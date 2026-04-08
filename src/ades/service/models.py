@@ -103,6 +103,8 @@ class BatchFileTagRequest(BaseModel):
     paths: list[str] = Field(default_factory=list)
     directories: list[str] = Field(default_factory=list)
     glob_patterns: list[str] = Field(default_factory=list)
+    include_patterns: list[str] = Field(default_factory=list)
+    exclude_patterns: list[str] = Field(default_factory=list)
     recursive: bool = True
     pack: str
     content_type: str | None = None
@@ -131,11 +133,28 @@ class TagResponse(BaseModel):
     timing_ms: int
 
 
+class BatchSourceSummary(BaseModel):
+    """Discovery and filtering summary for a local corpus tagging run."""
+
+    explicit_path_count: int
+    directory_match_count: int
+    glob_match_count: int
+    discovered_count: int
+    included_count: int
+    excluded_count: int
+    duplicate_count: int
+    generated_output_skipped_count: int
+    recursive: bool
+    include_patterns: list[str] = Field(default_factory=list)
+    exclude_patterns: list[str] = Field(default_factory=list)
+
+
 class BatchTagResponse(BaseModel):
     """Response body for local batch tagging."""
 
     pack: str
     item_count: int
+    summary: BatchSourceSummary
     items: list[TagResponse] = Field(default_factory=list)
 
 

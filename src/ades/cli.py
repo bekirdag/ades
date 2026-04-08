@@ -176,6 +176,16 @@ def tag_files(
         "--glob",
         help="Glob pattern to expand into local file paths. Can be provided multiple times.",
     ),
+    include_patterns: list[str] = typer.Option(
+        None,
+        "--include",
+        help="Include only discovered files whose basename or full path matches this glob. Can be provided multiple times.",
+    ),
+    exclude_patterns: list[str] = typer.Option(
+        None,
+        "--exclude",
+        help="Exclude discovered files whose basename or full path matches this glob. Can be provided multiple times.",
+    ),
     non_recursive: bool = typer.Option(
         False,
         "--non-recursive",
@@ -205,6 +215,8 @@ def tag_files(
         directories=directories or [],
         glob_patterns=glob_patterns or [],
         recursive=not non_recursive,
+        include_patterns=include_patterns or [],
+        exclude_patterns=exclude_patterns or [],
     )
     typer.echo(json.dumps(response.model_dump(), indent=2))
 

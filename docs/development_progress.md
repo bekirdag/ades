@@ -73,6 +73,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Kept directory/glob discovery additive to the existing batch API, CLI, and local-service endpoint instead of creating a second batch surface.
 - Filtered generated `.ades.json` outputs out of directory and glob discovery to avoid accidental self-reprocessing in local corpus runs.
 
+### 10. Include/exclude filtering and batch discovery summaries
+
+- Added include and exclude glob filters for batch local tagging across the shared file-discovery layer, public Python API, CLI, and local-service endpoint.
+- Kept filtering additive to the existing local batch surface instead of creating a second corpus-run interface.
+- Added machine-readable summary metadata for corpus discovery runs, including discovered counts, included counts, excluded counts, duplicate suppression counts, generated-output skip counts, and the active filter patterns.
+- Preserved the current local-only execution model while making larger local corpus runs easier to control and audit.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -83,6 +90,8 @@ This file records the implementation progress of `ades` as the project moves tow
 - `ades tag-files <path...>`
 - `ades tag-files --directory <dir>`
 - `ades tag-files --glob <pattern>`
+- `ades tag-files --include <pattern>`
+- `ades tag-files --exclude <pattern>`
 - `ades packs list`
 - `ades packs activate`
 - `ades packs deactivate`
@@ -124,4 +133,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add include/exclude filtering and corpus-run summary metadata so larger local tagging runs remain controllable and auditable from the local tool.
+- Add run-level manifest export and aggregated warnings so larger local corpus jobs can emit one stable audit artifact alongside per-file outputs.
