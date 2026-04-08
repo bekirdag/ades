@@ -8,3 +8,5 @@ __pycache__/
 .venv/
 build/
 dist/
+/.docdex/
+/docs/planning/

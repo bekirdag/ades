@@ -80,21 +80,32 @@ class PackInstaller:
         if entry is None:
             raise ValueError(f"Pack not found in registry: {pack_id}")
 
-        installed = self.registry.get_pack(pack_id)
-        if installed is not None and installed.version == entry.version:
-            if pack_id not in result.skipped:
-                result.skipped.append(pack_id)
-            return
-
         visiting.add(pack_id)
-        manifest = self._load_manifest(entry.manifest_url)
-        for dependency in manifest.dependencies:
-            self._install_recursive(dependency, result=result, visiting=visiting)
+        try:
+            manifest = self._load_manifest(entry.manifest_url)
+            for dependency in manifest.dependencies:
+                self._install_recursive(dependency, result=result, visiting=visiting)
 
-        self._install_manifest(manifest)
-        visiting.remove(pack_id)
-        if pack_id not in result.installed:
-            result.installed.append(pack_id)
+            installed = self.registry.get_pack(pack_id)
+            if installed is not None and installed.version == manifest.version:
+                if installed.active:
+                    if pack_id not in result.skipped:
+                        result.skipped.append(pack_id)
+                    return
+
+                self.registry.set_pack_active(pack_id, True)
+                reactivated = self.registry.get_pack(pack_id)
+                if reactivated is None or not reactivated.active:
+                    raise ValueError(f"Failed to reactivate installed pack: {pack_id}")
+                if pack_id not in result.installed:
+                    result.installed.append(pack_id)
+                return
+
+            self._install_manifest(manifest)
+            if pack_id not in result.installed:
+                result.installed.append(pack_id)
+        finally:
+            visiting.remove(pack_id)
 
     def _load_index(self) -> RegistryIndex:
         if self._index is None:

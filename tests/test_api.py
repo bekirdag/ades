@@ -29,13 +29,14 @@ def test_public_api_can_install_and_list_packs(tmp_path: Path) -> None:
     assert finance_pack.active is True
 
 
-def test_public_api_status_and_tag(tmp_path: Path) -> None:
+def test_public_api_status_and_tag(tmp_path: Path, monkeypatch) -> None:
     pull_pack("finance-en", storage_root=tmp_path)
+    monkeypatch.setenv("ADES_REGISTRY_URL", "https://example.invalid/index.json")
 
     runtime_status = status(storage_root=tmp_path)
     assert runtime_status.storage_root == str(tmp_path)
     assert "finance-en" in runtime_status.installed_packs
-    assert runtime_status.registry_url is None
+    assert runtime_status.registry_url == "https://example.invalid/index.json"
 
     response = tag(
         "AAPL rallied on NASDAQ after USD 12.5 guidance from Apple.",
