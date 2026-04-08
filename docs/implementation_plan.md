@@ -191,6 +191,7 @@ Target release: `v0.1.0`
 - Add library mode APIs for direct import.
 - Publish the Python package shape.
 - Add the npm wrapper and installation docs.
+- Keep the npm distribution thin by bootstrapping a user-local Python runtime instead of rebuilding the enrichment pipeline in Node.
 
 ### Phase 6
 

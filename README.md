@@ -49,6 +49,7 @@ ades tag-files --directory ./corpus --manifest-input ./outputs/batch.finance-en.
 
 - Library mode: import `ades` directly from Python for in-process enrichment.
 - CLI mode: pull packs, tag text, inspect installed packs, and run the local service.
+- npm wrapper mode: install `ades-cli`, then let the wrapper bootstrap a user-local Python runtime on first execution before delegating to the Python `ades` command.
 - Local service mode: run `ades serve` and expose a localhost API that multiple tools or agents can share.
 - Future production server mode: reserved for a later PostgreSQL-backed server build and not available in `v0.1.0`.
 
@@ -100,9 +101,10 @@ print(saved_response.saved_output_path)
 ## Current Runtime Surface
 
 - CLI commands: `ades pull`, `ades pull --registry-url`, `ades registry build`, `ades serve`, `ades tag`, `ades tag-files`, `ades status`, `ades packs list`, `ades packs list --available --registry-url`, `ades packs activate`, `ades packs deactivate`, `ades packs lookup`
-- Local API endpoints: `GET /healthz`, `GET /v0/status`, `GET /v0/packs`, `GET /v0/packs/{pack}`, `POST /v0/packs/{pack}/activate`, `POST /v0/packs/{pack}/deactivate`, `POST /v0/registry/build`, `GET /v0/lookup`, `POST /v0/tag`, `POST /v0/tag/file`, `POST /v0/tag/files`
+- npm wrapper package: `npm/ades-cli`, installed command `ades`, first-run bootstrap into a user-local Python virtual environment
+- Local API endpoints: `GET /healthz`, `GET /v0/status`, `GET /v0/packs`, `GET /v0/packs/{pack}`, `POST /v0/packs/{pack}/activate`, `POST /v0/packs/{pack}/deactivate`, `POST /v0/registry/build`, `GET /v0/installers/npm`, `GET /v0/lookup`, `POST /v0/tag`, `POST /v0/tag/file`, `POST /v0/tag/files`
 - Local runtime status now reports `runtime_target=local` and `metadata_backend=sqlite`
-- Public Python helpers: `build_registry`, `pull_pack`, `list_packs`, `get_pack`, `activate_pack`, `deactivate_pack`, `lookup_candidates`, `status`, `tag`, `tag_file`, `tag_files`, `create_service_app`
+- Public Python helpers: `build_registry`, `npm_installer_info`, `pull_pack`, `list_packs`, `get_pack`, `activate_pack`, `deactivate_pack`, `lookup_candidates`, `status`, `tag`, `tag_file`, `tag_files`, `create_service_app`
 - Bundled development packs: `general-en`, `finance-en`, `medical-en`
 
 ## Initial Product Direction
@@ -143,7 +145,8 @@ This repository now contains a working `v0.1.0` scaffold with:
 - rerun diff reporting so manifest-driven corpus reruns now emit a structured `rerun_diff` summary with changed, newly processed, reused, repaired, and skipped inputs
 - manifest lineage metadata and stable run identifiers so saved batch manifests now record `run_id`, `root_run_id`, `parent_run_id`, `source_manifest_path`, and `created_at` across rerun chains
 - static pack publication and remote registry tooling so local pack directories can be exported as a file-based registry and consumed immediately by `ades pull` through `--registry-url`
+- a real `ades-cli` npm wrapper package with first-run Python runtime bootstrap into a user-local virtual environment
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The next local-tool step is to add the npm wrapper and local-install bootstrap flow so `ades` can be installed and invoked cleanly through both `pip` and `npm`.
+The next local-tool step is to add packaging release verification for both the Python and npm distributions so `ades` can build and validate wheel/sdist and npm tarball artifacts before publication.

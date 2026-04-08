@@ -69,6 +69,20 @@ class RegistryBuildResponse(BaseModel):
     packs: list[RegistryBuildPackSummary] = Field(default_factory=list)
 
 
+class NpmInstallerInfo(BaseModel):
+    """Canonical npm-wrapper bootstrap metadata."""
+
+    npm_package: str
+    command: str
+    wrapper_version: str
+    python_package_spec: str
+    runtime_dir: str
+    python_bin_env: str
+    runtime_dir_env: str
+    package_spec_env: str
+    pip_install_args_env: str
+
+
 class EntityProvenance(BaseModel):
     """Deterministic provenance for a single entity match."""
 

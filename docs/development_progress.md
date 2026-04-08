@@ -157,12 +157,20 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added local CLI and public Python API support for registry publication, plus per-command `--registry-url` overrides so pack discovery and pulls can target external registries without changing the default bundled source.
 - Added a local HTTP admin endpoint for registry builds so the localhost service can drive publication workflows when direct filesystem automation is preferred.
 
+### 22. npm wrapper and local install bootstrap flow
+
+- Added the `npm/ades-cli` wrapper package so the Node distribution target now exists as a real installable npm surface instead of documentation only.
+- Implemented first-run bootstrap logic in the npm bin wrapper so `ades-cli` creates a user-local Python virtual environment, installs the matching `ades` Python package, writes a runtime marker, and then delegates all CLI arguments to the Python `ades` command.
+- Added canonical npm-bootstrap metadata on the Python side plus a local service endpoint so the npm package, public API, docs, and local service all agree on package name, version, runtime directory defaults, and bootstrap environment variables.
+- Kept the local tool Python-first by making the npm package a thin launcher around the Python runtime rather than re-implementing the pipeline in Node.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
 - `ades pull <pack> --registry-url <url>`
 - `ades serve`
 - `ades status`
+- `npm install -g ades-cli`
 - `ades tag <text>`
 - `ades tag --file <path>`
 - `ades tag-files <path...>`
@@ -188,6 +196,7 @@ The local service currently exposes:
 - `POST /v0/packs/{pack}/activate`
 - `POST /v0/packs/{pack}/deactivate`
 - `POST /v0/registry/build`
+- `GET /v0/installers/npm`
 - `GET /v0/lookup`
 - `POST /v0/tag`
 - `POST /v0/tag/file`
@@ -216,4 +225,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add the npm wrapper and local-install bootstrap flow so `ades` can be installed and invoked cleanly through both `pip` and `npm` for the local-tool release.
+- Add packaging release verification for both the Python and npm distributions so `ades` can build and validate wheel/sdist and npm tarball artifacts before publication.

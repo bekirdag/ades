@@ -37,6 +37,7 @@ packages = ["src/ades"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+  "/npm/ades-cli",
   "/src/ades/resources",
 ]
 

@@ -20,6 +20,7 @@
 - Large downloads, dataset packs, model packs, and generated KB assets must live under `/mnt/githubActions/ades_big_data`.
 - Do not store large runtime data, downloaded corpora, or model checkpoints inside this repo.
 - Keep the implementation Python-first. The npm package should distribute or launch the Python-based runtime instead of re-implementing the pipeline in Node.
+- The npm wrapper should bootstrap a user-local Python virtual environment on first use and then delegate to the Python `ades` command.
 - Treat the older “Open Calais clone” wording as historical research context, not the current product identity.
 - Every development step must include unit, component, integration, and API tests.
 

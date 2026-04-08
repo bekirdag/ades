@@ -1,0 +1,23 @@
+{
+  "name": "ades-cli",
+  "version": "0.1.0",
+  "description": "npm wrapper for the Python-based ades local semantic enrichment runtime",
+  "license": "MIT",
+  "bin": {
+    "ades": "bin/ades.cjs"
+  },
+  "files": [
+    "README.md",
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "ades",
+    "cli",
+    "semantic-enrichment",
+    "entity-extraction",
+    "python-wrapper"
+  ]
+}

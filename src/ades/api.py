@@ -6,6 +6,16 @@ from pathlib import Path
 from typing import Iterable
 
 from .config import Settings, get_settings
+from .distribution import (
+    NPM_COMMAND_NAME,
+    NPM_PACKAGE_NAME,
+    NPM_PIP_INSTALL_ARGS_ENV,
+    NPM_PYTHON_BIN_ENV,
+    NPM_PYTHON_PACKAGE_SPEC_ENV,
+    NPM_RUNTIME_DIR_ENV,
+    build_npm_python_package_spec,
+    resolve_npm_runtime_dir,
+)
 from .packs.installer import InstallResult, PackInstaller
 from .packs.publish import build_static_registry
 from .packs.registry import PackRegistry
@@ -18,6 +28,7 @@ from .service.models import (
     BatchTagResponse,
     LookupCandidate,
     LookupResponse,
+    NpmInstallerInfo,
     PackSummary,
     RegistryBuildPackSummary,
     RegistryBuildResponse,
@@ -168,6 +179,22 @@ def build_registry(
             )
             for pack in result.packs
         ],
+    )
+
+
+def npm_installer_info() -> NpmInstallerInfo:
+    """Return the canonical npm-wrapper bootstrap metadata."""
+
+    return NpmInstallerInfo(
+        npm_package=NPM_PACKAGE_NAME,
+        command=NPM_COMMAND_NAME,
+        wrapper_version=settings_version(),
+        python_package_spec=build_npm_python_package_spec(),
+        runtime_dir=str(resolve_npm_runtime_dir().resolve()),
+        python_bin_env=NPM_PYTHON_BIN_ENV,
+        runtime_dir_env=NPM_RUNTIME_DIR_ENV,
+        package_spec_env=NPM_PYTHON_PACKAGE_SPEC_ENV,
+        pip_install_args_env=NPM_PIP_INSTALL_ARGS_ENV,
     )
 
 

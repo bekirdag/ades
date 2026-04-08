@@ -13,6 +13,7 @@ from ..api import (
     get_pack,
     list_packs,
     lookup_candidates,
+    npm_installer_info,
     status,
     tag,
     tag_file,
@@ -24,6 +25,7 @@ from .models import (
     BatchTagResponse,
     FileTagRequest,
     LookupResponse,
+    NpmInstallerInfo,
     PackSummary,
     RegistryBuildRequest,
     RegistryBuildResponse,
@@ -49,6 +51,12 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         """Report local runtime status."""
 
         return status(storage_root=storage_root)
+
+    @app.get("/v0/installers/npm", response_model=NpmInstallerInfo)
+    def runtime_npm_installer_info() -> NpmInstallerInfo:
+        """Return canonical npm-wrapper bootstrap metadata."""
+
+        return npm_installer_info()
 
     @app.get("/v0/packs", response_model=list[PackSummary])
     def runtime_list_packs(active_only: bool = Query(False)) -> list[PackSummary]:
