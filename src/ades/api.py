@@ -21,6 +21,7 @@ from .packs.publish import build_static_registry
 from .packs.registry import PackRegistry
 from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load_tag_file
 from .pipeline.tagger import tag_text
+from .release import verify_release_artifacts
 from .service.models import (
     BatchManifestItem,
     BatchRerunDiff,
@@ -30,6 +31,7 @@ from .service.models import (
     LookupResponse,
     NpmInstallerInfo,
     PackSummary,
+    ReleaseVerificationResponse,
     RegistryBuildPackSummary,
     RegistryBuildResponse,
     SourceFingerprint,
@@ -196,6 +198,16 @@ def npm_installer_info() -> NpmInstallerInfo:
         package_spec_env=NPM_PYTHON_PACKAGE_SPEC_ENV,
         pip_install_args_env=NPM_PIP_INSTALL_ARGS_ENV,
     )
+
+
+def verify_release(
+    *,
+    output_dir: str | Path,
+    clean: bool = True,
+) -> ReleaseVerificationResponse:
+    """Build and verify the local Python and npm release artifacts."""
+
+    return verify_release_artifacts(output_dir=output_dir, clean=clean)
 
 
 def tag(

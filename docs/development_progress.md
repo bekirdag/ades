@@ -164,11 +164,19 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added canonical npm-bootstrap metadata on the Python side plus a local service endpoint so the npm package, public API, docs, and local service all agree on package name, version, runtime directory defaults, and bootstrap environment variables.
 - Kept the local tool Python-first by making the npm package a thin launcher around the Python runtime rather than re-implementing the pipeline in Node.
 
+### 23. Packaging release verification for Python and npm
+
+- Added a shared local release-verification flow that builds the Python wheel, Python sdist, and npm tarball into one caller-selected output directory.
+- Added stable verification metadata for each artifact, including absolute path, file name, byte size, and SHA-256 digest.
+- Added explicit Python/npm version alignment checks so release verification now reports whether both distributions are still locked to the same `v0.1.0` version before publication.
+- Exposed the verifier consistently through the public Python API, the new `ades release verify` CLI command, and a local HTTP endpoint for localhost automation.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
 - `ades pull <pack> --registry-url <url>`
 - `ades serve`
+- `ades release verify --output-dir <dir>`
 - `ades status`
 - `npm install -g ades-cli`
 - `ades tag <text>`
@@ -197,6 +205,7 @@ The local service currently exposes:
 - `POST /v0/packs/{pack}/deactivate`
 - `POST /v0/registry/build`
 - `GET /v0/installers/npm`
+- `POST /v0/release/verify`
 - `GET /v0/lookup`
 - `POST /v0/tag`
 - `POST /v0/tag/file`
@@ -225,4 +234,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add packaging release verification for both the Python and npm distributions so `ades` can build and validate wheel/sdist and npm tarball artifacts before publication.
+- Add coordinated release version synchronization and release-manifest generation so Python and npm version bumps and publication metadata stay locked together before the first public `v0.1.0` release.

@@ -18,6 +18,7 @@ from ..api import (
     tag,
     tag_file,
     tag_files,
+    verify_release,
 )
 from ..version import __version__
 from .models import (
@@ -27,6 +28,8 @@ from .models import (
     LookupResponse,
     NpmInstallerInfo,
     PackSummary,
+    ReleaseVerificationRequest,
+    ReleaseVerificationResponse,
     RegistryBuildRequest,
     RegistryBuildResponse,
     StatusResponse,
@@ -57,6 +60,17 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         """Return canonical npm-wrapper bootstrap metadata."""
 
         return npm_installer_info()
+
+    @app.post("/v0/release/verify", response_model=ReleaseVerificationResponse)
+    def runtime_verify_release(request: ReleaseVerificationRequest) -> ReleaseVerificationResponse:
+        """Build and verify the local Python and npm release artifacts."""
+
+        try:
+            return verify_release(output_dir=request.output_dir, clean=request.clean)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/v0/packs", response_model=list[PackSummary])
     def runtime_list_packs(active_only: bool = Query(False)) -> list[PackSummary]:

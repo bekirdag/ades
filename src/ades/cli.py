@@ -17,6 +17,7 @@ from .api import status as api_status
 from .api import tag as api_tag
 from .api import tag_file as api_tag_file
 from .api import tag_files as api_tag_files
+from .api import verify_release as api_verify_release
 from .config import get_settings
 from .packs.installer import PackInstaller
 from .storage.paths import build_storage_layout, ensure_storage_layout
@@ -25,8 +26,10 @@ from .storage.paths import build_storage_layout, ensure_storage_layout
 app = typer.Typer(help="ades local semantic enrichment CLI", no_args_is_help=True)
 packs_app = typer.Typer(help="Inspect installed ades packs.")
 registry_app = typer.Typer(help="Build static pack registries for external distribution.")
+release_app = typer.Typer(help="Build and verify local release artifacts.")
 app.add_typer(packs_app, name="packs")
 app.add_typer(registry_app, name="registry")
+app.add_typer(release_app, name="release")
 
 
 def _echo_json(payload: object) -> None:
@@ -148,6 +151,25 @@ def registry_build(
     """Build a static file-based registry from local pack directories."""
 
     response = api_build_registry(pack_dirs, output_dir=output_dir)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@release_app.command("verify")
+def release_verify(
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where verified Python and npm artifacts should be written.",
+    ),
+    no_clean: bool = typer.Option(
+        False,
+        "--no-clean",
+        help="Keep any existing release artifacts under the output directory.",
+    ),
+) -> None:
+    """Build and verify the current local Python and npm release artifacts."""
+
+    response = api_verify_release(output_dir=output_dir, clean=not no_clean)
     _echo_json(response.model_dump(mode="json"))
 
 

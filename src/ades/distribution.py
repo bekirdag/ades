@@ -1,10 +1,12 @@
-"""Distribution and installer metadata helpers."""
+"""Distribution, installer, and packaging metadata helpers."""
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import sys
+from typing import Any
 
 from .version import __version__
 
@@ -17,10 +19,30 @@ NPM_PYTHON_PACKAGE_SPEC_ENV = "ADES_PYTHON_PACKAGE_SPEC"
 NPM_PIP_INSTALL_ARGS_ENV = "ADES_NPM_PIP_INSTALL_ARGS"
 
 
+def resolve_project_root() -> Path:
+    """Return the ades source project root when available."""
+
+    return Path(__file__).resolve().parents[2]
+
+
 def build_npm_python_package_spec() -> str:
     """Return the default Python package spec used by the npm wrapper."""
 
     return f"ades=={__version__}"
+
+
+def resolve_npm_package_dir() -> Path:
+    """Return the source checkout npm wrapper directory."""
+
+    return resolve_project_root() / "npm" / "ades-cli"
+
+
+def load_npm_package_json(*, package_dir: str | Path | None = None) -> dict[str, Any]:
+    """Load the npm wrapper package.json payload from the source checkout."""
+
+    root = Path(package_dir).expanduser() if package_dir is not None else resolve_npm_package_dir()
+    package_json_path = root / "package.json"
+    return json.loads(package_json_path.read_text(encoding="utf-8"))
 
 
 def resolve_npm_runtime_dir(*, env: dict[str, str] | None = None) -> Path:

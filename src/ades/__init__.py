@@ -14,6 +14,7 @@ from .api import (
     tag,
     tag_file,
     tag_files,
+    verify_release,
 )
 from .storage import MetadataBackend, RuntimeTarget
 from .version import __version__
@@ -35,4 +36,5 @@ __all__ = [
     "tag",
     "tag_file",
     "tag_files",
+    "verify_release",
 ]

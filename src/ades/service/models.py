@@ -83,6 +83,39 @@ class NpmInstallerInfo(BaseModel):
     pip_install_args_env: str
 
 
+class ReleaseArtifactSummary(BaseModel):
+    """Verified metadata for one built release artifact."""
+
+    path: str
+    file_name: str
+    size_bytes: int
+    sha256: str
+
+
+class ReleaseVerificationRequest(BaseModel):
+    """Request body for local release artifact verification."""
+
+    output_dir: str
+    clean: bool = True
+
+
+class ReleaseVerificationResponse(BaseModel):
+    """Built and verified metadata for one local release set."""
+
+    project_root: str
+    output_dir: str
+    python_package: str
+    python_version: str
+    npm_package: str
+    npm_version: str
+    versions_match: bool
+    overall_success: bool
+    warnings: list[str] = Field(default_factory=list)
+    wheel: ReleaseArtifactSummary
+    sdist: ReleaseArtifactSummary
+    npm_tarball: ReleaseArtifactSummary
+
+
 class EntityProvenance(BaseModel):
     """Deterministic provenance for a single entity match."""
 
