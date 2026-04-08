@@ -3,6 +3,8 @@ from pathlib import Path
 
 from ades.service.models import (
     BatchManifestItem,
+    BatchRerunDiff,
+    BatchSkippedInput,
     BatchSourceSummary,
     BatchTagResponse,
     SourceFingerprint,
@@ -221,3 +223,93 @@ def test_build_batch_manifest_item_from_tag_response_marks_repaired_output(tmp_p
     assert item.saved_output_exists is True
     assert item.warnings == [f"repaired_reused_output:{output_path.resolve()}"]
     assert item.warning_count == 1
+
+
+def test_persist_batch_manifest_json_includes_rerun_diff(tmp_path: Path) -> None:
+    persisted_items = persist_tag_responses_json(
+        [_response("/tmp/changed/report.html")],
+        pack_id="finance-en",
+        output_dir=tmp_path / "outputs",
+    )
+    response = BatchTagResponse(
+        pack="finance-en",
+        item_count=1,
+        summary=BatchSourceSummary(
+            explicit_path_count=0,
+            directory_match_count=1,
+            glob_match_count=0,
+            discovered_count=3,
+            included_count=3,
+            processed_count=1,
+            excluded_count=0,
+            skipped_count=2,
+            rejected_count=0,
+            limit_skipped_count=1,
+            unchanged_skipped_count=1,
+            unchanged_reused_count=1,
+            repaired_reused_output_count=1,
+            duplicate_count=0,
+            generated_output_skipped_count=0,
+            discovered_input_bytes=36,
+            included_input_bytes=36,
+            processed_input_bytes=12,
+            manifest_input_path="/tmp/outputs/batch.finance-en.ades-manifest.json",
+            manifest_replay_mode="resume",
+            recursive=True,
+        ),
+        warnings=[],
+        rerun_diff=BatchRerunDiff(
+            manifest_input_path="/tmp/outputs/batch.finance-en.ades-manifest.json",
+            changed=["/tmp/changed/report.html"],
+            newly_processed=["/tmp/new/report.html"],
+            reused=["/tmp/stable/report.html"],
+            repaired=["/tmp/stable/report.html"],
+            skipped=[
+                BatchSkippedInput(
+                    reference="/tmp/late/report.html",
+                    reason="max_files_limit",
+                    source_kind="limit",
+                    size_bytes=12,
+                )
+            ],
+        ),
+        skipped=[
+            BatchSkippedInput(
+                reference="/tmp/stable/report.html",
+                reason="unchanged_since_manifest",
+                source_kind="fingerprint",
+                size_bytes=12,
+            ),
+            BatchSkippedInput(
+                reference="/tmp/late/report.html",
+                reason="max_files_limit",
+                source_kind="limit",
+                size_bytes=12,
+            ),
+        ],
+        rejected=[],
+        items=persisted_items,
+    )
+
+    persisted = persist_batch_tag_manifest_json(
+        response,
+        pack_id="finance-en",
+        output_dir=tmp_path / "outputs",
+    )
+
+    manifest_path = Path(persisted.saved_manifest_path)
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert payload["rerun_diff"]["manifest_input_path"] == "/tmp/outputs/batch.finance-en.ades-manifest.json"
+    assert payload["rerun_diff"]["changed"] == ["/tmp/changed/report.html"]
+    assert payload["rerun_diff"]["newly_processed"] == ["/tmp/new/report.html"]
+    assert payload["rerun_diff"]["reused"] == ["/tmp/stable/report.html"]
+    assert payload["rerun_diff"]["repaired"] == ["/tmp/stable/report.html"]
+    assert payload["rerun_diff"]["skipped"] == [
+        {
+            "reference": "/tmp/late/report.html",
+            "reason": "max_files_limit",
+            "source_kind": "limit",
+            "size_bytes": 12,
+        }
+    ]

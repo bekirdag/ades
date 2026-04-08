@@ -130,7 +130,8 @@ This repository now contains a working `v0.1.0` scaffold with:
 - unchanged-output reuse so skipped unchanged files can optionally carry forward prior manifest output metadata in a dedicated `reused_items` collection during reruns
 - reused-output verification so carried-forward manifest items now report `saved_output_exists` and emit deterministic warnings when the referenced output file is unavailable
 - rerun repair mode so missing reused outputs can be regenerated automatically and recorded with `repaired_reused_output:<path>` warnings plus `repaired_reused_output_count`
+- rerun diff reporting so manifest-driven corpus reruns now emit a structured `rerun_diff` summary with changed, newly processed, reused, repaired, and skipped inputs
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The next local-tool step is to add rerun diff reporting so local batch reruns can summarize which files were changed, reused, repaired, skipped, or newly processed compared with the prior manifest.
+The next local-tool step is to add manifest lineage metadata and stable run identifiers so saved batch manifests can express parent-child relationships across repeated reruns.

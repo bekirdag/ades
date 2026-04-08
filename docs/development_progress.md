@@ -136,6 +136,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Extended batch summaries with a `repaired_reused_output_count` counter so rerun audit output records how many reused outputs were regenerated during the run.
 - Added deterministic `repaired_reused_output:<path>` warnings on repaired reused items so callers can distinguish repaired outputs from reused outputs that were already present.
 
+### 19. Rerun diff reporting
+
+- Added rerun diff reporting so local batch reruns now emit a structured `rerun_diff` payload whenever they are driven from a prior manifest.
+- Categorized rerun outcomes into `changed`, `newly_processed`, `reused`, `repaired`, and `skipped` so callers can audit the effective delta without re-deriving it from the full response.
+- Persisted the same rerun diff structure into saved batch manifests so replayed local runs keep one stable audit artifact for later inspection or chained reruns.
+- Kept top-level `items`, `reused_items`, and `skipped` semantics unchanged so the new diff layer is additive rather than a breaking response rewrite.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -191,4 +198,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add rerun diff reporting so local batch reruns can summarize which files were changed, reused, repaired, skipped, or newly processed compared with the prior manifest.
+- Add manifest lineage metadata and stable run identifiers so local reruns can trace parent-child relationships across a chain of saved batch manifests.

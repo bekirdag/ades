@@ -214,6 +214,17 @@ class BatchRejectedInput(BaseModel):
     source_kind: str
 
 
+class BatchRerunDiff(BaseModel):
+    """Categorized rerun delta against a prior batch manifest."""
+
+    manifest_input_path: str
+    changed: list[str] = Field(default_factory=list)
+    newly_processed: list[str] = Field(default_factory=list)
+    reused: list[str] = Field(default_factory=list)
+    repaired: list[str] = Field(default_factory=list)
+    skipped: list[BatchSkippedInput] = Field(default_factory=list)
+
+
 class BatchManifestItem(BaseModel):
     """Compact run-manifest entry for one persisted or processed batch item."""
 
@@ -238,6 +249,7 @@ class BatchTagResponse(BaseModel):
     summary: BatchSourceSummary
     warnings: list[str] = Field(default_factory=list)
     saved_manifest_path: str | None = None
+    rerun_diff: BatchRerunDiff | None = None
     skipped: list[BatchSkippedInput] = Field(default_factory=list)
     rejected: list[BatchRejectedInput] = Field(default_factory=list)
     reused_items: list[BatchManifestItem] = Field(default_factory=list)
@@ -252,6 +264,7 @@ class BatchManifest(BaseModel):
     item_count: int
     summary: BatchSourceSummary
     warnings: list[str] = Field(default_factory=list)
+    rerun_diff: BatchRerunDiff | None = None
     skipped: list[BatchSkippedInput] = Field(default_factory=list)
     rejected: list[BatchRejectedInput] = Field(default_factory=list)
     reused_items: list[BatchManifestItem] = Field(default_factory=list)

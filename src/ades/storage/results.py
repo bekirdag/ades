@@ -312,6 +312,7 @@ def build_batch_manifest(response: BatchTagResponse) -> BatchManifest:
         item_count=response.item_count,
         summary=summary,
         warnings=warnings,
+        rerun_diff=response.rerun_diff,
         skipped=response.skipped,
         rejected=response.rejected,
         reused_items=verified_reused_items,

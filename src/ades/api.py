@@ -12,6 +12,7 @@ from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load
 from .pipeline.tagger import tag_text
 from .service.models import (
     BatchManifestItem,
+    BatchRerunDiff,
     BatchSourceSummary,
     BatchTagResponse,
     LookupCandidate,
@@ -279,6 +280,10 @@ def tag_files(
     reused_items: list[BatchManifestItem] = []
     unchanged_skipped_count = 0
     repaired_reused_output_count = 0
+    rerun_changed: list[str] = []
+    rerun_newly_processed: list[str] = []
+    rerun_reused: list[str] = []
+    rerun_repaired: list[str] = []
     for path in discovery.paths:
         manifest_content_type = (
             replay_plan.content_type_overrides.get(path)
@@ -344,12 +349,14 @@ def tag_files(
                             pretty=pretty_output,
                         )
                         repaired_reused_output_count += 1
+                        rerun_repaired.append(str(resolved_path))
                         reused_item = build_batch_manifest_item_from_tag_response(
                             repaired_response,
                             extra_warnings=[
                                 f"repaired_reused_output:{repaired_response.saved_output_path}"
                             ],
                         )
+                rerun_reused.append(str(resolved_path))
                 reused_items.append(reused_item)
             continue
         response = tag_text(
@@ -368,6 +375,11 @@ def tag_files(
                 }
             )
         )
+        if replay_plan is not None:
+            if baseline_item is None:
+                rerun_newly_processed.append(str(resolved_path))
+            else:
+                rerun_changed.append(str(resolved_path))
     if output_dir is not None:
         items = persist_tag_responses_json(
             items,
@@ -408,11 +420,26 @@ def tag_files(
         warnings = sorted({*warnings, f"manifest_pack_override:{replay_plan.manifest.pack}->{pack}"})
     if not items and not reused_items:
         warnings = sorted({*warnings, "no_files_processed"})
+    rerun_diff = None
+    if replay_plan is not None:
+        rerun_diff = BatchRerunDiff(
+            manifest_input_path=str(Path(manifest_input_path).expanduser().resolve()),
+            changed=rerun_changed,
+            newly_processed=rerun_newly_processed,
+            reused=rerun_reused,
+            repaired=rerun_repaired,
+            skipped=[
+                entry.to_dict()
+                for entry in discovery.skipped
+                if entry.reference not in rerun_reused
+            ],
+        )
     response = BatchTagResponse(
         pack=resolved_pack,
         item_count=len(items),
         summary=summary,
         warnings=warnings,
+        rerun_diff=rerun_diff,
         skipped=[entry.to_dict() for entry in discovery.skipped],
         rejected=[entry.to_dict() for entry in discovery.rejected],
         reused_items=reused_items,
