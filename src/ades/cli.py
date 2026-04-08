@@ -163,9 +163,24 @@ def tag(
 
 @app.command("tag-files")
 def tag_files(
-    files: list[Path] = typer.Argument(..., help="Local file paths to tag."),
+    files: list[Path] = typer.Argument(None, help="Local file paths to tag."),
     pack: str = typer.Option(None, help="Pack id, for example finance-en."),
     content_type: str | None = typer.Option(None, help="Override the input content type."),
+    directories: list[Path] = typer.Option(
+        None,
+        "--directory",
+        help="Directory to scan for local files. Can be provided multiple times.",
+    ),
+    glob_patterns: list[str] = typer.Option(
+        None,
+        "--glob",
+        help="Glob pattern to expand into local file paths. Can be provided multiple times.",
+    ),
+    non_recursive: bool = typer.Option(
+        False,
+        "--non-recursive",
+        help="Scan provided directories without descending into subdirectories.",
+    ),
     output_dir: Path | None = typer.Option(
         None,
         "--output-dir",
@@ -179,12 +194,17 @@ def tag_files(
 ) -> None:
     """Tag multiple local files through the local pipeline."""
 
+    if not files and not directories and not glob_patterns:
+        raise typer.BadParameter("Provide file paths, --directory, or --glob.")
     response = api_tag_files(
-        files,
+        files or [],
         pack=pack,
         content_type=content_type,
         output_dir=output_dir,
         pretty_output=not compact_output,
+        directories=directories or [],
+        glob_patterns=glob_patterns or [],
+        recursive=not non_recursive,
     )
     typer.echo(json.dumps(response.model_dump(), indent=2))
 

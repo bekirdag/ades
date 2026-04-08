@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class PackSummary(BaseModel):
@@ -100,11 +100,20 @@ class FileTagRequest(BaseModel):
 class BatchFileTagRequest(BaseModel):
     """Request body for local batch file tagging."""
 
-    paths: list[str] = Field(min_length=1)
+    paths: list[str] = Field(default_factory=list)
+    directories: list[str] = Field(default_factory=list)
+    glob_patterns: list[str] = Field(default_factory=list)
+    recursive: bool = True
     pack: str
     content_type: str | None = None
     output: TagOutputOptions | None = None
     options: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_sources(self) -> "BatchFileTagRequest":
+        if self.paths or self.directories or self.glob_patterns:
+            return self
+        raise ValueError("At least one of paths, directories, or glob_patterns is required.")
 
 
 class TagResponse(BaseModel):

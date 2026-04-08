@@ -143,6 +143,9 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 output_dir=request.output.directory if request.output else None,
                 pretty_output=request.output.pretty if request.output else True,
                 storage_root=storage_root,
+                directories=request.directories,
+                glob_patterns=request.glob_patterns,
+                recursive=request.recursive,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

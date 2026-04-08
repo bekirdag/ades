@@ -33,6 +33,7 @@ ades tag "Apple CEO Tim Cook announced quarterly earnings."
 ades tag --file ./notes/report.html --pack finance-en
 ades tag --file ./notes/report.html --pack finance-en --output-dir ./outputs
 ades tag-files ./notes/report-a.html ./notes/report-b.html --pack finance-en --output-dir ./outputs
+ades tag-files --directory ./corpus --glob "./extras/*.html" --pack finance-en --output-dir ./outputs
 ```
 
 ## Current Usage
@@ -61,6 +62,14 @@ batch_response = tag_files(
     output_dir="./outputs",
 )
 print(batch_response.model_dump())
+
+discovered_response = tag_files(
+    pack="finance-en",
+    directories=["./corpus"],
+    glob_patterns=["./extras/*.html"],
+    output_dir="./outputs",
+)
+print(discovered_response.model_dump())
 
 saved_response = tag(
     "Apple said AAPL traded on NASDAQ.",
@@ -103,7 +112,8 @@ This repository now contains a working `v0.1.0` scaffold with:
 - file-oriented tagging entrypoints for local document paths
 - stable JSON persistence for tag results from CLI, library, and local-service entrypoints
 - batch tagging entrypoints for multiple local files with collision-safe persisted output names
+- directory and glob discovery for batch local tagging so corpus runs do not require enumerating every file path
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The next local-tool step is to add directory and glob input discovery so callers can point `ades` at a local corpus without enumerating every file path manually.
+The next local-tool step is to add include/exclude filtering and corpus-run summary metadata so larger local tagging runs can be shaped and inspected without custom wrapper scripts.

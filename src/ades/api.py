@@ -8,7 +8,7 @@ from typing import Iterable
 from .config import Settings, get_settings
 from .packs.installer import InstallResult, PackInstaller
 from .packs.registry import PackRegistry
-from .pipeline.files import load_tag_file, load_tag_files
+from .pipeline.files import load_tag_file, load_tag_files, resolve_tag_file_sources
 from .pipeline.tagger import tag_text
 from .service.models import (
     BatchTagResponse,
@@ -196,19 +196,28 @@ def tag_file(
 
 
 def tag_files(
-    paths: Iterable[str | Path],
+    paths: Iterable[str | Path] = (),
     *,
     pack: str | None = None,
     content_type: str | None = None,
     output_dir: str | Path | None = None,
     pretty_output: bool = True,
     storage_root: str | Path | None = None,
+    directories: Iterable[str | Path] = (),
+    glob_patterns: Iterable[str] = (),
+    recursive: bool = True,
 ) -> BatchTagResponse:
     """Run in-process tagging for multiple local file paths."""
 
     settings = _resolve_settings(storage_root=storage_root)
     resolved_pack = pack or settings.default_pack
-    loaded_files = load_tag_files(list(paths), content_type=content_type)
+    resolved_paths = resolve_tag_file_sources(
+        paths=paths,
+        directories=directories,
+        glob_patterns=glob_patterns,
+        recursive=recursive,
+    )
+    loaded_files = load_tag_files(resolved_paths, content_type=content_type)
     items: list[TagResponse] = []
     for resolved_path, text, resolved_content_type in loaded_files:
         response = tag_text(

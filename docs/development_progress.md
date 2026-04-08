@@ -66,6 +66,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added `__init__.py` markers to the test directories so pytest can collect duplicate test basenames without import collisions.
 - Verified the current repo state with `python -m pytest -q`, which now passes successfully.
 
+### 9. Directory and glob discovery
+
+- Extended batch tagging so local users can provide explicit file paths, directories, and glob patterns in a single run.
+- Added shared source discovery logic in the local file helper layer.
+- Kept directory/glob discovery additive to the existing batch API, CLI, and local-service endpoint instead of creating a second batch surface.
+- Filtered generated `.ades.json` outputs out of directory and glob discovery to avoid accidental self-reprocessing in local corpus runs.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -74,6 +81,8 @@ This file records the implementation progress of `ades` as the project moves tow
 - `ades tag <text>`
 - `ades tag --file <path>`
 - `ades tag-files <path...>`
+- `ades tag-files --directory <dir>`
+- `ades tag-files --glob <pattern>`
 - `ades packs list`
 - `ades packs activate`
 - `ades packs deactivate`
@@ -115,4 +124,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add directory and glob input discovery so local users can tag a corpus or folder tree without manually listing every file path.
+- Add include/exclude filtering and corpus-run summary metadata so larger local tagging runs remain controllable and auditable from the local tool.
