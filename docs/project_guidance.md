@@ -24,6 +24,8 @@
 - Treat the older “Open Calais clone” wording as historical research context, not the current product identity.
 - Treat exploratory architecture notes such as `docs/ades_chat_output.md` and `docs/ades_architecture.html` as research artifacts, not release-truth sources.
 - Every development step must include unit, component, integration, and API tests.
+- A completed module must be production-ready and functionally usable when it is closed, not merely scaffolded or partially wired.
+- Placeholders are allowed only for explicitly deferred future seams such as the later production server path; they do not count as completed delivery for the active module.
 
 ## Product Distinctions
 
@@ -70,6 +72,7 @@
 ## Development Workflow
 
 - Complete the implementation work, including the required unit, component, integration, and API tests, before closing a task.
+- Close active-module work only when the module is operationally usable through its intended surface area, with stable contracts and validation that matches real use rather than scaffold-only behavior.
 - After every completed task, commit the changes and push them to the configured remote repository.
 - Update [`development_progress.md`](/home/wodo/apps/ades/docs/development_progress.md) at each task completion so the current repo state is visible without reconstructing history from commits alone.
 

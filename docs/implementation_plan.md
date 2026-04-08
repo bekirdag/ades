@@ -36,6 +36,14 @@ Target release: `v0.1.0`
 - Quality bar:
   - every feature must add or update unit, component, integration, and API tests
   - local-tool changes should preserve a stable JSON contract for downstream tools such as Docdex and mcoda
+  - a completed module must be production-ready and functionally usable when it is marked done, not just scaffolded
+  - placeholders are acceptable only for explicitly deferred seams outside the active module scope
+
+## Module Completion Standard
+
+- The active local-tool track closes modules only when their intended user-facing or integration-facing behavior works end to end.
+- Module completion requires operationally usable behavior, stable contracts, validation, and the required categorized tests for that module.
+- Scaffolds, stubs, and future-backend seams are allowed only where the repo explicitly marks them as deferred work rather than completed delivery.
 
 ## Detailed Production Server Tool Scope
 
@@ -167,9 +175,9 @@ Target release: `v0.1.0`
 
 ### Phase 1
 
-- Scaffold the Python package and service layout.
+- Deliver the Python package and service layout as working runtime entrypoints.
 - Add config loading and storage-root resolution.
-- Implement a placeholder `ades serve` and `ades status`.
+- Implement usable `ades serve` and `ades status` behavior rather than placeholder-only commands.
 
 ### Phase 2
 
@@ -202,6 +210,7 @@ Target release: `v0.1.0`
 - Preserve the local/public interfaces while preparing the production-server seam.
 - Keep the PostgreSQL-backed production-server path as an explicit placeholder, not an accidental SQLite assumption spread across the codebase.
 - Extend the release workflow through verify, manifest, validate, smoke-install, and coordinated publish steps with categorized test coverage.
+- Keep the active local-tool modules production-ready while deferring only the explicitly named future server seam.
 
 ### Phase 7
 

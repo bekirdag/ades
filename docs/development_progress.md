@@ -206,6 +206,12 @@ This file records the implementation progress of `ades` as the project moves tow
 - Extended topic matches with evidence counts and contributing entity-label summaries so topic output now carries more than a bare label-plus-score pair.
 - Added categorized unit, component, integration, and API coverage for deterministic relevance ordering, topic evidence metadata, and the public response contract.
 
+### 29. Production-ready module completion standard
+
+- Updated the repo requirements so completed modules are now expected to be production-ready and functionally usable when closed, not merely scaffolded or partially wired.
+- Aligned the implementation plan with that rule by making module completion explicitly require operational behavior, stable contracts, validation, and categorized tests.
+- Kept placeholders limited to explicitly deferred seams such as the future PostgreSQL-backed production server path rather than treating scaffolds as completed delivery for active local-tool modules.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
