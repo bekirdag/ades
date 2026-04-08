@@ -1,0 +1,14 @@
+{
+  "patterns": [
+    {
+      "name": "clinical_trial_id",
+      "kind": "regex",
+      "pattern": "NCT[0-9]{8}"
+    },
+    {
+      "name": "dosage",
+      "kind": "regex",
+      "pattern": "[0-9]+\\s?(mg|ml|mcg)"
+    }
+  ]
+}

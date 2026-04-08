@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-04-08T00:00:00Z",
+  "packs": {
+    "general-en": {
+      "version": "0.1.0",
+      "manifest_url": "packs/general-en/manifest.json"
+    },
+    "finance-en": {
+      "version": "0.1.0",
+      "manifest_url": "packs/finance-en/manifest.json"
+    },
+    "medical-en": {
+      "version": "0.1.0",
+      "manifest_url": "packs/medical-en/manifest.json"
+    }
+  }
+}

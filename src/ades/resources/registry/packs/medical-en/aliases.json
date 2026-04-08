@@ -1,0 +1,16 @@
+{
+  "aliases": [
+    {
+      "text": "aspirin",
+      "label": "drug"
+    },
+    {
+      "text": "diabetes",
+      "label": "disease"
+    },
+    {
+      "text": "BRCA1",
+      "label": "gene"
+    }
+  ]
+}

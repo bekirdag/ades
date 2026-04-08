@@ -1,11 +1,57 @@
 # ades Implementation Plan
 
+Target release: `v0.1.0`
+
 ## Current Understanding
 
 - The existing docs describe a semantic enrichment pipeline with ingestion, NLP, NER, entity linking, topic tagging, relation extraction, and scoring.
 - The old material was framed as an “Open Calais clone” and used a temporary placeholder CLI name.
 - The current product name is `ades`, and the product direction is a reusable local service with tiered downloadable packs.
+- The current release target is `v0.1.0`.
 - The first priority is not distributed scale. It is a strong local runtime, a reliable pack system, and a clean developer-facing interface.
+
+## Local Tool vs Production Server Tool
+
+- The current implementation track is the `local tool`.
+- The later `production server tool` is a separate track that will use `PostgreSQL` instead of `SQLite`.
+- Code written during local-tool development must preserve a clear seam for that future server build.
+- Placeholders for the production-server path are allowed now, but real delivery work remains focused on the local tool until that track is complete.
+
+## Detailed Local Tool Scope
+
+- Runtime model: single-machine local execution.
+- Metadata backend: `SQLite`.
+- Service style: localhost `FastAPI` service plus direct in-process Python library use.
+- Primary user flows:
+  - pull one or more packs locally
+  - serve the runtime on localhost
+  - tag inline text
+  - tag local files
+  - tag batches of local files
+  - inspect installed packs and metadata
+- Storage model:
+  - code and packaging stay in the repo
+  - large downloaded datasets and runtime assets live under `/mnt/githubActions/ades_big_data`
+  - local runtime metadata and installed-pack state remain lightweight
+- Quality bar:
+  - every feature must add or update unit, component, integration, and API tests
+  - local-tool changes should preserve a stable JSON contract for downstream tools such as Docdex and mcoda
+
+## Detailed Production Server Tool Scope
+
+- Runtime model: hosted or shared multi-user service after the local tool is complete.
+- Metadata backend: `PostgreSQL`.
+- Expected additions beyond the local tool:
+  - real server-grade persistence and migrations
+  - multi-user state and operational controls
+  - production-specific deployment and health strategy
+  - production-only test coverage for migrations, concurrency, and server behavior
+- Compatibility goal:
+  - reuse the pack model, result schema, and as much of the public API surface as possible
+  - avoid baking local SQLite assumptions into public contracts
+- Current state:
+  - the server track is not being delivered in `v0.1.0`
+  - codebase placeholders may exist, but production-server behavior is not yet implemented
 
 ## What We Keep From The Existing Docs
 
@@ -15,7 +61,7 @@
 - `FlashText` and pattern rules for deterministic extraction.
 - A staged enrichment pipeline with room for topic classification, entity linking, and relation extraction.
 
-## What We Change For ades v1
+## What We Change For ades v0.1.0
 
 - Replace the original server-heavy default stack with a local-first stack.
 - Start with `SQLite` and local indexes instead of `Postgres`, `OpenSearch`, and `Redis`.
@@ -51,6 +97,7 @@
 - `ruff` for linting and formatting
 - `mypy` for type checking
 - npm package as a thin CLI distribution layer around the Python runtime
+- every development step must add or update unit, component, integration, and API tests
 
 ## Parts We Will Build
 
@@ -67,10 +114,11 @@
    - pack versioning and checksums
 
 3. Local storage layer
-   - installed-pack registry
+   - local installed-pack registry
    - alias and KB storage
    - cache layout
    - local state and metadata tables
+   - backend selector and future production placeholder seam
 
 4. Enrichment pipeline core
    - text normalization
@@ -82,9 +130,10 @@
 
 5. Local HTTP service
    - `/healthz`
-   - `/v1/tag`
-   - `/v1/packs`
-   - `/v1/packs/{pack}`
+   - `/v0/status`
+   - `/v0/tag`
+   - `/v0/packs`
+   - `/v0/packs/{pack}`
 
 6. CLI commands
    - `ades pull <pack>`
@@ -95,7 +144,7 @@
 
 7. Distribution
    - `pip install ades`
-   - `npm install -g ades`
+   - `npm install -g ades-cli`
    - release flow for pack manifests and pack artifacts
 
 8. Integrations
@@ -145,9 +194,36 @@
 
 ### Phase 6
 
+- Preserve the local/public interfaces while preparing the production-server seam.
+- Keep the PostgreSQL-backed production-server path as an explicit placeholder, not an accidental SQLite assumption spread across the codebase.
+- Expand categorized test coverage with unit, component, integration, and API cases for each new feature area.
+
+### Phase 7
+
 - Add richer pack tooling and pack publication scripts.
 - Evaluate heavier optional components such as REL, OpenTapioca, or relation extraction.
 - Decide which server-scale pieces are still necessary after the local stack is proven.
+
+### Later Production Track
+
+- Introduce the real `production server tool`.
+- Replace the local metadata backend with `PostgreSQL` for that track.
+- Reuse the same pack model and public API contracts where possible.
+- Add production-specific deployment, migration, and multi-user test coverage after the local tool is complete.
+- Split the server-track implementation plan into:
+  - backend persistence and migration work
+  - hosted service/runtime operations
+  - server-only API and operational endpoints
+  - production integration and rollout testing
+
+## Locked Decisions For v0.1.0
+
+- Release scope and technical decisions are fixed in [`v0.1.0_decisions.md`](/home/wodo/apps/ades/docs/v0.1.0_decisions.md).
+- `v0.1.0` is a local-first release, not a distributed deployment release.
+- `v0.1.0` delivers the local tool only; the production server is deferred.
+- The canonical service API for this release is versioned under `/v0`.
+- Pack pulling is CLI-first; the local service exposes installed-pack visibility, not full remote pack management.
+- Heavy linking, vector databases, and relation extraction are deferred unless they become necessary to make the first local product useful.
 
 ## First Deliverables
 
@@ -159,13 +235,11 @@
 - A first thin `finance-en` pack
 - A first thin `medical-en` pack
 
-## Decisions To Lock Early
+## Decisions Beyond v0.1.0
 
-- Exact pack manifest format and versioning rules
-- The default on-disk directory layout under `/mnt/githubActions/ades_big_data`
-- Whether v1 local search uses `SQLite FTS5` alone or a second lightweight index
-- The initial JSON response schema for tags and entity matches
-- How the npm installer will locate or bootstrap the Python runtime
+- Whether later local search should stay on `SQLite FTS5` or move to a second lightweight index
+- Whether future larger packs should include heavier dedicated domain models
+- Whether the first stable API after `v0.x` should remain HTTP-only or add another transport
 
 ## Deferred For Now
 

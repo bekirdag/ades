@@ -1,0 +1,1 @@
+"""Local tagging pipeline."""

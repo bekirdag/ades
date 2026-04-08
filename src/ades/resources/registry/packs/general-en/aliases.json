@@ -1,0 +1,16 @@
+{
+  "aliases": [
+    {
+      "text": "OpenAI",
+      "label": "organization"
+    },
+    {
+      "text": "Tim Cook",
+      "label": "person"
+    },
+    {
+      "text": "Apple",
+      "label": "organization"
+    }
+  ]
+}

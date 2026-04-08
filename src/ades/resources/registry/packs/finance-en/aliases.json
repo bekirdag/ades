@@ -1,0 +1,16 @@
+{
+  "aliases": [
+    {
+      "text": "NASDAQ",
+      "label": "exchange"
+    },
+    {
+      "text": "NYSE",
+      "label": "exchange"
+    },
+    {
+      "text": "AAPL",
+      "label": "ticker"
+    }
+  ]
+}
