@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ades — Architecture</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0e0f11;
+    --surface: #161820;
+    --surface2: #1e2028;
+    --border: #2a2d38;
+    --accent: #5b8af5;
+    --accent2: #3ecf8e;
+    --accent3: #f0a050;
+    --accent4: #c77dff;
+    --text: #d4d8e8;
+    --text-muted: #7a7f96;
+    --text-dim: #4a4f66;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+
+  /* Header */
+  .header {
+    margin-bottom: 48px;
+    border-left: 3px solid var(--accent);
+    padding-left: 20px;
+  }
+
+  .header-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .header h1 {
+    font-size: 28px;
+    font-weight: 600;
+    color: #eaedf8;
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+
+  .header p {
+    font-size: 14px;
+    color: var(--text-muted);
+    font-weight: 300;
+  }
+
+  /* Section */
+  .section {
+    margin-bottom: 48px;
+  }
+
+  .section-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Diagram card */
+  .diagram-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .diagram-card-header {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface2);
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .diagram-card-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 4px;
+  }
+
+  .diagram-body {
+    padding: 24px;
+    overflow-x: auto;
+  }
+
+  .diagram-body svg {
+    max-width: 100%;
+  }
+
+  /* Tool legend */
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    margin-top: 0;
+  }
+
+  .legend-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 12px 16px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+
+  .legend-stage {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .legend-tool {
+    font-size: 13px;
+    font-weight: 500;
+    color: #eaedf8;
+    margin-bottom: 2px;
+  }
+
+  .legend-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  /* V1/V2 table */
+  .phase-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .phase-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .phase-header {
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .phase-v1 .phase-header { color: var(--accent2); background: rgba(62,207,142,0.06); }
+  .phase-v2 .phase-header { color: var(--accent4); background: rgba(199,125,255,0.06); }
+
+  .phase-body {
+    padding: 14px 16px;
+  }
+
+  .phase-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .phase-item:last-child { border-bottom: none; }
+
+  .phase-item-label {
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    min-width: 80px;
+    padding-top: 1px;
+  }
+
+  .phase-item-val {
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--surface2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="header-label">System Architecture · v1.0</div>
+    <h1>ades — Semantic Enrichment Pipeline</h1>
+    <p>Local-first tagging service: tiered packs · entity extraction · linking · topic classification</p>
+  </div>
+
+  <!-- DIAGRAM 1: Full Pipeline Flow -->
+  <div class="section">
+    <div class="section-title">01 — Full pipeline flowchart</div>
+    <div class="diagram-card">
+      <div class="diagram-card-header">
+        <div class="dot" style="background:#f05555"></div>
+        <div class="dot" style="background:#f0a050"></div>
+        <div class="dot" style="background:#3ecf8e"></div>
+        <span class="diagram-card-title">pipeline.mmd — top-level enrichment flow</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    CLIENT["🌐 Client\nREST / batch"]
+    GW["API Gateway\nFastAPI · POST /tag · POST /batch/tag"]
+
+    CLIENT --> GW
+
+    subgraph INGEST["Stage 1 — Ingestion & Normalization"]
+        direction LR
+        ING1["HTML → text\nTrafilatura"]
+        ING2["PDF → text\npymupdf"]
+        ING3["lang detect\nlangdetect / lingua"]
+        ING4["unicode fix\nftfy"]
+    end
+
+    GW --> INGEST
+
+    subgraph NLP["Stage 2 — NLP Base Layer  (spaCy)"]
+        direction LR
+        N1["Tokenize\nSentence split"]
+        N2["POS tag\nDep parse"]
+        N3["Coreference\ncoreferee"]
+        N1 --> N2 --> N3
+    end
+
+    INGEST --> NLP
+
+    subgraph EXTRACT["Stage 3 — Mention Detection  (parallel)"]
+        direction TB
+        E1["Named entity recognition\nGLiNER zero-shot"]
+        E2["Pattern extraction\nspaCy EntityRuler · FlashText · regex"]
+        E3["Topic classification\nSetFit · bart-large-mnli"]
+    end
+
+    NLP --> EXTRACT
+
+    subgraph CAND["Stage 4 — Candidate Generation"]
+        direction LR
+        C1["Alias table lookup\nWikidata surface forms"]
+        C2["BM25 search\nOpenSearch entity index"]
+        C3["ANN retrieval\nFAISS / Qdrant"]
+        C1 & C2 & C3
+    end
+
+    EXTRACT --> CAND
+
+    KB[("Knowledge Base\nWikidata dump\nPostgres / SQLite")]
+    CAND <-->|alias + type constraints| KB
+
+    subgraph LINK["Stage 5 — Entity Linking & Disambiguation"]
+        direction LR
+        L1["Context-aware linker\nREL / OpenTapioca / spaCy EL"]
+        L2["Collective coherence\ncross-entity voting"]
+        L1 --> L2
+    end
+
+    CAND --> LINK
+
+    subgraph REL_EXT["Stage 6 — Relation & Event Extraction"]
+        direction LR
+        R1["Dep-pattern rules\nspaCy DependencyMatcher"]
+        R2["Joint NER+REL\nGLiNER multitask · REBEL"]
+        R1 & R2
+    end
+
+    LINK --> REL_EXT
+
+    SCORE["Stage 7 — Relevance & Confidence Scoring\ntitle weight · frequency · TF-IDF · model confidence"]
+
+    REL_EXT --> SCORE
+
+    POST["Stage 8 — Post-processing\nmerge spans · dedup · attach offsets · sort by relevance"]
+
+    SCORE --> POST
+
+    subgraph STORE["Stage 9 — Storage"]
+        direction LR
+        S1[("Postgres\ndocs · entities · jobs · feedback")]
+        S2[("OpenSearch\nfull-text + faceted")]
+        S3[("Redis + Celery\nasync queue · cache")]
+    end
+
+    POST --> STORE
+
+    RESP["JSON Response\nmentions · entities · topics · relations · confidence · relevance"]
+    STORE --> RESP
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIAGRAM 2: Entity Linking Detail -->
+  <div class="section">
+    <div class="section-title">02 — Entity linking & disambiguation detail</div>
+    <div class="diagram-card">
+      <div class="diagram-card-header">
+        <div class="dot" style="background:#f05555"></div>
+        <div class="dot" style="background:#f0a050"></div>
+        <div class="dot" style="background:#3ecf8e"></div>
+        <span class="diagram-card-title">entity_linking.mmd — candidate generation → disambiguation → NIL handling</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart LR
+    MENTION["Detected mention\ne.g. 'Apple'"]
+
+    subgraph CGEN["Candidate Generation"]
+        direction TB
+        CG1["Alias table\nsurface form → QID list"]
+        CG2["BM25 fuzzy search\nOpenSearch entity index"]
+        CG3["Embedding ANN\nFAISS bi-encoder"]
+    end
+
+    MENTION --> CGEN
+
+    MERGE["Merge &amp; deduplicate\ncandidate pool"]
+    CGEN --> MERGE
+
+    subgraph FEAT["Feature computation"]
+        direction TB
+        F1["Prior probability\nalias frequency stats"]
+        F2["Type compatibility\nNER label vs entity type"]
+        F3["Context embedding\nmention + surrounding sentence"]
+        F4["Global coherence\nother entities in document"]
+    end
+
+    MERGE --> FEAT
+
+    RANK["Cross-encoder reranker\nor gradient boost classifier"]
+    FEAT --> RANK
+
+    DEC{Score ≥ threshold?}
+    RANK --> DEC
+
+    LINKED["Linked entity\nQID · canonical name · type · external IDs"]
+    NIL["NIL — unknown entity\nflag for KB insertion"]
+
+    DEC -- yes --> LINKED
+    DEC -- no --> NIL
+
+    SCORE_OUT["Assign confidence score\n0.0 – 1.0"]
+    LINKED --> SCORE_OUT
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIAGRAM 3: Service decomposition -->
+  <div class="section">
+    <div class="section-title">03 — Service decomposition</div>
+    <div class="diagram-card">
+      <div class="diagram-card-header">
+        <div class="dot" style="background:#f05555"></div>
+        <div class="dot" style="background:#f0a050"></div>
+        <div class="dot" style="background:#3ecf8e"></div>
+        <span class="diagram-card-title">services.mmd — microservice boundaries and communication</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    subgraph EXTERNAL["External"]
+        CLIENT2["HTTP Client"]
+    end
+
+    subgraph API_LAYER["API Layer"]
+        GW2["FastAPI Gateway\n/tag  /batch/tag  /entities  /feedback"]
+        QUEUE["Redis Task Queue\nCelery / Dramatiq"]
+    end
+
+    CLIENT2 --> GW2
+    GW2 -- async jobs --> QUEUE
+
+    subgraph NLP_SERVICES["NLP Services  (Python workers)"]
+        direction TB
+        SVC1["Ingestion Worker\nTrafilatura · pymupdf · ftfy"]
+        SVC2["NLP Worker\nspaCy pipeline"]
+        SVC3["NER Worker\nGLiNER inference server"]
+        SVC4["Entity Linker\nREL / OpenTapioca / spaCy EL"]
+        SVC5["Classifier Worker\nSetFit · zero-shot NLI"]
+        SVC6["Relation Worker\nGLiNER multitask · REBEL · dep rules"]
+        SVC7["Scorer Worker\nrelevance + confidence rollup"]
+    end
+
+    QUEUE --> SVC1 --> SVC2 --> SVC3
+    SVC3 --> SVC4
+    SVC3 --> SVC5
+    SVC4 --> SVC6
+    SVC5 --> SVC6
+    SVC6 --> SVC7
+
+    subgraph DATA_LAYER["Data Layer"]
+        PG[("Postgres\nentities · jobs · docs · feedback")]
+        OS[("OpenSearch\nfull-text index")]
+        RD[("Redis\ncache · sessions")]
+        KB2[("Entity KB\nWikidata SQLite / PG")]
+    end
+
+    SVC4 <--> KB2
+    SVC7 --> PG
+    SVC7 --> OS
+    GW2 <--> RD
+    GW2 <--> PG
+    GW2 <--> OS
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIAGRAM 4: Data model -->
+  <div class="section">
+    <div class="section-title">04 — Core data model (ERD)</div>
+    <div class="diagram-card">
+      <div class="diagram-card-header">
+        <div class="dot" style="background:#f05555"></div>
+        <div class="dot" style="background:#f0a050"></div>
+        <div class="dot" style="background:#3ecf8e"></div>
+        <span class="diagram-card-title">schema.mmd — entity-relationship diagram for enrichment output</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+erDiagram
+    DOCUMENT {
+        uuid    doc_id        PK
+        text    title
+        text    body
+        varchar language
+        varchar source_url
+        jsonb   metadata
+        timestamp created_at
+    }
+
+    ENRICHMENT_JOB {
+        uuid    job_id        PK
+        uuid    doc_id        FK
+        varchar status
+        float   duration_ms
+        timestamp created_at
+    }
+
+    MENTION {
+        uuid    mention_id    PK
+        uuid    doc_id        FK
+        int     char_start
+        int     char_end
+        varchar surface_form
+        varchar ner_label
+        float   ner_confidence
+    }
+
+    ENTITY {
+        uuid    entity_id     PK
+        varchar qid
+        varchar canonical_name
+        varchar entity_type
+        text    description
+        jsonb   external_ids
+        float   popularity_prior
+    }
+
+    ENTITY_ALIAS {
+        uuid    alias_id      PK
+        uuid    entity_id     FK
+        varchar surface_form
+        varchar language
+        float   prior_prob
+    }
+
+    LINKED_ENTITY {
+        uuid    link_id       PK
+        uuid    mention_id    FK
+        uuid    entity_id     FK
+        float   confidence
+        float   relevance
+        boolean is_nil
+    }
+
+    TOPIC_TAG {
+        uuid    tag_id        PK
+        uuid    doc_id        FK
+        varchar taxonomy
+        varchar label
+        float   score
+    }
+
+    RELATION {
+        uuid    relation_id   PK
+        uuid    doc_id        FK
+        varchar relation_type
+        uuid    subject_entity FK
+        uuid    object_entity  FK
+        float   confidence
+        jsonb   arguments
+    }
+
+    FEEDBACK {
+        uuid    feedback_id   PK
+        uuid    link_id       FK
+        varchar action
+        timestamp created_at
+    }
+
+    DOCUMENT        ||--o{ ENRICHMENT_JOB  : triggers
+    DOCUMENT        ||--o{ MENTION         : contains
+    DOCUMENT        ||--o{ TOPIC_TAG       : tagged_with
+    DOCUMENT        ||--o{ RELATION        : has
+    MENTION         ||--o| LINKED_ENTITY   : resolved_to
+    ENTITY          ||--o{ LINKED_ENTITY   : referenced_by
+    ENTITY          ||--o{ ENTITY_ALIAS    : known_as
+    ENTITY          ||--o{ RELATION        : subject_of
+    ENTITY          ||--o{ RELATION        : object_of
+    LINKED_ENTITY   ||--o{ FEEDBACK        : receives
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIAGRAM 5: Feedback loop -->
+  <div class="section">
+    <div class="section-title">05 — Training & feedback loop</div>
+    <div class="diagram-card">
+      <div class="diagram-card-header">
+        <div class="dot" style="background:#f05555"></div>
+        <div class="dot" style="background:#f0a050"></div>
+        <div class="dot" style="background:#3ecf8e"></div>
+        <span class="diagram-card-title">feedback.mmd — continuous improvement cycle</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart LR
+    TAG["Tagging output\nentities · topics · relations"]
+
+    subgraph HUMAN["Human-in-the-loop"]
+        direction TB
+        H1["Accept / reject links"]
+        H2["Correct categories"]
+        H3["Mark false positives"]
+        H4["Submit new KB entities"]
+    end
+
+    TAG --> HUMAN
+
+    subgraph UPDATES["Model & KB updates"]
+        direction TB
+        U1["Update alias priors\nfrequency recount"]
+        U2["Retrain disambiguation\nnew positive/negative pairs"]
+        U3["Retrain SetFit classifier\nnew labeled examples"]
+        U4["Insert entity record\ninto KB + alias table"]
+    end
+
+    HUMAN --> UPDATES
+
+    DEPLOY["Re-deploy updated models\n+ refreshed alias table"]
+    UPDATES --> DEPLOY
+    DEPLOY --> TAG
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tool legend -->
+  <div class="section">
+    <div class="section-title">06 — Open source tool assignments</div>
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#5b8af5"></div>
+        <div>
+          <div class="legend-stage">Ingestion</div>
+          <div class="legend-tool">Trafilatura</div>
+          <div class="legend-desc">Best-in-class HTML→text extraction. Apache 2.0. pip install trafilatura</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#5b8af5"></div>
+        <div>
+          <div class="legend-stage">Ingestion</div>
+          <div class="legend-tool">pymupdf · ftfy · langdetect</div>
+          <div class="legend-desc">PDF extraction, unicode repair, language detection</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#3ecf8e"></div>
+        <div>
+          <div class="legend-stage">NLP base</div>
+          <div class="legend-tool">spaCy</div>
+          <div class="legend-desc">Tokenize, POS, dep parse, sentence split. en_core_web_trf for quality.</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#3ecf8e"></div>
+        <div>
+          <div class="legend-stage">NLP base</div>
+          <div class="legend-tool">coreferee</div>
+          <div class="legend-desc">Coreference resolution as spaCy pipeline component</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#f0a050"></div>
+        <div>
+          <div class="legend-stage">NER</div>
+          <div class="legend-tool">GLiNER</div>
+          <div class="legend-desc">Zero-shot, any entity type, outperforms ChatGPT on NER benchmarks. NAACL 2024.</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#f0a050"></div>
+        <div>
+          <div class="legend-stage">Patterns</div>
+          <div class="legend-tool">FlashText + spaCy EntityRuler</div>
+          <div class="legend-desc">ISINs, tickers, money amounts, phone numbers, URLs. ~4000x faster than regex at scale.</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#c77dff"></div>
+        <div>
+          <div class="legend-stage">Topic classification</div>
+          <div class="legend-tool">SetFit</div>
+          <div class="legend-desc">Few-shot: 8 examples per class, 5x faster inference than NLI pipeline. HuggingFace.</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#c77dff"></div>
+        <div>
+          <div class="legend-stage">Topic classification</div>
+          <div class="legend-tool">facebook/bart-large-mnli</div>
+          <div class="legend-desc">Zero-shot fallback. No training required, pass candidate labels at inference time.</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#5b8af5"></div>
+        <div>
+          <div class="legend-stage">Entity linking</div>
+          <div class="legend-tool">REL (Radboud Entity Linker)</div>
+          <div class="legend-desc">Best quality self-hosted Wikipedia/Wikidata linker. REST-API deployable.</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#5b8af5"></div>
+        <div>
+          <div class="legend-stage">Entity linking</div>
+          <div class="legend-tool">OpenTapioca</div>
+          <div class="legend-desc">Lightweight Wikidata linker. Real-time sync with Wikidata. Apache 2.0.</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#5b8af5"></div>
+        <div>
+          <div class="legend-stage">Vector search</div>
+          <div class="legend-tool">FAISS / Qdrant</div>
+          <div class="legend-desc">ANN retrieval over entity description embeddings for candidate generation</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#f0a050"></div>
+        <div>
+          <div class="legend-stage">Relation extraction</div>
+          <div class="legend-tool">REBEL (Babelscape)</div>
+          <div class="legend-desc">Seq2seq → (subject, relation, object) triples. ~220 Wikidata relation types.</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#f0a050"></div>
+        <div>
+          <div class="legend-stage">Relation extraction</div>
+          <div class="legend-tool">GLiNER multitask</div>
+          <div class="legend-desc">Joint NER + relation extraction in one forward pass. Knowledgator model.</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#3ecf8e"></div>
+        <div>
+          <div class="legend-stage">Storage</div>
+          <div class="legend-tool">Postgres + OpenSearch + Redis</div>
+          <div class="legend-desc">Entity records, full-text search + faceting, async queue + caching</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#3ecf8e"></div>
+        <div>
+          <div class="legend-stage">Knowledge base</div>
+          <div class="legend-tool">Wikidata dump → SQLite / Postgres</div>
+          <div class="legend-desc">Entity records, aliases, types, descriptions. Seeded via wikid spaCy project.</div>
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#c77dff"></div>
+        <div>
+          <div class="legend-stage">API framework</div>
+          <div class="legend-tool">FastAPI + Celery + Dramatiq</div>
+          <div class="legend-desc">Sync + async endpoints. Worker pool for batch tagging jobs.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- V1 / V2 build phases -->
+  <div class="section">
+    <div class="section-title">07 — Build phases</div>
+    <div class="phase-grid">
+      <div class="phase-card phase-v1">
+        <div class="phase-header">V1 — Ship first</div>
+        <div class="phase-body">
+          <div class="phase-item">
+            <span class="phase-item-label">Ingestion</span>
+            <span class="phase-item-val"><code>Trafilatura</code> + pymupdf + ftfy</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">NLP</span>
+            <span class="phase-item-val"><code>spaCy</code> en_core_web_trf</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">NER</span>
+            <span class="phase-item-val"><code>GLiNER</code> medium news model</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">Entity KB</span>
+            <span class="phase-item-val">Wikidata alias table → Postgres</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">Linking</span>
+            <span class="phase-item-val"><code>OpenTapioca</code> or spaCy EL</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">Topics</span>
+            <span class="phase-item-val"><code>bart-large-mnli</code> zero-shot</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">Relevance</span>
+            <span class="phase-item-val">title/freq heuristic scorer</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">API</span>
+            <span class="phase-item-val"><code>FastAPI</code> + Postgres + OpenSearch</span>
+          </div>
+        </div>
+      </div>
+      <div class="phase-card phase-v2">
+        <div class="phase-header">V2 — After V1 is stable</div>
+        <div class="phase-body">
+          <div class="phase-item">
+            <span class="phase-item-label">Linking</span>
+            <span class="phase-item-val">Upgrade to <code>REL</code> for better disambiguation</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">Coherence</span>
+            <span class="phase-item-val">Collective disambiguation cross-entity voting</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">Relations</span>
+            <span class="phase-item-val"><code>REBEL</code> + GLiNER multitask + dep rules</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">Topics</span>
+            <span class="phase-item-val"><code>SetFit</code> domain-specific classifiers</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">Feedback</span>
+            <span class="phase-item-val">Human-in-the-loop correction loop</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">Multilingual</span>
+            <span class="phase-item-val">Multilingual spaCy + GLiNER models</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">Graph</span>
+            <span class="phase-item-val">Neo4j for entity relation graph queries</span>
+          </div>
+          <div class="phase-item">
+            <span class="phase-item-label">Custom KB</span>
+            <span class="phase-item-val">Domain ontology extension layer</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#161820',
+      primaryColor: '#1e2028',
+      primaryBorderColor: '#2a2d38',
+      primaryTextColor: '#d4d8e8',
+      secondaryColor: '#1a1c24',
+      tertiaryColor: '#242630',
+      lineColor: '#4a4f66',
+      fontFamily: '"IBM Plex Mono", monospace',
+      fontSize: '13px',
+      nodeBorder: '#2a2d38',
+      clusterBkg: '#1a1c28',
+      clusterBorder: '#3a3f55',
+      edgeLabelBackground: '#161820',
+      titleColor: '#d4d8e8',
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 20,
+    },
+    er: {
+      layoutDirection: 'TB',
+      minEntityWidth: 100,
+      minEntityHeight: 75,
+      entityPadding: 15,
+    }
+  });
+</script>
+</body>
+</html>
