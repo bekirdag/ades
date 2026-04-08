@@ -157,6 +157,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 recursive=request.recursive,
                 include_patterns=request.include_patterns,
                 exclude_patterns=request.exclude_patterns,
+                max_files=request.max_files,
+                max_input_bytes=request.max_input_bytes,
                 write_manifest=request.output.write_manifest if request.output else False,
                 manifest_output_path=request.output.manifest_path if request.output else None,
             )

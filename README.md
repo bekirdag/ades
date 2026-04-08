@@ -36,6 +36,7 @@ ades tag-files ./notes/report-a.html ./notes/report-b.html --pack finance-en --o
 ades tag-files --directory ./corpus --glob "./extras/*.html" --pack finance-en --output-dir ./outputs
 ades tag-files --directory ./corpus --include "*earnings*.html" --exclude "*draft*" --pack finance-en
 ades tag-files ./notes/report-a.html ./notes/report-b.html --pack finance-en --output-dir ./outputs --write-manifest
+ades tag-files --directory ./corpus --pack finance-en --max-files 100 --max-bytes 5000000
 ```
 
 ## Current Usage
@@ -119,7 +120,8 @@ This repository now contains a working `v0.1.0` scaffold with:
 - include/exclude filtering plus batch summary metadata for local corpus runs so discovery, filtering, and audit counts are visible in one response
 - run-level manifest export plus aggregated batch warnings so corpus jobs can emit one stable audit artifact alongside per-file outputs
 - corpus input-size accounting plus explicit skipped/rejected input reporting so batch local runs can explain what was processed, skipped, or rejected
+- corpus-run guardrails with explicit max-file and max-byte limits so local jobs stop in deterministic discovery order with explicit limit skip reasons
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The next local-tool step is to add corpus-run guardrails with explicit max-file and max-byte limits so larger local jobs can stop early with deterministic skip reasons instead of overrunning local resources.
+The next local-tool step is to add resumable corpus runs and manifest replay so local batch jobs can be resumed or selectively re-run from saved audit artifacts.

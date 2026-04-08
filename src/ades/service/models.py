@@ -108,6 +108,8 @@ class BatchFileTagRequest(BaseModel):
     include_patterns: list[str] = Field(default_factory=list)
     exclude_patterns: list[str] = Field(default_factory=list)
     recursive: bool = True
+    max_files: int | None = Field(default=None, ge=0)
+    max_input_bytes: int | None = Field(default=None, ge=0)
     pack: str
     content_type: str | None = None
     output: TagOutputOptions | None = None
@@ -148,11 +150,14 @@ class BatchSourceSummary(BaseModel):
     excluded_count: int
     skipped_count: int
     rejected_count: int
+    limit_skipped_count: int = 0
     duplicate_count: int
     generated_output_skipped_count: int
     discovered_input_bytes: int
     included_input_bytes: int
     processed_input_bytes: int
+    max_files: int | None = None
+    max_input_bytes: int | None = None
     recursive: bool
     include_patterns: list[str] = Field(default_factory=list)
     exclude_patterns: list[str] = Field(default_factory=list)

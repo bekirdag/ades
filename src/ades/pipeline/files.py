@@ -55,11 +55,14 @@ class TagFileDiscoverySummary:
     excluded_count: int = 0
     skipped_count: int = 0
     rejected_count: int = 0
+    limit_skipped_count: int = 0
     duplicate_count: int = 0
     generated_output_skipped_count: int = 0
     discovered_input_bytes: int = 0
     included_input_bytes: int = 0
     processed_input_bytes: int = 0
+    max_files: int | None = None
+    max_input_bytes: int | None = None
     recursive: bool = True
     include_patterns: tuple[str, ...] = ()
     exclude_patterns: tuple[str, ...] = ()
@@ -144,8 +147,15 @@ def discover_tag_file_sources(
     recursive: bool = True,
     include_patterns: Iterable[str] = (),
     exclude_patterns: Iterable[str] = (),
+    max_files: int | None = None,
+    max_input_bytes: int | None = None,
 ) -> TagFileDiscoveryResult:
     """Resolve explicit files, directories, and globs into a filtered discovery result."""
+
+    if max_files is not None and max_files < 0:
+        raise ValueError("max_files must be zero or greater.")
+    if max_input_bytes is not None and max_input_bytes < 0:
+        raise ValueError("max_input_bytes must be zero or greater.")
 
     resolved_paths: list[Path] = []
     path_sizes: dict[Path, int] = {}
@@ -155,6 +165,8 @@ def discover_tag_file_sources(
     normalized_include_patterns = tuple(pattern for pattern in include_patterns if pattern)
     normalized_exclude_patterns = tuple(pattern for pattern in exclude_patterns if pattern)
     summary = TagFileDiscoverySummary(
+        max_files=max_files,
+        max_input_bytes=max_input_bytes,
         recursive=recursive,
         include_patterns=normalized_include_patterns,
         exclude_patterns=normalized_exclude_patterns,
@@ -309,11 +321,61 @@ def discover_tag_file_sources(
     summary.included_count = len(filtered_paths)
     summary.included_input_bytes = sum(path_sizes.get(path, 0) for path in filtered_paths)
     summary.excluded_count = summary.discovered_count - summary.included_count
+
+    limited_paths: list[Path] = []
+    processed_input_bytes = 0
+    file_limit_reached = False
+    byte_limit_reached = False
+    for path in filtered_paths:
+        path_size = path_sizes.get(path)
+        if file_limit_reached:
+            summary.limit_skipped_count += 1
+            add_skipped(
+                path,
+                reason="max_files_limit",
+                source_kind="limit",
+                size_bytes=path_size,
+            )
+            continue
+        if byte_limit_reached:
+            summary.limit_skipped_count += 1
+            add_skipped(
+                path,
+                reason="max_input_bytes_limit",
+                source_kind="limit",
+                size_bytes=path_size,
+            )
+            continue
+        if max_files is not None and len(limited_paths) >= max_files:
+            file_limit_reached = True
+            summary.limit_skipped_count += 1
+            add_skipped(
+                path,
+                reason="max_files_limit",
+                source_kind="limit",
+                size_bytes=path_size,
+            )
+            continue
+        if max_input_bytes is not None and processed_input_bytes + (path_size or 0) > max_input_bytes:
+            byte_limit_reached = True
+            summary.limit_skipped_count += 1
+            add_skipped(
+                path,
+                reason="max_input_bytes_limit",
+                source_kind="limit",
+                size_bytes=path_size,
+            )
+            continue
+        limited_paths.append(path)
+        processed_input_bytes += path_size or 0
+
     summary.skipped_count = len(skipped)
     summary.rejected_count = len(rejected)
+    summary.processed_count = len(limited_paths)
+    summary.processed_input_bytes = processed_input_bytes
 
     return TagFileDiscoveryResult(
-        paths=filtered_paths,
+        paths=limited_paths,
         summary=summary,
         skipped=skipped,
         rejected=rejected,
@@ -328,6 +390,8 @@ def resolve_tag_file_sources(
     recursive: bool = True,
     include_patterns: Iterable[str] = (),
     exclude_patterns: Iterable[str] = (),
+    max_files: int | None = None,
+    max_input_bytes: int | None = None,
 ) -> list[Path]:
     """Resolve explicit files, directories, and globs into a unique ordered file list."""
 
@@ -338,4 +402,6 @@ def resolve_tag_file_sources(
         recursive=recursive,
         include_patterns=include_patterns,
         exclude_patterns=exclude_patterns,
+        max_files=max_files,
+        max_input_bytes=max_input_bytes,
     ).paths

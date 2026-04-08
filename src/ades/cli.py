@@ -186,6 +186,18 @@ def tag_files(
         "--exclude",
         help="Exclude discovered files whose basename or full path matches this glob. Can be provided multiple times.",
     ),
+    max_files: int | None = typer.Option(
+        None,
+        "--max-files",
+        min=0,
+        help="Maximum number of filtered files to process before the remaining inputs are skipped.",
+    ),
+    max_input_bytes: int | None = typer.Option(
+        None,
+        "--max-bytes",
+        min=0,
+        help="Maximum cumulative input bytes to process before the remaining inputs are skipped.",
+    ),
     non_recursive: bool = typer.Option(
         False,
         "--non-recursive",
@@ -229,6 +241,8 @@ def tag_files(
         recursive=not non_recursive,
         include_patterns=include_patterns or [],
         exclude_patterns=exclude_patterns or [],
+        max_files=max_files,
+        max_input_bytes=max_input_bytes,
         write_manifest=write_manifest,
         manifest_output_path=manifest_output,
     )

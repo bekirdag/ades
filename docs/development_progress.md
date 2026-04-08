@@ -94,6 +94,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added batch summary fields for discovered, included, and processed byte totals plus processed, skipped, and rejected counts.
 - Kept the batch manifest aligned with the runtime response so audit artifacts now include per-item input sizes and the full skipped/rejected input lists.
 
+### 13. Corpus-run guardrails
+
+- Added explicit `max_files` and `max_input_bytes` guardrails to local batch tagging across the shared discovery layer, public Python API, CLI, and local-service endpoint.
+- Applied the guardrails in deterministic discovery order after filtering, so once a configured limit is reached the remaining corpus inputs are skipped with explicit limit reasons instead of being processed opportunistically.
+- Extended batch summaries to carry the configured limits plus a `limit_skipped_count` counter for auditability.
+- Preserved manifest parity with runtime responses so batch audit artifacts now include the configured guardrails and the exact inputs skipped because of them.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -148,4 +155,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add corpus-run guardrails with explicit max-file and max-byte limits so larger local jobs can stop early with deterministic skip reasons instead of overrunning local resources.
+- Add resumable corpus runs and manifest replay so a local batch job can be resumed or selectively re-run from the saved audit artifact instead of starting discovery from scratch.

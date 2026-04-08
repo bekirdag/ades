@@ -218,6 +218,8 @@ def tag_files(
     recursive: bool = True,
     include_patterns: Iterable[str] = (),
     exclude_patterns: Iterable[str] = (),
+    max_files: int | None = None,
+    max_input_bytes: int | None = None,
     write_manifest: bool = False,
     manifest_output_path: str | Path | None = None,
 ) -> BatchTagResponse:
@@ -234,6 +236,8 @@ def tag_files(
         recursive=recursive,
         include_patterns=include_patterns,
         exclude_patterns=exclude_patterns,
+        max_files=max_files,
+        max_input_bytes=max_input_bytes,
     )
     loaded_files = load_tag_files(discovery.paths, content_type=content_type)
     items: list[TagResponse] = []

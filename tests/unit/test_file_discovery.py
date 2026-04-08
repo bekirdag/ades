@@ -66,10 +66,11 @@ def test_discover_tag_file_sources_applies_include_exclude_filters_and_tracks_su
     assert discovery.summary.glob_match_count == 2
     assert discovery.summary.discovered_count == 3
     assert discovery.summary.included_count == 1
-    assert discovery.summary.processed_count == 0
+    assert discovery.summary.processed_count == 1
     assert discovery.summary.excluded_count == 2
     assert discovery.summary.skipped_count == 5
     assert discovery.summary.rejected_count == 0
+    assert discovery.summary.limit_skipped_count == 0
     assert discovery.summary.duplicate_count == 2
     assert discovery.summary.generated_output_skipped_count == 1
     assert discovery.summary.discovered_input_bytes == (
@@ -78,7 +79,7 @@ def test_discover_tag_file_sources_applies_include_exclude_filters_and_tracks_su
         + len("<p>NASDAQ</p>".encode("utf-8"))
     )
     assert discovery.summary.included_input_bytes == len("<p>Apple</p>".encode("utf-8"))
-    assert discovery.summary.processed_input_bytes == 0
+    assert discovery.summary.processed_input_bytes == len("<p>Apple</p>".encode("utf-8"))
     assert discovery.summary.include_patterns == ("*report.html",)
     assert discovery.summary.exclude_patterns == ("skip*",)
     skipped_reasons = {(entry.reference, entry.reason) for entry in discovery.skipped}
@@ -107,3 +108,55 @@ def test_discover_tag_file_sources_reports_rejected_inputs_and_empty_results(tmp
     assert (str(missing_dir.resolve()), "directory_not_found") in rejected_pairs
     skipped_pairs = {(entry.reference, entry.reason) for entry in discovery.skipped}
     assert (str(tmp_path / "*.html"), "glob_no_matches") in skipped_pairs
+
+
+def test_discover_tag_file_sources_applies_max_files_guardrail_in_discovery_order(
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "alpha.html"
+    second = tmp_path / "beta.html"
+    third = tmp_path / "gamma.html"
+    first.write_text("<p>Apple</p>", encoding="utf-8")
+    second.write_text("<p>NASDAQ</p>", encoding="utf-8")
+    third.write_text("<p>AAPL</p>", encoding="utf-8")
+
+    discovery = discover_tag_file_sources(
+        paths=[first, second, third],
+        max_files=1,
+    )
+
+    assert discovery.paths == [first.resolve()]
+    assert discovery.summary.max_files == 1
+    assert discovery.summary.included_count == 3
+    assert discovery.summary.processed_count == 1
+    assert discovery.summary.limit_skipped_count == 2
+    assert discovery.summary.processed_input_bytes == len("<p>Apple</p>".encode("utf-8"))
+    skipped_pairs = {(entry.reference, entry.reason) for entry in discovery.skipped}
+    assert (str(second.resolve()), "max_files_limit") in skipped_pairs
+    assert (str(third.resolve()), "max_files_limit") in skipped_pairs
+
+
+def test_discover_tag_file_sources_applies_max_input_bytes_guardrail_in_discovery_order(
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "alpha.html"
+    second = tmp_path / "beta.html"
+    third = tmp_path / "gamma.html"
+    first.write_text("alpha", encoding="utf-8")
+    second.write_text("bravo", encoding="utf-8")
+    third.write_text("charlie", encoding="utf-8")
+
+    discovery = discover_tag_file_sources(
+        paths=[first, second, third],
+        max_input_bytes=5,
+    )
+
+    assert discovery.paths == [first.resolve()]
+    assert discovery.summary.max_input_bytes == 5
+    assert discovery.summary.included_count == 3
+    assert discovery.summary.processed_count == 1
+    assert discovery.summary.limit_skipped_count == 2
+    assert discovery.summary.processed_input_bytes == len("alpha".encode("utf-8"))
+    skipped_pairs = {(entry.reference, entry.reason) for entry in discovery.skipped}
+    assert (str(second.resolve()), "max_input_bytes_limit") in skipped_pairs
+    assert (str(third.resolve()), "max_input_bytes_limit") in skipped_pairs
