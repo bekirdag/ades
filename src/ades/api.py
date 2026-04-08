@@ -24,6 +24,7 @@ from .service.models import (
 from .storage.paths import build_storage_layout, ensure_storage_layout
 from .storage.results import (
     aggregate_batch_warnings,
+    build_batch_manifest_item_from_tag_response,
     build_batch_manifest_replay_plan,
     persist_batch_tag_manifest_json,
     persist_tag_response_json,
@@ -224,6 +225,7 @@ def tag_files(
     manifest_replay_mode: str = "resume",
     skip_unchanged: bool = False,
     reuse_unchanged_outputs: bool = False,
+    repair_missing_reused_outputs: bool = False,
     recursive: bool = True,
     include_patterns: Iterable[str] = (),
     exclude_patterns: Iterable[str] = (),
@@ -253,6 +255,10 @@ def tag_files(
         raise ValueError("reuse_unchanged_outputs requires manifest_input_path.")
     if reuse_unchanged_outputs and not skip_unchanged:
         raise ValueError("reuse_unchanged_outputs requires skip_unchanged.")
+    if repair_missing_reused_outputs and replay_plan is None:
+        raise ValueError("repair_missing_reused_outputs requires manifest_input_path.")
+    if repair_missing_reused_outputs and not reuse_unchanged_outputs:
+        raise ValueError("repair_missing_reused_outputs requires reuse_unchanged_outputs.")
     resolved_pack = pack or (replay_plan.manifest.pack if replay_plan is not None else None) or settings.default_pack
     if (write_manifest or manifest_output_path is not None) and output_dir is None:
         raise ValueError("Batch manifest export requires output_dir.")
@@ -272,6 +278,7 @@ def tag_files(
     items: list[TagResponse] = []
     reused_items: list[BatchManifestItem] = []
     unchanged_skipped_count = 0
+    repaired_reused_output_count = 0
     for path in discovery.paths:
         manifest_content_type = (
             replay_plan.content_type_overrides.get(path)
@@ -299,15 +306,51 @@ def tag_files(
                 )
             )
             if reuse_unchanged_outputs:
-                reused_items.append(
-                    baseline_item.model_copy(
-                        update={
-                            "source_path": str(resolved_path),
-                            "input_size_bytes": input_size_bytes,
-                            "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
-                        }
-                    )
+                reused_item = baseline_item.model_copy(
+                    update={
+                        "source_path": str(resolved_path),
+                        "input_size_bytes": input_size_bytes,
+                        "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
+                    }
                 )
+                if repair_missing_reused_outputs:
+                    has_saved_output_path = reused_item.saved_output_path is not None
+                    saved_output_exists = (
+                        Path(reused_item.saved_output_path).expanduser().resolve().exists()
+                        if has_saved_output_path
+                        else False
+                    )
+                    if (not has_saved_output_path and output_dir is not None) or (
+                        has_saved_output_path and not saved_output_exists
+                    ):
+                        repaired_response = tag_text(
+                            text=text,
+                            pack=resolved_pack,
+                            content_type=resolved_content_type,
+                            storage_root=settings.storage_root,
+                        ).model_copy(
+                            update={
+                                "content_type": resolved_content_type,
+                                "source_path": str(resolved_path),
+                                "input_size_bytes": input_size_bytes,
+                                "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
+                            }
+                        )
+                        repaired_response = persist_tag_response_json(
+                            repaired_response,
+                            pack_id=resolved_pack,
+                            output_path=reused_item.saved_output_path if has_saved_output_path else None,
+                            output_dir=output_dir if not has_saved_output_path else None,
+                            pretty=pretty_output,
+                        )
+                        repaired_reused_output_count += 1
+                        reused_item = build_batch_manifest_item_from_tag_response(
+                            repaired_response,
+                            extra_warnings=[
+                                f"repaired_reused_output:{repaired_response.saved_output_path}"
+                            ],
+                        )
+                reused_items.append(reused_item)
             continue
         response = tag_text(
             text=text,
@@ -340,6 +383,7 @@ def tag_files(
     summary_payload["unchanged_skipped_count"] = unchanged_skipped_count
     summary_payload["unchanged_reused_count"] = len(reused_items)
     summary_payload["reused_output_missing_count"] = reused_output_missing_count
+    summary_payload["repaired_reused_output_count"] = repaired_reused_output_count
     summary_payload["manifest_input_path"] = (
         str(Path(manifest_input_path).expanduser().resolve())
         if manifest_input_path is not None

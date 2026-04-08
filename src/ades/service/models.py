@@ -117,6 +117,7 @@ class BatchFileTagRequest(BaseModel):
     manifest_replay_mode: Literal["resume", "processed", "all"] = "resume"
     skip_unchanged: bool = False
     reuse_unchanged_outputs: bool = False
+    repair_missing_reused_outputs: bool = False
     include_patterns: list[str] = Field(default_factory=list)
     exclude_patterns: list[str] = Field(default_factory=list)
     recursive: bool = True
@@ -136,6 +137,10 @@ class BatchFileTagRequest(BaseModel):
                 raise ValueError("reuse_unchanged_outputs requires manifest_input_path.")
             if self.reuse_unchanged_outputs and not self.skip_unchanged:
                 raise ValueError("reuse_unchanged_outputs requires skip_unchanged.")
+            if self.repair_missing_reused_outputs and self.manifest_input_path is None:
+                raise ValueError("repair_missing_reused_outputs requires manifest_input_path.")
+            if self.repair_missing_reused_outputs and not self.reuse_unchanged_outputs:
+                raise ValueError("repair_missing_reused_outputs requires reuse_unchanged_outputs.")
             return self
         raise ValueError(
             "At least one of paths, directories, glob_patterns, or manifest_input_path is required."
@@ -175,6 +180,7 @@ class BatchSourceSummary(BaseModel):
     unchanged_skipped_count: int = 0
     unchanged_reused_count: int = 0
     reused_output_missing_count: int = 0
+    repaired_reused_output_count: int = 0
     duplicate_count: int
     generated_output_skipped_count: int
     discovered_input_bytes: int

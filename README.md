@@ -40,6 +40,7 @@ ades tag-files --directory ./corpus --pack finance-en --max-files 100 --max-byte
 ades tag-files --manifest-input ./outputs/batch.finance-en.ades-manifest.json --manifest-mode resume
 ades tag-files --directory ./corpus --manifest-input ./outputs/batch.finance-en.ades-manifest.json --skip-unchanged --pack finance-en
 ades tag-files --directory ./corpus --manifest-input ./outputs/batch.finance-en.ades-manifest.json --skip-unchanged --reuse-unchanged-outputs --pack finance-en
+ades tag-files --directory ./corpus --manifest-input ./outputs/batch.finance-en.ades-manifest.json --skip-unchanged --reuse-unchanged-outputs --repair-missing-reused-outputs --pack finance-en
 ```
 
 ## Current Usage
@@ -128,7 +129,8 @@ This repository now contains a working `v0.1.0` scaffold with:
 - source fingerprinting plus unchanged-file skip detection so repeated local corpus runs can avoid re-tagging files whose content has not changed since the last saved manifest
 - unchanged-output reuse so skipped unchanged files can optionally carry forward prior manifest output metadata in a dedicated `reused_items` collection during reruns
 - reused-output verification so carried-forward manifest items now report `saved_output_exists` and emit deterministic warnings when the referenced output file is unavailable
+- rerun repair mode so missing reused outputs can be regenerated automatically and recorded with `repaired_reused_output:<path>` warnings plus `repaired_reused_output_count`
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The next local-tool step is to add rerun repair mode so missing reused outputs can be regenerated automatically instead of only emitting warnings.
+The next local-tool step is to add rerun diff reporting so local batch reruns can summarize which files were changed, reused, repaired, skipped, or newly processed compared with the prior manifest.

@@ -129,6 +129,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Extended batch summaries with a `reused_output_missing_count` counter so rerun audit output shows how many reused outputs are unavailable.
 - Kept manifest export self-consistent by re-verifying reused items and normalizing missing-output warnings during manifest persistence.
 
+### 18. Rerun repair mode for missing reused outputs
+
+- Added opt-in rerun repair mode so a local batch rerun can regenerate missing reused JSON outputs instead of only reporting them as unavailable.
+- Kept repaired files in the existing `reused_items` path so `items` still represent newly processed changed or new inputs only.
+- Extended batch summaries with a `repaired_reused_output_count` counter so rerun audit output records how many reused outputs were regenerated during the run.
+- Added deterministic `repaired_reused_output:<path>` warnings on repaired reused items so callers can distinguish repaired outputs from reused outputs that were already present.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -184,4 +191,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add rerun repair mode so missing reused outputs can be regenerated automatically instead of only emitting warnings.
+- Add rerun diff reporting so local batch reruns can summarize which files were changed, reused, repaired, skipped, or newly processed compared with the prior manifest.

@@ -196,6 +196,11 @@ def tag_files(
         "--reuse-unchanged-outputs",
         help="When skipping unchanged files, carry forward their prior saved output metadata from the manifest.",
     ),
+    repair_missing_reused_outputs: bool = typer.Option(
+        False,
+        "--repair-missing-reused-outputs",
+        help="When reusing unchanged outputs, regenerate missing JSON artifacts instead of only warning.",
+    ),
     include_patterns: list[str] = typer.Option(
         None,
         "--include",
@@ -254,6 +259,12 @@ def tag_files(
         raise typer.BadParameter("Use --manifest-input when enabling --reuse-unchanged-outputs.")
     if reuse_unchanged_outputs and not skip_unchanged:
         raise typer.BadParameter("Use --skip-unchanged when enabling --reuse-unchanged-outputs.")
+    if repair_missing_reused_outputs and manifest_input is None:
+        raise typer.BadParameter("Use --manifest-input when enabling --repair-missing-reused-outputs.")
+    if repair_missing_reused_outputs and not reuse_unchanged_outputs:
+        raise typer.BadParameter(
+            "Use --reuse-unchanged-outputs when enabling --repair-missing-reused-outputs."
+        )
     if (write_manifest or manifest_output is not None) and output_dir is None:
         raise typer.BadParameter("Use --output-dir when writing a batch manifest.")
     response = api_tag_files(
@@ -268,6 +279,7 @@ def tag_files(
         manifest_replay_mode=manifest_mode,
         skip_unchanged=skip_unchanged,
         reuse_unchanged_outputs=reuse_unchanged_outputs,
+        repair_missing_reused_outputs=repair_missing_reused_outputs,
         recursive=not non_recursive,
         include_patterns=include_patterns or [],
         exclude_patterns=exclude_patterns or [],

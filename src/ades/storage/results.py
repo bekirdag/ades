@@ -174,6 +174,32 @@ def verify_reused_output_items(
     return verified_items, missing_count
 
 
+def build_batch_manifest_item_from_tag_response(
+    response: TagResponse,
+    *,
+    extra_warnings: list[str] | None = None,
+) -> BatchManifestItem:
+    """Build one compact manifest item from a full tag response."""
+
+    warnings = sorted({*response.warnings, *(extra_warnings or [])})
+    saved_output_path, saved_output_exists = _resolve_saved_output_path_status(
+        response.saved_output_path
+    )
+    return BatchManifestItem(
+        source_path=response.source_path,
+        saved_output_path=saved_output_path,
+        saved_output_exists=saved_output_exists,
+        content_type=response.content_type,
+        input_size_bytes=response.input_size_bytes,
+        source_fingerprint=response.source_fingerprint,
+        warning_count=len(warnings),
+        warnings=warnings,
+        entity_count=len(response.entities),
+        topic_count=len(response.topics),
+        timing_ms=response.timing_ms,
+    )
+
+
 def aggregate_batch_warnings(
     responses: list[TagResponse],
     *,
@@ -290,19 +316,7 @@ def build_batch_manifest(response: BatchTagResponse) -> BatchManifest:
         rejected=response.rejected,
         reused_items=verified_reused_items,
         items=[
-            BatchManifestItem(
-                source_path=item.source_path,
-                saved_output_path=_resolve_saved_output_path_status(item.saved_output_path)[0],
-                saved_output_exists=_resolve_saved_output_path_status(item.saved_output_path)[1],
-                content_type=item.content_type,
-                input_size_bytes=item.input_size_bytes,
-                source_fingerprint=item.source_fingerprint,
-                warning_count=len(item.warnings),
-                warnings=item.warnings,
-                entity_count=len(item.entities),
-                topic_count=len(item.topics),
-                timing_ms=item.timing_ms,
-            )
+            build_batch_manifest_item_from_tag_response(item)
             for item in response.items
         ],
     )

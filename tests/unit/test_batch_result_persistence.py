@@ -10,6 +10,7 @@ from ades.service.models import (
 )
 from ades.storage.results import (
     aggregate_batch_warnings,
+    build_batch_manifest_item_from_tag_response,
     persist_batch_tag_manifest_json,
     persist_tag_responses_json,
     verify_reused_output_items,
@@ -202,3 +203,21 @@ def test_verify_reused_output_items_marks_missing_output_paths(tmp_path: Path) -
     assert verified_items[0].saved_output_exists is False
     assert verified_items[0].warnings == [f"reused_output_missing_file:{missing_output.resolve()}"]
     assert verified_items[0].warning_count == 1
+
+
+def test_build_batch_manifest_item_from_tag_response_marks_repaired_output(tmp_path: Path) -> None:
+    output_path = tmp_path / "stable.finance-en.ades.json"
+    output_path.write_text("{}", encoding="utf-8")
+    response = _response("/tmp/alpha/report.html").model_copy(
+        update={"saved_output_path": str(output_path)}
+    )
+
+    item = build_batch_manifest_item_from_tag_response(
+        response,
+        extra_warnings=[f"repaired_reused_output:{output_path.resolve()}"],
+    )
+
+    assert item.saved_output_path == str(output_path.resolve())
+    assert item.saved_output_exists is True
+    assert item.warnings == [f"repaired_reused_output:{output_path.resolve()}"]
+    assert item.warning_count == 1
