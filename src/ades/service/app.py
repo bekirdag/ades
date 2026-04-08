@@ -156,6 +156,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 glob_patterns=request.glob_patterns,
                 manifest_input_path=request.manifest_input_path,
                 manifest_replay_mode=request.manifest_replay_mode,
+                skip_unchanged=request.skip_unchanged,
                 recursive=request.recursive,
                 include_patterns=request.include_patterns,
                 exclude_patterns=request.exclude_patterns,

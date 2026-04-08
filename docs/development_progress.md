@@ -108,6 +108,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Reused the existing batch pipeline for replayed sources so filtering, guardrails, persistence, and audit reporting remain consistent with normal local corpus runs.
 - Extended batch summaries with manifest replay metadata such as the manifest path, replay mode, and manifest candidate/selected counts.
 
+### 15. Source fingerprinting and unchanged-file skip detection
+
+- Added stable source fingerprints to file-based tag results and batch manifest items using file size, modification time, and SHA-256 content hash.
+- Added `skip_unchanged` support for repeated local corpus runs, so a saved batch manifest can act as a fingerprint baseline while the current corpus is rediscovered normally.
+- Kept unchanged detection deterministic and local-only by comparing the newly loaded file fingerprint with the prior manifest fingerprint before running the tagger.
+- Extended batch summaries with an `unchanged_skipped_count` counter so audit output explains how many files were intentionally not re-tagged.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -162,4 +169,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add source fingerprinting and unchanged-file skip detection so repeated local corpus runs can avoid re-tagging files that have not changed since the last saved manifest.
+- Add unchanged-output reuse so skipped unchanged files can optionally carry forward their prior saved output metadata instead of only appearing as skipped inputs.

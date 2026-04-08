@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from ades.service.models import BatchSourceSummary, BatchTagResponse, TagResponse
+from ades.service.models import BatchSourceSummary, BatchTagResponse, SourceFingerprint, TagResponse
 from ades.storage.results import (
     aggregate_batch_warnings,
     persist_batch_tag_manifest_json,
@@ -17,6 +17,11 @@ def _response(source_path: str) -> TagResponse:
         content_type="text/html",
         source_path=source_path,
         input_size_bytes=12,
+        source_fingerprint=SourceFingerprint(
+            size_bytes=12,
+            modified_time_ns=123,
+            sha256="a" * 64,
+        ),
         entities=[],
         topics=[],
         warnings=[],
@@ -101,3 +106,4 @@ def test_persist_batch_manifest_json_writes_aggregated_audit_artifact(tmp_path: 
         tmp_path.resolve() / "outputs" / "report.finance-en.ades.json"
     )
     assert payload["items"][0]["input_size_bytes"] == 12
+    assert payload["items"][0]["source_fingerprint"]["sha256"] == "a" * 64

@@ -6,6 +6,7 @@ from dataclasses import asdict
 from dataclasses import dataclass
 from fnmatch import fnmatch
 from glob import glob
+import hashlib
 from pathlib import Path
 from typing import Iterable
 
@@ -21,6 +22,20 @@ class TagFileSkippedEntry:
     reason: str
     source_kind: str
     size_bytes: int | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a stable dictionary payload for API model construction."""
+
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class TagSourceFingerprint:
+    """Stable local fingerprint for a source file."""
+
+    size_bytes: int
+    modified_time_ns: int
+    sha256: str
 
     def to_dict(self) -> dict[str, object]:
         """Return a stable dictionary payload for API model construction."""
@@ -56,6 +71,7 @@ class TagFileDiscoverySummary:
     skipped_count: int = 0
     rejected_count: int = 0
     limit_skipped_count: int = 0
+    unchanged_skipped_count: int = 0
     duplicate_count: int = 0
     generated_output_skipped_count: int = 0
     discovered_input_bytes: int = 0
@@ -110,20 +126,27 @@ def load_tag_file(
     path: str | Path,
     *,
     content_type: str | None = None,
-) -> tuple[Path, str, str, int]:
+) -> tuple[Path, str, str, int, TagSourceFingerprint]:
     """Resolve, validate, and read a local file for tagging."""
 
     resolved_path = resolve_tag_file(path)
     resolved_content_type = content_type or infer_content_type(resolved_path)
-    text = resolved_path.read_text(encoding="utf-8", errors="replace")
-    return resolved_path, text, resolved_content_type, resolved_path.stat().st_size
+    payload = resolved_path.read_bytes()
+    stat = resolved_path.stat()
+    text = payload.decode("utf-8", errors="replace")
+    fingerprint = TagSourceFingerprint(
+        size_bytes=stat.st_size,
+        modified_time_ns=stat.st_mtime_ns,
+        sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    return resolved_path, text, resolved_content_type, stat.st_size, fingerprint
 
 
 def load_tag_files(
     paths: list[str | Path] | tuple[str | Path, ...],
     *,
     content_type: str | None = None,
-) -> list[tuple[Path, str, str, int]]:
+) -> list[tuple[Path, str, str, int, TagSourceFingerprint]]:
     """Resolve, validate, and read multiple local files for tagging."""
 
     if not paths:

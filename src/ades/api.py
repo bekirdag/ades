@@ -8,7 +8,7 @@ from typing import Iterable
 from .config import Settings, get_settings
 from .packs.installer import InstallResult, PackInstaller
 from .packs.registry import PackRegistry
-from .pipeline.files import discover_tag_file_sources, load_tag_file
+from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load_tag_file
 from .pipeline.tagger import tag_text
 from .service.models import (
     BatchSourceSummary,
@@ -16,6 +16,7 @@ from .service.models import (
     LookupCandidate,
     LookupResponse,
     PackSummary,
+    SourceFingerprint,
     StatusResponse,
     TagResponse,
 )
@@ -178,7 +179,7 @@ def tag_file(
 
     settings = _resolve_settings(storage_root=storage_root)
     resolved_pack = pack or settings.default_pack
-    resolved_path, text, resolved_content_type, input_size_bytes = load_tag_file(
+    resolved_path, text, resolved_content_type, input_size_bytes, source_fingerprint = load_tag_file(
         path,
         content_type=content_type,
     )
@@ -193,6 +194,7 @@ def tag_file(
             "content_type": resolved_content_type,
             "source_path": str(resolved_path),
             "input_size_bytes": input_size_bytes,
+            "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
         }
     )
     if output_path is not None or output_dir is not None:
@@ -218,6 +220,7 @@ def tag_files(
     glob_patterns: Iterable[str] = (),
     manifest_input_path: str | Path | None = None,
     manifest_replay_mode: str = "resume",
+    skip_unchanged: bool = False,
     recursive: bool = True,
     include_patterns: Iterable[str] = (),
     exclude_patterns: Iterable[str] = (),
@@ -229,6 +232,10 @@ def tag_files(
     """Run in-process tagging for multiple local file paths."""
 
     settings = _resolve_settings(storage_root=storage_root)
+    explicit_paths = [Path(path) for path in paths]
+    resolved_directories = [Path(path) for path in directories]
+    resolved_glob_patterns = list(glob_patterns)
+    has_discovery_sources = bool(explicit_paths or resolved_directories or resolved_glob_patterns)
     replay_plan = (
         build_batch_manifest_replay_plan(
             manifest_input_path,
@@ -237,13 +244,18 @@ def tag_files(
         if manifest_input_path is not None
         else None
     )
+    if skip_unchanged and replay_plan is None:
+        raise ValueError("skip_unchanged requires manifest_input_path.")
     resolved_pack = pack or (replay_plan.manifest.pack if replay_plan is not None else None) or settings.default_pack
     if (write_manifest or manifest_output_path is not None) and output_dir is None:
         raise ValueError("Batch manifest export requires output_dir.")
     discovery = discover_tag_file_sources(
-        paths=[*(Path(path) for path in paths), *(replay_plan.paths if replay_plan is not None else [])],
-        directories=directories,
-        glob_patterns=glob_patterns,
+        paths=[
+            *explicit_paths,
+            *(replay_plan.paths if replay_plan is not None and not has_discovery_sources else []),
+        ],
+        directories=resolved_directories,
+        glob_patterns=resolved_glob_patterns,
         recursive=recursive,
         include_patterns=include_patterns,
         exclude_patterns=exclude_patterns,
@@ -251,16 +263,34 @@ def tag_files(
         max_input_bytes=max_input_bytes,
     )
     items: list[TagResponse] = []
+    unchanged_skipped_count = 0
     for path in discovery.paths:
         manifest_content_type = (
             replay_plan.content_type_overrides.get(path)
             if replay_plan is not None
             else None
         )
-        resolved_path, text, resolved_content_type, input_size_bytes = load_tag_file(
+        resolved_path, text, resolved_content_type, input_size_bytes, source_fingerprint = load_tag_file(
             path,
             content_type=content_type or manifest_content_type,
         )
+        baseline_item = replay_plan.item_index.get(resolved_path) if replay_plan is not None else None
+        if (
+            skip_unchanged
+            and baseline_item is not None
+            and baseline_item.source_fingerprint is not None
+            and baseline_item.source_fingerprint.model_dump(mode="python") == source_fingerprint.to_dict()
+        ):
+            unchanged_skipped_count += 1
+            discovery.skipped.append(
+                TagFileSkippedEntry(
+                    reference=str(resolved_path),
+                    reason="unchanged_since_manifest",
+                    source_kind="fingerprint",
+                    size_bytes=input_size_bytes,
+                )
+            )
+            continue
         response = tag_text(
             text=text,
             pack=resolved_pack,
@@ -273,6 +303,7 @@ def tag_files(
                     "content_type": resolved_content_type,
                     "source_path": str(resolved_path),
                     "input_size_bytes": input_size_bytes,
+                    "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
                 }
             )
         )
@@ -286,17 +317,27 @@ def tag_files(
     summary_payload = discovery.summary.to_dict()
     summary_payload["processed_count"] = len(items)
     summary_payload["processed_input_bytes"] = sum(item.input_size_bytes or 0 for item in items)
+    summary_payload["skipped_count"] = len(discovery.skipped)
+    summary_payload["unchanged_skipped_count"] = unchanged_skipped_count
     summary_payload["manifest_input_path"] = (
         str(Path(manifest_input_path).expanduser().resolve())
         if manifest_input_path is not None
         else None
     )
     summary_payload["manifest_replay_mode"] = manifest_replay_mode if replay_plan is not None else None
-    summary_payload["manifest_candidate_count"] = replay_plan.candidate_count if replay_plan is not None else 0
-    summary_payload["manifest_selected_count"] = replay_plan.selected_count if replay_plan is not None else 0
+    summary_payload["manifest_candidate_count"] = (
+        replay_plan.candidate_count
+        if replay_plan is not None and not has_discovery_sources
+        else 0
+    )
+    summary_payload["manifest_selected_count"] = (
+        replay_plan.selected_count
+        if replay_plan is not None and not has_discovery_sources
+        else 0
+    )
     summary = BatchSourceSummary(**summary_payload)
     warnings = aggregate_batch_warnings(items)
-    if replay_plan is not None and replay_plan.selected_count == 0:
+    if replay_plan is not None and not has_discovery_sources and replay_plan.selected_count == 0:
         warnings = sorted({*warnings, "manifest_replay_empty"})
     if replay_plan is not None and pack is not None and pack != replay_plan.manifest.pack:
         warnings = sorted({*warnings, f"manifest_pack_override:{replay_plan.manifest.pack}->{pack}"})

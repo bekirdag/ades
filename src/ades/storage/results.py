@@ -22,6 +22,7 @@ class BatchManifestReplayPlan:
     manifest: BatchManifest
     paths: list[Path]
     content_type_overrides: dict[Path, str]
+    item_index: dict[Path, BatchManifestItem]
     candidate_count: int
     selected_count: int
 
@@ -169,8 +170,13 @@ def build_batch_manifest_replay_plan(
     manifest = load_batch_manifest(path)
     paths: list[Path] = []
     content_type_overrides: dict[Path, str] = {}
+    item_index: dict[Path, BatchManifestItem] = {}
     seen: set[Path] = set()
     candidate_count = 0
+
+    for item in manifest.items:
+        if item.source_path:
+            item_index[Path(item.source_path).expanduser().resolve()] = item
 
     def add_candidate(source_path: str, *, content_type: str | None = None) -> None:
         nonlocal candidate_count
@@ -197,6 +203,7 @@ def build_batch_manifest_replay_plan(
         manifest=manifest,
         paths=paths,
         content_type_overrides=content_type_overrides,
+        item_index=item_index,
         candidate_count=candidate_count,
         selected_count=len(paths),
     )
@@ -219,6 +226,7 @@ def build_batch_manifest(response: BatchTagResponse) -> BatchManifest:
                 saved_output_path=item.saved_output_path,
                 content_type=item.content_type,
                 input_size_bytes=item.input_size_bytes,
+                source_fingerprint=item.source_fingerprint,
                 warning_count=len(item.warnings),
                 warnings=item.warnings,
                 entity_count=len(item.entities),

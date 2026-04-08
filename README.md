@@ -38,6 +38,7 @@ ades tag-files --directory ./corpus --include "*earnings*.html" --exclude "*draf
 ades tag-files ./notes/report-a.html ./notes/report-b.html --pack finance-en --output-dir ./outputs --write-manifest
 ades tag-files --directory ./corpus --pack finance-en --max-files 100 --max-bytes 5000000
 ades tag-files --manifest-input ./outputs/batch.finance-en.ades-manifest.json --manifest-mode resume
+ades tag-files --directory ./corpus --manifest-input ./outputs/batch.finance-en.ades-manifest.json --skip-unchanged --pack finance-en
 ```
 
 ## Current Usage
@@ -123,7 +124,8 @@ This repository now contains a working `v0.1.0` scaffold with:
 - corpus input-size accounting plus explicit skipped/rejected input reporting so batch local runs can explain what was processed, skipped, or rejected
 - corpus-run guardrails with explicit max-file and max-byte limits so local jobs stop in deterministic discovery order with explicit limit skip reasons
 - resumable corpus runs and manifest replay so saved batch manifests can resume deferred work or selectively replay processed corpus inputs
+- source fingerprinting plus unchanged-file skip detection so repeated local corpus runs can avoid re-tagging files whose content has not changed since the last saved manifest
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The next local-tool step is to add source fingerprinting and unchanged-file skip detection so repeated local corpus runs can avoid re-tagging files that have not changed since the last saved manifest.
+The next local-tool step is to add unchanged-output reuse so skipped unchanged files can optionally carry forward their prior saved output metadata instead of only appearing as skipped inputs.
