@@ -177,7 +177,10 @@ def tag_file(
 
     settings = _resolve_settings(storage_root=storage_root)
     resolved_pack = pack or settings.default_pack
-    resolved_path, text, resolved_content_type = load_tag_file(path, content_type=content_type)
+    resolved_path, text, resolved_content_type, input_size_bytes = load_tag_file(
+        path,
+        content_type=content_type,
+    )
     response = tag_text(
         text=text,
         pack=resolved_pack,
@@ -188,6 +191,7 @@ def tag_file(
         update={
             "content_type": resolved_content_type,
             "source_path": str(resolved_path),
+            "input_size_bytes": input_size_bytes,
         }
     )
     if output_path is not None or output_dir is not None:
@@ -233,7 +237,7 @@ def tag_files(
     )
     loaded_files = load_tag_files(discovery.paths, content_type=content_type)
     items: list[TagResponse] = []
-    for resolved_path, text, resolved_content_type in loaded_files:
+    for resolved_path, text, resolved_content_type, input_size_bytes in loaded_files:
         response = tag_text(
             text=text,
             pack=resolved_pack,
@@ -245,6 +249,7 @@ def tag_files(
                 update={
                     "content_type": resolved_content_type,
                     "source_path": str(resolved_path),
+                    "input_size_bytes": input_size_bytes,
                 }
             )
         )
@@ -255,11 +260,20 @@ def tag_files(
             output_dir=output_dir,
             pretty=pretty_output,
         )
+    summary_payload = discovery.summary.to_dict()
+    summary_payload["processed_count"] = len(items)
+    summary_payload["processed_input_bytes"] = sum(item.input_size_bytes or 0 for item in items)
+    summary = BatchSourceSummary(**summary_payload)
+    warnings = aggregate_batch_warnings(items)
+    if not items:
+        warnings = sorted({*warnings, "no_files_processed"})
     response = BatchTagResponse(
         pack=resolved_pack,
         item_count=len(items),
-        summary=BatchSourceSummary(**discovery.summary.to_dict()),
-        warnings=aggregate_batch_warnings(items),
+        summary=summary,
+        warnings=warnings,
+        skipped=[entry.to_dict() for entry in discovery.skipped],
+        rejected=[entry.to_dict() for entry in discovery.rejected],
         items=items,
     )
     if write_manifest or manifest_output_path is not None:

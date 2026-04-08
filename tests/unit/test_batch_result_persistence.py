@@ -16,6 +16,7 @@ def _response(source_path: str) -> TagResponse:
         language="en",
         content_type="text/html",
         source_path=source_path,
+        input_size_bytes=12,
         entities=[],
         topics=[],
         warnings=[],
@@ -67,12 +68,20 @@ def test_persist_batch_manifest_json_writes_aggregated_audit_artifact(tmp_path: 
             glob_match_count=0,
             discovered_count=2,
             included_count=2,
+            processed_count=2,
             excluded_count=0,
+            skipped_count=0,
+            rejected_count=0,
             duplicate_count=0,
             generated_output_skipped_count=0,
+            discovered_input_bytes=24,
+            included_input_bytes=24,
+            processed_input_bytes=24,
             recursive=True,
         ),
         warnings=aggregate_batch_warnings(persisted_items),
+        skipped=[],
+        rejected=[],
         items=persisted_items,
     )
 
@@ -91,3 +100,4 @@ def test_persist_batch_manifest_json_writes_aggregated_audit_artifact(tmp_path: 
     assert payload["items"][0]["saved_output_path"] == str(
         tmp_path.resolve() / "outputs" / "report.finance-en.ades.json"
     )
+    assert payload["items"][0]["input_size_bytes"] == 12

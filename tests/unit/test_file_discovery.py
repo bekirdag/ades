@@ -66,8 +66,44 @@ def test_discover_tag_file_sources_applies_include_exclude_filters_and_tracks_su
     assert discovery.summary.glob_match_count == 2
     assert discovery.summary.discovered_count == 3
     assert discovery.summary.included_count == 1
+    assert discovery.summary.processed_count == 0
     assert discovery.summary.excluded_count == 2
+    assert discovery.summary.skipped_count == 5
+    assert discovery.summary.rejected_count == 0
     assert discovery.summary.duplicate_count == 2
     assert discovery.summary.generated_output_skipped_count == 1
+    assert discovery.summary.discovered_input_bytes == (
+        len("alpha".encode("utf-8"))
+        + len("<p>Apple</p>".encode("utf-8"))
+        + len("<p>NASDAQ</p>".encode("utf-8"))
+    )
+    assert discovery.summary.included_input_bytes == len("<p>Apple</p>".encode("utf-8"))
+    assert discovery.summary.processed_input_bytes == 0
     assert discovery.summary.include_patterns == ("*report.html",)
     assert discovery.summary.exclude_patterns == ("skip*",)
+    skipped_reasons = {(entry.reference, entry.reason) for entry in discovery.skipped}
+    assert (str(generated_output.resolve()), "generated_output") in skipped_reasons
+    assert (str(keep_path.resolve()), "duplicate") in skipped_reasons
+    assert (str(explicit_path.resolve()), "include_filter_miss") in skipped_reasons
+    assert (str(drop_path.resolve()), "exclude_filter_match") in skipped_reasons
+
+
+def test_discover_tag_file_sources_reports_rejected_inputs_and_empty_results(tmp_path: Path) -> None:
+    missing_file = tmp_path / "missing.html"
+    missing_dir = tmp_path / "missing-dir"
+
+    discovery = discover_tag_file_sources(
+        paths=[missing_file],
+        directories=[missing_dir],
+        glob_patterns=[str(tmp_path / "*.html")],
+    )
+
+    assert discovery.paths == []
+    assert discovery.summary.discovered_count == 0
+    assert discovery.summary.rejected_count == 2
+    assert discovery.summary.skipped_count == 1
+    rejected_pairs = {(entry.reference, entry.reason) for entry in discovery.rejected}
+    assert (str(missing_file.expanduser()), "file_not_found") in rejected_pairs
+    assert (str(missing_dir.resolve()), "directory_not_found") in rejected_pairs
+    skipped_pairs = {(entry.reference, entry.reason) for entry in discovery.skipped}
+    assert (str(tmp_path / "*.html"), "glob_no_matches") in skipped_pairs

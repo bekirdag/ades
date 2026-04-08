@@ -128,6 +128,7 @@ class TagResponse(BaseModel):
     language: str
     content_type: str
     source_path: str | None = None
+    input_size_bytes: int | None = None
     saved_output_path: str | None = None
     entities: list[EntityMatch] = Field(default_factory=list)
     topics: list[TopicMatch] = Field(default_factory=list)
@@ -143,12 +144,35 @@ class BatchSourceSummary(BaseModel):
     glob_match_count: int
     discovered_count: int
     included_count: int
+    processed_count: int
     excluded_count: int
+    skipped_count: int
+    rejected_count: int
     duplicate_count: int
     generated_output_skipped_count: int
+    discovered_input_bytes: int
+    included_input_bytes: int
+    processed_input_bytes: int
     recursive: bool
     include_patterns: list[str] = Field(default_factory=list)
     exclude_patterns: list[str] = Field(default_factory=list)
+
+
+class BatchSkippedInput(BaseModel):
+    """One skipped corpus input with a deterministic reason."""
+
+    reference: str
+    reason: str
+    source_kind: str
+    size_bytes: int | None = None
+
+
+class BatchRejectedInput(BaseModel):
+    """One rejected corpus input that could not be accepted for processing."""
+
+    reference: str
+    reason: str
+    source_kind: str
 
 
 class BatchTagResponse(BaseModel):
@@ -159,6 +183,8 @@ class BatchTagResponse(BaseModel):
     summary: BatchSourceSummary
     warnings: list[str] = Field(default_factory=list)
     saved_manifest_path: str | None = None
+    skipped: list[BatchSkippedInput] = Field(default_factory=list)
+    rejected: list[BatchRejectedInput] = Field(default_factory=list)
     items: list[TagResponse] = Field(default_factory=list)
 
 
@@ -168,6 +194,7 @@ class BatchManifestItem(BaseModel):
     source_path: str | None = None
     saved_output_path: str | None = None
     content_type: str
+    input_size_bytes: int | None = None
     warning_count: int
     warnings: list[str] = Field(default_factory=list)
     entity_count: int
@@ -183,6 +210,8 @@ class BatchManifest(BaseModel):
     item_count: int
     summary: BatchSourceSummary
     warnings: list[str] = Field(default_factory=list)
+    skipped: list[BatchSkippedInput] = Field(default_factory=list)
+    rejected: list[BatchRejectedInput] = Field(default_factory=list)
     items: list[BatchManifestItem] = Field(default_factory=list)
 
 

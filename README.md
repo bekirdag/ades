@@ -118,7 +118,8 @@ This repository now contains a working `v0.1.0` scaffold with:
 - directory and glob discovery for batch local tagging so corpus runs do not require enumerating every file path
 - include/exclude filtering plus batch summary metadata for local corpus runs so discovery, filtering, and audit counts are visible in one response
 - run-level manifest export plus aggregated batch warnings so corpus jobs can emit one stable audit artifact alongside per-file outputs
+- corpus input-size accounting plus explicit skipped/rejected input reporting so batch local runs can explain what was processed, skipped, or rejected
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The next local-tool step is to add corpus input-size accounting and skip reporting so larger local runs can explain exactly what was processed, skipped, or rejected.
+The next local-tool step is to add corpus-run guardrails with explicit max-file and max-byte limits so larger local jobs can stop early with deterministic skip reasons instead of overrunning local resources.

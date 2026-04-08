@@ -129,11 +129,14 @@ def build_batch_manifest(response: BatchTagResponse) -> BatchManifest:
         item_count=response.item_count,
         summary=response.summary,
         warnings=response.warnings,
+        skipped=response.skipped,
+        rejected=response.rejected,
         items=[
             BatchManifestItem(
                 source_path=item.source_path,
                 saved_output_path=item.saved_output_path,
                 content_type=item.content_type,
+                input_size_bytes=item.input_size_bytes,
                 warning_count=len(item.warnings),
                 warnings=item.warnings,
                 entity_count=len(item.entities),

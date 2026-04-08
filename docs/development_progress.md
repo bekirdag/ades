@@ -87,6 +87,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Kept manifest export additive to the existing batch output flow by requiring the existing output-directory path instead of introducing a second persistence mode.
 - Added manifest persistence helpers that write a compact run summary, aggregated warnings, and per-item output references without duplicating full extraction payloads.
 
+### 12. Corpus input-size accounting and skip reporting
+
+- Added per-file input-size accounting to local file and batch tagging responses so callers can see how many source bytes were actually processed.
+- Extended batch local tagging to report deterministic skipped and rejected inputs instead of failing or silently dropping discovery edge cases.
+- Added batch summary fields for discovered, included, and processed byte totals plus processed, skipped, and rejected counts.
+- Kept the batch manifest aligned with the runtime response so audit artifacts now include per-item input sizes and the full skipped/rejected input lists.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -141,4 +148,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add corpus input-size accounting and skip reporting so larger local runs can explain exactly what was processed, skipped, or rejected.
+- Add corpus-run guardrails with explicit max-file and max-byte limits so larger local jobs can stop early with deterministic skip reasons instead of overrunning local resources.
