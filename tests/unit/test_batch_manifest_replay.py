@@ -41,6 +41,19 @@ def _write_manifest(path: Path) -> Path:
             )
         ],
         rejected=[],
+        reused_items=[
+            BatchManifestItem(
+                source_path="/tmp/reused.html",
+                saved_output_path="/tmp/reused.finance-en.ades.json",
+                content_type="text/html",
+                input_size_bytes=7,
+                warning_count=1,
+                warnings=["empty_input"],
+                entity_count=0,
+                topic_count=0,
+                timing_ms=1,
+            )
+        ],
         items=[
             BatchManifestItem(
                 source_path="/tmp/alpha.html",
@@ -71,7 +84,12 @@ def test_build_batch_manifest_replay_plan_supports_resume_and_all_modes(tmp_path
     assert resume_plan.paths == [Path("/tmp/beta.html").resolve()]
 
     all_plan = build_batch_manifest_replay_plan(manifest_path, mode="all")
-    assert all_plan.candidate_count == 2
-    assert all_plan.selected_count == 2
-    assert all_plan.paths == [Path("/tmp/alpha.html").resolve(), Path("/tmp/beta.html").resolve()]
+    assert all_plan.candidate_count == 3
+    assert all_plan.selected_count == 3
+    assert all_plan.paths == [
+        Path("/tmp/alpha.html").resolve(),
+        Path("/tmp/reused.html").resolve(),
+        Path("/tmp/beta.html").resolve(),
+    ]
     assert all_plan.content_type_overrides[Path("/tmp/alpha.html").resolve()] == "text/html"
+    assert all_plan.item_index[Path("/tmp/reused.html").resolve()].saved_output_path == "/tmp/reused.finance-en.ades.json"

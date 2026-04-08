@@ -116,6 +116,7 @@ class BatchFileTagRequest(BaseModel):
     manifest_input_path: str | None = None
     manifest_replay_mode: Literal["resume", "processed", "all"] = "resume"
     skip_unchanged: bool = False
+    reuse_unchanged_outputs: bool = False
     include_patterns: list[str] = Field(default_factory=list)
     exclude_patterns: list[str] = Field(default_factory=list)
     recursive: bool = True
@@ -129,6 +130,12 @@ class BatchFileTagRequest(BaseModel):
     @model_validator(mode="after")
     def validate_sources(self) -> "BatchFileTagRequest":
         if self.paths or self.directories or self.glob_patterns or self.manifest_input_path:
+            if self.skip_unchanged and self.manifest_input_path is None:
+                raise ValueError("skip_unchanged requires manifest_input_path.")
+            if self.reuse_unchanged_outputs and self.manifest_input_path is None:
+                raise ValueError("reuse_unchanged_outputs requires manifest_input_path.")
+            if self.reuse_unchanged_outputs and not self.skip_unchanged:
+                raise ValueError("reuse_unchanged_outputs requires skip_unchanged.")
             return self
         raise ValueError(
             "At least one of paths, directories, glob_patterns, or manifest_input_path is required."
@@ -166,6 +173,7 @@ class BatchSourceSummary(BaseModel):
     rejected_count: int
     limit_skipped_count: int = 0
     unchanged_skipped_count: int = 0
+    unchanged_reused_count: int = 0
     duplicate_count: int
     generated_output_skipped_count: int
     discovered_input_bytes: int
@@ -199,19 +207,6 @@ class BatchRejectedInput(BaseModel):
     source_kind: str
 
 
-class BatchTagResponse(BaseModel):
-    """Response body for local batch tagging."""
-
-    pack: str
-    item_count: int
-    summary: BatchSourceSummary
-    warnings: list[str] = Field(default_factory=list)
-    saved_manifest_path: str | None = None
-    skipped: list[BatchSkippedInput] = Field(default_factory=list)
-    rejected: list[BatchRejectedInput] = Field(default_factory=list)
-    items: list[TagResponse] = Field(default_factory=list)
-
-
 class BatchManifestItem(BaseModel):
     """Compact run-manifest entry for one persisted or processed batch item."""
 
@@ -227,6 +222,20 @@ class BatchManifestItem(BaseModel):
     timing_ms: int
 
 
+class BatchTagResponse(BaseModel):
+    """Response body for local batch tagging."""
+
+    pack: str
+    item_count: int
+    summary: BatchSourceSummary
+    warnings: list[str] = Field(default_factory=list)
+    saved_manifest_path: str | None = None
+    skipped: list[BatchSkippedInput] = Field(default_factory=list)
+    rejected: list[BatchRejectedInput] = Field(default_factory=list)
+    reused_items: list[BatchManifestItem] = Field(default_factory=list)
+    items: list[TagResponse] = Field(default_factory=list)
+
+
 class BatchManifest(BaseModel):
     """Stable run-level audit artifact for a batch tagging execution."""
 
@@ -237,6 +246,7 @@ class BatchManifest(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     skipped: list[BatchSkippedInput] = Field(default_factory=list)
     rejected: list[BatchRejectedInput] = Field(default_factory=list)
+    reused_items: list[BatchManifestItem] = Field(default_factory=list)
     items: list[BatchManifestItem] = Field(default_factory=list)
 
 

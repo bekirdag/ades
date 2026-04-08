@@ -1,7 +1,13 @@
 import json
 from pathlib import Path
 
-from ades.service.models import BatchSourceSummary, BatchTagResponse, SourceFingerprint, TagResponse
+from ades.service.models import (
+    BatchManifestItem,
+    BatchSourceSummary,
+    BatchTagResponse,
+    SourceFingerprint,
+    TagResponse,
+)
 from ades.storage.results import (
     aggregate_batch_warnings,
     persist_batch_tag_manifest_json,
@@ -107,3 +113,61 @@ def test_persist_batch_manifest_json_writes_aggregated_audit_artifact(tmp_path: 
     )
     assert payload["items"][0]["input_size_bytes"] == 12
     assert payload["items"][0]["source_fingerprint"]["sha256"] == "a" * 64
+
+
+def test_persist_batch_manifest_json_includes_reused_items(tmp_path: Path) -> None:
+    reused_item = BatchManifestItem(
+        source_path="/tmp/alpha/report.html",
+        saved_output_path=str(tmp_path / "outputs" / "report.finance-en.ades.json"),
+        content_type="text/html",
+        input_size_bytes=12,
+        source_fingerprint=SourceFingerprint(
+            size_bytes=12,
+            modified_time_ns=123,
+            sha256="a" * 64,
+        ),
+        warning_count=0,
+        warnings=[],
+        entity_count=0,
+        topic_count=0,
+        timing_ms=1,
+    )
+    response = BatchTagResponse(
+        pack="finance-en",
+        item_count=0,
+        summary=BatchSourceSummary(
+            explicit_path_count=1,
+            directory_match_count=0,
+            glob_match_count=0,
+            discovered_count=1,
+            included_count=1,
+            processed_count=0,
+            excluded_count=0,
+            skipped_count=1,
+            rejected_count=0,
+            unchanged_skipped_count=1,
+            unchanged_reused_count=1,
+            duplicate_count=0,
+            generated_output_skipped_count=0,
+            discovered_input_bytes=12,
+            included_input_bytes=12,
+            processed_input_bytes=0,
+            recursive=True,
+        ),
+        warnings=aggregate_batch_warnings([], reused_items=[reused_item]),
+        skipped=[],
+        rejected=[],
+        reused_items=[reused_item],
+        items=[],
+    )
+
+    persisted = persist_batch_tag_manifest_json(
+        response,
+        pack_id="finance-en",
+        output_dir=tmp_path / "outputs",
+    )
+
+    manifest_path = Path(persisted.saved_manifest_path)
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert payload["summary"]["unchanged_reused_count"] == 1
+    assert payload["reused_items"][0]["source_path"] == "/tmp/alpha/report.html"

@@ -191,6 +191,11 @@ def tag_files(
         "--skip-unchanged",
         help="When used with --manifest-input and explicit sources, skip files whose source fingerprint matches the saved manifest.",
     ),
+    reuse_unchanged_outputs: bool = typer.Option(
+        False,
+        "--reuse-unchanged-outputs",
+        help="When skipping unchanged files, carry forward their prior saved output metadata from the manifest.",
+    ),
     include_patterns: list[str] = typer.Option(
         None,
         "--include",
@@ -245,6 +250,10 @@ def tag_files(
         raise typer.BadParameter("Provide file paths, --directory, --glob, or --manifest-input.")
     if skip_unchanged and manifest_input is None:
         raise typer.BadParameter("Use --manifest-input when enabling --skip-unchanged.")
+    if reuse_unchanged_outputs and manifest_input is None:
+        raise typer.BadParameter("Use --manifest-input when enabling --reuse-unchanged-outputs.")
+    if reuse_unchanged_outputs and not skip_unchanged:
+        raise typer.BadParameter("Use --skip-unchanged when enabling --reuse-unchanged-outputs.")
     if (write_manifest or manifest_output is not None) and output_dir is None:
         raise typer.BadParameter("Use --output-dir when writing a batch manifest.")
     response = api_tag_files(
@@ -258,6 +267,7 @@ def tag_files(
         manifest_input_path=manifest_input,
         manifest_replay_mode=manifest_mode,
         skip_unchanged=skip_unchanged,
+        reuse_unchanged_outputs=reuse_unchanged_outputs,
         recursive=not non_recursive,
         include_patterns=include_patterns or [],
         exclude_patterns=exclude_patterns or [],

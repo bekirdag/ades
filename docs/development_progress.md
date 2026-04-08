@@ -115,6 +115,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Kept unchanged detection deterministic and local-only by comparing the newly loaded file fingerprint with the prior manifest fingerprint before running the tagger.
 - Extended batch summaries with an `unchanged_skipped_count` counter so audit output explains how many files were intentionally not re-tagged.
 
+### 16. Unchanged-output reuse on reruns
+
+- Added optional unchanged-output reuse for repeated local corpus runs so skipped unchanged files can carry forward their prior manifest item metadata instead of appearing only in the skipped list.
+- Kept `items` scoped to newly processed files in the current run and added a separate `reused_items` collection for carried-forward output metadata.
+- Extended batch summaries with an `unchanged_reused_count` counter so rerun audit output distinguishes skipped unchanged files from unchanged files whose prior output metadata was intentionally reused.
+- Extended saved batch manifests and replay planning so reused manifest items remain valid baseline coverage for future reruns.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -128,6 +135,7 @@ This file records the implementation progress of `ades` as the project moves tow
 - `ades tag-files --include <pattern>`
 - `ades tag-files --exclude <pattern>`
 - `ades tag-files --write-manifest`
+- `ades tag-files --reuse-unchanged-outputs`
 - `ades packs list`
 - `ades packs activate`
 - `ades packs deactivate`
@@ -169,4 +177,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add unchanged-output reuse so skipped unchanged files can optionally carry forward their prior saved output metadata instead of only appearing as skipped inputs.
+- Add reused-output verification and missing-output warnings so reruns can detect when a carried-forward saved output path no longer exists on disk.

@@ -11,6 +11,7 @@ from .packs.registry import PackRegistry
 from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load_tag_file
 from .pipeline.tagger import tag_text
 from .service.models import (
+    BatchManifestItem,
     BatchSourceSummary,
     BatchTagResponse,
     LookupCandidate,
@@ -221,6 +222,7 @@ def tag_files(
     manifest_input_path: str | Path | None = None,
     manifest_replay_mode: str = "resume",
     skip_unchanged: bool = False,
+    reuse_unchanged_outputs: bool = False,
     recursive: bool = True,
     include_patterns: Iterable[str] = (),
     exclude_patterns: Iterable[str] = (),
@@ -228,7 +230,7 @@ def tag_files(
     max_input_bytes: int | None = None,
     write_manifest: bool = False,
     manifest_output_path: str | Path | None = None,
-) -> BatchTagResponse:
+    ) -> BatchTagResponse:
     """Run in-process tagging for multiple local file paths."""
 
     settings = _resolve_settings(storage_root=storage_root)
@@ -246,6 +248,10 @@ def tag_files(
     )
     if skip_unchanged and replay_plan is None:
         raise ValueError("skip_unchanged requires manifest_input_path.")
+    if reuse_unchanged_outputs and replay_plan is None:
+        raise ValueError("reuse_unchanged_outputs requires manifest_input_path.")
+    if reuse_unchanged_outputs and not skip_unchanged:
+        raise ValueError("reuse_unchanged_outputs requires skip_unchanged.")
     resolved_pack = pack or (replay_plan.manifest.pack if replay_plan is not None else None) or settings.default_pack
     if (write_manifest or manifest_output_path is not None) and output_dir is None:
         raise ValueError("Batch manifest export requires output_dir.")
@@ -263,6 +269,7 @@ def tag_files(
         max_input_bytes=max_input_bytes,
     )
     items: list[TagResponse] = []
+    reused_items: list[BatchManifestItem] = []
     unchanged_skipped_count = 0
     for path in discovery.paths:
         manifest_content_type = (
@@ -290,6 +297,16 @@ def tag_files(
                     size_bytes=input_size_bytes,
                 )
             )
+            if reuse_unchanged_outputs:
+                reused_items.append(
+                    baseline_item.model_copy(
+                        update={
+                            "source_path": str(resolved_path),
+                            "input_size_bytes": input_size_bytes,
+                            "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
+                        }
+                    )
+                )
             continue
         response = tag_text(
             text=text,
@@ -319,6 +336,7 @@ def tag_files(
     summary_payload["processed_input_bytes"] = sum(item.input_size_bytes or 0 for item in items)
     summary_payload["skipped_count"] = len(discovery.skipped)
     summary_payload["unchanged_skipped_count"] = unchanged_skipped_count
+    summary_payload["unchanged_reused_count"] = len(reused_items)
     summary_payload["manifest_input_path"] = (
         str(Path(manifest_input_path).expanduser().resolve())
         if manifest_input_path is not None
@@ -336,12 +354,12 @@ def tag_files(
         else 0
     )
     summary = BatchSourceSummary(**summary_payload)
-    warnings = aggregate_batch_warnings(items)
+    warnings = aggregate_batch_warnings(items, reused_items=reused_items)
     if replay_plan is not None and not has_discovery_sources and replay_plan.selected_count == 0:
         warnings = sorted({*warnings, "manifest_replay_empty"})
     if replay_plan is not None and pack is not None and pack != replay_plan.manifest.pack:
         warnings = sorted({*warnings, f"manifest_pack_override:{replay_plan.manifest.pack}->{pack}"})
-    if not items:
+    if not items and not reused_items:
         warnings = sorted({*warnings, "no_files_processed"})
     response = BatchTagResponse(
         pack=resolved_pack,
@@ -350,6 +368,7 @@ def tag_files(
         warnings=warnings,
         skipped=[entry.to_dict() for entry in discovery.skipped],
         rejected=[entry.to_dict() for entry in discovery.rejected],
+        reused_items=reused_items,
         items=items,
     )
     if write_manifest or manifest_output_path is not None:

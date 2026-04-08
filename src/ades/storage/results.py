@@ -129,10 +129,25 @@ def _dedupe_output_path(destination: Path, *, used_paths: set[Path]) -> Path:
     return candidate
 
 
-def aggregate_batch_warnings(responses: list[TagResponse]) -> list[str]:
+def _iter_manifest_items(manifest: BatchManifest) -> list[BatchManifestItem]:
+    return [*manifest.items, *manifest.reused_items]
+
+
+def aggregate_batch_warnings(
+    responses: list[TagResponse],
+    *,
+    reused_items: list[BatchManifestItem] | None = None,
+) -> list[str]:
     """Collect unique warnings from a batch of per-item tag responses."""
 
-    return sorted({warning for response in responses for warning in response.warnings})
+    warnings = {warning for response in responses for warning in response.warnings}
+    if reused_items is not None:
+        warnings.update(
+            warning
+            for item in reused_items
+            for warning in item.warnings
+        )
+    return sorted(warnings)
 
 
 def load_batch_manifest(path: str | Path) -> BatchManifest:
@@ -174,7 +189,7 @@ def build_batch_manifest_replay_plan(
     seen: set[Path] = set()
     candidate_count = 0
 
-    for item in manifest.items:
+    for item in _iter_manifest_items(manifest):
         if item.source_path:
             item_index[Path(item.source_path).expanduser().resolve()] = item
 
@@ -190,7 +205,7 @@ def build_batch_manifest_replay_plan(
             content_type_overrides[resolved_path] = content_type
 
     if mode in {"processed", "all"}:
-        for item in manifest.items:
+        for item in _iter_manifest_items(manifest):
             if item.source_path:
                 add_candidate(item.source_path, content_type=item.content_type)
 
@@ -220,6 +235,7 @@ def build_batch_manifest(response: BatchTagResponse) -> BatchManifest:
         warnings=response.warnings,
         skipped=response.skipped,
         rejected=response.rejected,
+        reused_items=response.reused_items,
         items=[
             BatchManifestItem(
                 source_path=item.source_path,
