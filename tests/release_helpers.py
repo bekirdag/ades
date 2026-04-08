@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import subprocess
 from typing import Callable
+from typing import Any
 
 from ades.version import __version__
 
@@ -9,6 +10,11 @@ from ades.version import __version__
 def _write_artifact(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
+
+
+def _write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
 
 
 def create_release_project(
@@ -64,6 +70,14 @@ def build_fake_release_runner(
     test_returncode: int = 0,
     test_stdout: str = "111 passed",
     test_stderr: str = "",
+    wheel_install_returncode: int = 0,
+    wheel_install_stderr: str = "",
+    wheel_invoke_returncode: int = 0,
+    wheel_invoke_stderr: str = "",
+    npm_install_returncode: int = 0,
+    npm_install_stderr: str = "",
+    npm_invoke_returncode: int = 0,
+    npm_invoke_stderr: str = "",
 ):
     """Return a fake subprocess runner for release artifact verification tests."""
 
@@ -74,6 +88,26 @@ def build_fake_release_runner(
                 test_returncode,
                 stdout=test_stdout,
                 stderr=test_stderr,
+            )
+        if len(command) >= 3 and command[1:3] == ["-m", "venv"]:
+            venv_dir = Path(command[-1])
+            if command[0].endswith("python.exe"):
+                _write_text(venv_dir / "Scripts" / "python.exe", "")
+            else:
+                _write_text(venv_dir / "bin" / "python", "#!/usr/bin/env python\n")
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        if len(command) >= 3 and command[1:3] == ["-m", "pip"]:
+            python_bin = Path(command[0])
+            bin_dir = python_bin.parent
+            if python_bin.name == "python.exe":
+                _write_text(bin_dir / "ades.exe", "")
+            else:
+                _write_text(bin_dir / "ades", "#!/usr/bin/env python\n")
+            return subprocess.CompletedProcess(
+                command,
+                wheel_install_returncode,
+                stdout="installed" if wheel_install_returncode == 0 else "",
+                stderr=wheel_install_stderr,
             )
         if len(command) >= 3 and command[1:3] == ["-m", "build"]:
             outdir = Path(command[command.index("--outdir") + 1])
@@ -89,6 +123,44 @@ def build_fake_release_runner(
             _write_artifact(tarball_path, b"fake npm tarball")
             payload = json.dumps([{"filename": tarball_name}])
             return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+        if len(command) >= 2 and command[:2] == ["npm", "install"]:
+            prefix_dir = Path(command[command.index("--prefix") + 1])
+            _write_text(
+                prefix_dir / "node_modules" / ".bin" / "ades",
+                "#!/usr/bin/env node\n",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                npm_install_returncode,
+                stdout="added 1 package" if npm_install_returncode == 0 else "",
+                stderr=npm_install_stderr,
+            )
+        if command and Path(command[0]).name.startswith("ades"):
+            payload = json.dumps(
+                {
+                    "service": "ades",
+                    "version": python_version,
+                    "runtime_target": "local",
+                    "metadata_backend": "sqlite",
+                    "storage_root": str(Path(cwd) / "storage"),
+                    "host": "127.0.0.1",
+                    "port": 8734,
+                    "installed_packs": [],
+                }
+            )
+            if "node_modules/.bin" in command[0]:
+                return subprocess.CompletedProcess(
+                    command,
+                    npm_invoke_returncode,
+                    stdout=payload if npm_invoke_returncode == 0 else "",
+                    stderr=npm_invoke_stderr,
+                )
+            return subprocess.CompletedProcess(
+                command,
+                wheel_invoke_returncode,
+                stdout=payload if wheel_invoke_returncode == 0 else "",
+                stderr=wheel_invoke_stderr,
+            )
         raise AssertionError(f"Unexpected command: {command!r} (cwd={cwd})")
 
     return runner
@@ -101,3 +173,13 @@ def build_failed_release_runner(*, stderr: str) -> Callable[..., subprocess.Comp
         return subprocess.CompletedProcess(command, 1, stdout="", stderr=stderr)
 
     return runner
+
+
+def patch_release_runner(monkeypatch: Any, runner: Callable[..., subprocess.CompletedProcess[str]]) -> None:
+    """Patch both release command helpers to the same fake runner."""
+
+    monkeypatch.setattr("ades.release._run_command", runner)
+    monkeypatch.setattr(
+        "ades.release._run_command_with_env",
+        lambda command, *, cwd, env: runner(command, cwd=cwd),
+    )

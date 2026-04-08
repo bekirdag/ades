@@ -4,7 +4,34 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from ades.cli import app
-from tests.release_helpers import build_fake_release_runner, create_release_project
+from tests.release_helpers import (
+    build_fake_release_runner,
+    create_release_project,
+    patch_release_runner,
+)
+
+
+def test_cli_release_verify_reports_smoke_install_results(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    runner = CliRunner()
+
+    verify_result = runner.invoke(
+        app,
+        ["release", "verify", "--output-dir", str(tmp_path / "dist")],
+    )
+
+    assert verify_result.exit_code == 0
+    verify_payload = json.loads(verify_result.stdout)
+    assert verify_payload["overall_success"] is True
+    assert verify_payload["smoke_install"] is True
+    assert verify_payload["python_install_smoke"]["passed"] is True
+    assert verify_payload["npm_install_smoke"]["passed"] is True
 
 
 def test_cli_release_commands_sync_versions_and_write_manifest(
@@ -19,8 +46,8 @@ def test_cli_release_commands_sync_versions_and_write_manifest(
     )
     monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
     monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
-    monkeypatch.setattr(
-        "ades.release._run_command",
+    patch_release_runner(
+        monkeypatch,
         build_fake_release_runner(python_version="0.2.0", npm_version="0.2.0"),
     )
     runner = CliRunner()
@@ -33,11 +60,20 @@ def test_cli_release_commands_sync_versions_and_write_manifest(
 
     manifest_result = runner.invoke(
         app,
-        ["release", "manifest", "--output-dir", str(tmp_path / "dist")],
+        [
+            "release",
+            "manifest",
+            "--output-dir",
+            str(tmp_path / "dist"),
+            "--no-smoke-install",
+        ],
     )
     assert manifest_result.exit_code == 0
     manifest_payload = json.loads(manifest_result.stdout)
     assert manifest_payload["release_version"] == "0.2.0"
     assert manifest_payload["verification"]["overall_success"] is True
+    assert manifest_payload["verification"]["smoke_install"] is False
+    assert manifest_payload["verification"]["python_install_smoke"] is None
+    assert manifest_payload["verification"]["npm_install_smoke"] is None
     assert manifest_payload["verification"]["wheel"]["file_name"].endswith(".whl")
     assert Path(manifest_payload["manifest_path"]).exists()

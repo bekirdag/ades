@@ -212,10 +212,15 @@ def verify_release(
     *,
     output_dir: str | Path,
     clean: bool = True,
+    smoke_install: bool = True,
 ) -> ReleaseVerificationResponse:
     """Build and verify the local Python and npm release artifacts."""
 
-    return verify_release_artifacts(output_dir=output_dir, clean=clean)
+    return verify_release_artifacts(
+        output_dir=output_dir,
+        clean=clean,
+        smoke_install=smoke_install,
+    )
 
 
 def release_versions() -> ReleaseVersionState:
@@ -236,6 +241,7 @@ def write_release_manifest(
     manifest_path: str | Path | None = None,
     version: str | None = None,
     clean: bool = True,
+    smoke_install: bool = True,
 ) -> ReleaseManifestResponse:
     """Build and persist the coordinated release manifest."""
 
@@ -244,6 +250,7 @@ def write_release_manifest(
         manifest_path=manifest_path,
         version=version,
         clean=clean,
+        smoke_install=smoke_install,
     )
 
 
@@ -253,6 +260,7 @@ def validate_release(
     manifest_path: str | Path | None = None,
     version: str | None = None,
     clean: bool = True,
+    smoke_install: bool = True,
     tests_command: Iterable[str] | None = None,
 ) -> ReleaseValidationResponse:
     """Run the local test suite and persist one coordinated release manifest."""
@@ -262,6 +270,7 @@ def validate_release(
         manifest_path=manifest_path,
         version=version,
         clean=clean,
+        smoke_install=smoke_install,
         tests_command=list(tests_command) if tests_command is not None else None,
     )
 

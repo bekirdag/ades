@@ -185,6 +185,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Replaced the placeholder `.docdex/run-tests.json` with a committed repo-local runner configuration that executes `ades release validate` through `python -m ades` with `PYTHONPATH=src`.
 - Updated the repo ignore rules so `.docdex/run-tests.json` is versioned while generated `.docdex` artifacts remain ignored.
 
+### 26. Clean-environment install smoke validation for release artifacts
+
+- Extended release verification so the built Python wheel is installed into a fresh virtual environment and the installed `ades status` command is executed outside the source checkout.
+- Extended release verification so the built npm tarball is installed under a clean npm prefix, bootstraps the matching Python wheel into its runtime directory, and then executes `ades status` through the installed wrapper.
+- Added explicit smoke-validation metadata to the public Python API, CLI, and localhost service release responses, including per-command stdout/stderr, reported version, and deterministic warnings when install or invocation checks fail.
+- Added categorized unit, component, integration, and API coverage for smoke-install success paths, smoke-install disable flags, and propagated manifest/validate response shapes.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -256,4 +263,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add clean-environment install smoke validation for the built wheel and npm tarball so release verification proves both artifacts can be installed and invoked outside the source checkout.
+- Add a coordinated publish step that consumes the validated release manifest and performs Python/npm publication from one explicit local workflow without breaking the local-tool packaging seam.

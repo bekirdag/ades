@@ -96,7 +96,11 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         """Build and verify the local Python and npm release artifacts."""
 
         try:
-            return verify_release(output_dir=request.output_dir, clean=request.clean)
+            return verify_release(
+                output_dir=request.output_dir,
+                clean=request.clean,
+                smoke_install=request.smoke_install,
+            )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
@@ -114,6 +118,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 manifest_path=request.manifest_path,
                 version=request.version,
                 clean=request.clean,
+                smoke_install=request.smoke_install,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -132,6 +137,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 manifest_path=request.manifest_path,
                 version=request.version,
                 clean=request.clean,
+                smoke_install=request.smoke_install,
                 tests_command=request.tests_command or None,
             )
         except FileNotFoundError as exc:

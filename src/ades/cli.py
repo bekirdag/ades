@@ -170,10 +170,19 @@ def release_verify(
         "--no-clean",
         help="Keep any existing release artifacts under the output directory.",
     ),
+    smoke_install: bool = typer.Option(
+        True,
+        "--smoke-install/--no-smoke-install",
+        help="Run clean-environment install smoke checks for the built wheel and npm tarball.",
+    ),
 ) -> None:
     """Build and verify the current local Python and npm release artifacts."""
 
-    response = api_verify_release(output_dir=output_dir, clean=not no_clean)
+    response = api_verify_release(
+        output_dir=output_dir,
+        clean=not no_clean,
+        smoke_install=smoke_install,
+    )
     _echo_json(response.model_dump(mode="json"))
 
 
@@ -204,6 +213,11 @@ def release_validate(
         "--no-clean",
         help="Keep any existing release artifacts under the output directory.",
     ),
+    smoke_install: bool = typer.Option(
+        True,
+        "--smoke-install/--no-smoke-install",
+        help="Run clean-environment install smoke checks for the built wheel and npm tarball.",
+    ),
 ) -> None:
     """Run tests, then build and persist one coordinated local release manifest."""
 
@@ -212,6 +226,7 @@ def release_validate(
         manifest_path=manifest_output,
         version=version,
         clean=not no_clean,
+        smoke_install=smoke_install,
         tests_command=test_command or None,
     )
     _echo_json(response.model_dump(mode="json"))
@@ -257,6 +272,11 @@ def release_manifest(
         "--no-clean",
         help="Keep any existing release artifacts under the output directory.",
     ),
+    smoke_install: bool = typer.Option(
+        True,
+        "--smoke-install/--no-smoke-install",
+        help="Run clean-environment install smoke checks for the built wheel and npm tarball.",
+    ),
 ) -> None:
     """Build artifacts and persist one coordinated release manifest."""
 
@@ -265,6 +285,7 @@ def release_manifest(
         manifest_path=manifest_output,
         version=version,
         clean=not no_clean,
+        smoke_install=smoke_install,
     )
     _echo_json(response.model_dump(mode="json"))
 

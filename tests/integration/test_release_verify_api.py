@@ -1,7 +1,11 @@
 from pathlib import Path
 
 from ades import release_versions, sync_release_version, verify_release, write_release_manifest
-from tests.release_helpers import build_fake_release_runner, create_release_project
+from tests.release_helpers import (
+    build_fake_release_runner,
+    create_release_project,
+    patch_release_runner,
+)
 
 
 def test_public_release_api_can_sync_versions_and_persist_manifest(
@@ -16,19 +20,30 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     )
     monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
     monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
-    monkeypatch.setattr(
-        "ades.release._run_command",
+    patch_release_runner(
+        monkeypatch,
         build_fake_release_runner(python_version="0.3.0", npm_version="0.3.0"),
     )
 
     before = release_versions()
     sync = sync_release_version("0.3.0")
     verification = verify_release(output_dir=tmp_path / "dist")
-    manifest = write_release_manifest(output_dir=tmp_path / "dist")
+    manifest = write_release_manifest(
+        output_dir=tmp_path / "dist",
+        smoke_install=False,
+    )
 
     assert before.synchronized is False
     assert sync.version_state.version_file_version == "0.3.0"
     assert verification.version_state.synchronized is True
     assert verification.output_dir == str((tmp_path / "dist").resolve())
+    assert verification.smoke_install is True
+    assert verification.python_install_smoke is not None
+    assert verification.python_install_smoke.passed is True
+    assert verification.npm_install_smoke is not None
+    assert verification.npm_install_smoke.passed is True
     assert manifest.release_version == "0.3.0"
+    assert manifest.verification.smoke_install is False
+    assert manifest.verification.python_install_smoke is None
+    assert manifest.verification.npm_install_smoke is None
     assert Path(manifest.manifest_path).exists()

@@ -5,17 +5,28 @@ from __future__ import annotations
 from datetime import datetime, UTC
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Sequence
 
-from .distribution import load_npm_package_json, resolve_npm_package_dir, resolve_project_root
+from .distribution import (
+    NPM_COMMAND_NAME,
+    NPM_PYTHON_BIN_ENV,
+    NPM_PYTHON_PACKAGE_SPEC_ENV,
+    NPM_RUNTIME_DIR_ENV,
+    load_npm_package_json,
+    resolve_npm_package_dir,
+    resolve_project_root,
+)
 from .service.models import (
     ReleaseArtifactSummary,
     ReleaseCommandResult,
+    ReleaseInstallSmokeResult,
     ReleaseManifestResponse,
     ReleaseValidationResponse,
     ReleaseVerificationResponse,
@@ -47,6 +58,24 @@ def _run_command(command: list[str], *, cwd: Path) -> subprocess.CompletedProces
     )
 
 
+def _run_command_with_env(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+) -> subprocess.CompletedProcess[str]:
+    """Run one command with an explicit environment map."""
+
+    return subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
 def _normalize_release_test_command(
     command: Sequence[str] | None = None,
 ) -> list[str]:
@@ -58,6 +87,48 @@ def _normalize_release_test_command(
     if not normalized:
         raise ValueError("Release validation tests_command cannot be empty.")
     return [str(part) for part in normalized]
+
+
+def _build_command_result(
+    command: Sequence[str],
+    result: subprocess.CompletedProcess[str],
+) -> ReleaseCommandResult:
+    """Convert one subprocess result into the shared command-result model."""
+
+    return ReleaseCommandResult(
+        command=[str(part) for part in command],
+        exit_code=result.returncode,
+        passed=result.returncode == 0,
+        stdout=result.stdout or "",
+        stderr=result.stderr or "",
+    )
+
+
+def _skipped_command_result(
+    command: Sequence[str],
+    *,
+    reason: str,
+) -> ReleaseCommandResult:
+    """Return a skipped command result used when a prior step already failed."""
+
+    return ReleaseCommandResult(
+        command=[str(part) for part in command],
+        exit_code=-1,
+        passed=False,
+        stdout="",
+        stderr=reason,
+    )
+
+
+def _build_clean_runtime_env(*, overrides: dict[str, str] | None = None) -> dict[str, str]:
+    """Build a clean child-process environment without source-checkout Python paths."""
+
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    env.pop("VIRTUAL_ENV", None)
+    if overrides:
+        env.update({key: str(value) for key, value in overrides.items()})
+    return env
 
 
 def _resolve_project_root_path(project_root: str | Path | None = None) -> Path:
@@ -172,6 +243,69 @@ def _prepare_output_dir(output_dir: Path, *, clean: bool) -> tuple[Path, Path]:
     python_dir.mkdir(parents=True, exist_ok=True)
     npm_dir.mkdir(parents=True, exist_ok=True)
     return python_dir, npm_dir
+
+
+def _resolve_venv_python(venv_dir: Path) -> Path:
+    """Return the Python executable inside one virtual environment."""
+
+    if os.name == "nt":
+        return venv_dir / "Scripts" / "python.exe"
+    return venv_dir / "bin" / "python"
+
+
+def _resolve_venv_command(venv_dir: Path, command_name: str) -> Path:
+    """Return one installed console script path inside a virtual environment."""
+
+    if os.name == "nt":
+        for suffix in (".exe", ".cmd", ""):
+            candidate = venv_dir / "Scripts" / f"{command_name}{suffix}"
+            if suffix == "" or candidate.exists():
+                return candidate
+    return venv_dir / "bin" / command_name
+
+
+def _resolve_npm_installed_command(prefix_dir: Path, command_name: str) -> Path:
+    """Return one installed npm bin command under a local prefix."""
+
+    bin_dir = prefix_dir / "node_modules" / ".bin"
+    if os.name == "nt":
+        for suffix in (".cmd", ".exe", ""):
+            candidate = bin_dir / f"{command_name}{suffix}"
+            if suffix == "" or candidate.exists():
+                return candidate
+    return bin_dir / command_name
+
+
+def _parse_status_payload(output: str) -> dict[str, object] | None:
+    """Return the last JSON object found in one command stdout stream."""
+
+    text = output.strip()
+    if not text:
+        return None
+    decoder = json.JSONDecoder()
+    payload: dict[str, object] | None = None
+    for index, character in enumerate(text):
+        if character != "{":
+            continue
+        try:
+            candidate, _ = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(candidate, dict):
+            payload = candidate
+    return payload
+
+
+def _parse_status_version(result: ReleaseCommandResult) -> str | None:
+    """Extract the reported ades version from a JSON `ades status` payload."""
+
+    if not result.passed:
+        return None
+    payload = _parse_status_payload(result.stdout or "")
+    if payload is None:
+        return None
+    version = payload.get("version")
+    return version if isinstance(version, str) and version else None
 
 
 def _sha256(path: Path) -> str:
@@ -360,10 +494,164 @@ def _build_npm_artifact(*, npm_package_dir: Path, output_dir: Path) -> Path:
     return artifact_path
 
 
+def _run_python_install_smoke(
+    *,
+    wheel_path: Path,
+    expected_version: str,
+) -> ReleaseInstallSmokeResult:
+    """Install the built wheel into a clean venv and invoke the console script."""
+
+    with tempfile.TemporaryDirectory(prefix="ades-wheel-smoke-") as temp_dir:
+        working_dir = Path(temp_dir).resolve()
+        environment_dir = working_dir / "venv"
+        storage_root = working_dir / "storage"
+
+        create_env_command = [sys.executable, "-m", "venv", str(environment_dir)]
+        create_env_result = _run_command(create_env_command, cwd=working_dir)
+        if create_env_result.returncode != 0:
+            install = _build_command_result(create_env_command, create_env_result)
+            invoke_command = [str(_resolve_venv_command(environment_dir, "ades")), "status"]
+            invoke = _skipped_command_result(
+                invoke_command,
+                reason="Skipped because virtual environment creation failed.",
+            )
+            return ReleaseInstallSmokeResult(
+                artifact_kind="python_wheel",
+                working_dir=str(working_dir),
+                environment_dir=str(environment_dir),
+                storage_root=str(storage_root),
+                install=install,
+                invoke=invoke,
+                passed=False,
+                reported_version=None,
+            )
+
+        runtime_python = _resolve_venv_python(environment_dir)
+        install_command = [str(runtime_python), "-m", "pip", "install", str(wheel_path)]
+        install_result = _run_command_with_env(
+            install_command,
+            cwd=working_dir,
+            env=_build_clean_runtime_env(),
+        )
+        install = _build_command_result(install_command, install_result)
+
+        invoke_command = [str(_resolve_venv_command(environment_dir, "ades")), "status"]
+        if install.passed:
+            invoke_result = _run_command_with_env(
+                invoke_command,
+                cwd=working_dir,
+                env=_build_clean_runtime_env(
+                    overrides={"ADES_STORAGE_ROOT": str(storage_root)},
+                ),
+            )
+            invoke = _build_command_result(invoke_command, invoke_result)
+        else:
+            invoke = _skipped_command_result(
+                invoke_command,
+                reason="Skipped because wheel installation failed.",
+            )
+
+        reported_version = _parse_status_version(invoke)
+        passed = install.passed and invoke.passed and reported_version == expected_version
+        return ReleaseInstallSmokeResult(
+            artifact_kind="python_wheel",
+            working_dir=str(working_dir),
+            environment_dir=str(environment_dir),
+            storage_root=str(storage_root),
+            install=install,
+            invoke=invoke,
+            passed=passed,
+            reported_version=reported_version,
+        )
+
+
+def _run_npm_install_smoke(
+    *,
+    wheel_path: Path,
+    npm_tarball_path: Path,
+    expected_version: str,
+) -> ReleaseInstallSmokeResult:
+    """Install the npm tarball under a clean prefix and invoke the wrapper."""
+
+    with tempfile.TemporaryDirectory(prefix="ades-npm-smoke-") as temp_dir:
+        working_dir = Path(temp_dir).resolve()
+        install_prefix = working_dir / "npm-prefix"
+        environment_dir = working_dir / "npm-runtime"
+        storage_root = working_dir / "storage"
+
+        install_command = [
+            "npm",
+            "install",
+            "--prefix",
+            str(install_prefix),
+            str(npm_tarball_path),
+        ]
+        install_result = _run_command_with_env(
+            install_command,
+            cwd=working_dir,
+            env=_build_clean_runtime_env(),
+        )
+        install = _build_command_result(install_command, install_result)
+
+        invoke_command = [str(_resolve_npm_installed_command(install_prefix, NPM_COMMAND_NAME)), "status"]
+        if install.passed:
+            invoke_result = _run_command_with_env(
+                invoke_command,
+                cwd=working_dir,
+                env=_build_clean_runtime_env(
+                    overrides={
+                        "ADES_STORAGE_ROOT": str(storage_root),
+                        NPM_PYTHON_BIN_ENV: sys.executable,
+                        NPM_PYTHON_PACKAGE_SPEC_ENV: str(wheel_path),
+                        NPM_RUNTIME_DIR_ENV: str(environment_dir),
+                    },
+                ),
+            )
+            invoke = _build_command_result(invoke_command, invoke_result)
+        else:
+            invoke = _skipped_command_result(
+                invoke_command,
+                reason="Skipped because npm tarball installation failed.",
+            )
+
+        reported_version = _parse_status_version(invoke)
+        passed = install.passed and invoke.passed and reported_version == expected_version
+        return ReleaseInstallSmokeResult(
+            artifact_kind="npm_tarball",
+            working_dir=str(working_dir),
+            environment_dir=str(environment_dir),
+            storage_root=str(storage_root),
+            install=install,
+            invoke=invoke,
+            passed=passed,
+            reported_version=reported_version,
+        )
+
+
+def _smoke_install_warnings(
+    smoke_result: ReleaseInstallSmokeResult,
+    *,
+    expected_version: str,
+) -> list[str]:
+    """Return deterministic warnings for one smoke-install result."""
+
+    prefix = smoke_result.artifact_kind
+    if not smoke_result.install.passed:
+        return [f"{prefix}_install_failed:{smoke_result.install.exit_code}"]
+    if not smoke_result.invoke.passed:
+        return [f"{prefix}_invoke_failed:{smoke_result.invoke.exit_code}"]
+    if smoke_result.reported_version is None:
+        return [f"{prefix}_missing_reported_version"]
+    if smoke_result.reported_version != expected_version:
+        return [f"{prefix}_version_mismatch:{smoke_result.reported_version}"]
+    return []
+
+
 def verify_release_artifacts(
     *,
     output_dir: str | Path,
     clean: bool = True,
+    smoke_install: bool = True,
     project_root: str | Path | None = None,
 ) -> ReleaseVerificationResponse:
     """Build and verify Python and npm release artifacts for this checkout."""
@@ -393,6 +681,48 @@ def verify_release_artifacts(
             f"npm={version_state.npm_version}"
         )
 
+    python_install_smoke = (
+        _run_python_install_smoke(
+            wheel_path=wheel_path,
+            expected_version=version_state.version_file_version,
+        )
+        if smoke_install
+        else None
+    )
+    npm_install_smoke = (
+        _run_npm_install_smoke(
+            wheel_path=wheel_path,
+            npm_tarball_path=npm_tarball_path,
+            expected_version=version_state.version_file_version,
+        )
+        if smoke_install
+        else None
+    )
+    if python_install_smoke is not None:
+        warnings.extend(
+            _smoke_install_warnings(
+                python_install_smoke,
+                expected_version=version_state.version_file_version,
+            )
+        )
+    if npm_install_smoke is not None:
+        warnings.extend(
+            _smoke_install_warnings(
+                npm_install_smoke,
+                expected_version=version_state.version_file_version,
+            )
+        )
+    smoke_success = (
+        True
+        if not smoke_install
+        else bool(
+            python_install_smoke
+            and python_install_smoke.passed
+            and npm_install_smoke
+            and npm_install_smoke.passed
+        )
+    )
+
     return ReleaseVerificationResponse(
         project_root=str(resolved_project_root),
         output_dir=str(resolved_output_dir),
@@ -402,11 +732,14 @@ def verify_release_artifacts(
         npm_version=version_state.npm_version,
         version_state=version_state,
         versions_match=version_state.synchronized,
-        overall_success=version_state.synchronized,
+        smoke_install=smoke_install,
+        overall_success=version_state.synchronized and smoke_success,
         warnings=warnings,
         wheel=_build_artifact_summary(wheel_path),
         sdist=_build_artifact_summary(sdist_path),
         npm_tarball=_build_artifact_summary(npm_tarball_path),
+        python_install_smoke=python_install_smoke,
+        npm_install_smoke=npm_install_smoke,
     )
 
 
@@ -426,6 +759,7 @@ def write_release_manifest(
     manifest_path: str | Path | None = None,
     version: str | None = None,
     clean: bool = True,
+    smoke_install: bool = True,
     project_root: str | Path | None = None,
 ) -> ReleaseManifestResponse:
     """Synchronize versions if requested, verify artifacts, and persist a release manifest."""
@@ -438,6 +772,7 @@ def write_release_manifest(
     verification = verify_release_artifacts(
         output_dir=output_dir,
         clean=clean,
+        smoke_install=smoke_install,
         project_root=project_root,
     )
     release_version = verification.version_state.version_file_version
@@ -469,6 +804,7 @@ def validate_release_workflow(
     manifest_path: str | Path | None = None,
     version: str | None = None,
     clean: bool = True,
+    smoke_install: bool = True,
     tests_command: Sequence[str] | None = None,
     project_root: str | Path | None = None,
 ) -> ReleaseValidationResponse:
@@ -493,6 +829,7 @@ def validate_release_workflow(
             manifest_path=manifest_path,
             version=version,
             clean=clean,
+            smoke_install=smoke_install,
             project_root=resolved_project_root,
         )
         manifest_output_path = manifest.manifest_path

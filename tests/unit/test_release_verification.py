@@ -3,16 +3,19 @@ from pathlib import Path
 import pytest
 
 from ades.release import (
+    _parse_status_version,
     release_versions,
     sync_release_version,
     verify_release_artifacts,
     write_release_manifest,
 )
+from ades.service.models import ReleaseCommandResult
 from ades.version import __version__
 from tests.release_helpers import (
     build_failed_release_runner,
     build_fake_release_runner,
     create_release_project,
+    patch_release_runner,
 )
 
 
@@ -54,7 +57,7 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     project_root, npm_package_dir = create_release_project(tmp_path / "repo")
     monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
     monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
-    monkeypatch.setattr("ades.release._run_command", build_fake_release_runner())
+    patch_release_runner(monkeypatch, build_fake_release_runner())
 
     response = verify_release_artifacts(output_dir=tmp_path / "dist")
 
@@ -62,10 +65,17 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert response.npm_version == __version__
     assert response.version_state.synchronized is True
     assert response.versions_match is True
+    assert response.smoke_install is True
     assert response.overall_success is True
     assert response.wheel.file_name.endswith(".whl")
     assert response.sdist.file_name.endswith(".tar.gz")
     assert response.npm_tarball.file_name.endswith(".tgz")
+    assert response.python_install_smoke is not None
+    assert response.python_install_smoke.passed is True
+    assert response.python_install_smoke.reported_version == __version__
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is True
+    assert response.npm_install_smoke.reported_version == __version__
     assert len(response.wheel.sha256) == 64
     assert len(response.sdist.sha256) == 64
     assert len(response.npm_tarball.sha256) == 64
@@ -82,8 +92,8 @@ def test_verify_release_artifacts_reports_version_mismatch_warning(
     )
     monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
     monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
-    monkeypatch.setattr(
-        "ades.release._run_command",
+    patch_release_runner(
+        monkeypatch,
         build_fake_release_runner(python_version="0.1.1", npm_version="0.1.2"),
     )
 
@@ -93,7 +103,9 @@ def test_verify_release_artifacts_reports_version_mismatch_warning(
     assert response.overall_success is False
     assert response.version_state.synchronized is False
     assert response.warnings == [
-        f"version_mismatch:version_file={__version__},pyproject=0.1.1,npm=0.1.2"
+        f"version_mismatch:version_file={__version__},pyproject=0.1.1,npm=0.1.2",
+        "python_wheel_version_mismatch:0.1.1",
+        "npm_tarball_version_mismatch:0.1.1",
     ]
 
 
@@ -104,13 +116,84 @@ def test_verify_release_artifacts_raises_on_python_build_failure(
     project_root, npm_package_dir = create_release_project(tmp_path / "repo")
     monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
     monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
-    monkeypatch.setattr(
-        "ades.release._run_command",
+    patch_release_runner(
+        monkeypatch,
         build_failed_release_runner(stderr="python build failed"),
     )
 
     with pytest.raises(ValueError, match="python build failed"):
         verify_release_artifacts(output_dir=tmp_path / "dist")
+
+
+def test_verify_release_artifacts_can_skip_smoke_install(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    response = verify_release_artifacts(
+        output_dir=tmp_path / "dist",
+        smoke_install=False,
+    )
+
+    assert response.smoke_install is False
+    assert response.overall_success is True
+    assert response.python_install_smoke is None
+    assert response.npm_install_smoke is None
+    assert response.warnings == []
+
+
+def test_verify_release_artifacts_reports_smoke_install_failures(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(
+        monkeypatch,
+        build_fake_release_runner(
+            npm_install_returncode=4,
+            npm_install_stderr="npm install failed",
+        ),
+    )
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.python_install_smoke is not None
+    assert response.python_install_smoke.passed is True
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.install.exit_code == 4
+    assert response.npm_install_smoke.install.stderr == "npm install failed"
+    assert (
+        response.npm_install_smoke.invoke.stderr
+        == "Skipped because npm tarball installation failed."
+    )
+    assert response.warnings == ["npm_tarball_install_failed:4"]
+
+
+def test_parse_status_version_accepts_wrapper_logs_before_json() -> None:
+    result = ReleaseCommandResult(
+        command=["ades", "status"],
+        exit_code=0,
+        passed=True,
+        stdout=(
+            "Collecting ades==0.1.0\n"
+            "Successfully installed ades-0.1.0\n"
+            "{\n"
+            '  "service": "ades",\n'
+            '  "version": "0.1.0"\n'
+            "}\n"
+        ),
+        stderr="",
+    )
+
+    assert _parse_status_version(result) == "0.1.0"
 
 
 def test_write_release_manifest_can_sync_then_persist_manifest(
@@ -125,8 +208,8 @@ def test_write_release_manifest_can_sync_then_persist_manifest(
     )
     monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
     monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
-    monkeypatch.setattr(
-        "ades.release._run_command",
+    patch_release_runner(
+        monkeypatch,
         build_fake_release_runner(python_version="0.2.0", npm_version="0.2.0"),
     )
 
@@ -139,4 +222,7 @@ def test_write_release_manifest_can_sync_then_persist_manifest(
     assert response.version_sync is not None
     assert response.version_sync.target_version == "0.2.0"
     assert response.version_state.synchronized is True
+    assert response.verification.smoke_install is True
+    assert response.verification.python_install_smoke is not None
+    assert response.verification.python_install_smoke.passed is True
     assert Path(response.manifest_path).exists()

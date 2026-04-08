@@ -124,6 +124,7 @@ class ReleaseVerificationRequest(BaseModel):
 
     output_dir: str
     clean: bool = True
+    smoke_install: bool = True
 
 
 class ReleaseVerificationResponse(BaseModel):
@@ -137,11 +138,14 @@ class ReleaseVerificationResponse(BaseModel):
     npm_version: str
     version_state: ReleaseVersionState
     versions_match: bool
+    smoke_install: bool = True
     overall_success: bool
     warnings: list[str] = Field(default_factory=list)
     wheel: ReleaseArtifactSummary
     sdist: ReleaseArtifactSummary
     npm_tarball: ReleaseArtifactSummary
+    python_install_smoke: "ReleaseInstallSmokeResult | None" = None
+    npm_install_smoke: "ReleaseInstallSmokeResult | None" = None
 
 
 class ReleaseCommandResult(BaseModel):
@@ -154,6 +158,19 @@ class ReleaseCommandResult(BaseModel):
     stderr: str = ""
 
 
+class ReleaseInstallSmokeResult(BaseModel):
+    """Captured smoke-install result for one release artifact."""
+
+    artifact_kind: Literal["python_wheel", "npm_tarball"]
+    working_dir: str
+    environment_dir: str
+    storage_root: str
+    install: ReleaseCommandResult
+    invoke: ReleaseCommandResult
+    passed: bool
+    reported_version: str | None = None
+
+
 class ReleaseManifestRequest(BaseModel):
     """Request body for persisted release-manifest generation."""
 
@@ -161,6 +178,7 @@ class ReleaseManifestRequest(BaseModel):
     manifest_path: str | None = None
     version: str | None = None
     clean: bool = True
+    smoke_install: bool = True
 
 
 class ReleaseManifestResponse(BaseModel):
@@ -181,6 +199,7 @@ class ReleaseValidationRequest(BaseModel):
     manifest_path: str | None = None
     version: str | None = None
     clean: bool = True
+    smoke_install: bool = True
     tests_command: list[str] = Field(default_factory=list)
 
 
