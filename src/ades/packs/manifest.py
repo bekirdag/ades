@@ -17,6 +17,17 @@ class PackArtifact:
     url: str
     sha256: str | None = None
 
+    def to_dict(self) -> dict[str, str]:
+        """Serialize one artifact entry."""
+
+        payload = {
+            "name": self.name,
+            "url": self.url,
+        }
+        if self.sha256 is not None:
+            payload["sha256"] = self.sha256
+        return payload
+
 
 @dataclass(frozen=True)
 class PackManifest:
@@ -95,6 +106,35 @@ class PackManifest:
             "active": self.active,
         }
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the manifest into stable JSON-compatible data."""
+
+        payload: dict[str, Any] = {
+            "schema_version": self.schema_version,
+            "pack_id": self.pack_id,
+            "version": self.version,
+            "language": self.language,
+            "domain": self.domain,
+            "tier": self.tier,
+            "dependencies": list(self.dependencies),
+            "artifacts": [artifact.to_dict() for artifact in self.artifacts],
+            "models": list(self.models),
+            "rules": list(self.rules),
+            "labels": list(self.labels),
+            "min_ades_version": self.min_ades_version,
+        }
+        if self.sha256 is not None:
+            payload["sha256"] = self.sha256
+        if not self.active:
+            payload["active"] = self.active
+        if self.install_path is not None:
+            payload["install_path"] = self.install_path
+        if self.manifest_path is not None:
+            payload["manifest_path"] = self.manifest_path
+        if self.installed_at is not None:
+            payload["installed_at"] = self.installed_at
+        return payload
+
 
 @dataclass(frozen=True)
 class RegistryPack:
@@ -142,3 +182,18 @@ class RegistryIndex:
         """Return a single pack entry."""
 
         return self.packs.get(pack_id)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the registry index into stable JSON-compatible data."""
+
+        return {
+            "schema_version": self.schema_version,
+            "generated_at": self.generated_at,
+            "packs": {
+                pack_id: {
+                    "version": pack.version,
+                    "manifest_url": pack.manifest_url,
+                }
+                for pack_id, pack in sorted(self.packs.items())
+            },
+        }

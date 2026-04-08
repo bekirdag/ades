@@ -150,9 +150,17 @@ This file records the implementation progress of `ades` as the project moves tow
 - Kept the lineage block additive and backward-compatible by making it optional in the persisted manifest schema, so older saved manifests can still be loaded for replay.
 - Fixed the batch manifest persistence path handling so an explicit manifest output path can coexist with the existing per-file output directory flow, which is required for preserving parent and child manifests in the same workspace.
 
+### 21. Static pack publication and remote registry tooling
+
+- Added a static registry builder that publishes local pack directories into a file-based registry with generated `index.json`, published `manifest.json` files, and checksum-verified `.tar.zst` artifacts.
+- Kept the published registry contract identical to the existing installer read path, so generated registries can be consumed immediately through `file://` or any simple static HTTP host without introducing a second registry format.
+- Added local CLI and public Python API support for registry publication, plus per-command `--registry-url` overrides so pack discovery and pulls can target external registries without changing the default bundled source.
+- Added a local HTTP admin endpoint for registry builds so the localhost service can drive publication workflows when direct filesystem automation is preferred.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
+- `ades pull <pack> --registry-url <url>`
 - `ades serve`
 - `ades status`
 - `ades tag <text>`
@@ -164,7 +172,9 @@ This file records the implementation progress of `ades` as the project moves tow
 - `ades tag-files --exclude <pattern>`
 - `ades tag-files --write-manifest`
 - `ades tag-files --reuse-unchanged-outputs`
+- `ades registry build <pack-dir...> --output-dir <dir>`
 - `ades packs list`
+- `ades packs list --available --registry-url <url>`
 - `ades packs activate`
 - `ades packs deactivate`
 - `ades packs lookup`
@@ -177,6 +187,7 @@ The local service currently exposes:
 - `GET /v0/packs/{pack}`
 - `POST /v0/packs/{pack}/activate`
 - `POST /v0/packs/{pack}/deactivate`
+- `POST /v0/registry/build`
 - `GET /v0/lookup`
 - `POST /v0/tag`
 - `POST /v0/tag/file`
@@ -205,4 +216,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add pack publication and remote registry tooling so local packs can move beyond the bundled development registry and the local tool can support a real external pack distribution flow.
+- Add the npm wrapper and local-install bootstrap flow so `ades` can be installed and invoked cleanly through both `pip` and `npm` for the local-tool release.

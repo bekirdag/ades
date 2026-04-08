@@ -28,7 +28,9 @@ npm install -g ades-cli
 
 ades pull finance-en
 ades pull medical-en
+ades pull finance-en --registry-url file:///tmp/ades-registry/index.json
 ades serve
+ades registry build ./src/ades/resources/registry/packs/general-en ./src/ades/resources/registry/packs/finance-en --output-dir /tmp/ades-registry
 ades tag "Apple CEO Tim Cook announced quarterly earnings."
 ades tag --file ./notes/report.html --pack finance-en
 ades tag --file ./notes/report.html --pack finance-en --output-dir ./outputs
@@ -51,9 +53,17 @@ ades tag-files --directory ./corpus --manifest-input ./outputs/batch.finance-en.
 - Future production server mode: reserved for a later PostgreSQL-backed server build and not available in `v0.1.0`.
 
 ```python
-from ades import pull_pack, tag, tag_file, tag_files
+from ades import build_registry, pull_pack, tag, tag_file, tag_files
 
 pull_pack("finance-en")
+registry = build_registry(
+    [
+        "./src/ades/resources/registry/packs/general-en",
+        "./src/ades/resources/registry/packs/finance-en",
+    ],
+    output_dir="./published-registry",
+)
+pull_pack("finance-en", registry_url=registry.index_url)
 response = tag(
     "AAPL rallied on NASDAQ after USD 12.5 guidance from Apple.",
     pack="finance-en",
@@ -89,10 +99,10 @@ print(saved_response.saved_output_path)
 
 ## Current Runtime Surface
 
-- CLI commands: `ades pull`, `ades serve`, `ades tag`, `ades tag-files`, `ades status`, `ades packs list`, `ades packs activate`, `ades packs deactivate`, `ades packs lookup`
-- Local API endpoints: `GET /healthz`, `GET /v0/status`, `GET /v0/packs`, `GET /v0/packs/{pack}`, `POST /v0/packs/{pack}/activate`, `POST /v0/packs/{pack}/deactivate`, `GET /v0/lookup`, `POST /v0/tag`, `POST /v0/tag/file`, `POST /v0/tag/files`
+- CLI commands: `ades pull`, `ades pull --registry-url`, `ades registry build`, `ades serve`, `ades tag`, `ades tag-files`, `ades status`, `ades packs list`, `ades packs list --available --registry-url`, `ades packs activate`, `ades packs deactivate`, `ades packs lookup`
+- Local API endpoints: `GET /healthz`, `GET /v0/status`, `GET /v0/packs`, `GET /v0/packs/{pack}`, `POST /v0/packs/{pack}/activate`, `POST /v0/packs/{pack}/deactivate`, `POST /v0/registry/build`, `GET /v0/lookup`, `POST /v0/tag`, `POST /v0/tag/file`, `POST /v0/tag/files`
 - Local runtime status now reports `runtime_target=local` and `metadata_backend=sqlite`
-- Public Python helpers: `pull_pack`, `list_packs`, `get_pack`, `activate_pack`, `deactivate_pack`, `lookup_candidates`, `status`, `tag`, `tag_file`, `tag_files`, `create_service_app`
+- Public Python helpers: `build_registry`, `pull_pack`, `list_packs`, `get_pack`, `activate_pack`, `deactivate_pack`, `lookup_candidates`, `status`, `tag`, `tag_file`, `tag_files`, `create_service_app`
 - Bundled development packs: `general-en`, `finance-en`, `medical-en`
 
 ## Initial Product Direction
@@ -132,7 +142,8 @@ This repository now contains a working `v0.1.0` scaffold with:
 - rerun repair mode so missing reused outputs can be regenerated automatically and recorded with `repaired_reused_output:<path>` warnings plus `repaired_reused_output_count`
 - rerun diff reporting so manifest-driven corpus reruns now emit a structured `rerun_diff` summary with changed, newly processed, reused, repaired, and skipped inputs
 - manifest lineage metadata and stable run identifiers so saved batch manifests now record `run_id`, `root_run_id`, `parent_run_id`, `source_manifest_path`, and `created_at` across rerun chains
+- static pack publication and remote registry tooling so local pack directories can be exported as a file-based registry and consumed immediately by `ades pull` through `--registry-url`
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The next local-tool step is to add pack publication and remote registry tooling so local packs can move beyond the bundled development registry.
+The next local-tool step is to add the npm wrapper and local-install bootstrap flow so `ades` can be installed and invoked cleanly through both `pip` and `npm`.

@@ -8,6 +8,7 @@ from pathlib import Path
 import typer
 
 from .api import activate_pack as api_activate_pack
+from .api import build_registry as api_build_registry
 from .api import deactivate_pack as api_deactivate_pack
 from .api import lookup_candidates as api_lookup_candidates
 from .api import list_packs as api_list_packs
@@ -23,7 +24,9 @@ from .storage.paths import build_storage_layout, ensure_storage_layout
 
 app = typer.Typer(help="ades local semantic enrichment CLI", no_args_is_help=True)
 packs_app = typer.Typer(help="Inspect installed ades packs.")
+registry_app = typer.Typer(help="Build static pack registries for external distribution.")
 app.add_typer(packs_app, name="packs")
+app.add_typer(registry_app, name="registry")
 
 
 def _echo_json(payload: object) -> None:
@@ -32,9 +35,12 @@ def _echo_json(payload: object) -> None:
     typer.echo(json.dumps(payload, indent=2))
 
 
-def _installer() -> PackInstaller:
+def _installer(*, registry_url: str | None = None) -> PackInstaller:
     settings = get_settings()
-    return PackInstaller(settings.storage_root, registry_url=settings.registry_url)
+    return PackInstaller(
+        settings.storage_root,
+        registry_url=registry_url or settings.registry_url,
+    )
 
 
 @app.command()
@@ -49,14 +55,21 @@ def status() -> None:
 def packs_list(
     available: bool = typer.Option(False, "--available", help="List registry packs instead."),
     active_only: bool = typer.Option(False, "--active-only", help="List only active installed packs."),
+    registry_url: str | None = typer.Option(
+        None,
+        "--registry-url",
+        help="Override the registry URL or file path when listing --available packs.",
+    ),
 ) -> None:
     """List installed packs or available registry packs."""
 
     if available:
         if active_only:
             raise typer.BadParameter("--active-only cannot be used with --available.")
-        packs = _installer().available_packs()
+        packs = _installer(registry_url=registry_url).available_packs()
     else:
+        if registry_url is not None:
+            raise typer.BadParameter("--registry-url can only be used with --available.")
         packs = [pack.pack_id for pack in api_list_packs(active_only=active_only)]
     _echo_json({"packs": packs})
 
@@ -102,10 +115,17 @@ def packs_lookup(
 
 
 @app.command()
-def pull(pack: str) -> None:
+def pull(
+    pack: str,
+    registry_url: str | None = typer.Option(
+        None,
+        "--registry-url",
+        help="Override the registry URL or file path for this pull.",
+    ),
+) -> None:
     """Install a pack and any required dependencies."""
 
-    result = api_pull_pack(pack)
+    result = api_pull_pack(pack, registry_url=registry_url)
     _echo_json(
         {
             "requested_pack": result.requested_pack,
@@ -114,6 +134,21 @@ def pull(pack: str) -> None:
             "skipped": result.skipped,
         }
     )
+
+
+@registry_app.command("build")
+def registry_build(
+    pack_dirs: list[Path] = typer.Argument(..., help="Local pack directories to publish."),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the static registry should be written.",
+    ),
+) -> None:
+    """Build a static file-based registry from local pack directories."""
+
+    response = api_build_registry(pack_dirs, output_dir=output_dir)
+    _echo_json(response.model_dump(mode="json"))
 
 
 @app.command()

@@ -7,6 +7,7 @@ from typing import Iterable
 
 from .config import Settings, get_settings
 from .packs.installer import InstallResult, PackInstaller
+from .packs.publish import build_static_registry
 from .packs.registry import PackRegistry
 from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load_tag_file
 from .pipeline.tagger import tag_text
@@ -18,6 +19,8 @@ from .service.models import (
     LookupCandidate,
     LookupResponse,
     PackSummary,
+    RegistryBuildPackSummary,
+    RegistryBuildResponse,
     SourceFingerprint,
     StatusResponse,
     TagResponse,
@@ -137,6 +140,35 @@ def pull_pack(
         metadata_backend=settings.metadata_backend,
     )
     return installer.install(pack_id)
+
+
+def build_registry(
+    pack_dirs: Iterable[str | Path],
+    *,
+    output_dir: str | Path,
+) -> RegistryBuildResponse:
+    """Build a static file-based pack registry from local pack directories."""
+
+    result = build_static_registry(list(pack_dirs), output_dir=output_dir)
+    return RegistryBuildResponse(
+        output_dir=result.output_dir,
+        index_path=result.index_path,
+        index_url=result.index_url,
+        generated_at=result.generated_at,
+        pack_count=len(result.packs),
+        packs=[
+            RegistryBuildPackSummary(
+                pack_id=pack.pack_id,
+                version=pack.version,
+                source_path=pack.source_path,
+                manifest_path=pack.manifest_path,
+                artifact_path=pack.artifact_path,
+                artifact_sha256=pack.artifact_sha256,
+                artifact_size_bytes=pack.artifact_size_bytes,
+            )
+            for pack in result.packs
+        ],
+    )
 
 
 def tag(

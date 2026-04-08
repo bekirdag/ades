@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import hashlib
+import inspect
 import io
 import json
 import shutil
@@ -134,6 +135,9 @@ class PackInstaller:
         import zstandard
 
         decompressor = zstandard.ZstdDecompressor()
-        tar_bytes = decompressor.decompress(payload)
-        with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:") as archive:
-            archive.extractall(destination)
+        with decompressor.stream_reader(io.BytesIO(payload)) as reader:
+            with tarfile.open(fileobj=reader, mode="r|") as archive:
+                extract_kwargs = {"path": destination}
+                if "filter" in inspect.signature(archive.extractall).parameters:
+                    extract_kwargs["filter"] = "data"
+                archive.extractall(**extract_kwargs)

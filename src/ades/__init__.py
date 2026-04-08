@@ -2,6 +2,7 @@
 
 from .api import (
     activate_pack,
+    build_registry,
     create_service_app,
     deactivate_pack,
     get_pack,
@@ -21,6 +22,7 @@ __all__ = [
     "MetadataBackend",
     "RuntimeTarget",
     "activate_pack",
+    "build_registry",
     "create_service_app",
     "deactivate_pack",
     "get_pack",

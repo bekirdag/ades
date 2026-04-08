@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 
 from ..api import (
     activate_pack,
+    build_registry,
     deactivate_pack,
     get_pack,
     list_packs,
@@ -24,6 +25,8 @@ from .models import (
     FileTagRequest,
     LookupResponse,
     PackSummary,
+    RegistryBuildRequest,
+    RegistryBuildResponse,
     StatusResponse,
     TagRequest,
     TagResponse,
@@ -79,6 +82,24 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         if pack is None:
             raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
         return pack
+
+    @app.post("/v0/registry/build", response_model=RegistryBuildResponse)
+    def runtime_build_registry(request: RegistryBuildRequest) -> RegistryBuildResponse:
+        """Build a static file-based registry from local pack directories."""
+
+        try:
+            return build_registry(
+                request.pack_dirs,
+                output_dir=request.output_dir,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/v0/tag", response_model=TagResponse)
     def runtime_tag(request: TagRequest) -> TagResponse:

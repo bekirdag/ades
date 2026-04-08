@@ -33,6 +33,42 @@ class StatusResponse(BaseModel):
     installed_packs: list[str] = Field(default_factory=list)
 
 
+class RegistryBuildPackSummary(BaseModel):
+    """Published output for one pack in a static registry build."""
+
+    pack_id: str
+    version: str
+    source_path: str
+    manifest_path: str
+    artifact_path: str
+    artifact_sha256: str
+    artifact_size_bytes: int
+
+
+class RegistryBuildRequest(BaseModel):
+    """Request body for building a static file-based pack registry."""
+
+    pack_dirs: list[str] = Field(default_factory=list)
+    output_dir: str
+
+    @model_validator(mode="after")
+    def validate_pack_dirs(self) -> "RegistryBuildRequest":
+        if not self.pack_dirs:
+            raise ValueError("At least one pack directory is required.")
+        return self
+
+
+class RegistryBuildResponse(BaseModel):
+    """Response body for a static registry build."""
+
+    output_dir: str
+    index_path: str
+    index_url: str
+    generated_at: datetime
+    pack_count: int
+    packs: list[RegistryBuildPackSummary] = Field(default_factory=list)
+
+
 class EntityProvenance(BaseModel):
     """Deterministic provenance for a single entity match."""
 
