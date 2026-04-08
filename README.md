@@ -164,6 +164,7 @@ This repository now contains a working `v0.1.0` scaffold with:
 - a local SQLite metadata store for installed packs, dependencies, labels, rules, and aliases
 - a runtime/backend selector that keeps the local SQLite tool active and reserves a PostgreSQL production-server path for later work
 - deterministic pack-aware tagging for plain text and HTML with lookup-driven alias extraction
+- deterministic entity relevance scoring plus topic evidence metadata on the local tag response surface
 - lightweight entity linking and match provenance on extracted entities
 - file-oriented tagging entrypoints for local document paths
 - stable JSON persistence for tag results from CLI, library, and local-service entrypoints
@@ -189,4 +190,4 @@ This repository now contains a working `v0.1.0` scaffold with:
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The remaining local-tool priorities are tracked in [`docs/next_work_items.md`](/home/wodo/apps/ades/docs/next_work_items.md). The current queue starts with the richer tagging pipeline decision, explicit relevance and topic scoring, and lightweight local candidate search.
+The remaining local-tool priorities are tracked in [`docs/next_work_items.md`](/home/wodo/apps/ades/docs/next_work_items.md). The current queue now starts with lightweight local candidate search, while heavier NLP-backed enrichment is explicitly deferred past the deterministic `v0.1.0` baseline.

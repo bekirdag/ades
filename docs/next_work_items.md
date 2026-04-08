@@ -1,23 +1,21 @@
 # ades Next Work Items
 
-Updated after completing coordinated release publication and the related doc alignment on 2026-04-08.
+Updated after completing deterministic tagging-scope alignment plus relevance/topic scoring on 2026-04-08.
 
 ## Priority Queue
 
-1. Richer tagging pipeline decision and execution
-   - The implemented tagger in `src/ades/pipeline/tagger.py` is still intentionally deterministic: regex and rule matching plus pack-provided alias lookup.
-   - `pyproject.toml` does not yet ship `spaCy`, `GLiNER`, or `FlashText`, and there is still no relation-extraction layer.
-   - Decide whether `v0.1.0` stays deterministic-only or whether it still requires a minimum NLP-backed enrichment step. Then either implement that stack with categorized tests or defer it explicitly in the release decisions.
-
-2. Relevance scoring and richer topic output
-   - The current response surface has entity confidence and lightweight topic labels, but no explicit relevance field and no stronger topic-classification layer.
-   - `docs/implementation_plan.md` now reflects that this work is still pending rather than already present.
-   - Add a stable relevance field plus richer topic derivation and scoring if they remain inside the local-tool `v0.1.0` scope.
-
-3. Lightweight local search/index for candidate lookup
+1. Lightweight local search/index for candidate lookup
    - The current lookup path is still installed-pack metadata, aliases, and rules rather than a broader local candidate-search layer.
-   - `SQLite FTS5` or a similar lightweight index remains the planned next option if broader lookup needs to be part of the first local release.
-   - Implement that search layer only after the tagging-scope decision is settled so the lookup design matches the real extraction pipeline.
+   - `SQLite FTS5` or a similar lightweight index remains the planned next option if broader lookup still needs to be part of the first local release.
+   - Implement that search layer against the current deterministic tagger instead of re-opening the NLP stack decision.
+
+2. Post-`v0.1.0` NLP-backed enrichment evaluation
+   - The default runtime is now intentionally deterministic for `v0.1.0`, and `pyproject.toml` still carries no `spaCy`, `GLiNER`, or `FlashText` runtime dependencies.
+   - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
+
+3. Production-server seam hardening
+   - The local-tool release path is real, while the PostgreSQL-backed production server remains a placeholder seam.
+   - Keep future local-tool changes from leaking SQLite-only assumptions into the contracts that the later production server should reuse.
 
 ## Recently Closed
 
@@ -27,9 +25,15 @@ Updated after completing coordinated release publication and the related doc ali
   - gated on validated manifests from `ades release validate`
   - includes dry-run support plus explicit env-var credential handling for Python and npm publication
 
+- Deterministic tagging-scope decision and stronger response scoring:
+  - `v0.1.0` is now explicitly locked to the implemented deterministic runtime instead of implying a missing `spaCy` / `GLiNER` baseline
+  - entity matches now expose explicit deterministic `relevance`
+  - topic matches now expose evidence counts plus contributing entity-label summaries
+
 - Documentation alignment for the actual `v0.1.0` scope:
-  - `README.md`, `docs/implementation_plan.md`, and `docs/development_progress.md` now describe the implemented deterministic tagging baseline and the completed release workflow instead of pointing at already-finished smoke-install work
+  - `README.md`, `docs/project_guidance.md`, `docs/implementation_plan.md`, `docs/v0.1.0_decisions.md`, and `docs/development_progress.md` now describe the implemented deterministic tagging baseline and the completed release workflow instead of pointing at already-finished or still-unshipped NLP work
 
 ## Not Next
 
 - The PostgreSQL-backed production server remains intentionally deferred until the local-tool `v0.1.0` scope is closed.
+- Historical architecture research notes in `docs/ades_chat_output.md` and `docs/ades_architecture.html` are not the release-truth source for `v0.1.0`; use the decisions, implementation plan, development progress, and this queue instead.

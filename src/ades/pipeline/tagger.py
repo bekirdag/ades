@@ -207,18 +207,135 @@ def _dedupe_entities(
     )
 
 
+def _clamp_score(value: float) -> float:
+    return round(max(0.0, min(1.0, value)), 4)
+
+
+def _count_occurrences(text: str, value: str) -> int:
+    if not value:
+        return 1
+    matches = re.findall(re.escape(value), text, flags=re.IGNORECASE)
+    return max(1, len(matches))
+
+
+def _span_token_count(value: str) -> int:
+    token_count = len(TOKEN_RE.findall(value))
+    return max(1, token_count)
+
+
+def _score_entity_relevance(
+    entity: EntityMatch,
+    *,
+    domain: str,
+    runtime: PackRuntime,
+    text: str,
+) -> float:
+    confidence = entity.confidence or 0.0
+    position_score = 1.0 - min(1.0, entity.start / max(1, len(text)))
+    span_bonus = min(0.08, max(0, _span_token_count(entity.text) - 1) * 0.03)
+    canonical_text = entity.link.canonical_text if entity.link is not None else entity.text
+    occurrence_bonus = min(0.12, max(0, _count_occurrences(text, canonical_text) - 1) * 0.05)
+    match_bonus = 0.18 if entity.provenance and entity.provenance.match_kind == "rule" else 0.12
+
+    if runtime.domain == "general":
+        domain_bonus = 0.08 if domain == "general" else 0.03
+    elif domain == runtime.domain:
+        domain_bonus = 0.18
+    elif domain == "general":
+        domain_bonus = 0.05
+    else:
+        domain_bonus = 0.1
+
+    return _clamp_score(
+        (confidence * 0.38)
+        + (position_score * 0.14)
+        + match_bonus
+        + domain_bonus
+        + span_bonus
+        + occurrence_bonus
+    )
+
+
+def _apply_entity_relevance(
+    runtime: PackRuntime,
+    *,
+    text: str,
+    extracted: list[tuple[EntityMatch, str]],
+) -> list[tuple[EntityMatch, str]]:
+    scored: list[tuple[EntityMatch, str]] = []
+    for entity, domain in extracted:
+        scored.append(
+            (
+                entity.model_copy(
+                    update={
+                        "relevance": _score_entity_relevance(
+                            entity,
+                            domain=domain,
+                            runtime=runtime,
+                            text=text,
+                        )
+                    }
+                ),
+                domain,
+            )
+        )
+    return scored
+
+
+def _topic_score(entities: list[EntityMatch], *, multiplier: float = 1.0) -> float:
+    if not entities:
+        return _clamp_score(1.0 if multiplier >= 1.0 else 0.4 * multiplier)
+
+    weights = [(entity.relevance if entity.relevance is not None else (entity.confidence or 0.0)) for entity in entities]
+    average_weight = sum(weights) / len(weights)
+    count_bonus = min(0.2, len(entities) * 0.08)
+    return _clamp_score(((average_weight * 0.8) + count_bonus) * multiplier)
+
+
+def _build_topic_match(
+    *,
+    label: str,
+    entities: list[EntityMatch],
+    multiplier: float = 1.0,
+) -> TopicMatch:
+    label_counts = Counter(entity.label for entity in entities)
+    return TopicMatch(
+        label=label,
+        score=_topic_score(entities, multiplier=multiplier),
+        evidence_count=len(entities),
+        entity_labels=[
+            entity_label
+            for entity_label, _ in sorted(label_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
+    )
+
+
 def _build_topics(runtime: PackRuntime, extracted: list[tuple[EntityMatch, str]]) -> list[TopicMatch]:
     if not extracted:
         return []
 
-    domain_counts = Counter(domain for _, domain in extracted if domain and domain != "general")
-    topics: list[TopicMatch] = []
-    for domain, count in sorted(domain_counts.items()):
-        topics.append(TopicMatch(label=domain, score=min(1.0, count / 3.0)))
+    by_domain: dict[str, list[EntityMatch]] = {}
+    for entity, domain in extracted:
+        if not domain or domain == "general":
+            continue
+        by_domain.setdefault(domain, []).append(entity)
 
-    if not topics:
-        topics.append(TopicMatch(label=runtime.domain, score=1.0 if runtime.domain == "general" else 0.5))
-    return topics
+    if by_domain:
+        topics = [
+            _build_topic_match(label=domain, entities=entities)
+            for domain, entities in sorted(by_domain.items())
+        ]
+        return sorted(topics, key=lambda topic: (-(topic.score or 0.0), -topic.evidence_count, topic.label))
+
+    fallback_entities = [entity for entity, _ in extracted]
+    multiplier = 1.0 if runtime.domain == "general" else 0.7
+    return [
+        _build_topic_match(
+            label=runtime.domain,
+            entities=fallback_entities,
+            multiplier=multiplier,
+        )
+    ]
 
 
 def tag_text(*, text: str, pack: str, content_type: str, storage_root: Path) -> TagResponse:
@@ -252,6 +369,7 @@ def tag_text(*, text: str, pack: str, content_type: str, storage_root: Path) -> 
     extracted = _extract_rule_entities(normalized, runtime.rules)
     extracted.extend(_extract_lookup_alias_entities(normalized, registry=registry, runtime=runtime))
     deduped = _dedupe_entities(extracted)
+    scored = _apply_entity_relevance(runtime, text=normalized, extracted=deduped)
 
     elapsed_ms = int((perf_counter() - start) * 1000)
     return TagResponse(
@@ -260,8 +378,8 @@ def tag_text(*, text: str, pack: str, content_type: str, storage_root: Path) -> 
         language=runtime.language,
         content_type=content_type,
         source_path=None,
-        entities=[entity for entity, _ in deduped],
-        topics=_build_topics(runtime, deduped),
+        entities=[entity for entity, _ in scored],
+        topics=_build_topics(runtime, scored),
         warnings=warnings,
         timing_ms=elapsed_ms,
     )

@@ -199,6 +199,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Exposed the coordinated publish flow consistently through the public Python API, the CLI command `ades release publish`, and the localhost service endpoint `POST /v0/release/publish`.
 - Added dry-run support plus explicit environment-variable credential and registry handling for `twine` and `npm publish`, and added categorized unit, component, integration, and API coverage for the new workflow.
 
+### 28. Deterministic relevance scoring and stronger topic evidence
+
+- Closed the open `v0.1.0` tagging-scope decision in favor of the current deterministic-only runtime instead of widening the release to a new `spaCy` / `GLiNER` / `FlashText` dependency stack.
+- Extended entity matches with an explicit deterministic `relevance` score so the local tagger now emits both confidence and rank-oriented match weight on the same stable response surface.
+- Extended topic matches with evidence counts and contributing entity-label summaries so topic output now carries more than a bare label-plus-score pair.
+- Added categorized unit, component, integration, and API coverage for deterministic relevance ordering, topic evidence metadata, and the public response contract.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`

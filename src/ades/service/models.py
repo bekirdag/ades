@@ -281,6 +281,7 @@ class EntityMatch(BaseModel):
     start: int
     end: int
     confidence: float | None = None
+    relevance: float | None = None
     provenance: EntityProvenance | None = None
     link: EntityLink | None = None
 
@@ -298,6 +299,8 @@ class TopicMatch(BaseModel):
 
     label: str
     score: float | None = None
+    evidence_count: int = 0
+    entity_labels: list[str] = Field(default_factory=list)
 
 
 class TagOutputOptions(BaseModel):

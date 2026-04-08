@@ -81,10 +81,10 @@ Target release: `v0.1.0`
 - regex and pack-provided alias metadata for the current deterministic tagging baseline
 - `build` and `twine` for Python release packaging and publication
 
-### Candidate Additions After The Release Workflow Closes
+### Candidate Additions After v0.1.0
 
-- `spaCy` for a richer NLP base layer if deterministic tagging is not sufficient
-- `GLiNER` for flexible entity extraction if that step is accepted into the `v0.1.0` scope
+- `spaCy` for a richer NLP base layer if deterministic tagging stops being sufficient after `v0.1.0`
+- `GLiNER` for flexible entity extraction if a later release accepts a model-backed extraction step
 - `FlashText` if a dedicated keyword-extraction layer is still warranted beyond the current alias lookup path
 
 ### Local Data And Search
@@ -127,11 +127,11 @@ Target release: `v0.1.0`
 
 4. Enrichment pipeline core
    - text normalization
-   - NLP base layer
-   - NER and deterministic extractors
-   - topic tagging
+   - deterministic alias and rule extractors
+   - relevance scoring
+   - topic tagging with evidence summaries
    - optional linking hooks
-   - scoring and result shaping
+   - result shaping plus a future NLP seam
 
 5. Local HTTP service
    - `/healthz`
@@ -186,9 +186,9 @@ Target release: `v0.1.0`
 
 ### Phase 4
 
-- Decide whether `v0.1.0` remains deterministic-only or expands to an initial NLP-backed enrichment layer.
-- If the scope expands, add the minimum acceptable `spaCy` / `GLiNER` / `FlashText` stack with categorized tests.
-- Add explicit relevance scoring, stronger topic output, and lightweight candidate search only if they stay inside the local-tool release scope.
+- Keep `v0.1.0` deterministic-only and local-first for the default runtime.
+- Add explicit deterministic relevance scoring and stronger topic output on the existing entity/topic response surface.
+- Treat lightweight candidate search as the remaining tagging-related release-scope decision; defer `spaCy` / `GLiNER` / `FlashText` unless the release target changes after `v0.1.0`.
 
 ### Phase 5
 
@@ -243,6 +243,7 @@ Target release: `v0.1.0`
 ## Decisions Beyond v0.1.0
 
 - Whether later local search should stay on `SQLite FTS5` or move to a second lightweight index
+- Whether post-`v0.1.0` local enrichment should add `spaCy`, `GLiNER`, `FlashText`, or stay deterministic-first
 - Whether future larger packs should include heavier dedicated domain models
 - Whether the first stable API after `v0.x` should remain HTTP-only or add another transport
 

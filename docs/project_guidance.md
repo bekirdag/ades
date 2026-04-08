@@ -22,6 +22,7 @@
 - Keep the implementation Python-first. The npm package should distribute or launch the Python-based runtime instead of re-implementing the pipeline in Node.
 - The npm wrapper should bootstrap a user-local Python virtual environment on first use and then delegate to the Python `ades` command.
 - Treat the older “Open Calais clone” wording as historical research context, not the current product identity.
+- Treat exploratory architecture notes such as `docs/ades_chat_output.md` and `docs/ades_architecture.html` as research artifacts, not release-truth sources.
 - Every development step must include unit, component, integration, and API tests.
 
 ## Product Distinctions
@@ -40,7 +41,7 @@
 ## Architecture Direction
 
 - Build the first usable version as a local service before designing a distributed deployment.
-- Start with a simple local stack: `Typer` CLI, `FastAPI` service, `Pydantic v2`, `spaCy`, `GLiNER`, rule-based extractors, and local storage.
+- Start with a simple deterministic local stack: `Typer` CLI, `FastAPI` service, `Pydantic v2`, regex and pack-rule extractors, exact alias lookup, and local `SQLite` storage.
 - Prefer lightweight local persistence for `v0.1.0` such as `SQLite` plus local indexes over `Postgres` and `OpenSearch`.
 - Add backend seams and placeholders early so the later production-server build can swap `SQLite` for `PostgreSQL` without rewriting the public CLI, API, or pack model.
 - Keep heavier components such as `Celery`, `Redis`, `OpenSearch`, `Qdrant`, and large REL indexes as optional upgrades after the local pack/runtime model is stable.
@@ -74,8 +75,6 @@
 
 ## Immediate Priorities
 
-1. Scaffold the Python package, CLI entrypoint, and local service entrypoint.
-2. Define the pack manifest schema and on-disk layout rooted at `/mnt/githubActions/ades_big_data`.
-3. Implement `ades pull` for downloading and activating packs.
-4. Implement `ades serve` with a minimal health endpoint and text-tagging endpoint.
-5. Add a first finance and medical pack shape, even if initially thin, so the pack system is real from day one.
+1. Keep [`next_work_items.md`](/home/wodo/apps/ades/docs/next_work_items.md) as the authoritative queue for remaining local-tool work.
+2. Finish any remaining lightweight local candidate-search work without widening the default runtime beyond the deterministic `v0.1.0` baseline.
+3. Preserve the local-tool contracts and backend seams so later production-server work can reuse them without inheriting SQLite-only assumptions.
