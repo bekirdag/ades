@@ -12,6 +12,7 @@ from .api import build_registry as api_build_registry
 from .api import deactivate_pack as api_deactivate_pack
 from .api import lookup_candidates as api_lookup_candidates
 from .api import list_packs as api_list_packs
+from .api import publish_release as api_publish_release
 from .api import pull_pack as api_pull_pack
 from .api import release_versions as api_release_versions
 from .api import status as api_status
@@ -228,6 +229,30 @@ def release_validate(
         clean=not no_clean,
         smoke_install=smoke_install,
         tests_command=test_command or None,
+    )
+    _echo_json(response.model_dump(mode="json"))
+    if not response.overall_success:
+        raise typer.Exit(code=1)
+
+
+@release_app.command("publish")
+def release_publish(
+    manifest_path: Path = typer.Option(
+        ...,
+        "--manifest-path",
+        help="Validated release manifest created by `ades release validate`.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show coordinated publish commands without executing them.",
+    ),
+) -> None:
+    """Publish one validated release manifest to Python and npm registries."""
+
+    response = api_publish_release(
+        manifest_path=manifest_path,
+        dry_run=dry_run,
     )
     _echo_json(response.model_dump(mode="json"))
     if not response.overall_success:

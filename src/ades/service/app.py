@@ -14,6 +14,7 @@ from ..api import (
     list_packs,
     lookup_candidates,
     npm_installer_info,
+    publish_release,
     release_versions,
     status,
     sync_release_version,
@@ -34,6 +35,8 @@ from .models import (
     PackSummary,
     ReleaseManifestRequest,
     ReleaseManifestResponse,
+    ReleasePublishRequest,
+    ReleasePublishResponse,
     ReleaseValidationRequest,
     ReleaseValidationResponse,
     ReleaseVersionState,
@@ -139,6 +142,22 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 clean=request.clean,
                 smoke_install=request.smoke_install,
                 tests_command=request.tests_command or None,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/v0/release/publish", response_model=ReleasePublishResponse)
+    def runtime_publish_release(
+        request: ReleasePublishRequest,
+    ) -> ReleasePublishResponse:
+        """Publish one validated release manifest to Python and npm registries."""
+
+        try:
+            return publish_release(
+                manifest_path=request.manifest_path,
+                dry_run=request.dry_run,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

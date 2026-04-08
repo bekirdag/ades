@@ -22,6 +22,7 @@ from .packs.registry import PackRegistry
 from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load_tag_file
 from .pipeline.tagger import tag_text
 from .release import release_versions as read_release_versions
+from .release import publish_release_manifest as run_publish_release_manifest
 from .release import sync_release_version as run_sync_release_version
 from .release import validate_release_workflow
 from .release import verify_release_artifacts
@@ -34,6 +35,7 @@ from .service.models import (
     LookupCandidate,
     LookupResponse,
     ReleaseManifestResponse,
+    ReleasePublishResponse,
     ReleaseValidationResponse,
     ReleaseVersionState,
     ReleaseVersionSyncResponse,
@@ -251,6 +253,19 @@ def write_release_manifest(
         version=version,
         clean=clean,
         smoke_install=smoke_install,
+    )
+
+
+def publish_release(
+    *,
+    manifest_path: str | Path,
+    dry_run: bool = False,
+) -> ReleasePublishResponse:
+    """Publish one validated release manifest to Python and npm registries."""
+
+    return run_publish_release_manifest(
+        manifest_path=manifest_path,
+        dry_run=dry_run,
     )
 
 

@@ -78,6 +78,12 @@ def build_fake_release_runner(
     npm_install_stderr: str = "",
     npm_invoke_returncode: int = 0,
     npm_invoke_stderr: str = "",
+    twine_upload_returncode: int = 0,
+    twine_upload_stdout: str = "uploaded",
+    twine_upload_stderr: str = "",
+    npm_publish_returncode: int = 0,
+    npm_publish_stdout: str = "published",
+    npm_publish_stderr: str = "",
 ):
     """Return a fake subprocess runner for release artifact verification tests."""
 
@@ -116,6 +122,13 @@ def build_fake_release_runner(
             _write_artifact(wheel_path, b"fake wheel artifact")
             _write_artifact(sdist_path, b"fake sdist artifact")
             return subprocess.CompletedProcess(command, 0, stdout="built", stderr="")
+        if len(command) >= 3 and command[1:3] == ["-m", "twine"]:
+            return subprocess.CompletedProcess(
+                command,
+                twine_upload_returncode,
+                stdout=twine_upload_stdout if twine_upload_returncode == 0 else "",
+                stderr=twine_upload_stderr,
+            )
         if len(command) >= 2 and command[:2] == ["npm", "pack"]:
             outdir = Path(command[command.index("--pack-destination") + 1])
             tarball_name = f"ades-cli-{npm_version}.tgz"
@@ -123,6 +136,13 @@ def build_fake_release_runner(
             _write_artifact(tarball_path, b"fake npm tarball")
             payload = json.dumps([{"filename": tarball_name}])
             return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+        if len(command) >= 2 and command[:2] == ["npm", "publish"]:
+            return subprocess.CompletedProcess(
+                command,
+                npm_publish_returncode,
+                stdout=npm_publish_stdout if npm_publish_returncode == 0 else "",
+                stderr=npm_publish_stderr,
+            )
         if len(command) >= 2 and command[:2] == ["npm", "install"]:
             prefix_dir = Path(command[command.index("--prefix") + 1])
             _write_text(

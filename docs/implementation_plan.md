@@ -55,11 +55,10 @@ Target release: `v0.1.0`
 
 ## What We Keep From The Existing Docs
 
-- `FastAPI` for the service interface.
-- `spaCy` for tokenization, sentence splitting, and syntax.
-- `GLiNER` for flexible entity extraction.
-- `FlashText` and pattern rules for deterministic extraction.
-- A staged enrichment pipeline with room for topic classification, entity linking, and relation extraction.
+- `FastAPI` remains the service interface for the local tool.
+- Pack-driven deterministic extraction, alias lookup, and structured JSON output remain central to the first release.
+- A staged enrichment pipeline is still the long-term design, with room for topic classification, entity linking, relation extraction, and optional heavier NLP components later.
+- `spaCy`, `GLiNER`, and `FlashText` remain candidate upgrades, but they are not part of the current implemented `v0.1.0` baseline.
 
 ## What We Change For ades v0.1.0
 
@@ -77,16 +76,22 @@ Target release: `v0.1.0`
 - `Typer` for the CLI
 - `FastAPI` + `Uvicorn` for the local service
 - `Pydantic v2` for config, manifests, and API models
-- `spaCy` for the NLP base layer
-- `GLiNER` for entity extraction
-- `FlashText` plus regex/rule packs for deterministic entities
 - `httpx` for downloads and remote registry access
 - `orjson` for fast payload handling
+- regex and pack-provided alias metadata for the current deterministic tagging baseline
+- `build` and `twine` for Python release packaging and publication
+
+### Candidate Additions After The Release Workflow Closes
+
+- `spaCy` for a richer NLP base layer if deterministic tagging is not sufficient
+- `GLiNER` for flexible entity extraction if that step is accepted into the `v0.1.0` scope
+- `FlashText` if a dedicated keyword-extraction layer is still warranted beyond the current alias lookup path
 
 ### Local Data And Search
 
 - `SQLite` for local metadata, installed packs, aliases, and enrichment state
-- `SQLite FTS5` or a similarly lightweight local index for early candidate search
+- deterministic alias/rule lookup over installed-pack metadata for the current local baseline
+- `SQLite FTS5` or a similarly lightweight local index remains a candidate next step for broader lookup
 - File-based pack storage under `/mnt/githubActions/ades_big_data`
 - Checksum validation for pulled pack artifacts
 
@@ -175,16 +180,15 @@ Target release: `v0.1.0`
 
 ### Phase 3
 
-- Implement the first tag pipeline with plain-text input.
-- Add `spaCy` and `GLiNER`.
-- Add deterministic rule extraction for high-value patterns.
-- Return a stable JSON result structure.
+- Deliver the first deterministic tag pipeline with plain-text and file input.
+- Reuse pack-provided aliases and rules for high-value deterministic extraction.
+- Return a stable JSON result structure through the CLI, library, and local service.
 
 ### Phase 4
 
-- Add topic tagging and lightweight candidate lookup.
-- Introduce pack-provided alias tables and label sets.
-- Add score fields for confidence and relevance.
+- Decide whether `v0.1.0` remains deterministic-only or expands to an initial NLP-backed enrichment layer.
+- If the scope expands, add the minimum acceptable `spaCy` / `GLiNER` / `FlashText` stack with categorized tests.
+- Add explicit relevance scoring, stronger topic output, and lightweight candidate search only if they stay inside the local-tool release scope.
 
 ### Phase 5
 
@@ -197,12 +201,12 @@ Target release: `v0.1.0`
 
 - Preserve the local/public interfaces while preparing the production-server seam.
 - Keep the PostgreSQL-backed production-server path as an explicit placeholder, not an accidental SQLite assumption spread across the codebase.
-- Expand categorized test coverage with unit, component, integration, and API cases for each new feature area.
+- Extend the release workflow through verify, manifest, validate, smoke-install, and coordinated publish steps with categorized test coverage.
 
 ### Phase 7
 
-- Add richer pack tooling and pack publication scripts.
-- Evaluate heavier optional components such as REL, OpenTapioca, or relation extraction.
+- Add richer pack tooling and pack publication scripts beyond the current local registry builder.
+- Evaluate heavier optional components such as REL, OpenTapioca, or relation extraction after the local-tool tagging scope is settled.
 - Decide which server-scale pieces are still necessary after the local stack is proven.
 
 ### Later Production Track

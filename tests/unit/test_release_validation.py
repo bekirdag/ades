@@ -24,6 +24,9 @@ def test_validate_release_workflow_runs_tests_then_writes_manifest(
     assert response.overall_success is True
     assert response.manifest is not None
     assert response.manifest_path == response.manifest.manifest_path
+    assert response.manifest.validation is not None
+    assert response.manifest.validation.tests_passed is True
+    assert response.manifest.validation.tests_command[1:3] == ["-m", "pytest"]
     assert response.manifest.verification.smoke_install is True
     assert response.manifest.verification.python_install_smoke is not None
     assert response.manifest.verification.python_install_smoke.passed is True

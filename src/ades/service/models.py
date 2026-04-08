@@ -171,6 +171,15 @@ class ReleaseInstallSmokeResult(BaseModel):
     reported_version: str | None = None
 
 
+class ReleaseValidationSummary(BaseModel):
+    """Validation metadata persisted into a release manifest."""
+
+    validated_at: datetime
+    tests_command: list[str] = Field(default_factory=list)
+    tests_exit_code: int
+    tests_passed: bool
+
+
 class ReleaseManifestRequest(BaseModel):
     """Request body for persisted release-manifest generation."""
 
@@ -189,6 +198,7 @@ class ReleaseManifestResponse(BaseModel):
     release_version: str
     version_state: ReleaseVersionState
     version_sync: ReleaseVersionSyncResponse | None = None
+    validation: ReleaseValidationSummary | None = None
     verification: ReleaseVerificationResponse
 
 
@@ -211,6 +221,36 @@ class ReleaseValidationResponse(BaseModel):
     tests: ReleaseCommandResult
     manifest: ReleaseManifestResponse | None = None
     manifest_path: str | None = None
+    overall_success: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ReleasePublishRequest(BaseModel):
+    """Request body for coordinated release publication."""
+
+    manifest_path: str
+    dry_run: bool = False
+
+
+class ReleasePublishTargetResult(BaseModel):
+    """Structured publish result for one distribution target."""
+
+    artifact_paths: list[str] = Field(default_factory=list)
+    registry: str | None = None
+    command: ReleaseCommandResult
+    executed: bool
+    passed: bool
+
+
+class ReleasePublishResponse(BaseModel):
+    """Structured result for one coordinated release publication run."""
+
+    manifest_path: str
+    release_version: str
+    dry_run: bool
+    validated_manifest: bool
+    python_publish: ReleasePublishTargetResult
+    npm_publish: ReleasePublishTargetResult
     overall_success: bool
     warnings: list[str] = Field(default_factory=list)
 

@@ -192,6 +192,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added explicit smoke-validation metadata to the public Python API, CLI, and localhost service release responses, including per-command stdout/stderr, reported version, and deterministic warnings when install or invocation checks fail.
 - Added categorized unit, component, integration, and API coverage for smoke-install success paths, smoke-install disable flags, and propagated manifest/validate response shapes.
 
+### 27. Coordinated release publication from validated manifests
+
+- Added a manifest-driven publish workflow that reads a validated release manifest and publishes the recorded Python wheel/sdist plus npm tarball without rebuilding them.
+- Gated publication on the manifest carrying explicit validation metadata from `ades release validate`, so release publication now fails fast when callers try to publish from a manifest that did not come from the validated workflow.
+- Exposed the coordinated publish flow consistently through the public Python API, the CLI command `ades release publish`, and the localhost service endpoint `POST /v0/release/publish`.
+- Added dry-run support plus explicit environment-variable credential and registry handling for `twine` and `npm publish`, and added categorized unit, component, integration, and API coverage for the new workflow.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -202,6 +209,7 @@ This file records the implementation progress of `ades` as the project moves tow
 - `ades release sync-version <version>`
 - `ades release manifest --output-dir <dir>`
 - `ades release validate --output-dir <dir>`
+- `ades release publish --manifest-path <path>`
 - `ades status`
 - `npm install -g ades-cli`
 - `ades tag <text>`
@@ -235,6 +243,7 @@ The local service currently exposes:
 - `POST /v0/release/verify`
 - `POST /v0/release/manifest`
 - `POST /v0/release/validate`
+- `POST /v0/release/publish`
 - `GET /v0/lookup`
 - `POST /v0/tag`
 - `POST /v0/tag/file`
@@ -263,4 +272,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add a coordinated publish step that consumes the validated release manifest and performs Python/npm publication from one explicit local workflow without breaking the local-tool packaging seam.
+- Decide whether `v0.1.0` stays with the current deterministic tagging baseline or expands to an initial NLP-backed enrichment layer, then either implement that minimum stack or defer it explicitly in the release decisions and implementation plan.
