@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
+from uuid import uuid4
 
-from ..service.models import BatchManifest, BatchManifestItem, BatchTagResponse, TagResponse
+from ..service.models import (
+    BatchManifest,
+    BatchManifestItem,
+    BatchRunLineage,
+    BatchTagResponse,
+    TagResponse,
+)
 from ..version import __version__
 
 FILENAME_PART_RE = re.compile(r"[^a-z0-9-]+")
@@ -25,6 +33,37 @@ class BatchManifestReplayPlan:
     item_index: dict[Path, BatchManifestItem]
     candidate_count: int
     selected_count: int
+
+
+def new_batch_run_id() -> str:
+    """Return a stable unique identifier for one batch run."""
+
+    return f"ades-run-{uuid4().hex}"
+
+
+def build_batch_run_lineage(
+    *,
+    parent_manifest: BatchManifest | None = None,
+    source_manifest_path: str | Path | None = None,
+) -> BatchRunLineage:
+    """Build batch lineage metadata for a root run or rerun."""
+
+    run_id = new_batch_run_id()
+    parent_lineage = parent_manifest.lineage if parent_manifest is not None else None
+    root_run_id = parent_lineage.root_run_id if parent_lineage is not None else run_id
+    parent_run_id = parent_lineage.run_id if parent_lineage is not None else None
+    resolved_source_manifest_path = (
+        str(Path(source_manifest_path).expanduser().resolve())
+        if source_manifest_path is not None
+        else None
+    )
+    return BatchRunLineage(
+        run_id=run_id,
+        root_run_id=root_run_id,
+        parent_run_id=parent_run_id,
+        source_manifest_path=resolved_source_manifest_path,
+        created_at=datetime.now(timezone.utc),
+    )
 
 
 def _slug_filename_part(value: str) -> str:
@@ -70,8 +109,6 @@ def build_batch_manifest_output_path(
 ) -> Path:
     """Resolve the final JSON output path for a batch manifest artifact."""
 
-    if output_path is not None and output_dir is not None:
-        raise ValueError("Only one of output_path or output_dir may be set.")
     if output_path is None and output_dir is None:
         raise ValueError("An output path or directory is required.")
 
@@ -312,6 +349,7 @@ def build_batch_manifest(response: BatchTagResponse) -> BatchManifest:
         item_count=response.item_count,
         summary=summary,
         warnings=warnings,
+        lineage=response.lineage,
         rerun_diff=response.rerun_diff,
         skipped=response.skipped,
         rejected=response.rejected,

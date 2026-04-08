@@ -143,6 +143,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Persisted the same rerun diff structure into saved batch manifests so replayed local runs keep one stable audit artifact for later inspection or chained reruns.
 - Kept top-level `items`, `reused_items`, and `skipped` semantics unchanged so the new diff layer is additive rather than a breaking response rewrite.
 
+### 20. Manifest lineage metadata and stable run identifiers
+
+- Added stable batch `run_id` generation so every local corpus run now carries a durable identifier in both runtime responses and saved manifests.
+- Added lineage metadata with `root_run_id`, `parent_run_id`, `source_manifest_path`, and `created_at` so reruns can express parent-child relationships across repeated manifest-driven executions.
+- Kept the lineage block additive and backward-compatible by making it optional in the persisted manifest schema, so older saved manifests can still be loaded for replay.
+- Fixed the batch manifest persistence path handling so an explicit manifest output path can coexist with the existing per-file output directory flow, which is required for preserving parent and child manifests in the same workspace.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -198,4 +205,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add manifest lineage metadata and stable run identifiers so local reruns can trace parent-child relationships across a chain of saved batch manifests.
+- Add pack publication and remote registry tooling so local packs can move beyond the bundled development registry and the local tool can support a real external pack distribution flow.

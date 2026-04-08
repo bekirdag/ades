@@ -26,6 +26,12 @@ packs_app = typer.Typer(help="Inspect installed ades packs.")
 app.add_typer(packs_app, name="packs")
 
 
+def _echo_json(payload: object) -> None:
+    """Render one payload as stable JSON for the CLI."""
+
+    typer.echo(json.dumps(payload, indent=2))
+
+
 def _installer() -> PackInstaller:
     settings = get_settings()
     return PackInstaller(settings.storage_root, registry_url=settings.registry_url)
@@ -36,7 +42,7 @@ def status() -> None:
     """Show the local ades runtime status."""
 
     payload = api_status()
-    typer.echo(json.dumps(payload.model_dump(), indent=2))
+    _echo_json(payload.model_dump(mode="json"))
 
 
 @packs_app.command("list")
@@ -52,7 +58,7 @@ def packs_list(
         packs = _installer().available_packs()
     else:
         packs = [pack.pack_id for pack in api_list_packs(active_only=active_only)]
-    typer.echo(json.dumps({"packs": packs}, indent=2))
+    _echo_json({"packs": packs})
 
 
 @packs_app.command("activate")
@@ -62,7 +68,7 @@ def packs_activate(pack: str) -> None:
     result = api_activate_pack(pack)
     if result is None:
         raise typer.Exit(code=1)
-    typer.echo(json.dumps(result.model_dump(), indent=2))
+    _echo_json(result.model_dump(mode="json"))
 
 
 @packs_app.command("deactivate")
@@ -72,7 +78,7 @@ def packs_deactivate(pack: str) -> None:
     result = api_deactivate_pack(pack)
     if result is None:
         raise typer.Exit(code=1)
-    typer.echo(json.dumps(result.model_dump(), indent=2))
+    _echo_json(result.model_dump(mode="json"))
 
 
 @packs_app.command("lookup")
@@ -92,7 +98,7 @@ def packs_lookup(
         active_only=active_only,
         limit=limit,
     )
-    typer.echo(json.dumps(response.model_dump(), indent=2))
+    _echo_json(response.model_dump(mode="json"))
 
 
 @app.command()
@@ -100,16 +106,13 @@ def pull(pack: str) -> None:
     """Install a pack and any required dependencies."""
 
     result = api_pull_pack(pack)
-    typer.echo(
-        json.dumps(
-            {
-                "requested_pack": result.requested_pack,
-                "registry_url": result.registry_url,
-                "installed": result.installed,
-                "skipped": result.skipped,
-            },
-            indent=2,
-        )
+    _echo_json(
+        {
+            "requested_pack": result.requested_pack,
+            "registry_url": result.registry_url,
+            "installed": result.installed,
+            "skipped": result.skipped,
+        }
     )
 
 
@@ -158,7 +161,7 @@ def tag(
             output_dir=output_dir,
             pretty_output=not compact_output,
         )
-    typer.echo(json.dumps(response.model_dump(), indent=2))
+    _echo_json(response.model_dump(mode="json"))
 
 
 @app.command("tag-files")
@@ -288,7 +291,7 @@ def tag_files(
         write_manifest=write_manifest,
         manifest_output_path=manifest_output,
     )
-    typer.echo(json.dumps(response.model_dump(), indent=2))
+    _echo_json(response.model_dump(mode="json"))
 
 
 @app.command()

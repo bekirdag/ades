@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 
 from ades.service.models import (
+    BatchManifest,
     BatchManifestItem,
+    BatchRunLineage,
     BatchRerunDiff,
     BatchSkippedInput,
     BatchSourceSummary,
@@ -13,6 +15,7 @@ from ades.service.models import (
 from ades.storage.results import (
     aggregate_batch_warnings,
     build_batch_manifest_item_from_tag_response,
+    build_batch_run_lineage,
     persist_batch_tag_manifest_json,
     persist_tag_responses_json,
     verify_reused_output_items,
@@ -313,3 +316,116 @@ def test_persist_batch_manifest_json_includes_rerun_diff(tmp_path: Path) -> None
             "size_bytes": 12,
         }
     ]
+
+
+def test_build_batch_run_lineage_creates_root_run_for_initial_batch() -> None:
+    lineage = build_batch_run_lineage()
+
+    assert lineage.run_id.startswith("ades-run-")
+    assert lineage.root_run_id == lineage.run_id
+    assert lineage.parent_run_id is None
+    assert lineage.source_manifest_path is None
+    assert lineage.created_at.tzinfo is not None
+
+
+def test_build_batch_run_lineage_inherits_parent_chain(tmp_path: Path) -> None:
+    parent_manifest = BatchManifest(
+        version="0.1.0",
+        pack="finance-en",
+        item_count=0,
+        summary=BatchSourceSummary(
+            explicit_path_count=0,
+            directory_match_count=0,
+            glob_match_count=0,
+            discovered_count=0,
+            included_count=0,
+            processed_count=0,
+            excluded_count=0,
+            skipped_count=0,
+            rejected_count=0,
+            duplicate_count=0,
+            generated_output_skipped_count=0,
+            discovered_input_bytes=0,
+            included_input_bytes=0,
+            processed_input_bytes=0,
+            recursive=True,
+        ),
+        lineage=BatchRunLineage(
+            run_id="ades-run-parent",
+            root_run_id="ades-run-root",
+            parent_run_id=None,
+            source_manifest_path=None,
+            created_at="2026-04-08T12:00:00Z",
+        ),
+        warnings=[],
+        skipped=[],
+        rejected=[],
+        reused_items=[],
+        items=[],
+    )
+
+    lineage = build_batch_run_lineage(
+        parent_manifest=parent_manifest,
+        source_manifest_path=tmp_path / "batch.finance-en.ades-manifest.json",
+    )
+
+    assert lineage.run_id.startswith("ades-run-")
+    assert lineage.run_id != "ades-run-parent"
+    assert lineage.parent_run_id == "ades-run-parent"
+    assert lineage.root_run_id == "ades-run-root"
+    assert lineage.source_manifest_path == str(
+        (tmp_path / "batch.finance-en.ades-manifest.json").resolve()
+    )
+
+
+def test_persist_batch_manifest_json_includes_lineage(tmp_path: Path) -> None:
+    response = BatchTagResponse(
+        pack="finance-en",
+        item_count=0,
+        summary=BatchSourceSummary(
+            explicit_path_count=0,
+            directory_match_count=0,
+            glob_match_count=0,
+            discovered_count=0,
+            included_count=0,
+            processed_count=0,
+            excluded_count=0,
+            skipped_count=0,
+            rejected_count=0,
+            duplicate_count=0,
+            generated_output_skipped_count=0,
+            discovered_input_bytes=0,
+            included_input_bytes=0,
+            processed_input_bytes=0,
+            recursive=True,
+        ),
+        lineage=BatchRunLineage(
+            run_id="ades-run-child",
+            root_run_id="ades-run-root",
+            parent_run_id="ades-run-parent",
+            source_manifest_path="/tmp/parent-manifest.json",
+            created_at="2026-04-08T12:00:00Z",
+        ),
+        warnings=[],
+        skipped=[],
+        rejected=[],
+        reused_items=[],
+        items=[],
+    )
+
+    persisted = persist_batch_tag_manifest_json(
+        response,
+        pack_id="finance-en",
+        output_dir=tmp_path / "outputs",
+    )
+
+    manifest_payload = json.loads(
+        Path(persisted.saved_manifest_path).read_text(encoding="utf-8")
+    )
+    assert manifest_payload["lineage"] == {
+        "created_at": "2026-04-08T12:00:00Z",
+        "parent_run_id": "ades-run-parent",
+        "root_run_id": "ades-run-root",
+        "run_id": "ades-run-child",
+        "source_manifest_path": "/tmp/parent-manifest.json",
+    }

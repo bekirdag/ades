@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 from typing import Any
 
@@ -225,6 +226,16 @@ class BatchRerunDiff(BaseModel):
     skipped: list[BatchSkippedInput] = Field(default_factory=list)
 
 
+class BatchRunLineage(BaseModel):
+    """Stable lineage metadata for one batch run."""
+
+    run_id: str
+    root_run_id: str
+    parent_run_id: str | None = None
+    source_manifest_path: str | None = None
+    created_at: datetime
+
+
 class BatchManifestItem(BaseModel):
     """Compact run-manifest entry for one persisted or processed batch item."""
 
@@ -249,6 +260,7 @@ class BatchTagResponse(BaseModel):
     summary: BatchSourceSummary
     warnings: list[str] = Field(default_factory=list)
     saved_manifest_path: str | None = None
+    lineage: BatchRunLineage | None = None
     rerun_diff: BatchRerunDiff | None = None
     skipped: list[BatchSkippedInput] = Field(default_factory=list)
     rejected: list[BatchRejectedInput] = Field(default_factory=list)
@@ -264,6 +276,7 @@ class BatchManifest(BaseModel):
     item_count: int
     summary: BatchSourceSummary
     warnings: list[str] = Field(default_factory=list)
+    lineage: BatchRunLineage | None = None
     rerun_diff: BatchRerunDiff | None = None
     skipped: list[BatchSkippedInput] = Field(default_factory=list)
     rejected: list[BatchRejectedInput] = Field(default_factory=list)

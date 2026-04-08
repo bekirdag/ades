@@ -27,6 +27,7 @@ from .storage.results import (
     aggregate_batch_warnings,
     build_batch_manifest_item_from_tag_response,
     build_batch_manifest_replay_plan,
+    build_batch_run_lineage,
     persist_batch_tag_manifest_json,
     persist_tag_response_json,
     persist_tag_responses_json,
@@ -434,11 +435,16 @@ def tag_files(
                 if entry.reference not in rerun_reused
             ],
         )
+    lineage = build_batch_run_lineage(
+        parent_manifest=replay_plan.manifest if replay_plan is not None else None,
+        source_manifest_path=manifest_input_path,
+    )
     response = BatchTagResponse(
         pack=resolved_pack,
         item_count=len(items),
         summary=summary,
         warnings=warnings,
+        lineage=lineage,
         rerun_diff=rerun_diff,
         skipped=[entry.to_dict() for entry in discovery.skipped],
         rejected=[entry.to_dict() for entry in discovery.rejected],
