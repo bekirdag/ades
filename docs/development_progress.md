@@ -171,12 +171,22 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added explicit Python/npm version alignment checks so release verification now reports whether both distributions are still locked to the same `v0.1.0` version before publication.
 - Exposed the verifier consistently through the public Python API, the new `ades release verify` CLI command, and a local HTTP endpoint for localhost automation.
 
+### 24. Coordinated release version synchronization and release-manifest generation
+
+- Added coordinated release version inspection so the local tool can report whether `src/ades/version.py`, `pyproject.toml`, and `npm/ades-cli/package.json` are still synchronized before a publication step.
+- Added coordinated release version synchronization so one command can update the Python runtime version file, the Python package version, and the npm wrapper version together.
+- Added persisted release-manifest generation so a local release build now writes one stable JSON artifact that captures the coordinated version state, optional sync response, and the verified wheel/sdist/npm tarball metadata.
+- Exposed the coordinated release workflow consistently through the public Python API, the CLI commands `ades release versions`, `ades release sync-version`, and `ades release manifest`, plus matching local HTTP endpoints.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
 - `ades pull <pack> --registry-url <url>`
 - `ades serve`
 - `ades release verify --output-dir <dir>`
+- `ades release versions`
+- `ades release sync-version <version>`
+- `ades release manifest --output-dir <dir>`
 - `ades status`
 - `npm install -g ades-cli`
 - `ades tag <text>`
@@ -205,7 +215,10 @@ The local service currently exposes:
 - `POST /v0/packs/{pack}/deactivate`
 - `POST /v0/registry/build`
 - `GET /v0/installers/npm`
+- `GET /v0/release/versions`
+- `POST /v0/release/sync-version`
 - `POST /v0/release/verify`
+- `POST /v0/release/manifest`
 - `GET /v0/lookup`
 - `POST /v0/tag`
 - `POST /v0/tag/file`
@@ -234,4 +247,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add coordinated release version synchronization and release-manifest generation so Python and npm version bumps and publication metadata stay locked together before the first public `v0.1.0` release.
+- Add a repo-local `.docdex/run-tests.json` plus one-command release validation flow so `docdexd run-tests` can validate the full local-tool test suite and release workflow without falling back to ad-hoc commands.

@@ -21,7 +21,10 @@ from .packs.publish import build_static_registry
 from .packs.registry import PackRegistry
 from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load_tag_file
 from .pipeline.tagger import tag_text
+from .release import release_versions as read_release_versions
+from .release import sync_release_version as run_sync_release_version
 from .release import verify_release_artifacts
+from .release import write_release_manifest as persist_release_manifest
 from .service.models import (
     BatchManifestItem,
     BatchRerunDiff,
@@ -29,6 +32,9 @@ from .service.models import (
     BatchTagResponse,
     LookupCandidate,
     LookupResponse,
+    ReleaseManifestResponse,
+    ReleaseVersionState,
+    ReleaseVersionSyncResponse,
     NpmInstallerInfo,
     PackSummary,
     ReleaseVerificationResponse,
@@ -208,6 +214,35 @@ def verify_release(
     """Build and verify the local Python and npm release artifacts."""
 
     return verify_release_artifacts(output_dir=output_dir, clean=clean)
+
+
+def release_versions() -> ReleaseVersionState:
+    """Return the current coordinated release version state."""
+
+    return read_release_versions()
+
+
+def sync_release_version(version: str) -> ReleaseVersionSyncResponse:
+    """Synchronize the coordinated release version files."""
+
+    return run_sync_release_version(version)
+
+
+def write_release_manifest(
+    *,
+    output_dir: str | Path,
+    manifest_path: str | Path | None = None,
+    version: str | None = None,
+    clean: bool = True,
+) -> ReleaseManifestResponse:
+    """Build and persist the coordinated release manifest."""
+
+    return persist_release_manifest(
+        output_dir=output_dir,
+        manifest_path=manifest_path,
+        version=version,
+        clean=clean,
+    )
 
 
 def tag(

@@ -92,6 +92,33 @@ class ReleaseArtifactSummary(BaseModel):
     sha256: str
 
 
+class ReleaseVersionState(BaseModel):
+    """Current version alignment across the coordinated release files."""
+
+    project_root: str
+    version_file_path: str
+    pyproject_path: str
+    npm_package_json_path: str
+    version_file_version: str
+    pyproject_version: str
+    npm_version: str
+    synchronized: bool
+
+
+class ReleaseVersionSyncRequest(BaseModel):
+    """Request body for coordinated version synchronization."""
+
+    version: str
+
+
+class ReleaseVersionSyncResponse(BaseModel):
+    """Response body for coordinated version synchronization."""
+
+    target_version: str
+    updated_files: list[str] = Field(default_factory=list)
+    version_state: ReleaseVersionState
+
+
 class ReleaseVerificationRequest(BaseModel):
     """Request body for local release artifact verification."""
 
@@ -108,12 +135,33 @@ class ReleaseVerificationResponse(BaseModel):
     python_version: str
     npm_package: str
     npm_version: str
+    version_state: ReleaseVersionState
     versions_match: bool
     overall_success: bool
     warnings: list[str] = Field(default_factory=list)
     wheel: ReleaseArtifactSummary
     sdist: ReleaseArtifactSummary
     npm_tarball: ReleaseArtifactSummary
+
+
+class ReleaseManifestRequest(BaseModel):
+    """Request body for persisted release-manifest generation."""
+
+    output_dir: str
+    manifest_path: str | None = None
+    version: str | None = None
+    clean: bool = True
+
+
+class ReleaseManifestResponse(BaseModel):
+    """Persisted manifest for one coordinated local release build."""
+
+    manifest_path: str
+    generated_at: datetime
+    release_version: str
+    version_state: ReleaseVersionState
+    version_sync: ReleaseVersionSyncResponse | None = None
+    verification: ReleaseVerificationResponse
 
 
 class EntityProvenance(BaseModel):

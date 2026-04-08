@@ -10,11 +10,14 @@ from .api import (
     lookup_candidates,
     npm_installer_info,
     pull_pack,
+    release_versions,
     status,
+    sync_release_version,
     tag,
     tag_file,
     tag_files,
     verify_release,
+    write_release_manifest,
 )
 from .storage import MetadataBackend, RuntimeTarget
 from .version import __version__
@@ -32,9 +35,12 @@ __all__ = [
     "lookup_candidates",
     "npm_installer_info",
     "pull_pack",
+    "release_versions",
     "status",
+    "sync_release_version",
     "tag",
     "tag_file",
     "tag_files",
     "verify_release",
+    "write_release_manifest",
 ]

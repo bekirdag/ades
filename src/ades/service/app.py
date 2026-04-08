@@ -14,11 +14,14 @@ from ..api import (
     list_packs,
     lookup_candidates,
     npm_installer_info,
+    release_versions,
     status,
+    sync_release_version,
     tag,
     tag_file,
     tag_files,
     verify_release,
+    write_release_manifest,
 )
 from ..version import __version__
 from .models import (
@@ -28,6 +31,11 @@ from .models import (
     LookupResponse,
     NpmInstallerInfo,
     PackSummary,
+    ReleaseManifestRequest,
+    ReleaseManifestResponse,
+    ReleaseVersionState,
+    ReleaseVersionSyncRequest,
+    ReleaseVersionSyncResponse,
     ReleaseVerificationRequest,
     ReleaseVerificationResponse,
     RegistryBuildRequest,
@@ -61,12 +69,49 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
 
         return npm_installer_info()
 
+    @app.get("/v0/release/versions", response_model=ReleaseVersionState)
+    def runtime_release_versions() -> ReleaseVersionState:
+        """Return the current coordinated release version state."""
+
+        return release_versions()
+
+    @app.post("/v0/release/sync-version", response_model=ReleaseVersionSyncResponse)
+    def runtime_sync_release_version(
+        request: ReleaseVersionSyncRequest,
+    ) -> ReleaseVersionSyncResponse:
+        """Synchronize release versions across Python and npm metadata."""
+
+        try:
+            return sync_release_version(request.version)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.post("/v0/release/verify", response_model=ReleaseVerificationResponse)
     def runtime_verify_release(request: ReleaseVerificationRequest) -> ReleaseVerificationResponse:
         """Build and verify the local Python and npm release artifacts."""
 
         try:
             return verify_release(output_dir=request.output_dir, clean=request.clean)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/v0/release/manifest", response_model=ReleaseManifestResponse)
+    def runtime_write_release_manifest(
+        request: ReleaseManifestRequest,
+    ) -> ReleaseManifestResponse:
+        """Build and persist the coordinated release manifest."""
+
+        try:
+            return write_release_manifest(
+                output_dir=request.output_dir,
+                manifest_path=request.manifest_path,
+                version=request.version,
+                clean=request.clean,
+            )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:

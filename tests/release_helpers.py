@@ -11,6 +11,52 @@ def _write_artifact(path: Path, content: bytes) -> None:
     path.write_bytes(content)
 
 
+def create_release_project(
+    root: Path,
+    *,
+    version_file_version: str = __version__,
+    pyproject_version: str = __version__,
+    npm_version: str = __version__,
+) -> tuple[Path, Path]:
+    """Create a minimal coordinated release checkout for sync tests."""
+
+    project_root = root.resolve()
+    version_path = project_root / "src" / "ades" / "version.py"
+    pyproject_path = project_root / "pyproject.toml"
+    npm_package_json_path = project_root / "npm" / "ades-cli" / "package.json"
+    version_path.parent.mkdir(parents=True, exist_ok=True)
+    npm_package_json_path.parent.mkdir(parents=True, exist_ok=True)
+
+    version_path.write_text(
+        f'"""Package version."""\n\n__version__ = "{version_file_version}"\n',
+        encoding="utf-8",
+    )
+    pyproject_path.write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "ades"',
+                f'version = "{pyproject_version}"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    npm_package_json_path.write_text(
+        json.dumps(
+            {
+                "name": "ades-cli",
+                "version": npm_version,
+                "bin": {"ades": "bin/ades.cjs"},
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return project_root, npm_package_json_path.parent
+
+
 def build_fake_release_runner(
     *,
     python_version: str = __version__,

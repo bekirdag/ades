@@ -13,11 +13,14 @@ from .api import deactivate_pack as api_deactivate_pack
 from .api import lookup_candidates as api_lookup_candidates
 from .api import list_packs as api_list_packs
 from .api import pull_pack as api_pull_pack
+from .api import release_versions as api_release_versions
 from .api import status as api_status
+from .api import sync_release_version as api_sync_release_version
 from .api import tag as api_tag
 from .api import tag_file as api_tag_file
 from .api import tag_files as api_tag_files
 from .api import verify_release as api_verify_release
+from .api import write_release_manifest as api_write_release_manifest
 from .config import get_settings
 from .packs.installer import PackInstaller
 from .storage.paths import build_storage_layout, ensure_storage_layout
@@ -170,6 +173,56 @@ def release_verify(
     """Build and verify the current local Python and npm release artifacts."""
 
     response = api_verify_release(output_dir=output_dir, clean=not no_clean)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@release_app.command("versions")
+def release_versions() -> None:
+    """Show the current coordinated release version state."""
+
+    response = api_release_versions()
+    _echo_json(response.model_dump(mode="json"))
+
+
+@release_app.command("sync-version")
+def release_sync_version(version: str = typer.Argument(..., help="Target release version.")) -> None:
+    """Synchronize Python and npm release versions to one target."""
+
+    response = api_sync_release_version(version)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@release_app.command("manifest")
+def release_manifest(
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where release artifacts and the manifest should be written.",
+    ),
+    manifest_output: Path | None = typer.Option(
+        None,
+        "--manifest-output",
+        help="Write the release manifest JSON to this explicit file path.",
+    ),
+    version: str | None = typer.Option(
+        None,
+        "--version",
+        help="Optionally synchronize release versions before generating the manifest.",
+    ),
+    no_clean: bool = typer.Option(
+        False,
+        "--no-clean",
+        help="Keep any existing release artifacts under the output directory.",
+    ),
+) -> None:
+    """Build artifacts and persist one coordinated release manifest."""
+
+    response = api_write_release_manifest(
+        output_dir=output_dir,
+        manifest_path=manifest_output,
+        version=version,
+        clean=not no_clean,
+    )
     _echo_json(response.model_dump(mode="json"))
 
 

@@ -30,7 +30,10 @@ ades pull finance-en
 ades pull medical-en
 ades pull finance-en --registry-url file:///tmp/ades-registry/index.json
 ades serve
+ades release versions
+ades release sync-version 0.1.0
 ades release verify --output-dir ./dist/release
+ades release manifest --output-dir ./dist/release
 ades registry build ./src/ades/resources/registry/packs/general-en ./src/ades/resources/registry/packs/finance-en --output-dir /tmp/ades-registry
 ades tag "Apple CEO Tim Cook announced quarterly earnings."
 ades tag --file ./notes/report.html --pack finance-en
@@ -55,7 +58,17 @@ ades tag-files --directory ./corpus --manifest-input ./outputs/batch.finance-en.
 - Future production server mode: reserved for a later PostgreSQL-backed server build and not available in `v0.1.0`.
 
 ```python
-from ades import build_registry, pull_pack, tag, tag_file, tag_files, verify_release
+from ades import (
+    build_registry,
+    pull_pack,
+    release_versions,
+    sync_release_version,
+    tag,
+    tag_file,
+    tag_files,
+    verify_release,
+    write_release_manifest,
+)
 
 pull_pack("finance-en")
 registry = build_registry(
@@ -100,15 +113,22 @@ print(saved_response.saved_output_path)
 
 release = verify_release(output_dir="./dist/release")
 print(release.model_dump())
+
+versions = release_versions()
+print(versions.model_dump())
+
+sync_release_version("0.1.0")
+manifest = write_release_manifest(output_dir="./dist/release")
+print(manifest.manifest_path)
 ```
 
 ## Current Runtime Surface
 
-- CLI commands: `ades pull`, `ades pull --registry-url`, `ades registry build`, `ades release verify`, `ades serve`, `ades tag`, `ades tag-files`, `ades status`, `ades packs list`, `ades packs list --available --registry-url`, `ades packs activate`, `ades packs deactivate`, `ades packs lookup`
+- CLI commands: `ades pull`, `ades pull --registry-url`, `ades registry build`, `ades release versions`, `ades release sync-version`, `ades release verify`, `ades release manifest`, `ades serve`, `ades tag`, `ades tag-files`, `ades status`, `ades packs list`, `ades packs list --available --registry-url`, `ades packs activate`, `ades packs deactivate`, `ades packs lookup`
 - npm wrapper package: `npm/ades-cli`, installed command `ades`, first-run bootstrap into a user-local Python virtual environment
-- Local API endpoints: `GET /healthz`, `GET /v0/status`, `GET /v0/packs`, `GET /v0/packs/{pack}`, `POST /v0/packs/{pack}/activate`, `POST /v0/packs/{pack}/deactivate`, `POST /v0/registry/build`, `GET /v0/installers/npm`, `POST /v0/release/verify`, `GET /v0/lookup`, `POST /v0/tag`, `POST /v0/tag/file`, `POST /v0/tag/files`
+- Local API endpoints: `GET /healthz`, `GET /v0/status`, `GET /v0/packs`, `GET /v0/packs/{pack}`, `POST /v0/packs/{pack}/activate`, `POST /v0/packs/{pack}/deactivate`, `POST /v0/registry/build`, `GET /v0/installers/npm`, `GET /v0/release/versions`, `POST /v0/release/sync-version`, `POST /v0/release/verify`, `POST /v0/release/manifest`, `GET /v0/lookup`, `POST /v0/tag`, `POST /v0/tag/file`, `POST /v0/tag/files`
 - Local runtime status now reports `runtime_target=local` and `metadata_backend=sqlite`
-- Public Python helpers: `build_registry`, `npm_installer_info`, `verify_release`, `pull_pack`, `list_packs`, `get_pack`, `activate_pack`, `deactivate_pack`, `lookup_candidates`, `status`, `tag`, `tag_file`, `tag_files`, `create_service_app`
+- Public Python helpers: `build_registry`, `npm_installer_info`, `release_versions`, `sync_release_version`, `verify_release`, `write_release_manifest`, `pull_pack`, `list_packs`, `get_pack`, `activate_pack`, `deactivate_pack`, `lookup_candidates`, `status`, `tag`, `tag_file`, `tag_files`, `create_service_app`
 - Bundled development packs: `general-en`, `finance-en`, `medical-en`
 
 ## Initial Product Direction
@@ -151,7 +171,8 @@ This repository now contains a working `v0.1.0` scaffold with:
 - static pack publication and remote registry tooling so local pack directories can be exported as a file-based registry and consumed immediately by `ades pull` through `--registry-url`
 - a real `ades-cli` npm wrapper package with first-run Python runtime bootstrap into a user-local virtual environment
 - local release verification for Python wheel/sdist plus npm tarball outputs with artifact hashes, file sizes, and version-alignment checks before publication
+- coordinated release version synchronization across `src/ades/version.py`, `pyproject.toml`, and `npm/ades-cli/package.json`, plus persisted release-manifest generation for one verified local build
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The next local-tool step is to add coordinated release version synchronization and release-manifest generation so Python and npm version bumps and publication metadata stay locked together before the first public `v0.1.0` release.
+The next local-tool step is to add a repo-local `.docdex/run-tests.json` plus one-command release validation flow so `docdexd run-tests` can validate the full local-tool test suite and release workflow without falling back to ad-hoc commands.
