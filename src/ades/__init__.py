@@ -16,6 +16,7 @@ from .api import (
     tag,
     tag_file,
     tag_files,
+    validate_release,
     verify_release,
     write_release_manifest,
 )
@@ -41,6 +42,7 @@ __all__ = [
     "tag",
     "tag_file",
     "tag_files",
+    "validate_release",
     "verify_release",
     "write_release_manifest",
 ]

@@ -1,0 +1,14 @@
+{
+  "command": "python",
+  "args": [
+    "-m",
+    "ades",
+    "release",
+    "validate",
+    "--output-dir",
+    ".docdex/artifacts/release-validation"
+  ],
+  "env": {
+    "PYTHONPATH": "src"
+  }
+}

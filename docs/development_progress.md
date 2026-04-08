@@ -178,6 +178,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added persisted release-manifest generation so a local release build now writes one stable JSON artifact that captures the coordinated version state, optional sync response, and the verified wheel/sdist/npm tarball metadata.
 - Exposed the coordinated release workflow consistently through the public Python API, the CLI commands `ades release versions`, `ades release sync-version`, and `ades release manifest`, plus matching local HTTP endpoints.
 
+### 25. Repo-local Docdex test runner and one-command release validation
+
+- Added a shared release-validation flow that runs the local pytest suite first and only writes the coordinated release manifest when tests pass.
+- Exposed that flow consistently through the public Python API, the CLI command `ades release validate`, and the local HTTP endpoint `POST /v0/release/validate`.
+- Replaced the placeholder `.docdex/run-tests.json` with a committed repo-local runner configuration that executes `ades release validate` through `python -m ades` with `PYTHONPATH=src`.
+- Updated the repo ignore rules so `.docdex/run-tests.json` is versioned while generated `.docdex` artifacts remain ignored.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -187,6 +194,7 @@ This file records the implementation progress of `ades` as the project moves tow
 - `ades release versions`
 - `ades release sync-version <version>`
 - `ades release manifest --output-dir <dir>`
+- `ades release validate --output-dir <dir>`
 - `ades status`
 - `npm install -g ades-cli`
 - `ades tag <text>`
@@ -219,6 +227,7 @@ The local service currently exposes:
 - `POST /v0/release/sync-version`
 - `POST /v0/release/verify`
 - `POST /v0/release/manifest`
+- `POST /v0/release/validate`
 - `GET /v0/lookup`
 - `POST /v0/tag`
 - `POST /v0/tag/file`
@@ -247,4 +256,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add a repo-local `.docdex/run-tests.json` plus one-command release validation flow so `docdexd run-tests` can validate the full local-tool test suite and release workflow without falling back to ad-hoc commands.
+- Add clean-environment install smoke validation for the built wheel and npm tarball so release verification proves both artifacts can be installed and invoked outside the source checkout.

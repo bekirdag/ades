@@ -19,6 +19,7 @@ from .api import sync_release_version as api_sync_release_version
 from .api import tag as api_tag
 from .api import tag_file as api_tag_file
 from .api import tag_files as api_tag_files
+from .api import validate_release as api_validate_release
 from .api import verify_release as api_verify_release
 from .api import write_release_manifest as api_write_release_manifest
 from .config import get_settings
@@ -174,6 +175,48 @@ def release_verify(
 
     response = api_verify_release(output_dir=output_dir, clean=not no_clean)
     _echo_json(response.model_dump(mode="json"))
+
+
+@release_app.command("validate")
+def release_validate(
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where test-validated release artifacts should be written.",
+    ),
+    manifest_output: Path | None = typer.Option(
+        None,
+        "--manifest-output",
+        help="Write the release manifest JSON to this explicit file path.",
+    ),
+    version: str | None = typer.Option(
+        None,
+        "--version",
+        help="Optionally synchronize release versions before generating the manifest.",
+    ),
+    test_command: list[str] = typer.Option(
+        None,
+        "--test-command",
+        help="Override the test command by repeating this option for each argument.",
+    ),
+    no_clean: bool = typer.Option(
+        False,
+        "--no-clean",
+        help="Keep any existing release artifacts under the output directory.",
+    ),
+) -> None:
+    """Run tests, then build and persist one coordinated local release manifest."""
+
+    response = api_validate_release(
+        output_dir=output_dir,
+        manifest_path=manifest_output,
+        version=version,
+        clean=not no_clean,
+        tests_command=test_command or None,
+    )
+    _echo_json(response.model_dump(mode="json"))
+    if not response.overall_success:
+        raise typer.Exit(code=1)
 
 
 @release_app.command("versions")

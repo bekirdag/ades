@@ -10,11 +10,14 @@ import re
 import shutil
 import subprocess
 import sys
+from typing import Sequence
 
 from .distribution import load_npm_package_json, resolve_npm_package_dir, resolve_project_root
 from .service.models import (
     ReleaseArtifactSummary,
+    ReleaseCommandResult,
     ReleaseManifestResponse,
+    ReleaseValidationResponse,
     ReleaseVerificationResponse,
     ReleaseVersionState,
     ReleaseVersionSyncResponse,
@@ -24,6 +27,7 @@ from .service.models import (
 PYTHON_PACKAGE_NAME = "ades"
 PYTHON_BUILD_COMMAND = [sys.executable, "-m", "build", "--wheel", "--sdist"]
 NPM_PACK_COMMAND = ["npm", "pack", "--json"]
+DEFAULT_RELEASE_TEST_COMMAND = [sys.executable, "-m", "pytest", "-q"]
 VERSION_FILE_RELATIVE_PATH = Path("src/ades/version.py")
 PYPROJECT_RELATIVE_PATH = Path("pyproject.toml")
 NPM_PACKAGE_JSON_RELATIVE_PATH = Path("npm/ades-cli/package.json")
@@ -41,6 +45,19 @@ def _run_command(command: list[str], *, cwd: Path) -> subprocess.CompletedProces
         capture_output=True,
         text=True,
     )
+
+
+def _normalize_release_test_command(
+    command: Sequence[str] | None = None,
+) -> list[str]:
+    """Return one validated release-validation test command."""
+
+    if command is None:
+        return list(DEFAULT_RELEASE_TEST_COMMAND)
+    normalized = [part for part in command if str(part)]
+    if not normalized:
+        raise ValueError("Release validation tests_command cannot be empty.")
+    return [str(part) for part in normalized]
 
 
 def _resolve_project_root_path(project_root: str | Path | None = None) -> Path:
@@ -444,3 +461,51 @@ def write_release_manifest(
         encoding="utf-8",
     )
     return response
+
+
+def validate_release_workflow(
+    *,
+    output_dir: str | Path,
+    manifest_path: str | Path | None = None,
+    version: str | None = None,
+    clean: bool = True,
+    tests_command: Sequence[str] | None = None,
+    project_root: str | Path | None = None,
+) -> ReleaseValidationResponse:
+    """Run the local test suite, then build and persist the release manifest."""
+
+    resolved_project_root = _resolve_project_root_path(project_root)
+    normalized_tests_command = _normalize_release_test_command(tests_command)
+    tests_result = _run_command(normalized_tests_command, cwd=resolved_project_root)
+    tests = ReleaseCommandResult(
+        command=normalized_tests_command,
+        exit_code=tests_result.returncode,
+        passed=tests_result.returncode == 0,
+        stdout=tests_result.stdout or "",
+        stderr=tests_result.stderr or "",
+    )
+    warnings: list[str] = []
+    manifest: ReleaseManifestResponse | None = None
+    manifest_output_path: str | None = None
+    if tests.passed:
+        manifest = write_release_manifest(
+            output_dir=output_dir,
+            manifest_path=manifest_path,
+            version=version,
+            clean=clean,
+            project_root=resolved_project_root,
+        )
+        manifest_output_path = manifest.manifest_path
+        warnings.extend(manifest.verification.warnings)
+    else:
+        warnings.append(f"tests_failed:{tests.exit_code}")
+    overall_success = tests.passed and manifest is not None and manifest.verification.overall_success
+    return ReleaseValidationResponse(
+        project_root=str(resolved_project_root),
+        output_dir=str(Path(output_dir).expanduser().resolve()),
+        tests=tests,
+        manifest=manifest,
+        manifest_path=manifest_output_path,
+        overall_success=overall_success,
+        warnings=warnings,
+    )

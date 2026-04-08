@@ -61,10 +61,20 @@ def build_fake_release_runner(
     *,
     python_version: str = __version__,
     npm_version: str = __version__,
+    test_returncode: int = 0,
+    test_stdout: str = "111 passed",
+    test_stderr: str = "",
 ):
     """Return a fake subprocess runner for release artifact verification tests."""
 
     def runner(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+        if len(command) >= 3 and command[1:3] == ["-m", "pytest"]:
+            return subprocess.CompletedProcess(
+                command,
+                test_returncode,
+                stdout=test_stdout,
+                stderr=test_stderr,
+            )
         if len(command) >= 3 and command[1:3] == ["-m", "build"]:
             outdir = Path(command[command.index("--outdir") + 1])
             wheel_path = outdir / f"ades-{python_version}-py3-none-any.whl"

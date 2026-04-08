@@ -20,6 +20,7 @@ from ..api import (
     tag,
     tag_file,
     tag_files,
+    validate_release,
     verify_release,
     write_release_manifest,
 )
@@ -33,6 +34,8 @@ from .models import (
     PackSummary,
     ReleaseManifestRequest,
     ReleaseManifestResponse,
+    ReleaseValidationRequest,
+    ReleaseValidationResponse,
     ReleaseVersionState,
     ReleaseVersionSyncRequest,
     ReleaseVersionSyncResponse,
@@ -111,6 +114,25 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 manifest_path=request.manifest_path,
                 version=request.version,
                 clean=request.clean,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/v0/release/validate", response_model=ReleaseValidationResponse)
+    def runtime_validate_release(
+        request: ReleaseValidationRequest,
+    ) -> ReleaseValidationResponse:
+        """Run tests, then build and persist one coordinated release manifest."""
+
+        try:
+            return validate_release(
+                output_dir=request.output_dir,
+                manifest_path=request.manifest_path,
+                version=request.version,
+                clean=request.clean,
+                tests_command=request.tests_command or None,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

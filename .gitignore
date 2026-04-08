@@ -1,4 +1,5 @@
-/.docdex/
+/.docdex/*
+!/.docdex/run-tests.json
 /.docdex-state/
 __pycache__/
 .pytest_cache/

@@ -144,6 +144,16 @@ class ReleaseVerificationResponse(BaseModel):
     npm_tarball: ReleaseArtifactSummary
 
 
+class ReleaseCommandResult(BaseModel):
+    """Captured output for one release-validation shell command."""
+
+    command: list[str] = Field(default_factory=list)
+    exit_code: int
+    passed: bool
+    stdout: str = ""
+    stderr: str = ""
+
+
 class ReleaseManifestRequest(BaseModel):
     """Request body for persisted release-manifest generation."""
 
@@ -162,6 +172,28 @@ class ReleaseManifestResponse(BaseModel):
     version_state: ReleaseVersionState
     version_sync: ReleaseVersionSyncResponse | None = None
     verification: ReleaseVerificationResponse
+
+
+class ReleaseValidationRequest(BaseModel):
+    """Request body for one-command local release validation."""
+
+    output_dir: str
+    manifest_path: str | None = None
+    version: str | None = None
+    clean: bool = True
+    tests_command: list[str] = Field(default_factory=list)
+
+
+class ReleaseValidationResponse(BaseModel):
+    """Structured result for a local test-plus-release validation run."""
+
+    project_root: str
+    output_dir: str
+    tests: ReleaseCommandResult
+    manifest: ReleaseManifestResponse | None = None
+    manifest_path: str | None = None
+    overall_success: bool
+    warnings: list[str] = Field(default_factory=list)
 
 
 class EntityProvenance(BaseModel):

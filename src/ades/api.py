@@ -23,6 +23,7 @@ from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load
 from .pipeline.tagger import tag_text
 from .release import release_versions as read_release_versions
 from .release import sync_release_version as run_sync_release_version
+from .release import validate_release_workflow
 from .release import verify_release_artifacts
 from .release import write_release_manifest as persist_release_manifest
 from .service.models import (
@@ -33,6 +34,7 @@ from .service.models import (
     LookupCandidate,
     LookupResponse,
     ReleaseManifestResponse,
+    ReleaseValidationResponse,
     ReleaseVersionState,
     ReleaseVersionSyncResponse,
     NpmInstallerInfo,
@@ -242,6 +244,25 @@ def write_release_manifest(
         manifest_path=manifest_path,
         version=version,
         clean=clean,
+    )
+
+
+def validate_release(
+    *,
+    output_dir: str | Path,
+    manifest_path: str | Path | None = None,
+    version: str | None = None,
+    clean: bool = True,
+    tests_command: Iterable[str] | None = None,
+) -> ReleaseValidationResponse:
+    """Run the local test suite and persist one coordinated release manifest."""
+
+    return validate_release_workflow(
+        output_dir=output_dir,
+        manifest_path=manifest_path,
+        version=version,
+        clean=clean,
+        tests_command=list(tests_command) if tests_command is not None else None,
     )
 
 
