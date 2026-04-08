@@ -1,8 +1,12 @@
 import json
 from pathlib import Path
 
-from ades.service.models import TagResponse
-from ades.storage.results import persist_tag_responses_json
+from ades.service.models import BatchSourceSummary, BatchTagResponse, TagResponse
+from ades.storage.results import (
+    aggregate_batch_warnings,
+    persist_batch_tag_manifest_json,
+    persist_tag_responses_json,
+)
 
 
 def _response(source_path: str) -> TagResponse:
@@ -39,3 +43,51 @@ def test_persist_tag_responses_json_deduplicates_conflicting_filenames(tmp_path:
     second_payload = json.loads(second_path.read_text(encoding="utf-8"))
     assert first_payload["saved_output_path"] == str(first_path)
     assert second_payload["saved_output_path"] == str(second_path)
+
+
+def test_persist_batch_manifest_json_writes_aggregated_audit_artifact(tmp_path: Path) -> None:
+    persisted_items = persist_tag_responses_json(
+        [
+            _response("/tmp/alpha/report.html").model_copy(
+                update={"warnings": ["unsupported_content_type:application/json"]}
+            ),
+            _response("/tmp/beta/report.html").model_copy(
+                update={"warnings": ["unsupported_content_type:application/json", "empty_input"]}
+            ),
+        ],
+        pack_id="finance-en",
+        output_dir=tmp_path / "outputs",
+    )
+    response = BatchTagResponse(
+        pack="finance-en",
+        item_count=2,
+        summary=BatchSourceSummary(
+            explicit_path_count=2,
+            directory_match_count=0,
+            glob_match_count=0,
+            discovered_count=2,
+            included_count=2,
+            excluded_count=0,
+            duplicate_count=0,
+            generated_output_skipped_count=0,
+            recursive=True,
+        ),
+        warnings=aggregate_batch_warnings(persisted_items),
+        items=persisted_items,
+    )
+
+    persisted = persist_batch_tag_manifest_json(
+        response,
+        pack_id="finance-en",
+        output_dir=tmp_path / "outputs",
+    )
+
+    manifest_path = tmp_path.resolve() / "outputs" / "batch.finance-en.ades-manifest.json"
+    assert persisted.saved_manifest_path == str(manifest_path)
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert payload["pack"] == "finance-en"
+    assert payload["warnings"] == ["empty_input", "unsupported_content_type:application/json"]
+    assert payload["items"][0]["saved_output_path"] == str(
+        tmp_path.resolve() / "outputs" / "report.finance-en.ades.json"
+    )

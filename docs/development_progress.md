@@ -80,6 +80,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added machine-readable summary metadata for corpus discovery runs, including discovered counts, included counts, excluded counts, duplicate suppression counts, generated-output skip counts, and the active filter patterns.
 - Preserved the current local-only execution model while making larger local corpus runs easier to control and audit.
 
+### 11. Batch manifest export and aggregated warnings
+
+- Added run-level manifest export for batch local tagging so a corpus run can write one stable audit artifact alongside per-file outputs.
+- Added aggregated batch warnings on the local Python API, CLI, and local-service response shape.
+- Kept manifest export additive to the existing batch output flow by requiring the existing output-directory path instead of introducing a second persistence mode.
+- Added manifest persistence helpers that write a compact run summary, aggregated warnings, and per-item output references without duplicating full extraction payloads.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -92,6 +99,7 @@ This file records the implementation progress of `ades` as the project moves tow
 - `ades tag-files --glob <pattern>`
 - `ades tag-files --include <pattern>`
 - `ades tag-files --exclude <pattern>`
+- `ades tag-files --write-manifest`
 - `ades packs list`
 - `ades packs activate`
 - `ades packs deactivate`
@@ -133,4 +141,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add run-level manifest export and aggregated warnings so larger local corpus jobs can emit one stable audit artifact alongside per-file outputs.
+- Add corpus input-size accounting and skip reporting so larger local runs can explain exactly what was processed, skipped, or rejected.

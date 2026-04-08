@@ -196,6 +196,16 @@ def tag_files(
         "--output-dir",
         help="Write JSON outputs to generated pack-aware filenames in this directory.",
     ),
+    write_manifest: bool = typer.Option(
+        False,
+        "--write-manifest",
+        help="Write a stable run manifest JSON file for this batch alongside per-file outputs.",
+    ),
+    manifest_output: Path | None = typer.Option(
+        None,
+        "--manifest-output",
+        help="Write the batch run manifest JSON to this explicit file path.",
+    ),
     compact_output: bool = typer.Option(
         False,
         "--compact-output",
@@ -206,6 +216,8 @@ def tag_files(
 
     if not files and not directories and not glob_patterns:
         raise typer.BadParameter("Provide file paths, --directory, or --glob.")
+    if (write_manifest or manifest_output is not None) and output_dir is None:
+        raise typer.BadParameter("Use --output-dir when writing a batch manifest.")
     response = api_tag_files(
         files or [],
         pack=pack,
@@ -217,6 +229,8 @@ def tag_files(
         recursive=not non_recursive,
         include_patterns=include_patterns or [],
         exclude_patterns=exclude_patterns or [],
+        write_manifest=write_manifest,
+        manifest_output_path=manifest_output,
     )
     typer.echo(json.dumps(response.model_dump(), indent=2))
 

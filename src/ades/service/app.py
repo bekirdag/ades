@@ -135,6 +135,15 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 status_code=400,
                 detail="Batch file tagging supports output.directory only.",
             )
+        if (
+            request.output
+            and (request.output.write_manifest or request.output.manifest_path is not None)
+            and request.output.directory is None
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Batch manifest export requires output.directory.",
+            )
         try:
             return tag_files(
                 request.paths,
@@ -148,6 +157,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 recursive=request.recursive,
                 include_patterns=request.include_patterns,
                 exclude_patterns=request.exclude_patterns,
+                write_manifest=request.output.write_manifest if request.output else False,
+                manifest_output_path=request.output.manifest_path if request.output else None,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

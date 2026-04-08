@@ -35,6 +35,7 @@ ades tag --file ./notes/report.html --pack finance-en --output-dir ./outputs
 ades tag-files ./notes/report-a.html ./notes/report-b.html --pack finance-en --output-dir ./outputs
 ades tag-files --directory ./corpus --glob "./extras/*.html" --pack finance-en --output-dir ./outputs
 ades tag-files --directory ./corpus --include "*earnings*.html" --exclude "*draft*" --pack finance-en
+ades tag-files ./notes/report-a.html ./notes/report-b.html --pack finance-en --output-dir ./outputs --write-manifest
 ```
 
 ## Current Usage
@@ -116,7 +117,8 @@ This repository now contains a working `v0.1.0` scaffold with:
 - batch tagging entrypoints for multiple local files with collision-safe persisted output names
 - directory and glob discovery for batch local tagging so corpus runs do not require enumerating every file path
 - include/exclude filtering plus batch summary metadata for local corpus runs so discovery, filtering, and audit counts are visible in one response
+- run-level manifest export plus aggregated batch warnings so corpus jobs can emit one stable audit artifact alongside per-file outputs
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The next local-tool step is to add run-level manifest export and aggregated warnings so corpus jobs can emit one stable audit artifact alongside per-file outputs.
+The next local-tool step is to add corpus input-size accounting and skip reporting so larger local runs can explain exactly what was processed, skipped, or rejected.

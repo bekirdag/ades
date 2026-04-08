@@ -74,6 +74,8 @@ class TagOutputOptions(BaseModel):
 
     path: str | None = None
     directory: str | None = None
+    manifest_path: str | None = None
+    write_manifest: bool = False
     pretty: bool = True
 
 
@@ -155,7 +157,33 @@ class BatchTagResponse(BaseModel):
     pack: str
     item_count: int
     summary: BatchSourceSummary
+    warnings: list[str] = Field(default_factory=list)
+    saved_manifest_path: str | None = None
     items: list[TagResponse] = Field(default_factory=list)
+
+
+class BatchManifestItem(BaseModel):
+    """Compact run-manifest entry for one persisted or processed batch item."""
+
+    source_path: str | None = None
+    saved_output_path: str | None = None
+    content_type: str
+    warning_count: int
+    warnings: list[str] = Field(default_factory=list)
+    entity_count: int
+    topic_count: int
+    timing_ms: int
+
+
+class BatchManifest(BaseModel):
+    """Stable run-level audit artifact for a batch tagging execution."""
+
+    version: str
+    pack: str
+    item_count: int
+    summary: BatchSourceSummary
+    warnings: list[str] = Field(default_factory=list)
+    items: list[BatchManifestItem] = Field(default_factory=list)
 
 
 class LookupCandidate(BaseModel):

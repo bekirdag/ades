@@ -20,7 +20,12 @@ from .service.models import (
     TagResponse,
 )
 from .storage.paths import build_storage_layout, ensure_storage_layout
-from .storage.results import persist_tag_response_json, persist_tag_responses_json
+from .storage.results import (
+    aggregate_batch_warnings,
+    persist_batch_tag_manifest_json,
+    persist_tag_response_json,
+    persist_tag_responses_json,
+)
 
 
 def _resolve_settings(
@@ -209,11 +214,15 @@ def tag_files(
     recursive: bool = True,
     include_patterns: Iterable[str] = (),
     exclude_patterns: Iterable[str] = (),
+    write_manifest: bool = False,
+    manifest_output_path: str | Path | None = None,
 ) -> BatchTagResponse:
     """Run in-process tagging for multiple local file paths."""
 
     settings = _resolve_settings(storage_root=storage_root)
     resolved_pack = pack or settings.default_pack
+    if (write_manifest or manifest_output_path is not None) and output_dir is None:
+        raise ValueError("Batch manifest export requires output_dir.")
     discovery = discover_tag_file_sources(
         paths=paths,
         directories=directories,
@@ -246,12 +255,22 @@ def tag_files(
             output_dir=output_dir,
             pretty=pretty_output,
         )
-    return BatchTagResponse(
+    response = BatchTagResponse(
         pack=resolved_pack,
         item_count=len(items),
         summary=BatchSourceSummary(**discovery.summary.to_dict()),
+        warnings=aggregate_batch_warnings(items),
         items=items,
     )
+    if write_manifest or manifest_output_path is not None:
+        return persist_batch_tag_manifest_json(
+            response,
+            pack_id=resolved_pack,
+            output_dir=output_dir,
+            output_path=manifest_output_path,
+            pretty=pretty_output,
+        )
+    return response
 
 
 def set_pack_active(
