@@ -10,6 +10,7 @@ import json
 import shutil
 import tarfile
 from pathlib import Path
+from uuid import uuid4
 
 from .fetch import normalize_source_url, read_bytes, read_text
 from .manifest import PackManifest, RegistryIndex
@@ -104,15 +105,44 @@ class PackInstaller:
         self._verify_sha256(payload, artifact.sha256, artifact.url)
 
         destination = self.registry.layout.packs_dir / manifest.pack_id
-        if destination.exists():
-            shutil.rmtree(destination)
-        destination.mkdir(parents=True, exist_ok=True)
-        self._extract_tar_zst(payload, destination)
-        self.registry.store.sync_pack_from_dir(destination)
+        staging = self._temporary_pack_path(manifest.pack_id, "staging")
+        backup: Path | None = None
+        self._remove_path_if_present(staging)
 
-        installed_manifest = self.registry.get_pack(manifest.pack_id)
-        if installed_manifest is None:
-            raise ValueError(f"Installed pack manifest missing after extraction: {manifest.pack_id}")
+        try:
+            staging.mkdir(parents=True, exist_ok=True)
+            self._extract_tar_zst(payload, staging)
+            if not (staging / "manifest.json").exists():
+                raise ValueError(
+                    f"Extracted pack manifest missing after extraction: {manifest.pack_id}"
+                )
+
+            if destination.exists():
+                backup = self._temporary_pack_path(manifest.pack_id, "backup")
+                self._remove_path_if_present(backup)
+                destination.replace(backup)
+
+            try:
+                staging.replace(destination)
+                self.registry.store.sync_pack_from_dir(destination)
+                installed_manifest = self.registry.get_pack(manifest.pack_id)
+                if installed_manifest is None or installed_manifest.version != manifest.version:
+                    raise ValueError(
+                        "Installed pack manifest missing or mismatched after extraction: "
+                        f"{manifest.pack_id}"
+                    )
+            except Exception:
+                self._remove_path_if_present(destination)
+                if backup is not None and backup.exists():
+                    backup.replace(destination)
+                    self.registry.store.sync_pack_from_dir(destination)
+                else:
+                    self.registry.get_pack(manifest.pack_id)
+                raise
+        finally:
+            self._remove_path_if_present(staging)
+            if backup is not None and backup.exists():
+                self._remove_path_if_present(backup)
 
     @staticmethod
     def _choose_artifact(manifest: PackManifest):
@@ -141,3 +171,16 @@ class PackInstaller:
                 if "filter" in inspect.signature(archive.extractall).parameters:
                     extract_kwargs["filter"] = "data"
                 archive.extractall(**extract_kwargs)
+
+    def _temporary_pack_path(self, pack_id: str, kind: str) -> Path:
+        suffix = uuid4().hex
+        return self.registry.layout.packs_dir / f".{pack_id}.{kind}.{suffix}"
+
+    @staticmethod
+    def _remove_path_if_present(path: Path) -> None:
+        if not path.exists():
+            return
+        if path.is_dir():
+            shutil.rmtree(path)
+            return
+        path.unlink()

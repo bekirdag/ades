@@ -219,6 +219,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Kept exact-alias lookup unchanged for the tagger hot path and exposed the broader search through the existing public API, `ades packs lookup`, and `GET /v0/lookup` rather than introducing a second lookup surface.
 - Added categorized unit, component, integration, and API coverage for the broader candidate-search behavior and verified the repo through `docdexd run-tests --repo /home/wodo/apps/ades`, including full `pytest -q` with `142 passed`.
 
+### 31. Rollback-safe pack install recovery
+
+- Hardened `src/ades/packs/installer.py` so fresh installs extract into hidden staging directories and pack updates move the current installed pack into a hidden backup directory before replacement.
+- Added rollback logic so checksum-adjacent or post-replacement failures now clean up temporary directories, remove broken fresh installs, and restore the previous installed pack when an update fails after replacement begins.
+- Kept the existing public Python API, CLI `ades pull`, and local service pack surfaces unchanged while improving the underlying pack lifecycle safety.
+- Added categorized unit, component, integration, and API coverage for failed fresh installs, failed update recovery, and real static-registry artifact corruption paths.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`

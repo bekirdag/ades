@@ -10,7 +10,7 @@ Current goal: make the shipped local-tool modules operationally complete before 
    Goal: add broader ranked lookup over installed-pack metadata without changing the existing lookup API, CLI, or service contracts.
 
 2. Pack lifecycle hardening
-   Status: pending
+   Status: in progress
    Goal: validate pull/install/activate/deactivate/remove behavior against real artifacts and failure cases.
 
 3. Storage and metadata recovery
@@ -30,9 +30,9 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- validate pull/install/activate/deactivate flows against production-like artifact handling
-- add failure-path coverage for partial installs, checksum mismatch, and stale local state
-- keep the local/public contracts stable while tightening operational behavior
+- add coverage for stale metadata cleanup and repeated idempotent pack operations against published registry artifacts
+- verify activation and deactivation continue to behave correctly after real registry installs and failure recovery
+- keep the new rollback-safe install semantics stable while finishing the remaining pack-lifecycle recovery work
 
 ## Work Log
 
@@ -41,3 +41,6 @@ Planned work:
 - 2026-04-08: added categorized coverage for multi-term cross-field lookup in `tests/unit/test_lookup_search.py`, `tests/component/test_cli_lookup_search.py`, `tests/integration/test_lookup_search_api.py`, and `tests/api/test_lookup_search_endpoint.py`.
 - 2026-04-08: focused validation passed for the new coverage files, targeted lookup regressions, and `python -m compileall src/ades`.
 - 2026-04-08: full repo validation passed through `docdexd run-tests --repo /home/wodo/apps/ades`, including `142 passed` under `pytest -q` plus coordinated release validation and smoke-install checks.
+- 2026-04-08: hardened `src/ades/packs/installer.py` so pack installs now stage extracted artifacts into hidden temporary directories, only replace the destination after extraction succeeds, and restore the previous installed pack if metadata sync fails during an update.
+- 2026-04-08: added categorized rollback and cleanup coverage in `tests/unit/test_pack_install_rollback.py`, `tests/component/test_cli_pack_install_failures.py`, `tests/integration/test_pack_install_failures_api.py`, and `tests/api/test_pack_install_rollback_endpoint.py`.
+- 2026-04-08: focused failure-path tests, nearby pack/service regressions, and `python -m compileall src/ades` passed for the rollback-safe install slice.

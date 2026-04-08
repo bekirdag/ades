@@ -124,6 +124,7 @@ Target release: `v0.1.0`
    - pack manifest schema
    - local install registry
    - download, verify, unpack, activate flow
+   - rollback-safe staging and cleanup during install and update failures
    - pack versioning and checksums
 
 3. Local storage layer
@@ -184,6 +185,7 @@ Target release: `v0.1.0`
 - Design the pack manifest schema.
 - Implement `ades pull`.
 - Add local pack install metadata and artifact verification.
+- Make pack installs and updates rollback-safe when extraction or metadata sync fails.
 - Create a minimal local registry format for `finance-en` and `medical-en`.
 
 ### Phase 3

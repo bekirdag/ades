@@ -81,11 +81,17 @@ def create_pack_source(
     return pack_dir
 
 
-def create_finance_registry_sources(root: Path) -> tuple[Path, Path]:
+def create_finance_registry_sources(
+    root: Path,
+    *,
+    general_version: str = "0.1.0",
+    finance_version: str = "0.1.0",
+) -> tuple[Path, Path]:
     general_dir = create_pack_source(
         root,
         pack_id="general-en",
         domain="general",
+        version=general_version,
         labels=("person", "organization", "location", "product"),
         rules=(
             ("email_address", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
@@ -95,6 +101,7 @@ def create_finance_registry_sources(root: Path) -> tuple[Path, Path]:
         root,
         pack_id="finance-en",
         domain="finance",
+        version=finance_version,
         dependencies=("general-en",),
         labels=("ticker", "exchange", "currency_amount"),
         aliases=(

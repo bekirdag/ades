@@ -1,12 +1,12 @@
 # ades Next Work Items
 
-Updated after completing lightweight local candidate search/index on 2026-04-08.
+Updated after completing rollback-safe pack install recovery on 2026-04-08.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Exercise pull, install, activation, deactivation, and artifact verification against production-like registry inputs rather than only the bundled happy path.
-   - Add explicit recovery behavior for partial installs, checksum mismatch, stale metadata, and repeated idempotent operations.
+   - Finish the remaining production-like lifecycle checks around stale metadata cleanup, repeated idempotent pull/install behavior, and activation/deactivation flows against published registry artifacts.
+   - Keep the new rollback-safe install and update recovery semantics stable while closing the remaining stale-state and repeated-operation gaps.
 
 2. Storage and metadata recovery
    - Harden first-run bootstrap, stale-record cleanup, and repair behavior around the local SQLite registry so the shipped local tool can recover cleanly from interrupted or inconsistent state.
@@ -49,6 +49,12 @@ Updated after completing lightweight local candidate search/index on 2026-04-08.
   - exposed through the existing public API, `ades packs lookup`, and `GET /v0/lookup`
   - adds multi-term cross-field lookup through `SQLite FTS5` when available, with deterministic fallback to standard SQLite queries when it is not
   - includes categorized unit, component, integration, and API coverage for broader metadata lookup behavior
+
+- Rollback-safe pack install recovery:
+  - implemented in `src/ades/packs/installer.py`
+  - stages fresh installs into hidden temporary pack directories and restores the previous installed pack when an update fails after replacement begins
+  - keeps the existing `ades pull`, public Python API, and installed-pack service surfaces unchanged while preventing broken partial pack state from surviving failed installs
+  - includes categorized unit, component, integration, and API coverage for fresh-install cleanup and update rollback against published registry artifacts
 
 ## Not Next
 
