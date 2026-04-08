@@ -28,6 +28,7 @@ from .storage.results import (
     persist_batch_tag_manifest_json,
     persist_tag_response_json,
     persist_tag_responses_json,
+    verify_reused_output_items,
 )
 
 
@@ -331,12 +332,14 @@ def tag_files(
             output_dir=output_dir,
             pretty=pretty_output,
         )
+    reused_items, reused_output_missing_count = verify_reused_output_items(reused_items)
     summary_payload = discovery.summary.to_dict()
     summary_payload["processed_count"] = len(items)
     summary_payload["processed_input_bytes"] = sum(item.input_size_bytes or 0 for item in items)
     summary_payload["skipped_count"] = len(discovery.skipped)
     summary_payload["unchanged_skipped_count"] = unchanged_skipped_count
     summary_payload["unchanged_reused_count"] = len(reused_items)
+    summary_payload["reused_output_missing_count"] = reused_output_missing_count
     summary_payload["manifest_input_path"] = (
         str(Path(manifest_input_path).expanduser().resolve())
         if manifest_input_path is not None

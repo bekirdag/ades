@@ -127,7 +127,8 @@ This repository now contains a working `v0.1.0` scaffold with:
 - resumable corpus runs and manifest replay so saved batch manifests can resume deferred work or selectively replay processed corpus inputs
 - source fingerprinting plus unchanged-file skip detection so repeated local corpus runs can avoid re-tagging files whose content has not changed since the last saved manifest
 - unchanged-output reuse so skipped unchanged files can optionally carry forward prior manifest output metadata in a dedicated `reused_items` collection during reruns
+- reused-output verification so carried-forward manifest items now report `saved_output_exists` and emit deterministic warnings when the referenced output file is unavailable
 - initial tests for installer, tagger, lookup, public API, and service behavior
 - categorized test coverage under `tests/unit`, `tests/component`, `tests/integration`, and `tests/api`
 
-The next local-tool step is to add reused-output verification and missing-output warnings so reruns can detect when a carried-forward saved output path no longer exists on disk.
+The next local-tool step is to add rerun repair mode so missing reused outputs can be regenerated automatically instead of only emitting warnings.

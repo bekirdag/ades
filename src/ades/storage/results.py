@@ -133,6 +133,47 @@ def _iter_manifest_items(manifest: BatchManifest) -> list[BatchManifestItem]:
     return [*manifest.items, *manifest.reused_items]
 
 
+def _resolve_saved_output_path_status(saved_output_path: str | None) -> tuple[str | None, bool | None]:
+    if saved_output_path is None:
+        return None, None
+    resolved_path = Path(saved_output_path).expanduser().resolve()
+    return str(resolved_path), resolved_path.exists()
+
+
+def verify_reused_output_items(
+    items: list[BatchManifestItem],
+) -> tuple[list[BatchManifestItem], int]:
+    """Verify reused output references and attach deterministic warning state."""
+
+    verified_items: list[BatchManifestItem] = []
+    missing_count = 0
+    for item in items:
+        resolved_output_path, saved_output_exists = _resolve_saved_output_path_status(
+            item.saved_output_path
+        )
+        warnings = set(item.warnings)
+        if resolved_output_path is None:
+            warnings.add(
+                f"reused_output_missing_saved_output_path:{item.source_path or 'unknown'}"
+            )
+            missing_count += 1
+        elif not saved_output_exists:
+            warnings.add(f"reused_output_missing_file:{resolved_output_path}")
+            missing_count += 1
+        sorted_warnings = sorted(warnings)
+        verified_items.append(
+            item.model_copy(
+                update={
+                    "saved_output_path": resolved_output_path,
+                    "saved_output_exists": saved_output_exists,
+                    "warning_count": len(sorted_warnings),
+                    "warnings": sorted_warnings,
+                }
+            )
+        )
+    return verified_items, missing_count
+
+
 def aggregate_batch_warnings(
     responses: list[TagResponse],
     *,
@@ -227,19 +268,32 @@ def build_batch_manifest_replay_plan(
 def build_batch_manifest(response: BatchTagResponse) -> BatchManifest:
     """Build a stable manifest payload from a batch tag response."""
 
+    verified_reused_items, reused_output_missing_count = verify_reused_output_items(
+        response.reused_items
+    )
+    summary = response.summary.model_copy(
+        update={"reused_output_missing_count": reused_output_missing_count}
+    )
+    warnings = sorted(
+        {
+            *response.warnings,
+            *aggregate_batch_warnings(response.items, reused_items=verified_reused_items),
+        }
+    )
     return BatchManifest(
         version=response.items[0].version if response.items else __version__,
         pack=response.pack,
         item_count=response.item_count,
-        summary=response.summary,
-        warnings=response.warnings,
+        summary=summary,
+        warnings=warnings,
         skipped=response.skipped,
         rejected=response.rejected,
-        reused_items=response.reused_items,
+        reused_items=verified_reused_items,
         items=[
             BatchManifestItem(
                 source_path=item.source_path,
-                saved_output_path=item.saved_output_path,
+                saved_output_path=_resolve_saved_output_path_status(item.saved_output_path)[0],
+                saved_output_exists=_resolve_saved_output_path_status(item.saved_output_path)[1],
                 content_type=item.content_type,
                 input_size_bytes=item.input_size_bytes,
                 source_fingerprint=item.source_fingerprint,

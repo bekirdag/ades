@@ -174,6 +174,7 @@ class BatchSourceSummary(BaseModel):
     limit_skipped_count: int = 0
     unchanged_skipped_count: int = 0
     unchanged_reused_count: int = 0
+    reused_output_missing_count: int = 0
     duplicate_count: int
     generated_output_skipped_count: int
     discovered_input_bytes: int
@@ -212,6 +213,7 @@ class BatchManifestItem(BaseModel):
 
     source_path: str | None = None
     saved_output_path: str | None = None
+    saved_output_exists: bool | None = None
     content_type: str
     input_size_bytes: int | None = None
     source_fingerprint: SourceFingerprint | None = None

@@ -122,6 +122,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Extended batch summaries with an `unchanged_reused_count` counter so rerun audit output distinguishes skipped unchanged files from unchanged files whose prior output metadata was intentionally reused.
 - Extended saved batch manifests and replay planning so reused manifest items remain valid baseline coverage for future reruns.
 
+### 17. Reused-output verification and missing-output warnings
+
+- Added reused-output verification so carried-forward manifest items now record whether their `saved_output_path` still exists on disk.
+- Extended reused batch items with `saved_output_exists` and deterministic warning strings when a carried-forward output path is missing or was never recorded.
+- Extended batch summaries with a `reused_output_missing_count` counter so rerun audit output shows how many reused outputs are unavailable.
+- Kept manifest export self-consistent by re-verifying reused items and normalizing missing-output warnings during manifest persistence.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -177,4 +184,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add reused-output verification and missing-output warnings so reruns can detect when a carried-forward saved output path no longer exists on disk.
+- Add rerun repair mode so missing reused outputs can be regenerated automatically instead of only emitting warnings.

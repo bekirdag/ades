@@ -12,6 +12,7 @@ from ades.storage.results import (
     aggregate_batch_warnings,
     persist_batch_tag_manifest_json,
     persist_tag_responses_json,
+    verify_reused_output_items,
 )
 
 
@@ -111,6 +112,7 @@ def test_persist_batch_manifest_json_writes_aggregated_audit_artifact(tmp_path: 
     assert payload["items"][0]["saved_output_path"] == str(
         tmp_path.resolve() / "outputs" / "report.finance-en.ades.json"
     )
+    assert payload["items"][0]["saved_output_exists"] is True
     assert payload["items"][0]["input_size_bytes"] == 12
     assert payload["items"][0]["source_fingerprint"]["sha256"] == "a" * 64
 
@@ -170,4 +172,33 @@ def test_persist_batch_manifest_json_includes_reused_items(tmp_path: Path) -> No
     manifest_path = Path(persisted.saved_manifest_path)
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["summary"]["unchanged_reused_count"] == 1
+    assert payload["summary"]["reused_output_missing_count"] == 1
     assert payload["reused_items"][0]["source_path"] == "/tmp/alpha/report.html"
+    assert payload["reused_items"][0]["saved_output_exists"] is False
+
+
+def test_verify_reused_output_items_marks_missing_output_paths(tmp_path: Path) -> None:
+    missing_output = tmp_path / "missing.finance-en.ades.json"
+    reused_item = BatchManifestItem(
+        source_path="/tmp/alpha/report.html",
+        saved_output_path=str(missing_output),
+        content_type="text/html",
+        input_size_bytes=12,
+        source_fingerprint=SourceFingerprint(
+            size_bytes=12,
+            modified_time_ns=123,
+            sha256="a" * 64,
+        ),
+        warning_count=0,
+        warnings=[],
+        entity_count=0,
+        topic_count=0,
+        timing_ms=1,
+    )
+
+    verified_items, missing_count = verify_reused_output_items([reused_item])
+
+    assert missing_count == 1
+    assert verified_items[0].saved_output_exists is False
+    assert verified_items[0].warnings == [f"reused_output_missing_file:{missing_output.resolve()}"]
+    assert verified_items[0].warning_count == 1
