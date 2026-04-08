@@ -27,8 +27,12 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "mypy>=1.10,<2.0",
+  "psycopg[binary]>=3.2,<4.0",
   "pytest>=8.2,<9.0",
   "ruff>=0.4,<1.0",
+]
+server = [
+  "psycopg[binary]>=3.2,<4.0",
 ]
 
 [project.scripts]

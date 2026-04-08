@@ -126,6 +126,13 @@ def build_static_registry(
             pack_id=source_manifest.pack_id,
             version=source_manifest.version,
             manifest_url=f"packs/{source_manifest.pack_id}/manifest.json",
+            language=source_manifest.language,
+            domain=source_manifest.domain,
+            tier=source_manifest.tier,
+            description=source_manifest.description,
+            tags=list(source_manifest.tags),
+            dependencies=list(source_manifest.dependencies),
+            min_ades_version=source_manifest.min_ades_version,
         )
         built_packs.append(
             RegistryBuildPackResult(
@@ -168,6 +175,8 @@ def _build_published_manifest(
         language=source_manifest.language,
         domain=source_manifest.domain,
         tier=source_manifest.tier,
+        description=source_manifest.description,
+        tags=list(source_manifest.tags),
         dependencies=list(source_manifest.dependencies),
         artifacts=[
             PackArtifact(

@@ -343,55 +343,22 @@ class PackMetadataStore:
         if not manifest_path.exists():
             return None
 
-        dependencies = [
-            str(item["dependency_pack_id"])
-            for item in connection.execute(
-                """
-                SELECT dependency_pack_id
-                FROM pack_dependencies
-                WHERE pack_id = ?
-                ORDER BY position ASC, dependency_pack_id ASC
-                """,
-                (row["pack_id"],),
-            ).fetchall()
-        ]
-        rules = [
-            str(item["rule_name"])
-            for item in connection.execute(
-                """
-                SELECT rule_name
-                FROM pack_rules
-                WHERE pack_id = ?
-                ORDER BY position ASC, rule_name ASC
-                """,
-                (row["pack_id"],),
-            ).fetchall()
-        ]
-        labels = [
-            str(item["label"])
-            for item in connection.execute(
-                """
-                SELECT label
-                FROM pack_labels
-                WHERE pack_id = ?
-                ORDER BY position ASC, label ASC
-                """,
-                (row["pack_id"],),
-            ).fetchall()
-        ]
+        source_manifest = PackManifest.load(manifest_path)
         return PackManifest(
-            schema_version=int(row["schema_version"]),
-            pack_id=str(row["pack_id"]),
-            version=str(row["version"]),
-            language=str(row["language"]),
-            domain=str(row["domain"]),
-            tier=str(row["tier"]),
-            dependencies=dependencies,
-            artifacts=[],
-            models=[],
-            rules=rules,
-            labels=labels,
-            min_ades_version=str(row["min_ades_version"]),
+            schema_version=source_manifest.schema_version,
+            pack_id=source_manifest.pack_id,
+            version=source_manifest.version,
+            language=source_manifest.language,
+            domain=source_manifest.domain,
+            tier=source_manifest.tier,
+            description=source_manifest.description,
+            tags=list(source_manifest.tags),
+            dependencies=list(source_manifest.dependencies),
+            artifacts=list(source_manifest.artifacts),
+            models=list(source_manifest.models),
+            rules=list(source_manifest.rules),
+            labels=list(source_manifest.labels),
+            min_ades_version=source_manifest.min_ades_version,
             sha256=row["sha256"],
             active=bool(row["active"]),
             install_path=str(row["install_path"]),

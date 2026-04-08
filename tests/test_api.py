@@ -4,6 +4,7 @@ from ades import (
     activate_pack,
     deactivate_pack,
     get_pack,
+    list_available_packs,
     list_packs,
     lookup_candidates,
     pull_pack,
@@ -34,6 +35,7 @@ def test_public_api_status_and_tag(tmp_path: Path) -> None:
     runtime_status = status(storage_root=tmp_path)
     assert runtime_status.storage_root == str(tmp_path)
     assert "finance-en" in runtime_status.installed_packs
+    assert runtime_status.registry_url is None
 
     response = tag(
         "AAPL rallied on NASDAQ after USD 12.5 guidance from Apple.",
@@ -71,3 +73,14 @@ def test_public_api_activation_and_lookup(tmp_path: Path) -> None:
     assert lookup.candidates
     assert lookup.candidates[0].kind == "alias"
     assert lookup.candidates[0].value == "AAPL"
+
+
+def test_public_api_lists_available_pack_metadata() -> None:
+    available_packs = list_available_packs()
+
+    pack_ids = {pack.pack_id for pack in available_packs}
+    assert {"general-en", "finance-en", "medical-en"} <= pack_ids
+
+    finance_pack = next(pack for pack in available_packs if pack.pack_id == "finance-en")
+    assert finance_pack.description is not None
+    assert "finance" in finance_pack.tags

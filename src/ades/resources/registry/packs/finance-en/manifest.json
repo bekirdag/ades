@@ -5,6 +5,12 @@
   "language": "en",
   "domain": "finance",
   "tier": "domain",
+  "description": "English financial entities, exchanges, tickers, and money patterns.",
+  "tags": [
+    "finance",
+    "markets",
+    "english"
+  ],
   "dependencies": [
     "general-en"
   ],

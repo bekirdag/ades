@@ -33,6 +33,8 @@ def test_build_static_registry_writes_consumable_manifest_and_artifact(tmp_path:
     artifact_sha256 = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
 
     assert index_payload["packs"]["general-en"]["manifest_url"] == "packs/general-en/manifest.json"
+    assert index_payload["packs"]["general-en"]["description"] == "general-en pack for general tagging."
+    assert index_payload["packs"]["general-en"]["tags"] == []
     assert manifest_payload["artifacts"][0]["url"] == "../../artifacts/general-en-0.1.0.tar.zst"
     assert manifest_payload["artifacts"][0]["sha256"] == artifact_sha256
 

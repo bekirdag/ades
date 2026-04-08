@@ -25,6 +25,15 @@ def test_service_endpoints_reflect_installed_packs(tmp_path: Path) -> None:
     assert "finance-en" in pack_ids
     assert "general-en" in pack_ids
 
+    available_response = client.get("/v0/packs/available")
+    assert available_response.status_code == 200
+    available_pack_ids = {pack["pack_id"] for pack in available_response.json()}
+    assert "finance-en" in available_pack_ids
+    finance_available = next(
+        pack for pack in available_response.json() if pack["pack_id"] == "finance-en"
+    )
+    assert "finance" in finance_available["tags"]
+
     pack_response = client.get("/v0/packs/finance-en")
     assert pack_response.status_code == 200
     assert pack_response.json()["pack_id"] == "finance-en"

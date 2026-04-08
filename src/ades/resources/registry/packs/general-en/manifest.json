@@ -5,6 +5,12 @@
   "language": "en",
   "domain": "general",
   "tier": "base",
+  "description": "Shared English baseline entities and generic utility patterns.",
+  "tags": [
+    "baseline",
+    "general",
+    "english"
+  ],
   "dependencies": [],
   "artifacts": [
     {

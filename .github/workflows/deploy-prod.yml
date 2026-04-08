@@ -1,0 +1,135 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  ADES_DEPLOY_HOST: 178.105.13.134
+  ADES_DEPLOY_PORT: "34251"
+  ADES_DEPLOY_USER: deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ades-prod
+      cancel-in-progress: false
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Run test suite
+        run: python -m pytest -q
+
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Build static registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/registry
+          pack_dirs=(src/ades/resources/registry/packs/*)
+          ades registry build "${pack_dirs[@]}" --output-dir dist/registry
+
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          wheel_path="$(ls dist/ades-*.whl | head -n 1)"
+          release_id="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_SHA::12}"
+          echo "wheel_path=$wheel_path" >> "$GITHUB_OUTPUT"
+          echo "wheel_name=$(basename "$wheel_path")" >> "$GITHUB_OUTPUT"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH
+        env:
+          ADES_PROD_SSH_KEY: ${{ secrets.ADES_PROD_SSH_KEY }}
+          ADES_PROD_KNOWN_HOSTS: ${{ secrets.ADES_PROD_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$ADES_PROD_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$ADES_PROD_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Upload release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_cmd=(
+            ssh
+            -i ~/.ssh/id_ed25519
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -p "$ADES_DEPLOY_PORT"
+            "$ADES_DEPLOY_USER@$ADES_DEPLOY_HOST"
+          )
+          scp_cmd=(
+            scp
+            -i ~/.ssh/id_ed25519
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -P "$ADES_DEPLOY_PORT"
+          )
+          release_id="${{ steps.release.outputs.release_id }}"
+          wheel_path="${{ steps.release.outputs.wheel_path }}"
+          wheel_name="${{ steps.release.outputs.wheel_name }}"
+
+          "${ssh_cmd[@]}" "mkdir -p /mnt/ades/app/releases/$release_id /mnt/ades/repo/releases/$release_id"
+          "${scp_cmd[@]}" "$wheel_path" "$ADES_DEPLOY_USER@$ADES_DEPLOY_HOST:/mnt/ades/app/releases/$release_id/$wheel_name"
+          tar -C dist/registry -cf - . | "${ssh_cmd[@]}" "tar -C /mnt/ades/repo/releases/$release_id -xf -"
+
+      - name: Install release and restart service
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_cmd=(
+            ssh
+            -i ~/.ssh/id_ed25519
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -p "$ADES_DEPLOY_PORT"
+            "$ADES_DEPLOY_USER@$ADES_DEPLOY_HOST"
+          )
+          release_id="${{ steps.release.outputs.release_id }}"
+          wheel_name="${{ steps.release.outputs.wheel_name }}"
+
+          "${ssh_cmd[@]}" "bash -s" <<EOF
+          set -euo pipefail
+          release_id="$release_id"
+          wheel_name="$wheel_name"
+          /mnt/ades/app/shared/.venv/bin/python -m pip install --upgrade --force-reinstall "/mnt/ades/app/releases/\$release_id/\$wheel_name" "psycopg[binary]>=3.2,<4.0"
+          ln -sfn "/mnt/ades/repo/releases/\$release_id" /mnt/ades/repo/current
+          XDG_RUNTIME_DIR=/run/user/\$(id -u) systemctl --user restart ades.service
+          sleep 2
+          curl -fsS http://127.0.0.1:8734/healthz >/dev/null
+          curl -fsS http://127.0.0.1:8734/v0/status >/dev/null
+          curl -fsS http://127.0.0.1:8734/v0/packs/available >/dev/null
+          EOF
+
+      - name: Verify public endpoints
+        run: |
+          set -euo pipefail
+          curl -fsS https://adestool.com/healthz >/dev/null
+          curl -fsS https://adestool.com/v0/status >/dev/null
+          curl -fsS https://adestool.com/v0/packs/available >/dev/null
+          curl -fsS https://repo.adestool.com/index.json >/dev/null

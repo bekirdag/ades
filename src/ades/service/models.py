@@ -17,7 +17,24 @@ class PackSummary(BaseModel):
     language: str
     domain: str
     tier: str
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
     active: bool = True
+
+
+class AvailablePackSummary(BaseModel):
+    """Installable pack metadata exposed from a registry."""
+
+    pack_id: str
+    version: str
+    language: str | None = None
+    domain: str | None = None
+    tier: str | None = None
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
+    min_ades_version: str = "0.1.0"
+    manifest_url: str
 
 
 class StatusResponse(BaseModel):
@@ -30,6 +47,7 @@ class StatusResponse(BaseModel):
     storage_root: str
     host: str
     port: int
+    registry_url: str | None = None
     installed_packs: list[str] = Field(default_factory=list)
 
 

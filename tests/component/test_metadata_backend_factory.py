@@ -34,10 +34,10 @@ def test_backend_factory_rejects_invalid_runtime_backend_pair(tmp_path: Path) ->
         )
 
 
-def test_backend_factory_exposes_postgresql_placeholder(tmp_path: Path) -> None:
+def test_backend_factory_requires_postgresql_configuration(tmp_path: Path) -> None:
     layout = ensure_storage_layout(build_storage_layout(tmp_path))
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(RuntimeError):
         build_metadata_store(
             layout,
             runtime_target=RuntimeTarget.PRODUCTION_SERVER,

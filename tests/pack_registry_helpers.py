@@ -11,6 +11,8 @@ def create_pack_source(
     language: str = "en",
     tier: str = "base",
     dependencies: tuple[str, ...] = (),
+    description: str | None = None,
+    tags: tuple[str, ...] = (),
     labels: tuple[str, ...] = ("entity",),
     aliases: tuple[tuple[str, str], ...] = (),
     rules: tuple[tuple[str, str], ...] = (),
@@ -60,6 +62,8 @@ def create_pack_source(
                 "language": language,
                 "domain": domain,
                 "tier": tier,
+                "description": description or f"{pack_id} pack for {domain} tagging.",
+                "tags": list(tags),
                 "dependencies": list(dependencies),
                 "artifacts": [
                     {
@@ -93,6 +97,8 @@ def create_finance_registry_sources(
         domain="general",
         version=general_version,
         labels=("person", "organization", "location", "product"),
+        description="Shared English baseline entities and generic utility patterns.",
+        tags=("baseline", "general", "english"),
         rules=(
             ("email_address", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
         ),
@@ -103,6 +109,8 @@ def create_finance_registry_sources(
         domain="finance",
         version=finance_version,
         dependencies=("general-en",),
+        description="English financial entities, exchanges, tickers, and money patterns.",
+        tags=("finance", "markets", "english"),
         labels=("ticker", "exchange", "currency_amount"),
         aliases=(
             ("AAPL", "ticker"),

@@ -13,7 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .fetch import normalize_source_url, read_bytes, read_text
-from .manifest import PackManifest, RegistryIndex
+from .manifest import PackManifest, RegistryIndex, RegistryPack
 from .registry import PackRegistry, default_registry_url
 from ..storage.backend import MetadataBackend, RuntimeTarget
 
@@ -38,11 +38,13 @@ class PackInstaller:
         *,
         runtime_target: RuntimeTarget | str = RuntimeTarget.LOCAL,
         metadata_backend: MetadataBackend | str = MetadataBackend.SQLITE,
+        database_url: str | None = None,
     ) -> None:
         self.registry = PackRegistry(
             storage_root,
             runtime_target=runtime_target,
             metadata_backend=metadata_backend,
+            database_url=database_url,
         )
         self.registry_url = normalize_source_url(registry_url or default_registry_url())
         self._index: RegistryIndex | None = None
@@ -58,6 +60,11 @@ class PackInstaller:
         """List packs in the configured registry."""
 
         return sorted(self._load_index().packs)
+
+    def available_pack_summaries(self) -> list[RegistryPack]:
+        """Return stable summaries for packs in the configured registry."""
+
+        return self._load_index().list_packs()
 
     def _install_recursive(
         self,

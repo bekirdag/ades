@@ -26,6 +26,7 @@ class PackRegistry:
         *,
         runtime_target: RuntimeTarget | str = RuntimeTarget.LOCAL,
         metadata_backend: MetadataBackend | str = MetadataBackend.SQLITE,
+        database_url: str | None = None,
     ) -> None:
         self.layout = ensure_storage_layout(build_storage_layout(storage_root))
         self.runtime_target = normalize_runtime_target(runtime_target)
@@ -34,6 +35,7 @@ class PackRegistry:
             self.layout,
             runtime_target=self.runtime_target,
             metadata_backend=self.metadata_backend,
+            database_url=database_url,
         )
         self._bootstrap_if_needed()
 

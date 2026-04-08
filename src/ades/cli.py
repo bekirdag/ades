@@ -11,6 +11,7 @@ from .api import activate_pack as api_activate_pack
 from .api import build_registry as api_build_registry
 from .api import deactivate_pack as api_deactivate_pack
 from .api import lookup_candidates as api_lookup_candidates
+from .api import list_available_packs as api_list_available_packs
 from .api import list_packs as api_list_packs
 from .api import publish_release as api_publish_release
 from .api import pull_pack as api_pull_pack
@@ -29,9 +30,11 @@ from .storage.paths import build_storage_layout, ensure_storage_layout
 
 
 app = typer.Typer(help="ades local semantic enrichment CLI", no_args_is_help=True)
+list_app = typer.Typer(help="List available or installed ades resources.")
 packs_app = typer.Typer(help="Inspect installed ades packs.")
 registry_app = typer.Typer(help="Build static pack registries for external distribution.")
 release_app = typer.Typer(help="Build and verify local release artifacts.")
+app.add_typer(list_app, name="list")
 app.add_typer(packs_app, name="packs")
 app.add_typer(registry_app, name="registry")
 app.add_typer(release_app, name="release")
@@ -48,7 +51,55 @@ def _installer(*, registry_url: str | None = None) -> PackInstaller:
     return PackInstaller(
         settings.storage_root,
         registry_url=registry_url or settings.registry_url,
+        runtime_target=settings.runtime_target,
+        metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
     )
+
+
+def _echo_pack_listing(*, mode: str, packs: list[dict[str, object]], registry_url: str | None = None) -> None:
+    """Render one installed or available pack listing."""
+
+    payload: dict[str, object] = {
+        "mode": mode,
+        "pack_ids": [str(pack["pack_id"]) for pack in packs],
+        "packs": packs,
+    }
+    if registry_url is not None:
+        payload["registry_url"] = registry_url
+    _echo_json(payload)
+
+
+def _render_pack_listing(
+    *,
+    available: bool,
+    active_only: bool,
+    registry_url: str | None,
+) -> None:
+    """Render either an installed-pack or available-pack listing."""
+
+    if available:
+        if active_only:
+            raise typer.BadParameter("--active-only cannot be used with available pack listings.")
+        packs = [
+            pack.model_dump(mode="json")
+            for pack in api_list_available_packs(registry_url=registry_url)
+        ]
+        effective_registry_url = registry_url or get_settings().registry_url
+        _echo_pack_listing(
+            mode="available",
+            packs=packs,
+            registry_url=effective_registry_url,
+        )
+        return
+
+    if registry_url is not None:
+        raise typer.BadParameter("--registry-url can only be used with available pack listings.")
+    packs = [
+        pack.model_dump(mode="json")
+        for pack in api_list_packs(active_only=active_only)
+    ]
+    _echo_pack_listing(mode="installed", packs=packs)
 
 
 @app.command()
@@ -71,15 +122,38 @@ def packs_list(
 ) -> None:
     """List installed packs or available registry packs."""
 
-    if available:
-        if active_only:
-            raise typer.BadParameter("--active-only cannot be used with --available.")
-        packs = _installer(registry_url=registry_url).available_packs()
-    else:
-        if registry_url is not None:
-            raise typer.BadParameter("--registry-url can only be used with --available.")
-        packs = [pack.pack_id for pack in api_list_packs(active_only=active_only)]
-    _echo_json({"packs": packs})
+    _render_pack_listing(
+        available=available,
+        active_only=active_only,
+        registry_url=registry_url,
+    )
+
+
+@list_app.command("packs")
+def list_packs_alias(
+    installed: bool = typer.Option(
+        False,
+        "--installed",
+        help="List installed packs instead of available registry packs.",
+    ),
+    active_only: bool = typer.Option(
+        False,
+        "--active-only",
+        help="List only active installed packs when using --installed.",
+    ),
+    registry_url: str | None = typer.Option(
+        None,
+        "--registry-url",
+        help="Override the registry URL or file path for available-pack listings.",
+    ),
+) -> None:
+    """List packs with available registry packs as the default view."""
+
+    _render_pack_listing(
+        available=not installed,
+        active_only=active_only,
+        registry_url=registry_url,
+    )
 
 
 @packs_app.command("activate")
@@ -499,7 +573,7 @@ def serve(
     port: int = typer.Option(None, help="Override the bind port."),
     reload: bool = typer.Option(False, help="Enable auto-reload for development."),
 ) -> None:
-    """Run the local FastAPI service."""
+    """Run the configured ades FastAPI service."""
 
     import uvicorn
 
@@ -507,7 +581,7 @@ def serve(
     layout = ensure_storage_layout(build_storage_layout(settings.storage_root))
     typer.echo(f"Using storage root: {layout.storage_root}")
     uvicorn.run(
-        "ades.service.app:create_app",
+        "ades.api:create_service_app",
         host=host or settings.host,
         port=port or settings.port,
         factory=True,

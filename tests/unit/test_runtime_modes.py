@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+import pytest
+
 from ades.config import Settings
 from ades.service.production import create_production_app
 from ades.storage import MetadataBackend, RuntimeTarget
@@ -18,10 +20,10 @@ def test_settings_from_env_resolve_local_runtime_defaults(monkeypatch) -> None:
     assert settings.metadata_backend is MetadataBackend.SQLITE
 
 
-def test_production_service_placeholder_is_explicit() -> None:
-    try:
+def test_production_service_requires_explicit_runtime(monkeypatch) -> None:
+    monkeypatch.delenv("ADES_RUNTIME_TARGET", raising=False)
+    monkeypatch.delenv("ADES_METADATA_BACKEND", raising=False)
+    monkeypatch.delenv("ADES_DATABASE_URL", raising=False)
+
+    with pytest.raises(RuntimeError):
         create_production_app(storage_root=os.getcwd())
-    except NotImplementedError as exc:
-        assert "production server" in str(exc) or "production_server" in str(exc)
-    else:
-        raise AssertionError("Expected production service placeholder to raise.")

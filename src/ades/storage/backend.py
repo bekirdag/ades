@@ -93,6 +93,7 @@ def build_metadata_store(
     *,
     runtime_target: RuntimeTarget | str | None = None,
     metadata_backend: MetadataBackend | str | None = None,
+    database_url: str | None = None,
 ) -> MetadataStore:
     """Create the store for the requested runtime target and backend."""
 
@@ -110,7 +111,7 @@ def build_metadata_store(
     ):
         from .postgresql import PostgreSQLMetadataStore
 
-        return PostgreSQLMetadataStore(layout)
+        return PostgreSQLMetadataStore(layout, database_url=database_url)
 
     raise UnsupportedRuntimeConfigurationError(
         "Unsupported ades runtime/backend combination: "

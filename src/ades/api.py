@@ -18,7 +18,7 @@ from .distribution import (
 )
 from .packs.installer import InstallResult, PackInstaller
 from .packs.publish import build_static_registry
-from .packs.registry import PackRegistry
+from .packs.registry import PackRegistry, load_registry_index
 from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load_tag_file
 from .pipeline.tagger import tag_text
 from .release import release_versions as read_release_versions
@@ -28,6 +28,7 @@ from .release import validate_release_workflow
 from .release import verify_release_artifacts
 from .release import write_release_manifest as persist_release_manifest
 from .service.models import (
+    AvailablePackSummary,
     BatchManifestItem,
     BatchRerunDiff,
     BatchSourceSummary,
@@ -68,6 +69,7 @@ def _resolve_settings(
     port: int | None = None,
     default_pack: str | None = None,
     registry_url: str | None = None,
+    database_url: str | None = None,
 ) -> Settings:
     base = get_settings()
     return Settings(
@@ -78,6 +80,8 @@ def _resolve_settings(
         registry_url=registry_url if registry_url is not None else base.registry_url,
         runtime_target=base.runtime_target,
         metadata_backend=base.metadata_backend,
+        database_url=database_url if database_url is not None else base.database_url,
+        config_path=base.config_path,
     )
 
 
@@ -95,6 +99,7 @@ def status(
         layout.storage_root,
         runtime_target=settings.runtime_target,
         metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
     )
     return StatusResponse(
         service="ades",
@@ -104,6 +109,7 @@ def status(
         storage_root=str(layout.storage_root),
         host=settings.host,
         port=settings.port,
+        registry_url=settings.registry_url,
         installed_packs=[pack.pack_id for pack in registry.list_installed_packs()],
     )
 
@@ -120,10 +126,25 @@ def list_packs(
         settings.storage_root,
         runtime_target=settings.runtime_target,
         metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
     )
     return [
         PackSummary(**pack.to_summary())
         for pack in registry.list_installed_packs(active_only=active_only)
+    ]
+
+
+def list_available_packs(
+    *,
+    registry_url: str | None = None,
+) -> list[AvailablePackSummary]:
+    """List installable packs from the configured registry."""
+
+    settings = _resolve_settings(registry_url=registry_url)
+    index = load_registry_index(settings.registry_url)
+    return [
+        AvailablePackSummary(**pack.to_summary())
+        for pack in index.list_packs()
     ]
 
 
@@ -140,6 +161,7 @@ def get_pack(
         settings.storage_root,
         runtime_target=settings.runtime_target,
         metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
     )
     manifest = registry.get_pack(pack_id, active_only=active_only)
     if manifest is None:
@@ -161,6 +183,7 @@ def pull_pack(
         registry_url=settings.registry_url,
         runtime_target=settings.runtime_target,
         metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
     )
     return installer.install(pack_id)
 
@@ -626,6 +649,7 @@ def set_pack_active(
         settings.storage_root,
         runtime_target=settings.runtime_target,
         metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
     )
     if registry.get_pack(pack_id) is None:
         return None
@@ -664,6 +688,7 @@ def lookup_candidates(
         settings.storage_root,
         runtime_target=settings.runtime_target,
         metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
     )
     bounded_limit = max(1, min(limit, 100))
     candidates = [
@@ -688,9 +713,18 @@ def lookup_candidates(
 def create_service_app(*, storage_root: str | Path | None = None):
     """Create the FastAPI service app for direct embedding."""
 
+    settings = _resolve_settings(storage_root=storage_root)
+    if settings.runtime_target.value == "production_server":
+        from .service.production import create_production_app
+
+        return create_production_app(
+            storage_root=settings.storage_root,
+            database_url=settings.database_url,
+        )
+
     from .service.app import create_app
 
-    return create_app(storage_root=storage_root)
+    return create_app(storage_root=settings.storage_root)
 
 
 def settings_version() -> str:

@@ -39,6 +39,8 @@ class PackManifest:
     language: str
     domain: str
     tier: str
+    description: str | None = None
+    tags: list[str] = field(default_factory=list)
     dependencies: list[str] = field(default_factory=list)
     artifacts: list[PackArtifact] = field(default_factory=list)
     models: list[str] = field(default_factory=list)
@@ -75,6 +77,8 @@ class PackManifest:
             language=str(data["language"]),
             domain=str(data["domain"]),
             tier=str(data["tier"]),
+            description=str(data["description"]) if data.get("description") is not None else None,
+            tags=list(data.get("tags", [])),
             dependencies=list(data.get("dependencies", [])),
             artifacts=artifacts,
             models=list(data.get("models", [])),
@@ -103,6 +107,8 @@ class PackManifest:
             "language": self.language,
             "domain": self.domain,
             "tier": self.tier,
+            "description": self.description,
+            "tags": list(self.tags),
             "active": self.active,
         }
 
@@ -116,6 +122,7 @@ class PackManifest:
             "language": self.language,
             "domain": self.domain,
             "tier": self.tier,
+            "tags": list(self.tags),
             "dependencies": list(self.dependencies),
             "artifacts": [artifact.to_dict() for artifact in self.artifacts],
             "models": list(self.models),
@@ -123,6 +130,8 @@ class PackManifest:
             "labels": list(self.labels),
             "min_ades_version": self.min_ades_version,
         }
+        if self.description is not None:
+            payload["description"] = self.description
         if self.sha256 is not None:
             payload["sha256"] = self.sha256
         if not self.active:
@@ -143,6 +152,29 @@ class RegistryPack:
     pack_id: str
     version: str
     manifest_url: str
+    language: str | None = None
+    domain: str | None = None
+    tier: str | None = None
+    description: str | None = None
+    tags: list[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
+    min_ades_version: str = "0.1.0"
+
+    def to_summary(self) -> dict[str, Any]:
+        """Return a user-facing summary for one available registry pack."""
+
+        return {
+            "pack_id": self.pack_id,
+            "version": self.version,
+            "language": self.language,
+            "domain": self.domain,
+            "tier": self.tier,
+            "description": self.description,
+            "tags": list(self.tags),
+            "dependencies": list(self.dependencies),
+            "min_ades_version": self.min_ades_version,
+            "manifest_url": self.manifest_url,
+        }
 
 
 @dataclass(frozen=True)
@@ -169,6 +201,17 @@ class RegistryIndex:
                     if base_url
                     else str(item["manifest_url"])
                 ),
+                language=str(item["language"]) if item.get("language") is not None else None,
+                domain=str(item["domain"]) if item.get("domain") is not None else None,
+                tier=str(item["tier"]) if item.get("tier") is not None else None,
+                description=(
+                    str(item["description"])
+                    if item.get("description") is not None
+                    else None
+                ),
+                tags=list(item.get("tags", [])),
+                dependencies=list(item.get("dependencies", [])),
+                min_ades_version=str(item.get("min_ades_version", "0.1.0")),
             )
             for pack_id, item in data.get("packs", {}).items()
         }
@@ -183,6 +226,11 @@ class RegistryIndex:
 
         return self.packs.get(pack_id)
 
+    def list_packs(self) -> list[RegistryPack]:
+        """Return all registry pack entries in stable order."""
+
+        return [self.packs[pack_id] for pack_id in sorted(self.packs)]
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize the registry index into stable JSON-compatible data."""
 
@@ -193,6 +241,13 @@ class RegistryIndex:
                 pack_id: {
                     "version": pack.version,
                     "manifest_url": pack.manifest_url,
+                    "language": pack.language,
+                    "domain": pack.domain,
+                    "tier": pack.tier,
+                    "description": pack.description,
+                    "tags": list(pack.tags),
+                    "dependencies": list(pack.dependencies),
+                    "min_ades_version": pack.min_ades_version,
                 }
                 for pack_id, pack in sorted(self.packs.items())
             },

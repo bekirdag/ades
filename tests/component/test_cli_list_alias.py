@@ -7,9 +7,10 @@ from ades.cli import app
 from tests.pack_registry_helpers import create_finance_registry_sources
 
 
-def test_cli_can_build_registry_and_pull_from_registry_url(tmp_path: Path) -> None:
+def test_cli_list_packs_alias_defaults_to_available_registry_packs(tmp_path: Path) -> None:
     general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
     registry_dir = tmp_path / "registry"
+    install_root = tmp_path / "install"
     runner = CliRunner()
 
     build_result = runner.invoke(
@@ -26,26 +27,22 @@ def test_cli_can_build_registry_and_pull_from_registry_url(tmp_path: Path) -> No
 
     assert build_result.exit_code == 0
     build_payload = json.loads(build_result.stdout)
-    assert build_payload["pack_count"] == 2
 
     available_result = runner.invoke(
         app,
         [
-            "packs",
             "list",
-            "--available",
+            "packs",
             "--registry-url",
             build_payload["index_url"],
         ],
-        env={"ADES_STORAGE_ROOT": str(tmp_path / "install")},
+        env={"ADES_STORAGE_ROOT": str(install_root)},
     )
 
     assert available_result.exit_code == 0
     available_payload = json.loads(available_result.stdout)
     assert available_payload["mode"] == "available"
     assert available_payload["pack_ids"] == ["finance-en", "general-en"]
-    finance_pack = next(pack for pack in available_payload["packs"] if pack["pack_id"] == "finance-en")
-    assert "finance" in finance_pack["tags"]
 
     pull_result = runner.invoke(
         app,
@@ -55,10 +52,18 @@ def test_cli_can_build_registry_and_pull_from_registry_url(tmp_path: Path) -> No
             "--registry-url",
             build_payload["index_url"],
         ],
-        env={"ADES_STORAGE_ROOT": str(tmp_path / "install")},
+        env={"ADES_STORAGE_ROOT": str(install_root)},
     )
 
     assert pull_result.exit_code == 0
-    pull_payload = json.loads(pull_result.stdout)
-    assert pull_payload["registry_url"] == build_payload["index_url"]
-    assert pull_payload["installed"] == ["general-en", "finance-en"]
+
+    installed_result = runner.invoke(
+        app,
+        ["list", "packs", "--installed"],
+        env={"ADES_STORAGE_ROOT": str(install_root)},
+    )
+
+    assert installed_result.exit_code == 0
+    installed_payload = json.loads(installed_result.stdout)
+    assert installed_payload["mode"] == "installed"
+    assert sorted(installed_payload["pack_ids"]) == ["finance-en", "general-en"]

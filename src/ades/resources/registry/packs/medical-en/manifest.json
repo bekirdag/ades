@@ -5,6 +5,12 @@
   "language": "en",
   "domain": "medical",
   "tier": "domain",
+  "description": "English medical concepts, clinical entities, and healthcare vocabulary.",
+  "tags": [
+    "medical",
+    "healthcare",
+    "english"
+  ],
   "dependencies": [
     "general-en"
   ],

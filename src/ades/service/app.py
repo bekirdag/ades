@@ -11,6 +11,7 @@ from ..api import (
     build_registry,
     deactivate_pack,
     get_pack,
+    list_available_packs,
     list_packs,
     lookup_candidates,
     npm_installer_info,
@@ -27,6 +28,7 @@ from ..api import (
 )
 from ..version import __version__
 from .models import (
+    AvailablePackSummary,
     BatchFileTagRequest,
     BatchTagResponse,
     FileTagRequest,
@@ -169,6 +171,14 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         """List locally installed packs."""
 
         return list_packs(storage_root=storage_root, active_only=active_only)
+
+    @app.get("/v0/packs/available", response_model=list[AvailablePackSummary])
+    def runtime_list_available_packs(
+        registry_url: str | None = Query(None),
+    ) -> list[AvailablePackSummary]:
+        """List installable packs from the configured registry."""
+
+        return list_available_packs(registry_url=registry_url)
 
     @app.get("/v0/packs/{pack_id}", response_model=PackSummary)
     def runtime_get_pack(pack_id: str) -> PackSummary:

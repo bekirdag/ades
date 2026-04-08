@@ -9,7 +9,7 @@ The current delivery target is `v0.1.0`.
 ## Runtime Modes
 
 - `local tool`: the active product track for `v0.1.0`. It runs on one machine, stores runtime metadata in `SQLite`, and is the only supported execution target today.
-- `production server tool`: a later product track for multi-user or hosted deployment. It is planned to use `PostgreSQL` instead of `SQLite` and now has code/documentation placeholders only.
+- `production server tool`: the hosted deployment track. It uses `PostgreSQL`, serves the API behind `nginx`, and publishes downloadable packs from `repo.adestool.com`.
 
 ## Testing Policy
 
@@ -29,6 +29,7 @@ npm install -g ades-cli
 ades pull finance-en
 ades pull medical-en
 ades pull finance-en --registry-url file:///tmp/ades-registry/index.json
+ades list packs --registry-url https://repo.adestool.com/index.json
 ades serve
 ades release versions
 ades release sync-version 0.1.0
@@ -57,7 +58,7 @@ ades tag-files --directory ./corpus --manifest-input ./outputs/batch.finance-en.
 - CLI mode: pull packs, tag text, inspect installed packs, and run the local service.
 - npm wrapper mode: install `ades-cli`, then let the wrapper bootstrap a user-local Python runtime on first execution before delegating to the Python `ades` command.
 - Local service mode: run `ades serve` and expose a localhost API that multiple tools or agents can share.
-- Future production server mode: reserved for a later PostgreSQL-backed server build and not available in `v0.1.0`.
+- Hosted production-server mode: documented in [`docs/production_deployment.md`](/home/wodo/apps/ades/docs/production_deployment.md) with a PostgreSQL-backed deployment and public registry hosting.
 
 Coordinated release publication is manifest-driven. `ades release publish` reads a validated manifest from `ades release validate` and then publishes the recorded wheel, sdist, and npm tarball without rebuilding them. The publish flow reads credentials and registry overrides from `ADES_RELEASE_TWINE_USERNAME`, `ADES_RELEASE_TWINE_PASSWORD`, `ADES_RELEASE_TWINE_TOKEN`, `ADES_RELEASE_TWINE_REPOSITORY_URL`, `ADES_RELEASE_NPM_TOKEN`, `ADES_RELEASE_NPM_REGISTRY`, and `ADES_RELEASE_NPM_ACCESS`.
 
@@ -136,7 +137,7 @@ print(manifest.manifest_path)
 
 ## Current Runtime Surface
 
-- CLI commands: `ades pull`, `ades pull --registry-url`, `ades registry build`, `ades release versions`, `ades release sync-version`, `ades release verify`, `ades release manifest`, `ades release validate`, `ades release publish`, `ades serve`, `ades tag`, `ades tag-files`, `ades status`, `ades packs list`, `ades packs list --available --registry-url`, `ades packs activate`, `ades packs deactivate`, `ades packs lookup`
+- CLI commands: `ades pull`, `ades pull --registry-url`, `ades registry build`, `ades release versions`, `ades release sync-version`, `ades release verify`, `ades release manifest`, `ades release validate`, `ades release publish`, `ades serve`, `ades tag`, `ades tag-files`, `ades status`, `ades list packs`, `ades packs list`, `ades packs list --available --registry-url`, `ades packs activate`, `ades packs deactivate`, `ades packs lookup`
 - npm wrapper package: `npm/ades-cli`, installed command `ades`, first-run bootstrap into a user-local Python virtual environment
 - Local API endpoints: `GET /healthz`, `GET /v0/status`, `GET /v0/packs`, `GET /v0/packs/{pack}`, `POST /v0/packs/{pack}/activate`, `POST /v0/packs/{pack}/deactivate`, `POST /v0/registry/build`, `GET /v0/installers/npm`, `GET /v0/release/versions`, `POST /v0/release/sync-version`, `POST /v0/release/verify`, `POST /v0/release/manifest`, `POST /v0/release/validate`, `POST /v0/release/publish`, `GET /v0/lookup`, `POST /v0/tag`, `POST /v0/tag/file`, `POST /v0/tag/files`
 - Local runtime status now reports `runtime_target=local` and `metadata_backend=sqlite`

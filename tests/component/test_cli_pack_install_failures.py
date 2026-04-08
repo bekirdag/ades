@@ -54,7 +54,10 @@ def test_cli_pull_failure_does_not_leave_partial_pack_install(tmp_path: Path) ->
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert packs_result.exit_code == 0
-    assert json.loads(packs_result.stdout) == {"packs": []}
+    packs_payload = json.loads(packs_result.stdout)
+    assert packs_payload["mode"] == "installed"
+    assert packs_payload["pack_ids"] == []
+    assert packs_payload["packs"] == []
 
     layout = build_storage_layout(install_root)
     assert not (layout.packs_dir / "general-en").exists()
