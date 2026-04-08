@@ -212,6 +212,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Aligned the implementation plan with that rule by making module completion explicitly require operational behavior, stable contracts, validation, and categorized tests.
 - Kept placeholders limited to explicitly deferred seams such as the future PostgreSQL-backed production server path rather than treating scaffolds as completed delivery for active local-tool modules.
 
+### 30. Lightweight local candidate search/index
+
+- Added broader metadata lookup in the local SQLite store so `ades` can resolve multi-term candidate searches across alias text, labels, and source-domain metadata instead of only whole-query substring matching.
+- Implemented `SQLite FTS5` search tables for aliases and rules when the local SQLite build supports them, while preserving deterministic fallback behavior through standard SQLite queries when FTS is unavailable.
+- Kept exact-alias lookup unchanged for the tagger hot path and exposed the broader search through the existing public API, `ades packs lookup`, and `GET /v0/lookup` rather than introducing a second lookup surface.
+- Added categorized unit, component, integration, and API coverage for the broader candidate-search behavior and verified the repo through `docdexd run-tests --repo /home/wodo/apps/ades`, including full `pytest -q` with `142 passed`.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`

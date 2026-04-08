@@ -99,7 +99,7 @@ Target release: `v0.1.0`
 
 - `SQLite` for local metadata, installed packs, aliases, and enrichment state
 - deterministic alias/rule lookup over installed-pack metadata for the current local baseline
-- `SQLite FTS5` or a similarly lightweight local index remains a candidate next step for broader lookup
+- broader local candidate lookup over installed-pack metadata, using `SQLite FTS5` when available with deterministic fallback to standard SQLite queries
 - File-based pack storage under `/mnt/githubActions/ades_big_data`
 - Checksum validation for pulled pack artifacts
 
@@ -196,7 +196,7 @@ Target release: `v0.1.0`
 
 - Keep `v0.1.0` deterministic-only and local-first for the default runtime.
 - Add explicit deterministic relevance scoring and stronger topic output on the existing entity/topic response surface.
-- Treat lightweight candidate search as the remaining tagging-related release-scope decision; defer `spaCy` / `GLiNER` / `FlashText` unless the release target changes after `v0.1.0`.
+- Add lightweight local candidate search for broader metadata lookup without reopening the NLP stack decision; defer `spaCy` / `GLiNER` / `FlashText` unless the release target changes after `v0.1.0`.
 
 ### Phase 5
 

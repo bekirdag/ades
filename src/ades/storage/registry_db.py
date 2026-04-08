@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import re
 import sqlite3
 
 from ..packs.manifest import PackManifest
@@ -15,11 +16,17 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+SEARCH_TERM_RE = re.compile(r"[a-z0-9]+")
+ALIAS_SEARCH_TABLE = "pack_alias_search"
+RULE_SEARCH_TABLE = "pack_rule_search"
+
+
 class PackMetadataStore:
     """Persist installed-pack metadata and deterministic lookup content."""
 
     def __init__(self, layout: StorageLayout) -> None:
         self.layout = layout
+        self._search_index_supported = False
         self.ensure_schema()
 
     def ensure_schema(self) -> None:
@@ -88,6 +95,10 @@ class PackMetadataStore:
                 ON pack_rules(rule_name, label);
                 """
             )
+            self._ensure_search_schema(connection)
+            self._search_index_supported = self._search_index_enabled(connection)
+            if self._search_index_supported:
+                self._sync_search_index(connection)
 
     def count_installed_packs(self) -> int:
         with self._connect() as connection:
@@ -450,6 +461,7 @@ class PackMetadataStore:
                 for position, rule in enumerate(rules)
             ],
         )
+        self._replace_rule_search(connection, pack_id, rules)
 
     def _replace_aliases(
         self,
@@ -479,6 +491,7 @@ class PackMetadataStore:
                 for position, alias in enumerate(aliases)
             ],
         )
+        self._replace_alias_search(connection, pack_id, aliases)
 
     def _lookup_alias_candidates(
         self,
@@ -501,6 +514,15 @@ class PackMetadataStore:
             filters.append("LOWER(a.alias_text) = LOWER(?)")
             params.append(query)
         else:
+            match_query = self._build_search_match_query(query)
+            if self._search_index_supported and match_query is not None:
+                return self._lookup_alias_candidates_fts(
+                    query,
+                    match_query=match_query,
+                    pack_id=pack_id,
+                    active_only=active_only,
+                    limit=limit,
+                )
             like_query = f"%{query.lower()}%"
             filters.append(
                 "(LOWER(a.alias_text) LIKE ? OR LOWER(a.label) LIKE ? OR LOWER(a.source_domain) LIKE ?)"
@@ -535,7 +557,13 @@ class PackMetadataStore:
                 "pattern": None,
                 "domain": str(row["source_domain"]),
                 "active": bool(row["active"]),
-                "score": self._alias_score(query, str(row["alias_text"]), exact_alias),
+                "score": self._alias_score(
+                    query,
+                    alias_text=str(row["alias_text"]),
+                    label=str(row["label"]),
+                    source_domain=str(row["source_domain"]),
+                    exact_alias=exact_alias,
+                ),
             }
             for row in rows
         ]
@@ -557,6 +585,15 @@ class PackMetadataStore:
             params.append(pack_id)
 
         like_query = f"%{query.lower()}%"
+        match_query = self._build_search_match_query(query)
+        if self._search_index_supported and match_query is not None:
+            return self._lookup_rule_candidates_fts(
+                query,
+                match_query=match_query,
+                pack_id=pack_id,
+                active_only=active_only,
+                limit=limit,
+            )
         filters.append(
             "(LOWER(r.rule_name) LIKE ? OR LOWER(r.label) LIKE ? OR LOWER(r.pattern) LIKE ? OR LOWER(r.source_domain) LIKE ?)"
         )
@@ -591,7 +628,147 @@ class PackMetadataStore:
                 "pattern": str(row["pattern"]),
                 "domain": str(row["source_domain"]),
                 "active": bool(row["active"]),
-                "score": self._rule_score(query, str(row["rule_name"]), str(row["pattern"])),
+                "score": self._rule_score(
+                    query,
+                    rule_name=str(row["rule_name"]),
+                    label=str(row["label"]),
+                    pattern=str(row["pattern"]),
+                    source_domain=str(row["source_domain"]),
+                ),
+            }
+            for row in rows
+        ]
+
+    def _lookup_alias_candidates_fts(
+        self,
+        query: str,
+        *,
+        match_query: str,
+        pack_id: str | None,
+        active_only: bool,
+        limit: int,
+    ) -> list[dict[str, str | float | bool | None]]:
+        filters = [f"{ALIAS_SEARCH_TABLE} MATCH ?"]
+        params: list[object] = [match_query]
+        if active_only:
+            filters.append("p.active = 1")
+        if pack_id is not None:
+            filters.append(f"{ALIAS_SEARCH_TABLE}.pack_id = ?")
+            params.append(pack_id)
+        where_clause = f"WHERE {' AND '.join(filters)}"
+        params.append(limit)
+        with self._connect() as connection:
+            try:
+                rows = connection.execute(
+                    f"""
+                    SELECT
+                        {ALIAS_SEARCH_TABLE}.pack_id,
+                        {ALIAS_SEARCH_TABLE}.alias_text,
+                        {ALIAS_SEARCH_TABLE}.label,
+                        {ALIAS_SEARCH_TABLE}.source_domain,
+                        p.active
+                    FROM {ALIAS_SEARCH_TABLE}
+                    JOIN installed_packs AS p ON p.pack_id = {ALIAS_SEARCH_TABLE}.pack_id
+                    {where_clause}
+                    ORDER BY bm25({ALIAS_SEARCH_TABLE}, 3.0, 1.5, 0.75) ASC,
+                             {ALIAS_SEARCH_TABLE}.alias_text ASC,
+                             {ALIAS_SEARCH_TABLE}.label ASC
+                    LIMIT ?
+                    """,
+                    params,
+                ).fetchall()
+            except sqlite3.OperationalError:
+                self._search_index_supported = False
+                return self._lookup_alias_candidates(
+                    query,
+                    pack_id=pack_id,
+                    exact_alias=False,
+                    active_only=active_only,
+                    limit=limit,
+                )
+        return [
+            {
+                "kind": "alias",
+                "pack_id": str(row["pack_id"]),
+                "label": str(row["label"]),
+                "value": str(row["alias_text"]),
+                "pattern": None,
+                "domain": str(row["source_domain"]),
+                "active": bool(row["active"]),
+                "score": self._alias_score(
+                    query,
+                    alias_text=str(row["alias_text"]),
+                    label=str(row["label"]),
+                    source_domain=str(row["source_domain"]),
+                    exact_alias=False,
+                ),
+            }
+            for row in rows
+        ]
+
+    def _lookup_rule_candidates_fts(
+        self,
+        query: str,
+        *,
+        match_query: str,
+        pack_id: str | None,
+        active_only: bool,
+        limit: int,
+    ) -> list[dict[str, str | float | bool | None]]:
+        filters = [f"{RULE_SEARCH_TABLE} MATCH ?"]
+        params: list[object] = [match_query]
+        if active_only:
+            filters.append("p.active = 1")
+        if pack_id is not None:
+            filters.append(f"{RULE_SEARCH_TABLE}.pack_id = ?")
+            params.append(pack_id)
+        where_clause = f"WHERE {' AND '.join(filters)}"
+        params.append(limit)
+        with self._connect() as connection:
+            try:
+                rows = connection.execute(
+                    f"""
+                    SELECT
+                        {RULE_SEARCH_TABLE}.pack_id,
+                        {RULE_SEARCH_TABLE}.rule_name,
+                        {RULE_SEARCH_TABLE}.label,
+                        {RULE_SEARCH_TABLE}.pattern,
+                        {RULE_SEARCH_TABLE}.source_domain,
+                        p.active
+                    FROM {RULE_SEARCH_TABLE}
+                    JOIN installed_packs AS p ON p.pack_id = {RULE_SEARCH_TABLE}.pack_id
+                    {where_clause}
+                    ORDER BY bm25({RULE_SEARCH_TABLE}, 3.0, 1.5, 0.75, 0.5) ASC,
+                             {RULE_SEARCH_TABLE}.rule_name ASC,
+                             {RULE_SEARCH_TABLE}.label ASC
+                    LIMIT ?
+                    """,
+                    params,
+                ).fetchall()
+            except sqlite3.OperationalError:
+                self._search_index_supported = False
+                return self._lookup_rule_candidates(
+                    query,
+                    pack_id=pack_id,
+                    active_only=active_only,
+                    limit=limit,
+                )
+        return [
+            {
+                "kind": "rule",
+                "pack_id": str(row["pack_id"]),
+                "label": str(row["label"]),
+                "value": str(row["rule_name"]),
+                "pattern": str(row["pattern"]),
+                "domain": str(row["source_domain"]),
+                "active": bool(row["active"]),
+                "score": self._rule_score(
+                    query,
+                    rule_name=str(row["rule_name"]),
+                    label=str(row["label"]),
+                    pattern=str(row["pattern"]),
+                    source_domain=str(row["source_domain"]),
+                ),
             }
             for row in rows
         ]
@@ -603,27 +780,227 @@ class PackMetadataStore:
         return connection
 
     @staticmethod
-    def _alias_score(query: str, alias_text: str, exact_alias: bool) -> float:
+    def _alias_score(
+        query: str,
+        *,
+        alias_text: str,
+        label: str,
+        source_domain: str,
+        exact_alias: bool,
+    ) -> float:
         normalized_query = query.lower()
         normalized_alias = alias_text.lower()
+        normalized_label = label.lower()
+        normalized_domain = source_domain.lower()
+        coverage = PackMetadataStore._field_coverage(
+            query,
+            alias_text,
+            label,
+            source_domain,
+        )
         if exact_alias or normalized_alias == normalized_query:
             return 1.0
+        if coverage == 0.0:
+            return 0.0
         if normalized_alias.startswith(normalized_query):
             return 0.95
         if normalized_query in normalized_alias:
             return 0.85
-        return 0.7
+        score = 0.45 + (coverage * 0.35)
+        if normalized_query and normalized_query in normalized_label:
+            score += 0.04
+        if normalized_query and normalized_query in normalized_domain:
+            score += 0.03
+        if coverage == 1.0 and len(PackMetadataStore._query_terms(query)) > 1:
+            score += 0.05
+        return round(min(0.9, score), 4)
 
     @staticmethod
-    def _rule_score(query: str, rule_name: str, pattern: str) -> float:
+    def _rule_score(
+        query: str,
+        *,
+        rule_name: str,
+        label: str,
+        pattern: str,
+        source_domain: str,
+    ) -> float:
         normalized_query = query.lower()
+        coverage = PackMetadataStore._field_coverage(
+            query,
+            rule_name,
+            label,
+            pattern,
+            source_domain,
+        )
         if rule_name.lower() == normalized_query:
             return 0.9
+        if coverage == 0.0:
+            return 0.0
         if normalized_query in rule_name.lower():
             return 0.75
         if normalized_query in pattern.lower():
             return 0.6
-        return 0.5
+        score = 0.35 + (coverage * 0.35)
+        if coverage == 1.0 and len(PackMetadataStore._query_terms(query)) > 1:
+            score += 0.05
+        return round(min(0.85, score), 4)
+
+    def _ensure_search_schema(self, connection: sqlite3.Connection) -> None:
+        try:
+            connection.executescript(
+                f"""
+                CREATE VIRTUAL TABLE IF NOT EXISTS {ALIAS_SEARCH_TABLE}
+                USING fts5(
+                    pack_id UNINDEXED,
+                    alias_text,
+                    label,
+                    source_domain,
+                    tokenize = 'unicode61 remove_diacritics 2'
+                );
+
+                CREATE VIRTUAL TABLE IF NOT EXISTS {RULE_SEARCH_TABLE}
+                USING fts5(
+                    pack_id UNINDEXED,
+                    rule_name,
+                    label,
+                    pattern,
+                    source_domain,
+                    tokenize = 'unicode61 remove_diacritics 2'
+                );
+                """
+            )
+        except sqlite3.OperationalError:
+            self._search_index_supported = False
+
+    def _sync_search_index(self, connection: sqlite3.Connection) -> None:
+        if not self._search_index_enabled(connection):
+            return
+        alias_count = self._table_count(connection, "pack_aliases")
+        alias_search_count = self._table_count(connection, ALIAS_SEARCH_TABLE)
+        if alias_count != alias_search_count:
+            connection.execute(f"DELETE FROM {ALIAS_SEARCH_TABLE}")
+            connection.execute(
+                f"""
+                INSERT INTO {ALIAS_SEARCH_TABLE} (pack_id, alias_text, label, source_domain)
+                SELECT pack_id, alias_text, label, source_domain
+                FROM pack_aliases
+                """
+            )
+        rule_count = self._table_count(connection, "pack_rules")
+        rule_search_count = self._table_count(connection, RULE_SEARCH_TABLE)
+        if rule_count != rule_search_count:
+            connection.execute(f"DELETE FROM {RULE_SEARCH_TABLE}")
+            connection.execute(
+                f"""
+                INSERT INTO {RULE_SEARCH_TABLE} (pack_id, rule_name, label, pattern, source_domain)
+                SELECT pack_id, rule_name, label, pattern, source_domain
+                FROM pack_rules
+                """
+            )
+
+    def _replace_alias_search(
+        self,
+        connection: sqlite3.Connection,
+        pack_id: str,
+        aliases: list[dict[str, str]],
+    ) -> None:
+        if not self._search_index_enabled(connection):
+            return
+        connection.execute(
+            f"DELETE FROM {ALIAS_SEARCH_TABLE} WHERE pack_id = ?",
+            (pack_id,),
+        )
+        connection.executemany(
+            f"""
+            INSERT INTO {ALIAS_SEARCH_TABLE} (pack_id, alias_text, label, source_domain)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                (pack_id, alias["text"], alias["label"], alias["source_domain"])
+                for alias in aliases
+            ],
+        )
+
+    def _replace_rule_search(
+        self,
+        connection: sqlite3.Connection,
+        pack_id: str,
+        rules: list[dict[str, str]],
+    ) -> None:
+        if not self._search_index_enabled(connection):
+            return
+        connection.execute(
+            f"DELETE FROM {RULE_SEARCH_TABLE} WHERE pack_id = ?",
+            (pack_id,),
+        )
+        connection.executemany(
+            f"""
+            INSERT INTO {RULE_SEARCH_TABLE} (pack_id, rule_name, label, pattern, source_domain)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    pack_id,
+                    rule["name"],
+                    rule["label"],
+                    rule["pattern"],
+                    rule["source_domain"],
+                )
+                for rule in rules
+            ],
+        )
+
+    @staticmethod
+    def _table_count(connection: sqlite3.Connection, table_name: str) -> int:
+        row = connection.execute(f"SELECT COUNT(*) AS count FROM {table_name}").fetchone()
+        if row is None:
+            return 0
+        return int(row["count"])
+
+    @staticmethod
+    def _search_index_enabled(connection: sqlite3.Connection) -> bool:
+        rows = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table' AND name IN (?, ?)
+            ORDER BY name ASC
+            """,
+            (ALIAS_SEARCH_TABLE, RULE_SEARCH_TABLE),
+        ).fetchall()
+        return {str(row["name"]) for row in rows} == {ALIAS_SEARCH_TABLE, RULE_SEARCH_TABLE}
+
+    @staticmethod
+    def _query_terms(query: str) -> list[str]:
+        terms = [match.group(0) for match in SEARCH_TERM_RE.finditer(query.casefold())]
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for term in terms:
+            if term in seen:
+                continue
+            seen.add(term)
+            deduped.append(term)
+        return deduped
+
+    @staticmethod
+    def _build_search_match_query(query: str) -> str | None:
+        terms = PackMetadataStore._query_terms(query)
+        if not terms:
+            return None
+        return " AND ".join(f"{term}*" for term in terms)
+
+    @staticmethod
+    def _field_coverage(query: str, *fields: str) -> float:
+        terms = PackMetadataStore._query_terms(query)
+        if not terms:
+            return 0.0
+        normalized_fields = [field.casefold() for field in fields]
+        matched = sum(
+            1
+            for term in terms
+            if any(term in field for field in normalized_fields)
+        )
+        return matched / len(terms)
 
     @staticmethod
     def _load_labels(pack_dir: Path) -> list[str]:
