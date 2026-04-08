@@ -8,7 +8,7 @@ from typing import Iterable
 from .config import Settings, get_settings
 from .packs.installer import InstallResult, PackInstaller
 from .packs.registry import PackRegistry
-from .pipeline.files import discover_tag_file_sources, load_tag_file, load_tag_files
+from .pipeline.files import discover_tag_file_sources, load_tag_file
 from .pipeline.tagger import tag_text
 from .service.models import (
     BatchSourceSummary,
@@ -22,6 +22,7 @@ from .service.models import (
 from .storage.paths import build_storage_layout, ensure_storage_layout
 from .storage.results import (
     aggregate_batch_warnings,
+    build_batch_manifest_replay_plan,
     persist_batch_tag_manifest_json,
     persist_tag_response_json,
     persist_tag_responses_json,
@@ -215,6 +216,8 @@ def tag_files(
     storage_root: str | Path | None = None,
     directories: Iterable[str | Path] = (),
     glob_patterns: Iterable[str] = (),
+    manifest_input_path: str | Path | None = None,
+    manifest_replay_mode: str = "resume",
     recursive: bool = True,
     include_patterns: Iterable[str] = (),
     exclude_patterns: Iterable[str] = (),
@@ -226,11 +229,19 @@ def tag_files(
     """Run in-process tagging for multiple local file paths."""
 
     settings = _resolve_settings(storage_root=storage_root)
-    resolved_pack = pack or settings.default_pack
+    replay_plan = (
+        build_batch_manifest_replay_plan(
+            manifest_input_path,
+            mode=manifest_replay_mode,
+        )
+        if manifest_input_path is not None
+        else None
+    )
+    resolved_pack = pack or (replay_plan.manifest.pack if replay_plan is not None else None) or settings.default_pack
     if (write_manifest or manifest_output_path is not None) and output_dir is None:
         raise ValueError("Batch manifest export requires output_dir.")
     discovery = discover_tag_file_sources(
-        paths=paths,
+        paths=[*(Path(path) for path in paths), *(replay_plan.paths if replay_plan is not None else [])],
         directories=directories,
         glob_patterns=glob_patterns,
         recursive=recursive,
@@ -239,9 +250,17 @@ def tag_files(
         max_files=max_files,
         max_input_bytes=max_input_bytes,
     )
-    loaded_files = load_tag_files(discovery.paths, content_type=content_type)
     items: list[TagResponse] = []
-    for resolved_path, text, resolved_content_type, input_size_bytes in loaded_files:
+    for path in discovery.paths:
+        manifest_content_type = (
+            replay_plan.content_type_overrides.get(path)
+            if replay_plan is not None
+            else None
+        )
+        resolved_path, text, resolved_content_type, input_size_bytes = load_tag_file(
+            path,
+            content_type=content_type or manifest_content_type,
+        )
         response = tag_text(
             text=text,
             pack=resolved_pack,
@@ -267,8 +286,20 @@ def tag_files(
     summary_payload = discovery.summary.to_dict()
     summary_payload["processed_count"] = len(items)
     summary_payload["processed_input_bytes"] = sum(item.input_size_bytes or 0 for item in items)
+    summary_payload["manifest_input_path"] = (
+        str(Path(manifest_input_path).expanduser().resolve())
+        if manifest_input_path is not None
+        else None
+    )
+    summary_payload["manifest_replay_mode"] = manifest_replay_mode if replay_plan is not None else None
+    summary_payload["manifest_candidate_count"] = replay_plan.candidate_count if replay_plan is not None else 0
+    summary_payload["manifest_selected_count"] = replay_plan.selected_count if replay_plan is not None else 0
     summary = BatchSourceSummary(**summary_payload)
     warnings = aggregate_batch_warnings(items)
+    if replay_plan is not None and replay_plan.selected_count == 0:
+        warnings = sorted({*warnings, "manifest_replay_empty"})
+    if replay_plan is not None and pack is not None and pack != replay_plan.manifest.pack:
+        warnings = sorted({*warnings, f"manifest_pack_override:{replay_plan.manifest.pack}->{pack}"})
     if not items:
         warnings = sorted({*warnings, "no_files_processed"})
     response = BatchTagResponse(

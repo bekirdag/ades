@@ -117,7 +117,7 @@ def pull(pack: str) -> None:
 def tag(
     text: str | None = typer.Argument(None, help="Inline text to tag."),
     file: Path | None = typer.Option(None, "--file", help="Tag a local file instead of inline text."),
-    pack: str = typer.Option(None, help="Pack id, for example finance-en."),
+    pack: str | None = typer.Option(None, help="Pack id, for example finance-en."),
     content_type: str | None = typer.Option(None, help="Override the input content type."),
     output: Path | None = typer.Option(None, "--output", help="Write JSON output to this file path."),
     output_dir: Path | None = typer.Option(
@@ -164,7 +164,7 @@ def tag(
 @app.command("tag-files")
 def tag_files(
     files: list[Path] = typer.Argument(None, help="Local file paths to tag."),
-    pack: str = typer.Option(None, help="Pack id, for example finance-en."),
+    pack: str | None = typer.Option(None, help="Pack id, for example finance-en."),
     content_type: str | None = typer.Option(None, help="Override the input content type."),
     directories: list[Path] = typer.Option(
         None,
@@ -175,6 +175,16 @@ def tag_files(
         None,
         "--glob",
         help="Glob pattern to expand into local file paths. Can be provided multiple times.",
+    ),
+    manifest_input: Path | None = typer.Option(
+        None,
+        "--manifest-input",
+        help="Replay or resume a corpus run from this saved batch manifest artifact.",
+    ),
+    manifest_mode: str = typer.Option(
+        "resume",
+        "--manifest-mode",
+        help="Manifest replay mode: resume, processed, or all.",
     ),
     include_patterns: list[str] = typer.Option(
         None,
@@ -226,8 +236,8 @@ def tag_files(
 ) -> None:
     """Tag multiple local files through the local pipeline."""
 
-    if not files and not directories and not glob_patterns:
-        raise typer.BadParameter("Provide file paths, --directory, or --glob.")
+    if not files and not directories and not glob_patterns and manifest_input is None:
+        raise typer.BadParameter("Provide file paths, --directory, --glob, or --manifest-input.")
     if (write_manifest or manifest_output is not None) and output_dir is None:
         raise typer.BadParameter("Use --output-dir when writing a batch manifest.")
     response = api_tag_files(
@@ -238,6 +248,8 @@ def tag_files(
         pretty_output=not compact_output,
         directories=directories or [],
         glob_patterns=glob_patterns or [],
+        manifest_input_path=manifest_input,
+        manifest_replay_mode=manifest_mode,
         recursive=not non_recursive,
         include_patterns=include_patterns or [],
         exclude_patterns=exclude_patterns or [],

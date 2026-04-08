@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
@@ -10,6 +11,19 @@ from ..service.models import BatchManifest, BatchManifestItem, BatchTagResponse,
 from ..version import __version__
 
 FILENAME_PART_RE = re.compile(r"[^a-z0-9-]+")
+REPLAYABLE_MANIFEST_SKIP_REASONS = frozenset({"max_files_limit", "max_input_bytes_limit"})
+MANIFEST_REPLAY_MODES = frozenset({"resume", "processed", "all"})
+
+
+@dataclass(slots=True)
+class BatchManifestReplayPlan:
+    """Replay plan derived from a saved batch manifest artifact."""
+
+    manifest: BatchManifest
+    paths: list[Path]
+    content_type_overrides: dict[Path, str]
+    candidate_count: int
+    selected_count: int
 
 
 def _slug_filename_part(value: str) -> str:
@@ -118,6 +132,74 @@ def aggregate_batch_warnings(responses: list[TagResponse]) -> list[str]:
     """Collect unique warnings from a batch of per-item tag responses."""
 
     return sorted({warning for response in responses for warning in response.warnings})
+
+
+def load_batch_manifest(path: str | Path) -> BatchManifest:
+    """Load and validate a saved batch manifest artifact from disk."""
+
+    resolved_path = Path(path).expanduser().resolve()
+    if not resolved_path.exists():
+        raise FileNotFoundError(f"Batch manifest not found: {resolved_path}")
+    if not resolved_path.is_file():
+        raise IsADirectoryError(f"Batch manifest path is not a file: {resolved_path}")
+
+    try:
+        payload = json.loads(resolved_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid batch manifest JSON: {resolved_path}") from exc
+
+    try:
+        return BatchManifest.model_validate(payload)
+    except Exception as exc:
+        raise ValueError(f"Invalid batch manifest payload: {resolved_path}") from exc
+
+
+def build_batch_manifest_replay_plan(
+    path: str | Path,
+    *,
+    mode: str = "resume",
+) -> BatchManifestReplayPlan:
+    """Build a deterministic replay plan from a saved batch manifest artifact."""
+
+    if mode not in MANIFEST_REPLAY_MODES:
+        raise ValueError(
+            f"Invalid manifest replay mode: {mode}. Expected one of: all, processed, resume."
+        )
+
+    manifest = load_batch_manifest(path)
+    paths: list[Path] = []
+    content_type_overrides: dict[Path, str] = {}
+    seen: set[Path] = set()
+    candidate_count = 0
+
+    def add_candidate(source_path: str, *, content_type: str | None = None) -> None:
+        nonlocal candidate_count
+        candidate_count += 1
+        resolved_path = Path(source_path).expanduser().resolve()
+        if resolved_path in seen:
+            return
+        seen.add(resolved_path)
+        paths.append(resolved_path)
+        if content_type is not None:
+            content_type_overrides[resolved_path] = content_type
+
+    if mode in {"processed", "all"}:
+        for item in manifest.items:
+            if item.source_path:
+                add_candidate(item.source_path, content_type=item.content_type)
+
+    if mode in {"resume", "all"}:
+        for skipped in manifest.skipped:
+            if skipped.reason in REPLAYABLE_MANIFEST_SKIP_REASONS:
+                add_candidate(skipped.reference)
+
+    return BatchManifestReplayPlan(
+        manifest=manifest,
+        paths=paths,
+        content_type_overrides=content_type_overrides,
+        candidate_count=candidate_count,
+        selected_count=len(paths),
+    )
 
 
 def build_batch_manifest(response: BatchTagResponse) -> BatchManifest:

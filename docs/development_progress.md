@@ -101,6 +101,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Extended batch summaries to carry the configured limits plus a `limit_skipped_count` counter for auditability.
 - Preserved manifest parity with runtime responses so batch audit artifacts now include the configured guardrails and the exact inputs skipped because of them.
 
+### 14. Resumable corpus runs and manifest replay
+
+- Added manifest replay as a first-class batch source across the local Python API, CLI, and local-service endpoint.
+- Added deterministic replay modes `resume`, `processed`, and `all` so a saved batch manifest can resume deferred work, re-run processed items, or replay the entire recorded corpus without rediscovering directories and globs.
+- Reused the existing batch pipeline for replayed sources so filtering, guardrails, persistence, and audit reporting remain consistent with normal local corpus runs.
+- Extended batch summaries with manifest replay metadata such as the manifest path, replay mode, and manifest candidate/selected counts.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -155,4 +162,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add resumable corpus runs and manifest replay so a local batch job can be resumed or selectively re-run from the saved audit artifact instead of starting discovery from scratch.
+- Add source fingerprinting and unchanged-file skip detection so repeated local corpus runs can avoid re-tagging files that have not changed since the last saved manifest.

@@ -105,21 +105,25 @@ class BatchFileTagRequest(BaseModel):
     paths: list[str] = Field(default_factory=list)
     directories: list[str] = Field(default_factory=list)
     glob_patterns: list[str] = Field(default_factory=list)
+    manifest_input_path: str | None = None
+    manifest_replay_mode: Literal["resume", "processed", "all"] = "resume"
     include_patterns: list[str] = Field(default_factory=list)
     exclude_patterns: list[str] = Field(default_factory=list)
     recursive: bool = True
     max_files: int | None = Field(default=None, ge=0)
     max_input_bytes: int | None = Field(default=None, ge=0)
-    pack: str
+    pack: str | None = None
     content_type: str | None = None
     output: TagOutputOptions | None = None
     options: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_sources(self) -> "BatchFileTagRequest":
-        if self.paths or self.directories or self.glob_patterns:
+        if self.paths or self.directories or self.glob_patterns or self.manifest_input_path:
             return self
-        raise ValueError("At least one of paths, directories, or glob_patterns is required.")
+        raise ValueError(
+            "At least one of paths, directories, glob_patterns, or manifest_input_path is required."
+        )
 
 
 class TagResponse(BaseModel):
@@ -158,6 +162,10 @@ class BatchSourceSummary(BaseModel):
     processed_input_bytes: int
     max_files: int | None = None
     max_input_bytes: int | None = None
+    manifest_input_path: str | None = None
+    manifest_replay_mode: Literal["resume", "processed", "all"] | None = None
+    manifest_candidate_count: int = 0
+    manifest_selected_count: int = 0
     recursive: bool
     include_patterns: list[str] = Field(default_factory=list)
     exclude_patterns: list[str] = Field(default_factory=list)
