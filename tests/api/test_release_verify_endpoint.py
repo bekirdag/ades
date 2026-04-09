@@ -38,6 +38,7 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert verify_payload["python_install_smoke"]["serve_status"]["passed"] is True
     assert verify_payload["python_install_smoke"]["serve_tag"]["passed"] is True
     assert verify_payload["python_install_smoke"]["serve_tag_file"]["passed"] is True
+    assert verify_payload["python_install_smoke"]["serve_tag_files"]["passed"] is True
     assert {"general-en", "finance-en"} <= set(
         verify_payload["python_install_smoke"]["pulled_pack_ids"]
     )
@@ -56,6 +57,9 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verify_payload["python_install_smoke"]["serve_tag_file_labels"]
     )
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        verify_payload["python_install_smoke"]["serve_tag_files_labels"]
+    )
     assert verify_payload["npm_install_smoke"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["pull"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["tag"]["passed"] is True
@@ -65,6 +69,7 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert verify_payload["npm_install_smoke"]["serve_status"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["serve_tag"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["serve_tag_file"]["passed"] is True
+    assert verify_payload["npm_install_smoke"]["serve_tag_files"]["passed"] is True
     assert {"general-en", "finance-en"} <= set(
         verify_payload["npm_install_smoke"]["pulled_pack_ids"]
     )
@@ -82,6 +87,9 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     )
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verify_payload["npm_install_smoke"]["serve_tag_file_labels"]
+    )
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        verify_payload["npm_install_smoke"]["serve_tag_files_labels"]
     )
 
 

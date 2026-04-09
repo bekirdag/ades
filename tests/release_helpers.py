@@ -290,6 +290,8 @@ def build_fake_service_smoke(
     ReleaseCommandResult,
     ReleaseCommandResult,
     ReleaseCommandResult,
+    ReleaseCommandResult,
+    list[str],
     list[str],
     list[str],
     list[str],
@@ -387,13 +389,64 @@ def build_fake_service_smoke(
         ),
         stderr="",
     )
+    serve_tag_files = ReleaseCommandResult(
+        command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+        exit_code=0,
+        passed=True,
+        stdout=json.dumps(
+            {
+                "pack": "finance-en",
+                "item_count": 2,
+                "warnings": [],
+                "items": [
+                    {
+                        "version": version,
+                        "pack": "finance-en",
+                        "language": "en",
+                        "content_type": "text/html",
+                        "source_path": str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
+                        "entities": [
+                            {"text": "Apple", "label": "organization", "start": 3, "end": 8, "confidence": 1.0},
+                            {"text": "AAPL", "label": "ticker", "start": 14, "end": 18, "confidence": 1.0},
+                        ],
+                        "topics": [],
+                        "warnings": [],
+                        "timing_ms": 1,
+                    },
+                    {
+                        "version": version,
+                        "pack": "finance-en",
+                        "language": "en",
+                        "content_type": "text/html",
+                        "source_path": str((storage_root.parent / "serve-smoke-batch-beta.html").resolve()),
+                        "entities": [
+                            {"text": "NASDAQ", "label": "exchange", "start": 3, "end": 9, "confidence": 1.0},
+                            {
+                                "text": "USD 12.5",
+                                "label": "currency_amount",
+                                "start": 23,
+                                "end": 31,
+                                "confidence": 0.9,
+                            },
+                        ],
+                        "topics": [],
+                        "warnings": [],
+                        "timing_ms": 1,
+                    },
+                ],
+            }
+        ),
+        stderr="",
+    )
     return (
         serve,
         healthz,
         status,
         serve_tag,
         serve_tag_file,
+        serve_tag_files,
         ["general-en", "finance-en"],
+        ["organization", "ticker", "exchange", "currency_amount"],
         ["organization", "ticker", "exchange", "currency_amount"],
         ["organization", "ticker", "exchange", "currency_amount"],
     )

@@ -56,6 +56,8 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert verification.python_install_smoke.serve_tag.passed is True
     assert verification.python_install_smoke.serve_tag_file is not None
     assert verification.python_install_smoke.serve_tag_file.passed is True
+    assert verification.python_install_smoke.serve_tag_files is not None
+    assert verification.python_install_smoke.serve_tag_files.passed is True
     assert {"general-en", "finance-en"} <= set(verification.python_install_smoke.pulled_pack_ids)
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verification.python_install_smoke.tagged_labels
@@ -69,6 +71,9 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     )
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verification.python_install_smoke.serve_tag_file_labels
+    )
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        verification.python_install_smoke.serve_tag_files_labels
     )
     assert verification.npm_install_smoke is not None
     assert verification.npm_install_smoke.passed is True
@@ -88,6 +93,8 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert verification.npm_install_smoke.serve_tag.passed is True
     assert verification.npm_install_smoke.serve_tag_file is not None
     assert verification.npm_install_smoke.serve_tag_file.passed is True
+    assert verification.npm_install_smoke.serve_tag_files is not None
+    assert verification.npm_install_smoke.serve_tag_files.passed is True
     assert {"general-en", "finance-en"} <= set(verification.npm_install_smoke.pulled_pack_ids)
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verification.npm_install_smoke.tagged_labels
@@ -99,6 +106,9 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     )
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verification.npm_install_smoke.serve_tag_file_labels
+    )
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        verification.npm_install_smoke.serve_tag_files_labels
     )
     assert manifest.release_version == "0.3.0"
     assert manifest.verification.smoke_install is False
