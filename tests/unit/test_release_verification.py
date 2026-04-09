@@ -16,6 +16,7 @@ from tests.release_helpers import (
     build_expected_batch_input_sizes,
     build_expected_batch_manifest_path,
     build_expected_batch_output_paths,
+    build_expected_batch_summary_input_bytes,
     build_expected_batch_source_fingerprints,
     build_expected_batch_source_paths,
     build_expected_batch_replay_manifest_path,
@@ -49,6 +50,7 @@ def _served_batch_manifest_payload(
     output_count: int = 2,
     source_paths: list[str] | None = None,
     input_sizes: list[int] | None = None,
+    summary_input_bytes: dict[str, int] | None = None,
     source_fingerprints: list[dict[str, object]] | None = None,
     saved_output_paths: list[str] | None = None,
 ) -> dict[str, object]:
@@ -84,6 +86,11 @@ def _served_batch_manifest_payload(
         if source_fingerprints is None
         else source_fingerprints
     )
+    effective_summary_input_bytes = (
+        build_expected_batch_summary_input_bytes()
+        if summary_input_bytes is None
+        else summary_input_bytes
+    )
     assert len(effective_saved_output_paths) >= 2
     assert len(effective_source_paths) >= 2
     assert len(effective_input_sizes) >= 2
@@ -115,6 +122,7 @@ def _served_batch_manifest_payload(
     payload: dict[str, object] = {
         "pack": pack,
         "item_count": len(items) if item_count is None else item_count,
+        "summary": dict(effective_summary_input_bytes),
         "lineage": {},
         "warnings": [],
         "items": items[:output_count],
@@ -190,6 +198,7 @@ def _served_batch_manifest_replay_payload(
     output_count: int = 2,
     source_paths: list[str] | None = None,
     input_sizes: list[int] | None = None,
+    summary_input_bytes: dict[str, int] | None = None,
     source_fingerprints: list[dict[str, object]] | None = None,
     saved_output_paths: list[str] | None = None,
 ) -> dict[str, object]:
@@ -225,6 +234,11 @@ def _served_batch_manifest_replay_payload(
         build_expected_batch_source_fingerprints()
         if source_fingerprints is None
         else source_fingerprints
+    )
+    effective_summary_input_bytes = (
+        build_expected_batch_summary_input_bytes()
+        if summary_input_bytes is None
+        else summary_input_bytes
     )
     assert len(effective_saved_output_paths) >= 2
     assert len(effective_source_paths) >= 2
@@ -267,6 +281,7 @@ def _served_batch_manifest_replay_payload(
             else saved_manifest_path
         ),
         "summary": {
+            **effective_summary_input_bytes,
             "manifest_replay_mode": replay_mode,
         },
         "lineage": {},
@@ -667,6 +682,7 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     python_working_dir = Path(response.python_install_smoke.working_dir)
     python_expected_source_paths = build_expected_batch_source_paths(python_working_dir)
     python_expected_input_sizes = build_expected_batch_input_sizes()
+    python_expected_summary_input_bytes = build_expected_batch_summary_input_bytes()
     python_expected_source_fingerprints = build_expected_batch_source_fingerprints()
     python_expected_output_paths = build_expected_batch_output_paths(python_working_dir)
     python_batch_payload = json.loads(response.python_install_smoke.serve_tag_files.stdout)
@@ -687,6 +703,10 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert [item["input_size_bytes"] for item in python_batch_payload["items"]] == (
         python_expected_input_sizes
     )
+    assert {
+        field_name: python_batch_payload["summary"][field_name]
+        for field_name in python_expected_summary_input_bytes
+    } == python_expected_summary_input_bytes
     assert [item["source_fingerprint"] for item in python_batch_payload["items"]] == (
         python_expected_source_fingerprints
     )
@@ -718,6 +738,10 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert python_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert python_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert python_replay_payload["summary"]["manifest_selected_count"] == 2
+    assert {
+        field_name: python_replay_payload["summary"][field_name]
+        for field_name in python_expected_summary_input_bytes
+    } == python_expected_summary_input_bytes
     assert (
         python_replay_payload["lineage"]["source_manifest_path"]
         == python_batch_payload["saved_manifest_path"]
@@ -798,6 +822,7 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     npm_working_dir = Path(response.npm_install_smoke.working_dir)
     npm_expected_source_paths = build_expected_batch_source_paths(npm_working_dir)
     npm_expected_input_sizes = build_expected_batch_input_sizes()
+    npm_expected_summary_input_bytes = build_expected_batch_summary_input_bytes()
     npm_expected_source_fingerprints = build_expected_batch_source_fingerprints()
     npm_expected_output_paths = build_expected_batch_output_paths(npm_working_dir)
     npm_batch_payload = json.loads(response.npm_install_smoke.serve_tag_files.stdout)
@@ -818,6 +843,10 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert [item["input_size_bytes"] for item in npm_batch_payload["items"]] == (
         npm_expected_input_sizes
     )
+    assert {
+        field_name: npm_batch_payload["summary"][field_name]
+        for field_name in npm_expected_summary_input_bytes
+    } == npm_expected_summary_input_bytes
     assert [item["source_fingerprint"] for item in npm_batch_payload["items"]] == (
         npm_expected_source_fingerprints
     )
@@ -849,6 +878,10 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert npm_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert npm_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert npm_replay_payload["summary"]["manifest_selected_count"] == 2
+    assert {
+        field_name: npm_replay_payload["summary"][field_name]
+        for field_name in npm_expected_summary_input_bytes
+    } == npm_expected_summary_input_bytes
     assert (
         npm_replay_payload["lineage"]["source_manifest_path"]
         == npm_batch_payload["saved_manifest_path"]
@@ -2312,6 +2345,47 @@ def test_verify_release_artifacts_reports_live_service_batch_input_size_mismatch
     assert response.warnings == ["npm_tarball_serve_tag_files_invalid_input_sizes"]
 
 
+def test_verify_release_artifacts_reports_live_service_batch_summary_input_byte_mismatches(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        if "node_modules/.bin" not in str(executable):
+            return _service_smoke_tuple(
+                executable=Path(executable),
+                working_dir=working_dir,
+                expected_version=expected_version,
+            )
+        invalid_summary_input_bytes = build_expected_batch_summary_input_bytes()
+        invalid_summary_input_bytes["processed_input_bytes"] += 1
+        return _service_smoke_tuple(
+            executable=Path(executable),
+            working_dir=working_dir,
+            expected_version=expected_version,
+            batch_payload=_served_batch_manifest_payload(
+                working_dir,
+                version=expected_version,
+                summary_input_bytes=invalid_summary_input_bytes,
+            ),
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.serve_tag_files is not None
+    assert response.npm_install_smoke.serve_tag_files.passed is True
+    assert response.warnings == ["npm_tarball_serve_tag_files_invalid_summary_input_bytes"]
+
+
 def test_verify_release_artifacts_reports_live_service_batch_source_fingerprint_mismatches(
     monkeypatch,
     tmp_path: Path,
@@ -2536,6 +2610,49 @@ def test_verify_release_artifacts_reports_live_service_batch_replay_input_size_m
     assert response.npm_install_smoke.serve_tag_files_replay is not None
     assert response.npm_install_smoke.serve_tag_files_replay.passed is True
     assert response.warnings == ["npm_tarball_serve_tag_files_replay_invalid_input_sizes"]
+
+
+def test_verify_release_artifacts_reports_live_service_batch_replay_summary_input_byte_mismatches(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        if "node_modules/.bin" not in str(executable):
+            return _service_smoke_tuple(
+                executable=Path(executable),
+                working_dir=working_dir,
+                expected_version=expected_version,
+            )
+        invalid_summary_input_bytes = build_expected_batch_summary_input_bytes()
+        invalid_summary_input_bytes["discovered_input_bytes"] += 2
+        return _service_smoke_tuple(
+            executable=Path(executable),
+            working_dir=working_dir,
+            expected_version=expected_version,
+            replay_payload=_served_batch_manifest_replay_payload(
+                working_dir,
+                version=expected_version,
+                summary_input_bytes=invalid_summary_input_bytes,
+            ),
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.serve_tag_files_replay is not None
+    assert response.npm_install_smoke.serve_tag_files_replay.passed is True
+    assert response.warnings == [
+        "npm_tarball_serve_tag_files_replay_invalid_summary_input_bytes"
+    ]
 
 
 def test_verify_release_artifacts_reports_live_service_batch_replay_source_fingerprint_mismatches(

@@ -62,6 +62,15 @@ def build_expected_batch_input_sizes() -> list[int]:
     ]
 
 
+def build_expected_batch_summary_input_bytes() -> dict[str, int]:
+    total_input_bytes = sum(build_expected_batch_input_sizes())
+    return {
+        "discovered_input_bytes": total_input_bytes,
+        "included_input_bytes": total_input_bytes,
+        "processed_input_bytes": total_input_bytes,
+    }
+
+
 def _build_fake_batch_source_fingerprint(content: str) -> dict[str, object]:
     payload = content.encode("utf-8")
     return {
@@ -466,6 +475,7 @@ def build_fake_service_smoke(
                         / "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
                     ).resolve()
                 ),
+                "summary": build_expected_batch_summary_input_bytes(),
                 "lineage": {
                     "run_id": "ades-run-parent-smoke",
                     "root_run_id": "ades-run-parent-smoke",
@@ -554,6 +564,7 @@ def build_fake_service_smoke(
                     ).resolve()
                 ),
                 "summary": {
+                    **build_expected_batch_summary_input_bytes(),
                     "manifest_input_path": str(
                         (
                             storage_root.parent
