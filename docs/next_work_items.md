@@ -1,11 +1,11 @@
 # ades Next Work Items
 
-Updated after completing live batch file-tag smoke validation for installed artifacts on 2026-04-09.
+Updated after completing live batch-manifest write smoke validation for installed artifacts on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` requests also write batch manifests after `finance-en` pull and metadata recovery, so the packaged serve path proves persisted batch output artifacts instead of only in-memory batch tagging responses.
+   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` requests also prove explicit `output.manifest_path` overrides after `finance-en` pull and metadata recovery, so the packaged serve path locks in deterministic persisted batch-manifest locations as well as default output-directory manifests.
    - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, dependency-chain guardrails, and dependency-bearing release smoke stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
@@ -126,6 +126,12 @@ Updated after completing live batch file-tag smoke validation for installed arti
    - extends release smoke verification so both the installed wheel and npm wrapper now write two deterministic local HTML files and send a real `POST /v0/tag/files` request after finance-pack pull, metadata bootstrap recovery, and `ades serve` startup
    - keeps the release verify/validate contracts additive by exposing `serve_tag_files` and `serve_tag_files_labels` inside each smoke-install artifact result
    - includes categorized unit, component, integration, and API coverage for successful live batch tagging and explicit `serve_tag_files` failure warnings
+
+- Live batch-manifest write smoke validation for installed artifacts:
+   - implemented in `src/ades/release.py`, with fake-runner updates in `tests/release_helpers.py`
+   - extends release smoke verification so both the installed wheel and npm wrapper now request persisted batch outputs plus manifest writing through a live `POST /v0/tag/files` request after finance-pack pull, metadata bootstrap recovery, and `ades serve` startup
+   - keeps the release verify/validate contracts unchanged while requiring `saved_manifest_path` and both per-item `saved_output_path` values inside the existing `serve_tag_files` result
+   - includes categorized unit, component, integration, and API coverage for successful live batch-manifest writes and explicit missing-manifest warnings
 
 ## Not Next
 

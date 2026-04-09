@@ -313,6 +313,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated `tests/release_helpers.py` and the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful served batch tagging and explicit live `/v0/tag/files` failure warnings are covered across unit, component, integration, and API layers.
 - Verified the item through focused release verification tests with `20 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `183 passed` under `pytest -q` plus successful clean-environment wheel/npm live `/v0/tag/files` smoke checks.
 
+### 44. Live batch-manifest write smoke validation for installed artifacts
+
+- Extended `src/ades/release.py` so the live `/v0/tag/files` release smoke now requests persisted batch outputs with `output.directory` plus `write_manifest=true`, then requires the served wheel and npm wrapper to return one `saved_manifest_path` and both per-item `saved_output_path` values after finance-pack pull, metadata-bootstrap recovery, and serve startup.
+- Kept the release verify/validate surface additive by reusing the existing `serve_tag_files` command result while tightening the internal smoke pass/fail checks and warning generation for missing manifest paths, invalid manifest-path suffixes, and missing persisted batch outputs.
+- Updated `tests/release_helpers.py` and the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful served batch-manifest writes and explicit missing-manifest warnings are covered across unit, component, integration, and API layers.
+- Verified the item through focused release verification tests with `21 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `184 passed` under `pytest -q` plus successful clean-environment wheel/npm live `/v0/tag/files` manifest-write smoke checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -386,4 +393,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Extend installed-artifact live-service smoke so `POST /v0/tag/files` writes batch manifests through the served wheel and npm wrapper, proving packaged clean-environment batch output persistence after finance-pack pull and metadata recovery.
+- Extend installed-artifact live-service smoke so `POST /v0/tag/files` proves an explicit batch `manifest_path` override through the served wheel and npm wrapper, keeping packaged clean-environment batch-manifest persistence deterministic after finance-pack pull and metadata recovery.

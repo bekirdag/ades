@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from ades import release_versions, sync_release_version, verify_release, write_release_manifest
@@ -75,6 +76,17 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verification.python_install_smoke.serve_tag_files_labels
     )
+    python_batch_payload = json.loads(verification.python_install_smoke.serve_tag_files.stdout)
+    assert str(python_batch_payload["saved_manifest_path"]).endswith(
+        "batch.finance-en.ades-manifest.json"
+    )
+    assert len(
+        [
+            item["saved_output_path"]
+            for item in python_batch_payload["items"]
+            if item.get("saved_output_path")
+        ]
+    ) == 2
     assert verification.npm_install_smoke is not None
     assert verification.npm_install_smoke.passed is True
     assert verification.npm_install_smoke.pull is not None
@@ -110,6 +122,13 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verification.npm_install_smoke.serve_tag_files_labels
     )
+    npm_batch_payload = json.loads(verification.npm_install_smoke.serve_tag_files.stdout)
+    assert str(npm_batch_payload["saved_manifest_path"]).endswith(
+        "batch.finance-en.ades-manifest.json"
+    )
+    assert len(
+        [item["saved_output_path"] for item in npm_batch_payload["items"] if item.get("saved_output_path")]
+    ) == 2
     assert manifest.release_version == "0.3.0"
     assert manifest.verification.smoke_install is False
     assert manifest.verification.python_install_smoke is None

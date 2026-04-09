@@ -69,6 +69,8 @@ SMOKE_TAG_BATCH_FILES = (
     ("serve-smoke-batch-alpha.html", "<p>Apple said AAPL rallied.</p>\n"),
     ("serve-smoke-batch-beta.html", "<p>NASDAQ closed near USD 12.5.</p>\n"),
 )
+SMOKE_TAG_BATCH_OUTPUT_DIR_NAME = "serve-smoke-batch-outputs"
+SMOKE_TAG_BATCH_MANIFEST_FILE_NAME = f"batch.{SMOKE_PULL_PACK_ID}.ades-manifest.json"
 SMOKE_TAG_REQUIRED_LABELS = ("organization", "ticker", "exchange", "currency_amount")
 SMOKE_SERVE_HOST = "127.0.0.1"
 SMOKE_SERVE_STARTUP_TIMEOUT_SECONDS = 20.0
@@ -423,6 +425,39 @@ def _parse_batch_tag_labels(result: ReleaseCommandResult) -> list[str]:
     return list(dict.fromkeys(labels))
 
 
+def _parse_batch_saved_manifest_path(result: ReleaseCommandResult) -> str | None:
+    """Extract the saved manifest path reported by one JSON `ades tag-files` payload."""
+
+    payload = _parse_command_payload(result)
+    if payload is None:
+        return None
+    saved_manifest_path = payload.get("saved_manifest_path")
+    return (
+        saved_manifest_path
+        if isinstance(saved_manifest_path, str) and saved_manifest_path
+        else None
+    )
+
+
+def _parse_batch_saved_output_paths(result: ReleaseCommandResult) -> list[str]:
+    """Extract saved output paths reported by one JSON `ades tag-files` payload."""
+
+    payload = _parse_command_payload(result)
+    if payload is None:
+        return []
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return []
+    output_paths: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        saved_output_path = item.get("saved_output_path")
+        if isinstance(saved_output_path, str) and saved_output_path:
+            output_paths.append(saved_output_path)
+    return output_paths
+
+
 def _parse_status_installed_pack_ids(result: ReleaseCommandResult) -> list[str]:
     """Extract installed pack ids reported by one JSON status payload."""
 
@@ -706,6 +741,7 @@ def _run_cli_service_smoke(
     tag_files_url = f"http://{SMOKE_SERVE_HOST}:{port}/v0/tag/files"
     smoke_input_path = _write_smoke_input_file(working_dir)
     smoke_batch_input_paths = _write_batch_smoke_input_files(working_dir)
+    smoke_batch_output_dir = (working_dir / SMOKE_TAG_BATCH_OUTPUT_DIR_NAME).resolve()
     process = subprocess.Popen(
         serve_command,
         cwd=working_dir,
@@ -778,6 +814,10 @@ def _run_cli_service_smoke(
                     {
                         "paths": [str(path) for path in smoke_batch_input_paths],
                         "pack": SMOKE_PULL_PACK_ID,
+                        "output": {
+                            "directory": str(smoke_batch_output_dir),
+                            "write_manifest": True,
+                        },
                     },
                 )
                 serve_tag_files_labels = _parse_batch_tag_labels(serve_tag_files)
@@ -1221,6 +1261,15 @@ def _run_python_install_smoke(
         missing_serve_tag_labels = sorted(required_labels - set(serve_tagged_labels))
         missing_serve_tag_file_labels = sorted(required_labels - set(serve_tag_file_labels))
         missing_serve_tag_files_labels = sorted(required_labels - set(serve_tag_files_labels))
+        serve_tag_files_manifest_path = _parse_batch_saved_manifest_path(serve_tag_files)
+        serve_tag_files_output_paths = _parse_batch_saved_output_paths(serve_tag_files)
+        has_expected_serve_tag_files_manifest_path = (
+            serve_tag_files_manifest_path is not None
+            and serve_tag_files_manifest_path.endswith(SMOKE_TAG_BATCH_MANIFEST_FILE_NAME)
+        )
+        has_expected_serve_tag_files_output_count = (
+            len(serve_tag_files_output_paths) == len(SMOKE_TAG_BATCH_FILES)
+        )
         passed = (
             install.passed
             and invoke.passed
@@ -1244,6 +1293,8 @@ def _run_python_install_smoke(
             and not missing_serve_tag_file_labels
             and serve_tag_files.passed
             and not missing_serve_tag_files_labels
+            and has_expected_serve_tag_files_manifest_path
+            and has_expected_serve_tag_files_output_count
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="python_wheel",
@@ -1464,6 +1515,15 @@ def _run_npm_install_smoke(
         missing_serve_tag_labels = sorted(required_labels - set(serve_tagged_labels))
         missing_serve_tag_file_labels = sorted(required_labels - set(serve_tag_file_labels))
         missing_serve_tag_files_labels = sorted(required_labels - set(serve_tag_files_labels))
+        serve_tag_files_manifest_path = _parse_batch_saved_manifest_path(serve_tag_files)
+        serve_tag_files_output_paths = _parse_batch_saved_output_paths(serve_tag_files)
+        has_expected_serve_tag_files_manifest_path = (
+            serve_tag_files_manifest_path is not None
+            and serve_tag_files_manifest_path.endswith(SMOKE_TAG_BATCH_MANIFEST_FILE_NAME)
+        )
+        has_expected_serve_tag_files_output_count = (
+            len(serve_tag_files_output_paths) == len(SMOKE_TAG_BATCH_FILES)
+        )
         passed = (
             install.passed
             and invoke.passed
@@ -1487,6 +1547,8 @@ def _run_npm_install_smoke(
             and not missing_serve_tag_file_labels
             and serve_tag_files.passed
             and not missing_serve_tag_files_labels
+            and has_expected_serve_tag_files_manifest_path
+            and has_expected_serve_tag_files_output_count
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="npm_tarball",
@@ -1610,6 +1672,14 @@ def _smoke_install_warnings(
         return [
             f"{prefix}_serve_tag_files_missing_labels:{','.join(missing_serve_tag_files_labels)}"
         ]
+    serve_tag_files_manifest_path = _parse_batch_saved_manifest_path(smoke_result.serve_tag_files)
+    if serve_tag_files_manifest_path is None:
+        return [f"{prefix}_serve_tag_files_missing_manifest_path"]
+    if not serve_tag_files_manifest_path.endswith(SMOKE_TAG_BATCH_MANIFEST_FILE_NAME):
+        return [f"{prefix}_serve_tag_files_invalid_manifest_path"]
+    serve_tag_files_output_paths = _parse_batch_saved_output_paths(smoke_result.serve_tag_files)
+    if len(serve_tag_files_output_paths) != len(SMOKE_TAG_BATCH_FILES):
+        return [f"{prefix}_serve_tag_files_output_count:{len(serve_tag_files_output_paths)}"]
     return []
 
 

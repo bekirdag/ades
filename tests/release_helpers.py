@@ -397,6 +397,13 @@ def build_fake_service_smoke(
             {
                 "pack": "finance-en",
                 "item_count": 2,
+                "saved_manifest_path": str(
+                    (
+                        storage_root.parent
+                        / "serve-smoke-batch-outputs"
+                        / "batch.finance-en.ades-manifest.json"
+                    ).resolve()
+                ),
                 "warnings": [],
                 "items": [
                     {
@@ -405,6 +412,13 @@ def build_fake_service_smoke(
                         "language": "en",
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
+                        "saved_output_path": str(
+                            (
+                                storage_root.parent
+                                / "serve-smoke-batch-outputs"
+                                / "serve-smoke-batch-alpha.finance-en.ades.json"
+                            ).resolve()
+                        ),
                         "entities": [
                             {"text": "Apple", "label": "organization", "start": 3, "end": 8, "confidence": 1.0},
                             {"text": "AAPL", "label": "ticker", "start": 14, "end": 18, "confidence": 1.0},
@@ -419,6 +433,13 @@ def build_fake_service_smoke(
                         "language": "en",
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-beta.html").resolve()),
+                        "saved_output_path": str(
+                            (
+                                storage_root.parent
+                                / "serve-smoke-batch-outputs"
+                                / "serve-smoke-batch-beta.finance-en.ades.json"
+                            ).resolve()
+                        ),
                         "entities": [
                             {"text": "NASDAQ", "label": "exchange", "start": 3, "end": 9, "confidence": 1.0},
                             {

@@ -30,9 +30,9 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- extend installed-artifact clean-environment validation so live `/v0/tag/files` requests can also write batch manifests after finance-pack pull and metadata recovery
+- extend installed-artifact clean-environment validation so live `/v0/tag/files` requests also prove explicit `manifest_path` overrides after finance-pack pull and metadata recovery
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
-- keep the new rollback-safe install semantics, lookup-driven metadata repair, SQLite recovery behavior, dependency-bearing release smoke, and live `/v0/tag`, `/v0/tag/file`, plus `/v0/tag/files` smoke stable while finishing the remaining pack-lifecycle recovery work
+- keep the new rollback-safe install semantics, lookup-driven metadata repair, SQLite recovery behavior, dependency-bearing release smoke, and live `/v0/tag`, `/v0/tag/file`, plus `/v0/tag/files` persistence smoke stable while finishing the remaining pack-lifecycle recovery work
 
 ## Work Log
 
@@ -81,3 +81,6 @@ Planned work:
 - 2026-04-09: extended `src/ades/release.py` so clean-environment release smoke verification now writes two deterministic local HTML files and drives a live `POST /v0/tag/files` request through the served wheel and npm wrapper after finance-pack pull, metadata bootstrap recovery, and serve startup.
 - 2026-04-09: extended `src/ades/service/models.py` plus `tests/release_helpers.py` and the categorized release verify tests so additive `serve_tag_files` plus `serve_tag_files_labels` results and explicit live batch-tag failure warnings are covered across unit, component, integration, and API layers.
 - 2026-04-09: focused live batch-tagging verification passed with `20 passed`, `python -m compileall src/ades` passed again, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `183 passed` under `pytest -q`.
+- 2026-04-09: extended `src/ades/release.py` so the live `/v0/tag/files` release smoke now requests persisted batch outputs and manifest writing, then requires `saved_manifest_path` plus both per-item `saved_output_path` values from the served wheel and npm wrapper.
+- 2026-04-09: updated `tests/release_helpers.py` plus the categorized release verify tests so successful live batch-manifest writes and explicit missing-manifest warnings are covered consistently across unit, component, integration, and API layers.
+- 2026-04-09: focused release verification passed with `21 passed`, `python -m compileall src/ades` passed again, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `184 passed` under `pytest -q`.

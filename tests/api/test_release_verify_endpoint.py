@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -60,6 +61,19 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verify_payload["python_install_smoke"]["serve_tag_files_labels"]
     )
+    python_batch_payload = json.loads(
+        verify_payload["python_install_smoke"]["serve_tag_files"]["stdout"]
+    )
+    assert str(python_batch_payload["saved_manifest_path"]).endswith(
+        "batch.finance-en.ades-manifest.json"
+    )
+    assert len(
+        [
+            item["saved_output_path"]
+            for item in python_batch_payload["items"]
+            if item.get("saved_output_path")
+        ]
+    ) == 2
     assert verify_payload["npm_install_smoke"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["pull"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["tag"]["passed"] is True
@@ -91,6 +105,15 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verify_payload["npm_install_smoke"]["serve_tag_files_labels"]
     )
+    npm_batch_payload = json.loads(
+        verify_payload["npm_install_smoke"]["serve_tag_files"]["stdout"]
+    )
+    assert str(npm_batch_payload["saved_manifest_path"]).endswith(
+        "batch.finance-en.ades-manifest.json"
+    )
+    assert len(
+        [item["saved_output_path"] for item in npm_batch_payload["items"] if item.get("saved_output_path")]
+    ) == 2
 
 
 def test_release_endpoints_report_versions_sync_and_manifest(
