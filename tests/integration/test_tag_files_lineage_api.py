@@ -27,6 +27,7 @@ def test_public_api_reports_manifest_lineage(tmp_path: Path) -> None:
     assert initial.lineage.root_run_id == initial.lineage.run_id
     assert initial.lineage.parent_run_id is None
     assert initial.lineage.source_manifest_path is None
+    assert initial.lineage.created_at is not None
 
     child_manifest_path = output_dir.resolve() / "child.finance-en.ades-manifest.json"
     replay = tag_files(
@@ -44,6 +45,8 @@ def test_public_api_reports_manifest_lineage(tmp_path: Path) -> None:
     assert replay.lineage.parent_run_id == initial.lineage.run_id
     assert replay.lineage.root_run_id == initial.lineage.root_run_id
     assert replay.lineage.source_manifest_path == str(manifest_path)
+    assert replay.lineage.created_at is not None
+    assert replay.lineage.created_at > initial.lineage.created_at
 
     child_manifest_payload = json.loads(child_manifest_path.read_text(encoding="utf-8"))
     assert child_manifest_payload["lineage"]["run_id"] == replay.lineage.run_id
@@ -52,4 +55,7 @@ def test_public_api_reports_manifest_lineage(tmp_path: Path) -> None:
     assert child_manifest_payload["lineage"]["source_manifest_path"] == str(
         manifest_path
     )
-
+    assert child_manifest_payload["lineage"]["created_at"] == replay.lineage.created_at.isoformat().replace(
+        "+00:00",
+        "Z",
+    )

@@ -69,7 +69,11 @@ def test_cli_tag_files_reports_manifest_lineage(tmp_path: Path) -> None:
     assert replay_payload["lineage"]["parent_run_id"] == initial_payload["lineage"]["run_id"]
     assert replay_payload["lineage"]["root_run_id"] == initial_payload["lineage"]["root_run_id"]
     assert replay_payload["lineage"]["source_manifest_path"] == str(manifest_path)
+    assert replay_payload["lineage"]["created_at"]
+    assert (
+        replay_payload["lineage"]["created_at"]
+        > initial_payload["lineage"]["created_at"]
+    )
 
     child_manifest_payload = json.loads(child_manifest_path.read_text(encoding="utf-8"))
     assert child_manifest_payload["lineage"] == replay_payload["lineage"]
-
