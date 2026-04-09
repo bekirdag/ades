@@ -142,7 +142,7 @@ def test_cli_repull_repairs_stale_pack_alias_metadata(tmp_path: Path) -> None:
     )
 
 
-def test_cli_list_repairs_missing_pack_metadata_rows(tmp_path: Path) -> None:
+def test_cli_lookup_repairs_missing_pack_metadata_rows(tmp_path: Path) -> None:
     general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
     registry_dir = tmp_path / "registry"
     install_root = tmp_path / "install"
@@ -171,25 +171,6 @@ def test_cli_list_repairs_missing_pack_metadata_rows(tmp_path: Path) -> None:
 
     delete_installed_pack_metadata(install_root, "finance-en")
 
-    lookup_before = runner.invoke(
-        app,
-        ["packs", "lookup", "AAPL", "--exact-alias"],
-        env={"ADES_STORAGE_ROOT": str(install_root)},
-    )
-    assert lookup_before.exit_code == 0
-    assert json.loads(lookup_before.stdout)["candidates"] == []
-
-    listed = runner.invoke(
-        app,
-        ["packs", "list"],
-        env={"ADES_STORAGE_ROOT": str(install_root)},
-    )
-    assert listed.exit_code == 0
-    assert {pack["pack_id"] for pack in json.loads(listed.stdout)["packs"]} == {
-        "finance-en",
-        "general-en",
-    }
-
     lookup_after = runner.invoke(
         app,
         ["packs", "lookup", "AAPL", "--exact-alias"],
@@ -203,6 +184,17 @@ def test_cli_list_repairs_missing_pack_metadata_rows(tmp_path: Path) -> None:
         and candidate["label"] == "ticker"
         for candidate in json.loads(lookup_after.stdout)["candidates"]
     )
+
+    listed = runner.invoke(
+        app,
+        ["packs", "list"],
+        env={"ADES_STORAGE_ROOT": str(install_root)},
+    )
+    assert listed.exit_code == 0
+    assert {pack["pack_id"] for pack in json.loads(listed.stdout)["packs"]} == {
+        "finance-en",
+        "general-en",
+    }
 
 
 def test_cli_blocks_dependency_deactivation_with_active_dependents(tmp_path: Path) -> None:

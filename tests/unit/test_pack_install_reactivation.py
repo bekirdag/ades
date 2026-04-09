@@ -84,7 +84,7 @@ def test_repull_repairs_stale_alias_metadata_before_skipping_same_version(
     )
 
 
-def test_list_packs_repairs_missing_metadata_rows_from_filesystem(tmp_path: Path) -> None:
+def test_lookup_repairs_missing_metadata_rows_from_filesystem(tmp_path: Path) -> None:
     general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
     registry = build_registry([general_dir, finance_dir], output_dir=tmp_path / "registry")
 
@@ -93,15 +93,18 @@ def test_list_packs_repairs_missing_metadata_rows_from_filesystem(tmp_path: Path
     installer.install("finance-en")
 
     delete_installed_pack_metadata(install_root, "finance-en")
-    assert lookup_candidates(
-        "AAPL",
-        storage_root=install_root,
-        exact_alias=True,
-    ).candidates == []
+    repaired_lookup = installer.registry.lookup_candidates("AAPL", exact_alias=True)
 
-    repaired = list_packs(storage_root=install_root)
-
-    assert {pack.pack_id for pack in repaired} == {"finance-en", "general-en"}
+    assert any(
+        candidate["kind"] == "alias"
+        and candidate["pack_id"] == "finance-en"
+        and candidate["value"] == "AAPL"
+        and candidate["label"] == "ticker"
+        for candidate in repaired_lookup
+    )
+    assert {
+        pack.pack_id for pack in installer.registry.list_installed_packs()
+    } == {"finance-en", "general-en"}
     assert any(
         candidate.kind == "alias"
         and candidate.pack_id == "finance-en"

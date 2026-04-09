@@ -271,6 +271,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated `tests/release_helpers.py` and the categorized release verify tests so successful metadata-bootstrap recovery and explicit recovery-status failures are covered across unit, component, integration, and API layers without changing the public release command contracts.
 - Verified the item through focused release verification/validation tests with `24 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `176 passed` under `pytest -q` plus successful wheel/npm clean-environment bootstrap recovery checks.
 
+### 38. Lookup-driven repair for missing installed-pack SQLite rows
+
+- Hardened `src/ades/packs/registry.py` so `PackRegistry.lookup_candidates()` now retries on lookup misses after reconciling on-disk `packs/*/manifest.json` directories back into the metadata store, instead of requiring a prior `list` call to repair a missing installed-pack row.
+- Kept the existing public Python API, CLI `ades packs lookup`, and local service `GET /v0/lookup` contracts unchanged while making direct alias lookup recover a pack like `finance-en` when its SQLite row is missing but its pack files still exist on disk.
+- Updated the categorized pack-reactivation coverage in `tests/unit/test_pack_install_reactivation.py`, `tests/component/test_cli_pack_reactivation.py`, `tests/integration/test_pack_reactivation_api.py`, and `tests/api/test_pack_reactivation_endpoint.py` so those surfaces now prove lookup-driven repair and verify the restored row remains visible to list calls as a side effect.
+- Verified the item through focused lookup-recovery tests with `21 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `176 passed` under `pytest -q` plus successful wheel/npm clean-environment smoke validation.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -344,4 +351,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Finish the remaining pack lifecycle hardening around broader clean-environment recovery combinations and end-to-end production-readiness validation against the published registry and current production deployment flow now that installed pull/tag smoke behavior, list-driven SQLite metadata repair, clean-environment serve startup, and metadata-bootstrap recovery are covered.
+- Add explicit tagger-level regression coverage for partial installed-pack row loss so the lookup-driven alias extraction path is proven to recover cleanly without relying on ambiguous rule-based matches, then continue the broader clean-environment recovery combinations against published registry artifacts.

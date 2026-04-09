@@ -1,15 +1,16 @@
 # ades Next Work Items
 
-Updated after completing clean-environment bootstrap recovery smoke validation on 2026-04-09.
+Updated after completing lookup-driven installed-pack metadata repair on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Finish the remaining production-like clean-environment lifecycle checks around broader recovery combinations against published registry artifacts now that installed pull/tag, serve startup, and metadata-bootstrap recovery smoke behavior is covered.
-   - Keep the rollback-safe install path, same-version metadata-repair semantics, and new dependency-chain guardrails stable while closing the remaining pack-lifecycle gaps.
+   - Add explicit tagger-level regression coverage for partial installed-pack row loss now that direct lookup repairs missing SQLite rows on demand, so alias-driven extraction is proven to recover cleanly without depending on a prior list call.
+   - Finish the remaining production-like clean-environment lifecycle checks around broader recovery combinations against published registry artifacts now that installed pull/tag, direct lookup repair, serve startup, and metadata-bootstrap recovery smoke behavior is covered.
+   - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, and new dependency-chain guardrails stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
-   - Keep hardening first-run bootstrap, stale-record cleanup, and repair behavior around the local SQLite registry now that list-driven recovery can repair missing installed-pack rows from on-disk manifests.
+   - Keep hardening first-run bootstrap, stale-record cleanup, and repair behavior around the local SQLite registry now that both list-driven and lookup-driven recovery can repair missing installed-pack rows from on-disk manifests.
    - Keep the storage seam explicit so future PostgreSQL work can reuse the public contracts without inheriting local-only assumptions.
 
 3. CLI and service operational hardening
@@ -91,6 +92,12 @@ Updated after completing clean-environment bootstrap recovery smoke validation o
    - extends release smoke verification so both the installed wheel and npm wrapper delete local SQLite metadata after pull/tag, recover `general-en` through a fresh `ades status` bootstrap, then delete the metadata again before `ades serve`
    - keeps the existing release verify/validate contracts additive by exposing `recovery_status` and `recovered_pack_ids` inside each smoke-install artifact result
    - includes categorized unit, component, integration, and API coverage for successful bootstrap recovery and explicit recovery-status failure warnings in clean environments
+
+- Lookup-driven installed-pack metadata repair:
+   - implemented in `src/ades/packs/registry.py`
+   - retries lookup misses after reconciling on-disk pack manifests back into SQLite, so direct `lookup_candidates`, `ades packs lookup`, and `GET /v0/lookup` calls can heal a deleted installed-pack row without requiring a preceding list operation
+   - keeps the public lookup contracts unchanged while restoring alias/rule metadata for packs that still exist on disk
+   - includes categorized unit, component, integration, and API coverage for direct lookup repair against published registry artifacts
 
 ## Not Next
 

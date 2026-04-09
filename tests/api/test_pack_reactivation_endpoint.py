@@ -95,7 +95,7 @@ def test_service_lookup_reflects_repaired_pack_metadata_after_repull(tmp_path: P
     )
 
 
-def test_service_pack_list_repairs_missing_metadata_rows(tmp_path: Path) -> None:
+def test_service_lookup_repairs_missing_metadata_rows(tmp_path: Path) -> None:
     general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
     registry = build_registry([general_dir, finance_dir], output_dir=tmp_path / "registry")
 
@@ -106,17 +106,6 @@ def test_service_pack_list_repairs_missing_metadata_rows(tmp_path: Path) -> None
     delete_installed_pack_metadata(install_root, "finance-en")
 
     client = TestClient(create_app(storage_root=install_root))
-
-    lookup_before = client.get(
-        "/v0/lookup",
-        params={"q": "AAPL", "exact_alias": True},
-    )
-    assert lookup_before.status_code == 200
-    assert lookup_before.json()["candidates"] == []
-
-    packs_response = client.get("/v0/packs")
-    assert packs_response.status_code == 200
-    assert {pack["pack_id"] for pack in packs_response.json()} == {"finance-en", "general-en"}
 
     lookup_after = client.get(
         "/v0/lookup",
@@ -130,6 +119,9 @@ def test_service_pack_list_repairs_missing_metadata_rows(tmp_path: Path) -> None
         and candidate["label"] == "ticker"
         for candidate in lookup_after.json()["candidates"]
     )
+    packs_response = client.get("/v0/packs")
+    assert packs_response.status_code == 200
+    assert {pack["pack_id"] for pack in packs_response.json()} == {"finance-en", "general-en"}
 
 
 def test_service_blocks_dependency_deactivation_with_active_dependents(tmp_path: Path) -> None:

@@ -107,6 +107,22 @@ class PackRegistry:
     ) -> list[dict[str, str | float | bool | None]]:
         """Return deterministic metadata candidates from the configured store."""
 
+        candidates = self.store.lookup_candidates(
+            query,
+            pack_id=pack_id,
+            exact_alias=exact_alias,
+            active_only=active_only,
+            limit=limit,
+        )
+        if candidates:
+            return candidates
+        if pack_id is not None:
+            if self.get_pack(pack_id, active_only=active_only) is None:
+                return []
+        else:
+            known_packs = self.store.list_installed_packs(active_only=False)
+            if not self._sync_missing_filesystem_packs(known_packs):
+                return []
         return self.store.lookup_candidates(
             query,
             pack_id=pack_id,

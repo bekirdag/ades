@@ -30,9 +30,10 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- add broader clean-environment recovery combinations after the installed pull/tag, list-repair, serve-smoke, and metadata-bootstrap recovery slices
+- add explicit tagger-level validation for partial installed-pack row loss now that direct lookup repairs missing SQLite rows on demand
+- add broader clean-environment recovery combinations after the installed pull/tag, direct lookup-repair, serve-smoke, and metadata-bootstrap recovery slices
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
-- keep the new rollback-safe install semantics, list-driven metadata repair, and SQLite recovery behavior stable while finishing the remaining pack-lifecycle recovery work
+- keep the new rollback-safe install semantics, lookup-driven metadata repair, and SQLite recovery behavior stable while finishing the remaining pack-lifecycle recovery work
 
 ## Work Log
 
@@ -64,3 +65,6 @@ Planned work:
 - 2026-04-09: extended `src/ades/release.py` so clean-environment release smoke verification now deletes the local SQLite registry after pull/tag, validates bootstrap recovery through a fresh `status` call, deletes the registry again, and then starts `ades serve` so the packaged artifacts prove metadata-loss recovery against on-disk packs.
 - 2026-04-09: extended `src/ades/service/models.py` plus `tests/release_helpers.py` and the categorized release verify tests so additive `recovery_status` plus `recovered_pack_ids` results and explicit recovery-failure warnings are covered across unit, component, integration, and API layers.
 - 2026-04-09: focused bootstrap-recovery verification/validation tests passed with `24 passed`, `python -m compileall src/ades` passed, and the full repo release-validation gate passed again through `docdexd run-tests --repo /home/wodo/apps/ades`, including `176 passed` under `pytest -q`.
+- 2026-04-09: hardened `src/ades/packs/registry.py` so lookup misses now repair missing installed-pack SQLite rows from on-disk manifests before retrying, which removes the previous requirement that `list_packs`, `ades packs list`, or `/v0/packs` run first to heal a deleted pack row.
+- 2026-04-09: updated categorized lookup-repair coverage in `tests/unit/test_pack_install_reactivation.py`, `tests/component/test_cli_pack_reactivation.py`, `tests/integration/test_pack_reactivation_api.py`, and `tests/api/test_pack_reactivation_endpoint.py`, with focused validation passing again at `21 passed`.
+- 2026-04-09: full repo release validation passed again after the direct lookup-repair slice through `docdexd run-tests --repo /home/wodo/apps/ades`, including `176 passed` under `pytest -q` plus successful Python/npm smoke-install, recovery, and serve checks.

@@ -83,7 +83,7 @@ def test_public_api_repull_repairs_stale_pack_alias_metadata(tmp_path: Path) -> 
     )
 
 
-def test_public_api_list_repairs_missing_pack_metadata_rows(tmp_path: Path) -> None:
+def test_public_api_lookup_repairs_missing_pack_metadata_rows(tmp_path: Path) -> None:
     general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
     registry = build_registry([general_dir, finance_dir], output_dir=tmp_path / "registry")
 
@@ -91,26 +91,23 @@ def test_public_api_list_repairs_missing_pack_metadata_rows(tmp_path: Path) -> N
     pull_pack("finance-en", storage_root=install_root, registry_url=registry.index_url)
 
     delete_installed_pack_metadata(install_root, "finance-en")
-    assert lookup_candidates(
+    repaired_lookup = lookup_candidates(
         "AAPL",
         storage_root=install_root,
         exact_alias=True,
-    ).candidates == []
+    ).candidates
 
-    repaired = list_packs(storage_root=install_root)
-
-    assert {pack.pack_id for pack in repaired} == {"finance-en", "general-en"}
     assert any(
         candidate.kind == "alias"
         and candidate.pack_id == "finance-en"
         and candidate.value == "AAPL"
         and candidate.label == "ticker"
-        for candidate in lookup_candidates(
-            "AAPL",
-            storage_root=install_root,
-            exact_alias=True,
-        ).candidates
+        for candidate in repaired_lookup
     )
+    assert {pack.pack_id for pack in list_packs(storage_root=install_root)} == {
+        "finance-en",
+        "general-en",
+    }
 
 
 def test_public_api_blocks_dependency_deactivation_with_active_dependents(
