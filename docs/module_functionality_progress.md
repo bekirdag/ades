@@ -30,8 +30,8 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- add guardrails for activation and deactivation across dependency chains after real registry installs and repeated pulls
-- keep validating stale metadata cleanup and repeated idempotent pack operations against published registry artifacts
+- add clean-environment recovery and bootstrap validation after the dependency-chain guardrails
+- keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
 - keep the new rollback-safe install semantics stable while finishing the remaining pack-lifecycle recovery work
 
 ## Work Log
@@ -48,3 +48,7 @@ Planned work:
 - 2026-04-09: added categorized stale-metadata repair coverage in `tests/unit/test_pack_install_reactivation.py`, `tests/component/test_cli_pack_reactivation.py`, `tests/integration/test_pack_reactivation_api.py`, and `tests/api/test_pack_reactivation_endpoint.py`.
 - 2026-04-09: focused stale-metadata repair tests passed with `9 passed` across the reactivation coverage files, and `python -m compileall src/ades` passed for the slice.
 - 2026-04-09: full repo release validation passed through `docdexd run-tests --repo /home/wodo/apps/ades`, including `161 passed` under `pytest -q` plus successful Python/npm smoke-install checks.
+- 2026-04-09: hardened pack activation/deactivation in `src/ades/api.py` so dependency deactivation is blocked when active dependents exist and pack activation recursively reactivates inactive installed dependencies before reactivating the requested pack.
+- 2026-04-09: updated CLI and local service error handling in `src/ades/cli.py` and `src/ades/service/app.py` so dependency-chain guardrail failures return deterministic CLI errors and HTTP `400` responses instead of partially mutating pack state.
+- 2026-04-09: added categorized dependency-guardrail coverage in `tests/unit/test_pack_install_reactivation.py`, `tests/component/test_cli_pack_reactivation.py`, `tests/integration/test_pack_reactivation_api.py`, and `tests/api/test_pack_reactivation_endpoint.py`, with focused activation/deactivation validation passing across the lifecycle and top-level API/service tests.
+- 2026-04-09: full repo release validation passed again after the dependency-guardrail slice through `docdexd run-tests --repo /home/wodo/apps/ades`, including `169 passed` under `pytest -q` plus successful Python/npm smoke-install checks.

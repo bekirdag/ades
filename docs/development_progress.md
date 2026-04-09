@@ -234,6 +234,14 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added categorized unit, component, integration, and API coverage for repeated same-version pulls that repair stale installed-pack alias metadata before returning a skip result.
 - Verified the item through focused lifecycle tests plus the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `161 passed` under `pytest -q` and successful Python/npm smoke-install checks.
 
+### 33. Dependency-aware activation and deactivation guardrails
+
+- Hardened `src/ades/api.py` so pack activation now recursively reactivates installed dependency chains, while pack deactivation rejects requests that would leave active dependent packs pointing at an inactive dependency.
+- Updated the CLI and local service adapters in `src/ades/cli.py` and `src/ades/service/app.py` so dependency-guardrail failures surface cleanly as CLI errors and HTTP `400` responses instead of partially mutating pack state.
+- Kept the existing `ades packs activate`, `ades packs deactivate`, public Python API, and local service routes unchanged while preventing users from deactivating shared dependencies out from under active packs and while making activation heal inactive dependency chains without a repull.
+- Added categorized unit, component, integration, and API coverage for blocked dependency deactivation and recursive dependency reactivation behavior.
+- Verified the item through focused lifecycle/API tests plus the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `169 passed` under `pytest -q` and successful Python/npm smoke-install checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -307,4 +315,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Finish the remaining pack lifecycle hardening around dependency-chain activation/deactivation guardrails and then continue with clean-environment install, pull, serve, tag, and recovery validation.
+- Finish the remaining pack lifecycle hardening around clean-environment install, pull, serve, tag, bootstrap, and recovery validation against the published registry and current production deployment flow.

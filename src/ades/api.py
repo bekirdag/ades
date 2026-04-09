@@ -651,10 +651,21 @@ def set_pack_active(
         metadata_backend=settings.metadata_backend,
         database_url=settings.database_url,
     )
-    if registry.get_pack(pack_id) is None:
+    manifest = registry.get_pack(pack_id, active_only=False)
+    if manifest is None:
         return None
-    registry.set_pack_active(pack_id, active)
-    manifest = registry.get_pack(pack_id)
+    if active:
+        _activate_pack_dependencies(registry, pack_id, visiting=set())
+    else:
+        active_dependents = _active_dependent_pack_ids(registry, pack_id)
+        if active_dependents:
+            dependents = ", ".join(active_dependents)
+            raise ValueError(
+                f"Cannot deactivate pack {pack_id} while active dependent packs exist: "
+                f"{dependents}"
+            )
+        registry.set_pack_active(pack_id, False)
+    manifest = registry.get_pack(pack_id, active_only=False)
     if manifest is None:
         return None
     return PackSummary(**manifest.to_summary())
@@ -670,6 +681,42 @@ def deactivate_pack(pack_id: str, *, storage_root: str | Path | None = None) -> 
     """Deactivate an installed pack."""
 
     return set_pack_active(pack_id, False, storage_root=storage_root)
+
+
+def _activate_pack_dependencies(
+    registry: PackRegistry,
+    pack_id: str,
+    *,
+    visiting: set[str],
+) -> None:
+    if pack_id in visiting:
+        raise ValueError(f"Cyclic installed-pack dependency detected at {pack_id}")
+
+    manifest = registry.get_pack(pack_id, active_only=False)
+    if manifest is None:
+        raise ValueError(f"Pack not found: {pack_id}")
+
+    visiting.add(pack_id)
+    try:
+        for dependency in manifest.dependencies:
+            dependency_manifest = registry.get_pack(dependency, active_only=False)
+            if dependency_manifest is None:
+                raise ValueError(
+                    f"Cannot activate pack {pack_id}: missing installed dependency {dependency}"
+                )
+            _activate_pack_dependencies(registry, dependency, visiting=visiting)
+        registry.set_pack_active(pack_id, True)
+    finally:
+        visiting.remove(pack_id)
+
+
+def _active_dependent_pack_ids(registry: PackRegistry, pack_id: str) -> list[str]:
+    dependents = {
+        manifest.pack_id
+        for manifest in registry.list_installed_packs(active_only=True)
+        if manifest.pack_id != pack_id and pack_id in manifest.dependencies
+    }
+    return sorted(dependents)
 
 
 def lookup_candidates(

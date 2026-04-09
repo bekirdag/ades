@@ -18,13 +18,17 @@ def test_service_pack_endpoints_reflect_reactivated_dependency_after_repull(tmp_
 
     client = TestClient(create_app(storage_root=install_root))
 
+    finance_down = client.post("/v0/packs/finance-en/deactivate")
+    assert finance_down.status_code == 200
+    assert finance_down.json()["active"] is False
+
     deactivate_response = client.post("/v0/packs/general-en/deactivate")
     assert deactivate_response.status_code == 200
     assert deactivate_response.json()["active"] is False
 
     repull_result = installer.install("finance-en")
-    assert repull_result.installed == ["general-en"]
-    assert repull_result.skipped == ["finance-en"]
+    assert repull_result.installed == ["general-en", "finance-en"]
+    assert repull_result.skipped == []
 
     active_packs = client.get("/v0/packs", params={"active_only": True})
     assert active_packs.status_code == 200
@@ -85,3 +89,50 @@ def test_service_lookup_reflects_repaired_pack_metadata_after_repull(tmp_path: P
         and candidate["label"] == "email_address"
         for candidate in lookup_after.json()["candidates"]
     )
+
+
+def test_service_blocks_dependency_deactivation_with_active_dependents(tmp_path: Path) -> None:
+    general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
+    registry = build_registry([general_dir, finance_dir], output_dir=tmp_path / "registry")
+
+    install_root = tmp_path / "install"
+    installer = PackInstaller(install_root, registry_url=registry.index_url)
+    installer.install("finance-en")
+
+    client = TestClient(create_app(storage_root=install_root))
+
+    deactivate_response = client.post("/v0/packs/general-en/deactivate")
+    assert deactivate_response.status_code == 400
+    assert (
+        deactivate_response.json()["detail"]
+        == "Cannot deactivate pack general-en while active dependent packs exist: finance-en"
+    )
+
+    active_packs = client.get("/v0/packs", params={"active_only": True})
+    assert active_packs.status_code == 200
+    assert {pack["pack_id"] for pack in active_packs.json()} == {"finance-en", "general-en"}
+
+
+def test_service_activate_reactivates_inactive_dependencies(tmp_path: Path) -> None:
+    general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
+    registry = build_registry([general_dir, finance_dir], output_dir=tmp_path / "registry")
+
+    install_root = tmp_path / "install"
+    installer = PackInstaller(install_root, registry_url=registry.index_url)
+    installer.install("finance-en")
+
+    client = TestClient(create_app(storage_root=install_root))
+
+    finance_down = client.post("/v0/packs/finance-en/deactivate")
+    assert finance_down.status_code == 200
+
+    general_down = client.post("/v0/packs/general-en/deactivate")
+    assert general_down.status_code == 200
+
+    activate_response = client.post("/v0/packs/finance-en/activate")
+    assert activate_response.status_code == 200
+    assert activate_response.json()["active"] is True
+
+    active_packs = client.get("/v0/packs", params={"active_only": True})
+    assert active_packs.status_code == 200
+    assert {pack["pack_id"] for pack in active_packs.json()} == {"finance-en", "general-en"}

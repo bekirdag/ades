@@ -1,12 +1,12 @@
 # ades Next Work Items
 
-Updated after completing same-version pack metadata repair on 2026-04-09.
+Updated after completing dependency-aware activation/deactivation guardrails on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Finish the remaining production-like lifecycle checks around dependency-chain activation/deactivation flows and clean-environment recovery behavior against published registry artifacts.
-   - Keep the rollback-safe install path and the new same-version metadata-repair semantics stable while closing the remaining pack-lifecycle gaps.
+   - Finish the remaining production-like clean-environment lifecycle checks around install, pull, bootstrap, serve, tag, and recovery behavior against published registry artifacts.
+   - Keep the rollback-safe install path, same-version metadata-repair semantics, and new dependency-chain guardrails stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
    - Harden first-run bootstrap, stale-record cleanup, and repair behavior around the local SQLite registry so the shipped local tool can recover cleanly from interrupted or inconsistent state.
@@ -61,6 +61,12 @@ Updated after completing same-version pack metadata repair on 2026-04-09.
    - refreshes installed pack metadata from disk before repeated same-version pulls decide to skip or reactivate a pack, which repairs stale alias/rule/label state in SQLite without changing the public pull contract
    - keeps CLI, public Python API, and local service lookup behavior aligned with the on-disk pack contents after repeated pulls
    - includes categorized unit, component, integration, and API coverage for repeated same-version metadata repair against published registry artifacts
+
+- Dependency-aware activation/deactivation guardrails:
+   - implemented in `src/ades/api.py`, with CLI/service error-path updates in `src/ades/cli.py` and `src/ades/service/app.py`
+   - blocks pack deactivation when active installed dependents would be left pointing at an inactive dependency, and makes pack activation recursively reactivate inactive installed dependencies before reactivating the requested pack
+   - keeps the existing public activation/deactivation surfaces unchanged while preventing broken active pack chains
+   - includes categorized unit, component, integration, and API coverage for blocked dependency deactivation and recursive dependency reactivation
 
 ## Not Next
 

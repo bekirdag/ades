@@ -193,7 +193,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     def runtime_activate_pack(pack_id: str) -> PackSummary:
         """Activate a single installed pack."""
 
-        pack = activate_pack(pack_id, storage_root=storage_root)
+        try:
+            pack = activate_pack(pack_id, storage_root=storage_root)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         if pack is None:
             raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
         return pack
@@ -202,7 +205,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     def runtime_deactivate_pack(pack_id: str) -> PackSummary:
         """Deactivate a single installed pack."""
 
-        pack = deactivate_pack(pack_id, storage_root=storage_root)
+        try:
+            pack = deactivate_pack(pack_id, storage_root=storage_root)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         if pack is None:
             raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
         return pack

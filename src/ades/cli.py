@@ -160,7 +160,11 @@ def list_packs_alias(
 def packs_activate(pack: str) -> None:
     """Activate an installed pack."""
 
-    result = api_activate_pack(pack)
+    try:
+        result = api_activate_pack(pack)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
     if result is None:
         raise typer.Exit(code=1)
     _echo_json(result.model_dump(mode="json"))
@@ -170,7 +174,11 @@ def packs_activate(pack: str) -> None:
 def packs_deactivate(pack: str) -> None:
     """Deactivate an installed pack."""
 
-    result = api_deactivate_pack(pack)
+    try:
+        result = api_deactivate_pack(pack)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
     if result is None:
         raise typer.Exit(code=1)
     _echo_json(result.model_dump(mode="json"))
