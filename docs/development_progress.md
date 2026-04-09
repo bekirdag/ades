@@ -481,4 +481,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Extend installed-artifact release validation with the next additive clean-environment assertions, starting with exact root/replay per-item `input_size_bytes` parity, so the shipped wheel and npm wrapper keep proving the remaining broad production-readiness goals together instead of relying on narrower source-tree regressions.
+- Extend installed-artifact release validation with the next additive clean-environment assertions, starting with exact root/replay per-item `source_fingerprint` parity, so the shipped wheel and npm wrapper keep proving the remaining broad production-readiness goals together instead of relying on narrower source-tree regressions.

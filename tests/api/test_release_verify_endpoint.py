@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from ades.service.app import create_app
 from tests.release_helpers import (
+    build_expected_batch_input_sizes,
     build_expected_batch_manifest_path,
     build_expected_batch_output_paths,
     build_expected_batch_source_paths,
@@ -79,6 +80,7 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     )
     python_working_dir = Path(verify_payload["python_install_smoke"]["working_dir"])
     python_expected_source_paths = build_expected_batch_source_paths(python_working_dir)
+    python_expected_input_sizes = build_expected_batch_input_sizes()
     python_expected_output_paths = build_expected_batch_output_paths(python_working_dir)
     python_batch_payload = json.loads(
         verify_payload["python_install_smoke"]["serve_tag_files"]["stdout"]
@@ -96,6 +98,9 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert python_batch_payload["lineage"]["created_at"] == "2026-04-09T14:57:00Z"
     assert [item["source_path"] for item in python_batch_payload["items"]] == (
         python_expected_source_paths
+    )
+    assert [item["input_size_bytes"] for item in python_batch_payload["items"]] == (
+        python_expected_input_sizes
     )
     assert [item["saved_output_path"] for item in python_batch_payload["items"]] == (
         python_expected_output_paths
@@ -142,6 +147,9 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     )
     assert [item["source_path"] for item in python_replay_payload["items"]] == (
         python_expected_source_paths
+    )
+    assert [item["input_size_bytes"] for item in python_replay_payload["items"]] == (
+        python_expected_input_sizes
     )
     assert [item["saved_output_path"] for item in python_replay_payload["items"]] == (
         python_expected_output_paths
@@ -191,6 +199,7 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     )
     npm_working_dir = Path(verify_payload["npm_install_smoke"]["working_dir"])
     npm_expected_source_paths = build_expected_batch_source_paths(npm_working_dir)
+    npm_expected_input_sizes = build_expected_batch_input_sizes()
     npm_expected_output_paths = build_expected_batch_output_paths(npm_working_dir)
     npm_batch_payload = json.loads(
         verify_payload["npm_install_smoke"]["serve_tag_files"]["stdout"]
@@ -208,6 +217,9 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert npm_batch_payload["lineage"]["created_at"] == "2026-04-09T14:57:00Z"
     assert [item["source_path"] for item in npm_batch_payload["items"]] == (
         npm_expected_source_paths
+    )
+    assert [item["input_size_bytes"] for item in npm_batch_payload["items"]] == (
+        npm_expected_input_sizes
     )
     assert [item["saved_output_path"] for item in npm_batch_payload["items"]] == (
         npm_expected_output_paths
@@ -254,6 +266,9 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     )
     assert [item["source_path"] for item in npm_replay_payload["items"]] == (
         npm_expected_source_paths
+    )
+    assert [item["input_size_bytes"] for item in npm_replay_payload["items"]] == (
+        npm_expected_input_sizes
     )
     assert [item["saved_output_path"] for item in npm_replay_payload["items"]] == (
         npm_expected_output_paths

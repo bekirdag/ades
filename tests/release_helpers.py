@@ -54,6 +54,13 @@ def build_expected_batch_source_paths(working_dir: Path) -> list[str]:
     ]
 
 
+def build_expected_batch_input_sizes() -> list[int]:
+    return [
+        len("<p>Apple said AAPL rallied.</p>\n".encode("utf-8")),
+        len("<p>NASDAQ closed near USD 12.5.</p>\n".encode("utf-8")),
+    ]
+
+
 def create_release_project(
     root: Path,
     *,
@@ -457,6 +464,7 @@ def build_fake_service_smoke(
                         "language": "en",
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
+                        "input_size_bytes": len("<p>Apple said AAPL rallied.</p>\n".encode("utf-8")),
                         "saved_output_path": str(
                             (
                                 storage_root.parent
@@ -478,6 +486,9 @@ def build_fake_service_smoke(
                         "language": "en",
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-beta.html").resolve()),
+                        "input_size_bytes": len(
+                            "<p>NASDAQ closed near USD 12.5.</p>\n".encode("utf-8")
+                        ),
                         "saved_output_path": str(
                             (
                                 storage_root.parent
@@ -569,6 +580,7 @@ def build_fake_service_smoke(
                         "language": "en",
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
+                        "input_size_bytes": len("<p>Apple said AAPL rallied.</p>\n".encode("utf-8")),
                         "saved_output_path": str(
                             (
                                 storage_root.parent
@@ -590,6 +602,9 @@ def build_fake_service_smoke(
                         "language": "en",
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-beta.html").resolve()),
+                        "input_size_bytes": len(
+                            "<p>NASDAQ closed near USD 12.5.</p>\n".encode("utf-8")
+                        ),
                         "saved_output_path": str(
                             (
                                 storage_root.parent
