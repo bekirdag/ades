@@ -406,6 +406,13 @@ def build_fake_service_smoke(
                         / "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
                     ).resolve()
                 ),
+                "lineage": {
+                    "run_id": "ades-run-parent-smoke",
+                    "root_run_id": "ades-run-parent-smoke",
+                    "parent_run_id": None,
+                    "source_manifest_path": None,
+                    "created_at": "2026-04-09T14:57:00Z",
+                },
                 "warnings": [],
                 "items": [
                     {
@@ -489,13 +496,17 @@ def build_fake_service_smoke(
                     "manifest_selected_count": 2,
                 },
                 "lineage": {
+                    "run_id": "ades-run-replay-smoke",
+                    "root_run_id": "ades-run-parent-smoke",
+                    "parent_run_id": "ades-run-parent-smoke",
                     "source_manifest_path": str(
                         (
                             storage_root.parent
                             / "serve-smoke-batch-outputs"
                             / "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
                         ).resolve()
-                    )
+                    ),
+                    "created_at": "2026-04-09T14:57:01Z",
                 },
                 "rerun_diff": {
                     "manifest_input_path": str(

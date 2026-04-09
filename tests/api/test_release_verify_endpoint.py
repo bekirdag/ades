@@ -71,6 +71,8 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert str(python_batch_payload["saved_manifest_path"]).endswith(
         "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
     )
+    assert python_batch_payload["lineage"]["run_id"] == "ades-run-parent-smoke"
+    assert python_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert len(
         [
             item["saved_output_path"]
@@ -108,6 +110,8 @@ def test_release_verify_endpoint_reports_smoke_install_results(
         python_replay_payload["lineage"]["source_manifest_path"]
         == python_batch_payload["saved_manifest_path"]
     )
+    assert python_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
+    assert python_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
     assert len(
         [
             item["saved_output_path"]
@@ -156,6 +160,8 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert str(npm_batch_payload["saved_manifest_path"]).endswith(
         "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
     )
+    assert npm_batch_payload["lineage"]["run_id"] == "ades-run-parent-smoke"
+    assert npm_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert len(
         [item["saved_output_path"] for item in npm_batch_payload["items"] if item.get("saved_output_path")]
     ) == 2
@@ -189,6 +195,8 @@ def test_release_verify_endpoint_reports_smoke_install_results(
         npm_replay_payload["lineage"]["source_manifest_path"]
         == npm_batch_payload["saved_manifest_path"]
     )
+    assert npm_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
+    assert npm_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
     assert len(
         [item["saved_output_path"] for item in npm_replay_payload["items"] if item.get("saved_output_path")]
     ) == 2

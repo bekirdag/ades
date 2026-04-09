@@ -1,11 +1,11 @@
 # ades Next Work Items
 
-Updated after completing live batch-manifest replay empty rerun-diff collection smoke validation for installed artifacts on 2026-04-09.
+Updated after completing live batch-manifest replay lineage root/parent run-id smoke validation for installed artifacts on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` replay through the served wheel and npm wrapper also proves lineage stability, especially the expected `lineage.root_run_id` carry-forward and `lineage.parent_run_id` parent-child relationship after `finance-en` pull and metadata recovery, not just replay summary and rerun-diff wiring.
+   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` replay through the served wheel and npm wrapper also proves child-manifest lineage identity, especially the expected non-empty replay `lineage.run_id` and its distinction from the parent batch run id after `finance-en` pull and metadata recovery, not just replay root/parent lineage wiring.
    - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, dependency-chain guardrails, and dependency-bearing release smoke stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
@@ -29,6 +29,12 @@ Updated after completing live batch-manifest replay empty rerun-diff collection 
    - Keep future local-tool changes from leaking SQLite-only assumptions into the contracts that the later production server should reuse.
 
 ## Recently Closed
+
+- Live batch-manifest replay lineage root/parent run-id smoke validation for installed artifacts:
+  - implemented in `src/ades/release.py`, with fake-runner support in `tests/release_helpers.py`
+  - extends release smoke verification so both the installed wheel and npm wrapper now require the parent batch payload to keep `lineage.run_id` plus matching `lineage.root_run_id`, and require the replay child payload to keep `lineage.root_run_id` plus `lineage.parent_run_id` aligned with that parent run
+  - keeps the release verify/validate contracts additive while surfacing explicit warning codes for missing or invalid replay lineage root/parent run-id metadata in the packaged serve path
+  - includes categorized unit, component, integration, and API coverage for successful replay lineage validation plus explicit invalid lineage warning paths
 
 - Live batch-manifest replay empty rerun-diff collection smoke validation for installed artifacts:
   - implemented in `src/ades/release.py`

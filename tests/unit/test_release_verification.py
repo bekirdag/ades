@@ -26,6 +26,10 @@ def _served_batch_manifest_payload(
     version: str = __version__,
     include_manifest_path: bool = True,
     manifest_file_name: str = "serve-smoke-batch-manifest.finance-en.ades-manifest.json",
+    include_lineage_run_id: bool = True,
+    include_lineage_root_run_id: bool = True,
+    lineage_run_id: str = "ades-run-parent-smoke",
+    lineage_root_run_id: str | None = None,
     output_count: int = 2,
 ) -> dict[str, object]:
     """Return one deterministic live `/v0/tag/files` payload with manifest output paths."""
@@ -58,11 +62,22 @@ def _served_batch_manifest_payload(
     payload: dict[str, object] = {
         "pack": "finance-en",
         "item_count": len(items),
+        "lineage": {},
         "warnings": [],
         "items": items[:output_count],
     }
     if include_manifest_path:
         payload["saved_manifest_path"] = str((output_dir / manifest_file_name).resolve())
+    if include_lineage_run_id:
+        lineage = payload["lineage"]
+        assert isinstance(lineage, dict)
+        lineage["run_id"] = lineage_run_id
+    if include_lineage_root_run_id:
+        lineage = payload["lineage"]
+        assert isinstance(lineage, dict)
+        lineage["root_run_id"] = (
+            lineage_run_id if lineage_root_run_id is None else lineage_root_run_id
+        )
     return payload
 
 
@@ -73,6 +88,8 @@ def _served_batch_manifest_replay_payload(
     pack: str = "finance-en",
     include_manifest_input_path: bool = True,
     include_lineage_source_manifest_path: bool = True,
+    include_lineage_root_run_id: bool = True,
+    include_lineage_parent_run_id: bool = True,
     include_manifest_candidate_count: bool = True,
     include_manifest_selected_count: bool = True,
     include_rerun_diff: bool = True,
@@ -86,6 +103,8 @@ def _served_batch_manifest_replay_payload(
     manifest_file_name: str = "serve-smoke-batch-replay.finance-en.ades-manifest.json",
     rerun_diff_manifest_input_file_name: str | None = None,
     replay_mode: str = "processed",
+    lineage_root_run_id: str = "ades-run-parent-smoke",
+    lineage_parent_run_id: str = "ades-run-parent-smoke",
     manifest_candidate_count: int = 2,
     manifest_selected_count: int = 2,
     changed_paths: list[str] | None = None,
@@ -155,6 +174,14 @@ def _served_batch_manifest_replay_payload(
         lineage = payload["lineage"]
         assert isinstance(lineage, dict)
         lineage["source_manifest_path"] = manifest_input_path
+    if include_lineage_root_run_id:
+        lineage = payload["lineage"]
+        assert isinstance(lineage, dict)
+        lineage["root_run_id"] = lineage_root_run_id
+    if include_lineage_parent_run_id:
+        lineage = payload["lineage"]
+        assert isinstance(lineage, dict)
+        lineage["parent_run_id"] = lineage_parent_run_id
     if include_rerun_diff:
         rerun_diff: dict[str, object] = {}
         if include_rerun_diff_manifest_input_path:
@@ -284,6 +311,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert str(python_batch_payload["saved_manifest_path"]).endswith(
         "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
     )
+    assert python_batch_payload["lineage"]["run_id"] == "ades-run-parent-smoke"
+    assert python_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert len(
         [
             item["saved_output_path"]
@@ -319,6 +348,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         python_replay_payload["lineage"]["source_manifest_path"]
         == python_batch_payload["saved_manifest_path"]
     )
+    assert python_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
+    assert python_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
     assert len(
         [
             item["saved_output_path"]
@@ -371,6 +402,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert str(npm_batch_payload["saved_manifest_path"]).endswith(
         "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
     )
+    assert npm_batch_payload["lineage"]["run_id"] == "ades-run-parent-smoke"
+    assert npm_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert len(
         [item["saved_output_path"] for item in npm_batch_payload["items"] if item.get("saved_output_path")]
     ) == 2
@@ -402,6 +435,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         npm_replay_payload["lineage"]["source_manifest_path"]
         == npm_batch_payload["saved_manifest_path"]
     )
+    assert npm_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
+    assert npm_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
     assert len(
         [item["saved_output_path"] for item in npm_replay_payload["items"] if item.get("saved_output_path")]
     ) == 2
@@ -2338,6 +2373,165 @@ def test_verify_release_artifacts_reports_live_service_batch_replay_rerun_diff_e
                         working_dir,
                         version=expected_version,
                         **replay_payload_kwargs,
+                    )
+                ),
+                stderr="",
+            ),
+            ["general-en", "finance-en"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.serve_tag_files_replay is not None
+    assert response.npm_install_smoke.serve_tag_files_replay.passed is True
+    assert response.warnings == [expected_warning]
+
+
+@pytest.mark.parametrize(
+    ("batch_kwargs", "replay_kwargs", "expected_warning"),
+    [
+        (
+            {"include_lineage_run_id": False},
+            {},
+            "npm_tarball_serve_tag_files_missing_lineage_run_id",
+        ),
+        (
+            {"lineage_root_run_id": "ades-run-wrong-root"},
+            {},
+            "npm_tarball_serve_tag_files_invalid_lineage_root_run_id",
+        ),
+        (
+            {},
+            {"include_lineage_root_run_id": False},
+            "npm_tarball_serve_tag_files_replay_missing_lineage_root_run_id",
+        ),
+        (
+            {},
+            {"lineage_root_run_id": "ades-run-wrong-root"},
+            "npm_tarball_serve_tag_files_replay_invalid_lineage_root_run_id",
+        ),
+        (
+            {},
+            {"include_lineage_parent_run_id": False},
+            "npm_tarball_serve_tag_files_replay_missing_lineage_parent_run_id",
+        ),
+        (
+            {},
+            {"lineage_parent_run_id": "ades-run-wrong-parent"},
+            "npm_tarball_serve_tag_files_replay_invalid_lineage_parent_run_id",
+        ),
+    ],
+)
+def test_verify_release_artifacts_reports_live_service_batch_replay_lineage_run_id_mismatches(
+    monkeypatch,
+    tmp_path: Path,
+    batch_kwargs: dict[str, object],
+    replay_kwargs: dict[str, object],
+    expected_warning: str,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        effective_batch_kwargs: dict[str, object] = (
+            {} if "node_modules/.bin" not in str(executable) else batch_kwargs
+        )
+        effective_replay_kwargs: dict[str, object] = (
+            {} if "node_modules/.bin" not in str(executable) else replay_kwargs
+        )
+        return (
+            ReleaseCommandResult(
+                command=[str(executable), "serve", "--host", "127.0.0.1", "--port", "8734"],
+                exit_code=0,
+                passed=True,
+                stdout="ready",
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["GET", "http://127.0.0.1:8734/healthz"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps({"status": "ok", "version": expected_version}),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["GET", "http://127.0.0.1:8734/v0/status"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    {
+                        "service": "ades",
+                        "version": expected_version,
+                        "installed_packs": ["general-en", "finance-en"],
+                    }
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    {
+                        "entities": [
+                            {"label": "organization"},
+                            {"label": "ticker"},
+                            {"label": "exchange"},
+                            {"label": "currency_amount"},
+                        ]
+                    }
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/file"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    {
+                        "entities": [
+                            {"label": "organization"},
+                            {"label": "ticker"},
+                            {"label": "exchange"},
+                            {"label": "currency_amount"},
+                        ]
+                    }
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    _served_batch_manifest_payload(
+                        working_dir,
+                        version=expected_version,
+                        **effective_batch_kwargs,
+                    )
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    _served_batch_manifest_replay_payload(
+                        working_dir,
+                        version=expected_version,
+                        **effective_replay_kwargs,
                     )
                 ),
                 stderr="",

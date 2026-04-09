@@ -30,7 +30,7 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- extend installed-artifact clean-environment validation so replayed live `/v0/tag/files` calls through the served wheel and npm wrapper also prove lineage stability, especially `lineage.root_run_id` carry-forward and `lineage.parent_run_id` parent-child wiring across the replay child manifest, now that the replay rerun-diff payload is fully validated
+- extend installed-artifact clean-environment validation so replayed live `/v0/tag/files` calls through the served wheel and npm wrapper also prove child-manifest lineage identity, especially a non-empty replay `lineage.run_id` that stays distinct from the parent batch run id while root/parent lineage wiring remains stable
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
 - keep the new rollback-safe install semantics, lookup-driven metadata repair, SQLite recovery behavior, dependency-bearing release smoke, and live `/v0/tag`, `/v0/tag/file`, plus `/v0/tag/files` persistence and replay smoke stable while finishing the remaining pack-lifecycle recovery work
 
@@ -102,3 +102,6 @@ Planned work:
 - 2026-04-09: extended `src/ades/release.py` so the replayed live `/v0/tag/files` release smoke now requires top-level `rerun_diff.newly_processed`, `rerun_diff.reused`, `rerun_diff.repaired`, and `rerun_diff.skipped` to stay empty lists through both the served wheel and the npm wrapper.
 - 2026-04-09: updated the categorized release verify tests so successful replay rerun-diff empty-collection validation and explicit invalid replay empty-collection warnings are covered consistently across unit, component, integration, and API layers.
 - 2026-04-09: focused release verification passed with `33 passed`, `python -m compileall src/ades` passed again, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `196 passed` under `pytest -q` while keeping the clean-environment wheel/npm replay smoke green.
+- 2026-04-09: extended `src/ades/release.py` so the replayed live `/v0/tag/files` release smoke now requires the parent batch payload to keep `lineage.run_id` plus matching `lineage.root_run_id`, and requires the replay child payload to keep `lineage.root_run_id` and `lineage.parent_run_id` aligned with that parent lineage through both the served wheel and the npm wrapper.
+- 2026-04-09: updated `tests/release_helpers.py` and the categorized release verify tests so successful replay lineage root/parent run-id validation and explicit invalid lineage warnings are covered consistently across unit, component, integration, and API layers.
+- 2026-04-09: focused release verification passed with `39 passed`, `python -m compileall src/ades` passed again, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `202 passed` under `pytest -q` while keeping the clean-environment wheel/npm replay smoke green.
