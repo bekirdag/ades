@@ -4,24 +4,25 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 
 ## Priority Queue
 
-1. CLI and service operational hardening
-   - The status, pack-listing, lookup, pack-mutation, registry-build, pack-access, and release-publish slices are now closed; next tighten the remaining real operator surfaces such as `release verify` and `release manifest` request-failure handling across `ades`, the public Python API, and the localhost service.
-   - Avoid inventing config hardening for pure metadata helpers like installer bootstrap info or release-version inspection when those reads do not cross the runtime-config boundary.
-   - Keep pack lifecycle, storage, and release-flow failures aligned so CLI exits and HTTP responses expose the same effective contract, but do not mask real install failures under configuration wrappers.
-
-2. End-to-end production-readiness validation
+1. End-to-end production-readiness validation
    - Keep extending clean-environment release validation so installed artifacts prove the real shipped wheel/npm behavior together rather than only through narrower source-tree regressions.
    - Convert the remaining broad readiness goals into additive release assertions and deterministic warning codes.
 
-3. Production-server seam hardening
+2. Production-server seam hardening
    - Keep future local-tool changes from leaking SQLite-only assumptions into the contracts the later PostgreSQL-backed production server should reuse.
    - Delay server-only delivery work until the local-tool operational-hardening and release-readiness queues are closed.
 
-4. Post-`v0.1.0` NLP-backed enrichment evaluation
+3. Post-`v0.1.0` NLP-backed enrichment evaluation
    - The default runtime is intentionally deterministic for `v0.1.0`, and `pyproject.toml` still carries no `spaCy`, `GLiNER`, or `FlashText` runtime dependencies.
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Final Phase B1 release-helper operational-hardening closure:
+  - implemented in `src/ades/cli.py` and `src/ades/service/app.py`
+  - aligns `ades release verify`, `ades release validate`, `ades release versions`, `ades release sync-version`, `ades release manifest`, and `GET /v0/release/versions` with the existing operator-facing release failure contract so missing release-layout files now surface deterministic CLI stderr plus exit code `1` and HTTP `404`, while invalid release-version metadata or version-update failures surface deterministic CLI stderr plus exit code `1` and HTTP `400`
+  - keeps the underlying public Python release helpers on raw exceptions while adding categorized unit, component, integration, and API coverage for missing-layout and invalid-version release-helper failures
+  - closes step 4 CLI and service operational hardening and moves the active queue to end-to-end production-readiness validation
 
 - Eighth Phase B1 release-publish operational-hardening slice:
   - implemented in `src/ades/cli.py`

@@ -281,3 +281,243 @@ def test_release_endpoints_report_versions_sync_and_manifest(
     assert payload["verification"]["npm_install_smoke"] is None
     assert payload["verification"]["wheel"]["file_name"].endswith(".whl")
     assert Path(payload["manifest_path"]).exists()
+
+
+def test_release_verify_endpoint_reports_missing_release_pyproject(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    missing_pyproject = (project_root / "pyproject.toml").resolve()
+    missing_pyproject.unlink()
+    client = TestClient(create_app())
+
+    verify_response = client.post(
+        "/v0/release/verify",
+        json={"output_dir": str(tmp_path / "dist"), "clean": True},
+    )
+
+    assert verify_response.status_code == 404
+    assert verify_response.json() == {
+        "detail": f"Release coordination requires {missing_pyproject}."
+    }
+
+
+def test_release_verify_endpoint_reports_invalid_version_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    (project_root / "src" / "ades" / "version.py").write_text(
+        '"""Package version."""\n\nVERSION = "broken"\n',
+        encoding="utf-8",
+    )
+    client = TestClient(create_app())
+
+    verify_response = client.post(
+        "/v0/release/verify",
+        json={"output_dir": str(tmp_path / "dist"), "clean": True},
+    )
+
+    assert verify_response.status_code == 400
+    assert verify_response.json() == {
+        "detail": "Could not parse __version__ from src/ades/version.py."
+    }
+
+
+def test_release_manifest_endpoint_reports_missing_release_pyproject(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    missing_pyproject = (project_root / "pyproject.toml").resolve()
+    missing_pyproject.unlink()
+    client = TestClient(create_app())
+
+    manifest_response = client.post(
+        "/v0/release/manifest",
+        json={
+            "output_dir": str(tmp_path / "dist"),
+            "clean": True,
+            "smoke_install": False,
+        },
+    )
+
+    assert manifest_response.status_code == 404
+    assert manifest_response.json() == {
+        "detail": f"Release coordination requires {missing_pyproject}."
+    }
+
+
+def test_release_manifest_endpoint_reports_invalid_version_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    (project_root / "src" / "ades" / "version.py").write_text(
+        '"""Package version."""\n\nVERSION = "broken"\n',
+        encoding="utf-8",
+    )
+    client = TestClient(create_app())
+
+    manifest_response = client.post(
+        "/v0/release/manifest",
+        json={
+            "output_dir": str(tmp_path / "dist"),
+            "clean": True,
+            "smoke_install": False,
+        },
+    )
+
+    assert manifest_response.status_code == 400
+    assert manifest_response.json() == {
+        "detail": "Could not parse __version__ from src/ades/version.py."
+    }
+
+
+def test_release_validate_endpoint_reports_missing_release_pyproject(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    missing_pyproject = (project_root / "pyproject.toml").resolve()
+    missing_pyproject.unlink()
+    client = TestClient(create_app())
+
+    validate_response = client.post(
+        "/v0/release/validate",
+        json={
+            "output_dir": str(tmp_path / "dist"),
+            "clean": True,
+            "smoke_install": False,
+        },
+    )
+
+    assert validate_response.status_code == 404
+    assert validate_response.json() == {
+        "detail": f"Release coordination requires {missing_pyproject}."
+    }
+
+
+def test_release_validate_endpoint_reports_invalid_version_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    (project_root / "src" / "ades" / "version.py").write_text(
+        '"""Package version."""\n\nVERSION = "broken"\n',
+        encoding="utf-8",
+    )
+    client = TestClient(create_app())
+
+    validate_response = client.post(
+        "/v0/release/validate",
+        json={
+            "output_dir": str(tmp_path / "dist"),
+            "clean": True,
+            "smoke_install": False,
+        },
+    )
+
+    assert validate_response.status_code == 400
+    assert validate_response.json() == {
+        "detail": "Could not parse __version__ from src/ades/version.py."
+    }
+
+
+def test_release_versions_endpoint_reports_missing_release_pyproject(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    missing_pyproject = (project_root / "pyproject.toml").resolve()
+    missing_pyproject.unlink()
+    client = TestClient(create_app())
+
+    versions_response = client.get("/v0/release/versions")
+
+    assert versions_response.status_code == 404
+    assert versions_response.json() == {
+        "detail": f"Release coordination requires {missing_pyproject}."
+    }
+
+
+def test_release_versions_endpoint_reports_invalid_version_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    (project_root / "src" / "ades" / "version.py").write_text(
+        '"""Package version."""\n\nVERSION = "broken"\n',
+        encoding="utf-8",
+    )
+    client = TestClient(create_app())
+
+    versions_response = client.get("/v0/release/versions")
+
+    assert versions_response.status_code == 400
+    assert versions_response.json() == {
+        "detail": "Could not parse __version__ from src/ades/version.py."
+    }
+
+
+def test_release_sync_version_endpoint_reports_missing_release_pyproject(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    missing_pyproject = (project_root / "pyproject.toml").resolve()
+    missing_pyproject.unlink()
+    client = TestClient(create_app())
+
+    sync_response = client.post("/v0/release/sync-version", json={"version": "0.2.0"})
+
+    assert sync_response.status_code == 404
+    assert sync_response.json() == {
+        "detail": f"Release coordination requires {missing_pyproject}."
+    }
+
+
+def test_release_sync_version_endpoint_reports_invalid_version_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    (project_root / "src" / "ades" / "version.py").write_text(
+        '"""Package version."""\n\nVERSION = "broken"\n',
+        encoding="utf-8",
+    )
+    client = TestClient(create_app())
+
+    sync_response = client.post("/v0/release/sync-version", json={"version": "0.2.0"})
+
+    assert sync_response.status_code == 400
+    assert sync_response.json() == {
+        "detail": "Could not update __version__ in src/ades/version.py."
+    }

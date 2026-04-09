@@ -382,6 +382,10 @@ This file records the implementation progress of `ades` as the project moves tow
 - Kept the release verify/validate surface additive by reusing the existing `serve_tag_files` and `serve_tag_files_replay` results while tightening both the internal smoke pass/fail checks and warning generation for invalid root-manifest lineage linkage fields.
 - Updated the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful root-lineage validation and explicit invalid root-manifest lineage warnings are covered across unit, component, integration, and API layers.
 - Verified the item through focused release verification tests with `43 passed`, `python -m compileall src/ades tests`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `206 passed` under `pytest -q` plus successful clean-environment wheel/npm live `/v0/tag/files` root-lineage smoke checks.
+- Hardened the remaining release-helper operator surfaces in `src/ades/cli.py` so `ades release verify`, `ades release validate`, `ades release versions`, `ades release sync-version`, and `ades release manifest` now convert request-time `FileNotFoundError` and `ValueError` failures into deterministic stderr plus exit code `1`, while keeping the public Python API on raw exceptions.
+- Hardened `src/ades/service/app.py` so `GET /v0/release/versions` now matches the existing release-endpoint `404`/`400` contract instead of leaking raw release-layout and release-version parsing failures.
+- Added categorized release-helper failure coverage in `tests/unit/test_release_verification.py`, `tests/unit/test_release_validation.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so missing release-layout files and invalid release-version metadata/update failures are proven consistently across unit, component, integration, and API layers.
+- Verified the slice through focused release suites with `91 passed` plus `python -m compileall src/ades tests`, which closes the remaining CLI/service operational-hardening queue and moves the active work to end-to-end production-readiness validation.
 
 ## Current Local Tool Capabilities
 
@@ -456,4 +460,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Extend installed-artifact live-service smoke so the initial and replayed `POST /v0/tag/files` manifests also prove lineage timestamp hygiene by exposing `lineage.created_at` and keeping the replay child timestamp ordered after the root batch manifest in the packaged clean-environment replay path.
+- Extend installed-artifact release validation with the next additive clean-environment assertions so the shipped wheel and npm wrapper keep proving the remaining broad production-readiness goals together instead of relying on narrower source-tree regressions.

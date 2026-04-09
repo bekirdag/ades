@@ -18,23 +18,22 @@ Current goal: make the shipped local-tool modules operationally complete before 
    Goal: ensure first-run bootstrap, repair, stale-state cleanup, and idempotent metadata operations are safe.
 
 4. CLI and service operational hardening
-   Status: in progress
+   Status: complete
    Goal: tighten startup validation, error paths, exit behavior, and operator-facing responses.
 
 5. End-to-end production-readiness validation
-   Status: pending
+   Status: in progress
    Goal: verify clean-environment flows for install, pull, serve, tag, and recovery paths.
 
 ## Active Slice
 
-Focus: step 4, CLI and service operational hardening.
+Focus: step 5, end-to-end production-readiness validation.
 
 Planned work:
-- extend the new configuration-error contract from status and pack listing to the remaining real operator-facing seams one slice at a time
-- keep lookup closed, and avoid inventing fake config-hardening work for config-independent metadata reads such as installer bootstrap metadata or release-version inspection
-- keep the pack-mutation, registry-build, pack-access, and release-publish seams closed, then move the next audit toward the remaining release helper failure paths starting with `ades release verify`
-- keep CLI exit behavior and HTTP error responses aligned when pack lifecycle, storage configuration, registry lookups, metadata reads, or release-flow operations fail
-- preserve the clean-environment release-validation gate while converting broader operational-hardening goals into narrow additive assertions
+- keep extending installed-artifact release validation instead of assuming source-tree behavior is sufficient
+- convert remaining broad readiness goals into narrow additive assertions and deterministic warning codes
+- keep the shipped wheel and npm wrapper in lockstep through the clean-environment verification flow
+- preserve the local-tool/public-contract seam so later production-server work does not inherit SQLite-only assumptions
 
 ## Work Log
 
@@ -145,3 +144,6 @@ Planned work:
 - 2026-04-09: implemented the eighth Phase B1 slice by hardening `src/ades/cli.py` so `ades release publish` now catches request-time `FileNotFoundError` and `ValueError`, prints deterministic stderr, and exits `1` without changing the underlying Python API `publish_release()` helper or the existing localhost service contract.
 - 2026-04-09: added categorized unit, component, integration, and API coverage in `tests/unit/test_release_publish.py`, `tests/component/test_cli_release_publish.py`, `tests/integration/test_release_publish_api.py`, and `tests/api/test_release_publish_endpoint.py` so missing-manifest and unvalidated-manifest failure paths are now proven consistently across the shared publish surfaces.
 - 2026-04-09: focused release-publish validation passed with `14 passed`, `python -m compileall src/ades tests` stayed green, and the full repo release-validation gate passed again through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `299 passed` under `pytest -q`.
+- 2026-04-09: closed the remaining Phase B1 release-helper operator surfaces by hardening `src/ades/cli.py` so `ades release verify`, `ades release validate`, `ades release versions`, `ades release sync-version`, and `ades release manifest` now convert request-time `FileNotFoundError` and `ValueError` failures into deterministic stderr plus exit code `1`, and by hardening `src/ades/service/app.py` so `GET /v0/release/versions` now matches the existing release-endpoint `404`/`400` contract.
+- 2026-04-09: added categorized unit, component, integration, and API coverage in `tests/unit/test_release_verification.py`, `tests/unit/test_release_validation.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so missing release layout files plus invalid release-version metadata/update failures are now proven consistently across the shared release surfaces while the public Python API keeps raw exceptions.
+- 2026-04-09: with status, listing, lookup, pack mutation, registry build, pack access, and all release-helper request-failure surfaces aligned, step 4 CLI and service operational hardening is now complete and the active work moves to step 5 end-to-end production-readiness validation.

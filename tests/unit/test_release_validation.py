@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from ades.release import validate_release_workflow
 from tests.release_helpers import (
     build_fake_release_runner,
@@ -59,3 +61,41 @@ def test_validate_release_workflow_stops_before_packaging_when_tests_fail(
     assert response.manifest is None
     assert response.manifest_path is None
     assert response.warnings == ["tests_failed:1"]
+
+
+def test_validate_release_workflow_requires_release_pyproject(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    missing_pyproject = (project_root / "pyproject.toml").resolve()
+    missing_pyproject.unlink()
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=f"Release coordination requires {missing_pyproject}",
+    ):
+        validate_release_workflow(output_dir=tmp_path / "dist")
+
+
+def test_validate_release_workflow_requires_parseable_version_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    (project_root / "src" / "ades" / "version.py").write_text(
+        '"""Package version."""\n\nVERSION = "broken"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Could not parse __version__ from src/ades/version\.py\.",
+    ):
+        validate_release_workflow(output_dir=tmp_path / "dist")

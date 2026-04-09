@@ -323,11 +323,14 @@ def release_verify(
 ) -> None:
     """Build and verify the current local Python and npm release artifacts."""
 
-    response = api_verify_release(
-        output_dir=output_dir,
-        clean=not no_clean,
-        smoke_install=smoke_install,
-    )
+    try:
+        response = api_verify_release(
+            output_dir=output_dir,
+            clean=not no_clean,
+            smoke_install=smoke_install,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
 
@@ -366,14 +369,17 @@ def release_validate(
 ) -> None:
     """Run tests, then build and persist one coordinated local release manifest."""
 
-    response = api_validate_release(
-        output_dir=output_dir,
-        manifest_path=manifest_output,
-        version=version,
-        clean=not no_clean,
-        smoke_install=smoke_install,
-        tests_command=test_command or None,
-    )
+    try:
+        response = api_validate_release(
+            output_dir=output_dir,
+            manifest_path=manifest_output,
+            version=version,
+            clean=not no_clean,
+            smoke_install=smoke_install,
+            tests_command=test_command or None,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
     if not response.overall_success:
         raise typer.Exit(code=1)
@@ -410,7 +416,10 @@ def release_publish(
 def release_versions() -> None:
     """Show the current coordinated release version state."""
 
-    response = api_release_versions()
+    try:
+        response = api_release_versions()
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
 
@@ -418,7 +427,10 @@ def release_versions() -> None:
 def release_sync_version(version: str = typer.Argument(..., help="Target release version.")) -> None:
     """Synchronize Python and npm release versions to one target."""
 
-    response = api_sync_release_version(version)
+    try:
+        response = api_sync_release_version(version)
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
 
@@ -452,13 +464,16 @@ def release_manifest(
 ) -> None:
     """Build artifacts and persist one coordinated release manifest."""
 
-    response = api_write_release_manifest(
-        output_dir=output_dir,
-        manifest_path=manifest_output,
-        version=version,
-        clean=not no_clean,
-        smoke_install=smoke_install,
-    )
+    try:
+        response = api_write_release_manifest(
+            output_dir=output_dir,
+            manifest_path=manifest_output,
+            version=version,
+            clean=not no_clean,
+            smoke_install=smoke_install,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
 

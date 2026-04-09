@@ -307,6 +307,78 @@ def test_sync_release_version_updates_all_release_files(
     assert len(response.updated_files) == 3
 
 
+def test_release_versions_requires_release_pyproject(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    missing_pyproject = (project_root / "pyproject.toml").resolve()
+    missing_pyproject.unlink()
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=f"Release coordination requires {missing_pyproject}",
+    ):
+        release_versions()
+
+
+def test_release_versions_requires_parseable_version_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    (project_root / "src" / "ades" / "version.py").write_text(
+        '"""Package version."""\n\nVERSION = "broken"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Could not parse __version__ from src/ades/version\.py\.",
+    ):
+        release_versions()
+
+
+def test_sync_release_version_requires_release_pyproject(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    missing_pyproject = (project_root / "pyproject.toml").resolve()
+    missing_pyproject.unlink()
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=f"Release coordination requires {missing_pyproject}",
+    ):
+        sync_release_version("0.2.0")
+
+
+def test_sync_release_version_requires_parseable_version_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    (project_root / "src" / "ades" / "version.py").write_text(
+        '"""Package version."""\n\nVERSION = "broken"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Could not update __version__ in src/ades/version\.py\.",
+    ):
+        sync_release_version("0.2.0")
+
+
 def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     monkeypatch,
     tmp_path: Path,
@@ -317,7 +389,6 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     patch_release_runner(monkeypatch, build_fake_release_runner())
 
     response = verify_release_artifacts(output_dir=tmp_path / "dist")
-
     assert response.python_version == __version__
     assert response.npm_version == __version__
     assert response.version_state.synchronized is True
@@ -546,6 +617,80 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert len(response.wheel.sha256) == 64
     assert len(response.sdist.sha256) == 64
     assert len(response.npm_tarball.sha256) == 64
+
+
+def test_verify_release_artifacts_requires_release_pyproject(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    (project_root / "pyproject.toml").unlink()
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=f"Release coordination requires {(project_root / 'pyproject.toml').resolve()}",
+    ):
+        verify_release_artifacts(output_dir=tmp_path / "dist")
+
+
+def test_verify_release_artifacts_requires_parseable_version_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    (project_root / "src" / "ades" / "version.py").write_text(
+        '"""Package version."""\n\nVERSION = "broken"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Could not parse __version__ from src/ades/version\.py\.",
+    ):
+        verify_release_artifacts(output_dir=tmp_path / "dist")
+
+
+def test_write_release_manifest_requires_release_pyproject(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    (project_root / "pyproject.toml").unlink()
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=f"Release coordination requires {(project_root / 'pyproject.toml').resolve()}",
+    ):
+        write_release_manifest(output_dir=tmp_path / "dist")
+
+
+def test_write_release_manifest_requires_parseable_version_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    (project_root / "src" / "ades" / "version.py").write_text(
+        '"""Package version."""\n\nVERSION = "broken"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Could not parse __version__ from src/ades/version\.py\.",
+    ):
+        write_release_manifest(output_dir=tmp_path / "dist")
 
 
 def test_verify_release_artifacts_reports_version_mismatch_warning(

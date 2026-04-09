@@ -96,7 +96,12 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     def runtime_release_versions() -> ReleaseVersionState:
         """Return the current coordinated release version state."""
 
-        return release_versions()
+        try:
+            return release_versions()
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/v0/release/sync-version", response_model=ReleaseVersionSyncResponse)
     def runtime_sync_release_version(
