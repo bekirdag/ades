@@ -89,6 +89,8 @@ def test_cli_release_verify_reports_smoke_install_results(
         == python_batch_payload["saved_manifest_path"]
     )
     assert python_replay_payload["summary"]["manifest_replay_mode"] == "processed"
+    assert python_replay_payload["summary"]["manifest_candidate_count"] == 2
+    assert python_replay_payload["summary"]["manifest_selected_count"] == 2
     assert (
         python_replay_payload["lineage"]["source_manifest_path"]
         == python_batch_payload["saved_manifest_path"]
@@ -155,6 +157,8 @@ def test_cli_release_verify_reports_smoke_install_results(
         == npm_batch_payload["saved_manifest_path"]
     )
     assert npm_replay_payload["summary"]["manifest_replay_mode"] == "processed"
+    assert npm_replay_payload["summary"]["manifest_candidate_count"] == 2
+    assert npm_replay_payload["summary"]["manifest_selected_count"] == 2
     assert (
         npm_replay_payload["lineage"]["source_manifest_path"]
         == npm_batch_payload["saved_manifest_path"]

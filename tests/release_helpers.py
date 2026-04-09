@@ -485,6 +485,8 @@ def build_fake_service_smoke(
                         ).resolve()
                     ),
                     "manifest_replay_mode": "processed",
+                    "manifest_candidate_count": 2,
+                    "manifest_selected_count": 2,
                 },
                 "lineage": {
                     "source_manifest_path": str(
