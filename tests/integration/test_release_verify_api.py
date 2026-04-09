@@ -61,6 +61,16 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert verification.python_install_smoke.serve_tag_files.passed is True
     assert verification.python_install_smoke.serve_tag_files_replay is not None
     assert verification.python_install_smoke.serve_tag_files_replay.passed is True
+    assert verification.python_install_smoke.remove_guardrail is not None
+    assert verification.python_install_smoke.remove_guardrail.passed is False
+    assert (
+        verification.python_install_smoke.remove_guardrail.stderr
+        == "Cannot remove pack general-en while installed dependent packs exist: finance-en"
+    )
+    assert verification.python_install_smoke.remove is not None
+    assert verification.python_install_smoke.remove.passed is True
+    assert verification.python_install_smoke.remove_status is not None
+    assert verification.python_install_smoke.remove_status.passed is True
     assert {"general-en", "finance-en"} <= set(verification.python_install_smoke.pulled_pack_ids)
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verification.python_install_smoke.tagged_labels
@@ -69,6 +79,7 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
         verification.python_install_smoke.recovered_pack_ids
     )
     assert {"general-en", "finance-en"} <= set(verification.python_install_smoke.served_pack_ids)
+    assert verification.python_install_smoke.remaining_pack_ids == ["general-en"]
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verification.python_install_smoke.serve_tagged_labels
     )
@@ -163,12 +174,23 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert verification.npm_install_smoke.serve_tag_files.passed is True
     assert verification.npm_install_smoke.serve_tag_files_replay is not None
     assert verification.npm_install_smoke.serve_tag_files_replay.passed is True
+    assert verification.npm_install_smoke.remove_guardrail is not None
+    assert verification.npm_install_smoke.remove_guardrail.passed is False
+    assert (
+        verification.npm_install_smoke.remove_guardrail.stderr
+        == "Cannot remove pack general-en while installed dependent packs exist: finance-en"
+    )
+    assert verification.npm_install_smoke.remove is not None
+    assert verification.npm_install_smoke.remove.passed is True
+    assert verification.npm_install_smoke.remove_status is not None
+    assert verification.npm_install_smoke.remove_status.passed is True
     assert {"general-en", "finance-en"} <= set(verification.npm_install_smoke.pulled_pack_ids)
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verification.npm_install_smoke.tagged_labels
     )
     assert {"general-en", "finance-en"} <= set(verification.npm_install_smoke.recovered_pack_ids)
     assert {"general-en", "finance-en"} <= set(verification.npm_install_smoke.served_pack_ids)
+    assert verification.npm_install_smoke.remaining_pack_ids == ["general-en"]
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verification.npm_install_smoke.serve_tagged_labels
     )

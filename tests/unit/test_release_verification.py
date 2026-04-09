@@ -13,6 +13,7 @@ from ades.release import (
 from ades.service.models import ReleaseCommandResult
 from ades.version import __version__
 from tests.release_helpers import (
+    build_fake_remove_smoke,
     build_failed_release_runner,
     build_fake_release_runner,
     create_release_project,
@@ -245,6 +246,36 @@ def _served_batch_manifest_replay_payload(
     return payload
 
 
+def _fake_remove_smoke_result(
+    *,
+    version: str = __version__,
+    storage_root: Path | None = None,
+    guardrail_updates: dict[str, object] | None = None,
+    remove_updates: dict[str, object] | None = None,
+    remove_status_updates: dict[str, object] | None = None,
+    remaining_pack_ids: list[str] | None = None,
+) -> tuple[ReleaseCommandResult, ReleaseCommandResult, ReleaseCommandResult, list[str]]:
+    """Return one deterministic fake remove-smoke tuple with optional overrides."""
+
+    effective_storage_root = storage_root or Path("/tmp/ades-remove-smoke")
+    guardrail, remove, remove_status, parsed_remaining_pack_ids = build_fake_remove_smoke(
+        version=version,
+        storage_root=effective_storage_root,
+    )
+    if guardrail_updates:
+        guardrail = guardrail.model_copy(update=guardrail_updates)
+    if remove_updates:
+        remove = remove.model_copy(update=remove_updates)
+    if remove_status_updates:
+        remove_status = remove_status.model_copy(update=remove_status_updates)
+    return (
+        guardrail,
+        remove,
+        remove_status,
+        parsed_remaining_pack_ids if remaining_pack_ids is None else remaining_pack_ids,
+    )
+
+
 def test_release_versions_reports_synchronized_state(monkeypatch, tmp_path: Path) -> None:
     project_root, npm_package_dir = create_release_project(tmp_path / "repo")
     monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
@@ -319,12 +350,23 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert response.python_install_smoke.serve_tag_files.passed is True
     assert response.python_install_smoke.serve_tag_files_replay is not None
     assert response.python_install_smoke.serve_tag_files_replay.passed is True
+    assert response.python_install_smoke.remove_guardrail is not None
+    assert response.python_install_smoke.remove_guardrail.passed is False
+    assert (
+        response.python_install_smoke.remove_guardrail.stderr
+        == "Cannot remove pack general-en while installed dependent packs exist: finance-en"
+    )
+    assert response.python_install_smoke.remove is not None
+    assert response.python_install_smoke.remove.passed is True
+    assert response.python_install_smoke.remove_status is not None
+    assert response.python_install_smoke.remove_status.passed is True
     assert {"general-en", "finance-en"} <= set(response.python_install_smoke.pulled_pack_ids)
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         response.python_install_smoke.tagged_labels
     )
     assert {"general-en", "finance-en"} <= set(response.python_install_smoke.recovered_pack_ids)
     assert {"general-en", "finance-en"} <= set(response.python_install_smoke.served_pack_ids)
+    assert response.python_install_smoke.remaining_pack_ids == ["general-en"]
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         response.python_install_smoke.serve_tagged_labels
     )
@@ -420,12 +462,23 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert response.npm_install_smoke.serve_tag_files.passed is True
     assert response.npm_install_smoke.serve_tag_files_replay is not None
     assert response.npm_install_smoke.serve_tag_files_replay.passed is True
+    assert response.npm_install_smoke.remove_guardrail is not None
+    assert response.npm_install_smoke.remove_guardrail.passed is False
+    assert (
+        response.npm_install_smoke.remove_guardrail.stderr
+        == "Cannot remove pack general-en while installed dependent packs exist: finance-en"
+    )
+    assert response.npm_install_smoke.remove is not None
+    assert response.npm_install_smoke.remove.passed is True
+    assert response.npm_install_smoke.remove_status is not None
+    assert response.npm_install_smoke.remove_status.passed is True
     assert {"general-en", "finance-en"} <= set(response.npm_install_smoke.pulled_pack_ids)
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         response.npm_install_smoke.tagged_labels
     )
     assert {"general-en", "finance-en"} <= set(response.npm_install_smoke.recovered_pack_ids)
     assert {"general-en", "finance-en"} <= set(response.npm_install_smoke.served_pack_ids)
+    assert response.npm_install_smoke.remaining_pack_ids == ["general-en"]
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         response.npm_install_smoke.serve_tagged_labels
     )
@@ -2649,6 +2702,91 @@ def test_verify_release_artifacts_reports_live_service_batch_replay_lineage_run_
     assert response.npm_install_smoke.passed is False
     assert response.npm_install_smoke.serve_tag_files_replay is not None
     assert response.npm_install_smoke.serve_tag_files_replay.passed is True
+    assert response.warnings == [expected_warning]
+
+
+@pytest.mark.parametrize(
+    (
+        "guardrail_updates",
+        "remove_updates",
+        "remove_status_updates",
+        "remaining_pack_ids",
+        "expected_warning",
+    ),
+    [
+        (
+            {"exit_code": 0, "passed": True, "stdout": "{}", "stderr": ""},
+            None,
+            None,
+            None,
+            "npm_tarball_remove_guardrail_unexpected_success",
+        ),
+        (
+            {"stderr": "dependency removal failed for an unexpected reason"},
+            None,
+            None,
+            None,
+            "npm_tarball_remove_guardrail_missing_dependency_message",
+        ),
+        (
+            None,
+            {"exit_code": 7, "passed": False, "stderr": "remove failed"},
+            None,
+            None,
+            "npm_tarball_remove_failed:7",
+        ),
+        (
+            None,
+            None,
+            {"exit_code": 11, "passed": False, "stderr": "status after remove failed"},
+            None,
+            "npm_tarball_remove_status_failed:11",
+        ),
+        (
+            None,
+            None,
+            None,
+            ["general-en", "finance-en"],
+            "npm_tarball_remove_status_invalid_remaining_packs:general-en,finance-en",
+        ),
+    ],
+)
+def test_verify_release_artifacts_reports_remove_smoke_warnings(
+    monkeypatch,
+    tmp_path: Path,
+    guardrail_updates: dict[str, object] | None,
+    remove_updates: dict[str, object] | None,
+    remove_status_updates: dict[str, object] | None,
+    remaining_pack_ids: list[str] | None,
+    expected_warning: str,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_remove_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        if "node_modules/.bin" not in str(executable):
+            return _fake_remove_smoke_result(
+                version=expected_version,
+                storage_root=storage_root,
+            )
+        return _fake_remove_smoke_result(
+            version=expected_version,
+            storage_root=storage_root,
+            guardrail_updates=guardrail_updates,
+            remove_updates=remove_updates,
+            remove_status_updates=remove_status_updates,
+            remaining_pack_ids=remaining_pack_ids,
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_remove_smoke", fake_remove_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.remove_guardrail is not None
     assert response.warnings == [expected_warning]
 
 

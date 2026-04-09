@@ -41,6 +41,13 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert verify_payload["python_install_smoke"]["serve_tag_file"]["passed"] is True
     assert verify_payload["python_install_smoke"]["serve_tag_files"]["passed"] is True
     assert verify_payload["python_install_smoke"]["serve_tag_files_replay"]["passed"] is True
+    assert verify_payload["python_install_smoke"]["remove_guardrail"]["passed"] is False
+    assert (
+        verify_payload["python_install_smoke"]["remove_guardrail"]["stderr"]
+        == "Cannot remove pack general-en while installed dependent packs exist: finance-en"
+    )
+    assert verify_payload["python_install_smoke"]["remove"]["passed"] is True
+    assert verify_payload["python_install_smoke"]["remove_status"]["passed"] is True
     assert {"general-en", "finance-en"} <= set(
         verify_payload["python_install_smoke"]["pulled_pack_ids"]
     )
@@ -53,6 +60,7 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert {"general-en", "finance-en"} <= set(
         verify_payload["python_install_smoke"]["served_pack_ids"]
     )
+    assert verify_payload["python_install_smoke"]["remaining_pack_ids"] == ["general-en"]
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verify_payload["python_install_smoke"]["serve_tagged_labels"]
     )
@@ -140,6 +148,13 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert verify_payload["npm_install_smoke"]["serve_tag_file"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["serve_tag_files"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["serve_tag_files_replay"]["passed"] is True
+    assert verify_payload["npm_install_smoke"]["remove_guardrail"]["passed"] is False
+    assert (
+        verify_payload["npm_install_smoke"]["remove_guardrail"]["stderr"]
+        == "Cannot remove pack general-en while installed dependent packs exist: finance-en"
+    )
+    assert verify_payload["npm_install_smoke"]["remove"]["passed"] is True
+    assert verify_payload["npm_install_smoke"]["remove_status"]["passed"] is True
     assert {"general-en", "finance-en"} <= set(
         verify_payload["npm_install_smoke"]["pulled_pack_ids"]
     )
@@ -152,6 +167,7 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert {"general-en", "finance-en"} <= set(
         verify_payload["npm_install_smoke"]["served_pack_ids"]
     )
+    assert verify_payload["npm_install_smoke"]["remaining_pack_ids"] == ["general-en"]
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verify_payload["npm_install_smoke"]["serve_tagged_labels"]
     )

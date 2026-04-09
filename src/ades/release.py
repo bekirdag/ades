@@ -60,8 +60,14 @@ TWINE_REPOSITORY_URL_ALIAS_ENV = "ADES_RELEASE_TWINE_REPOSITORY_URL"
 NPM_TOKEN_ALIAS_ENV = "ADES_RELEASE_NPM_TOKEN"
 NPM_REGISTRY_ALIAS_ENV = "ADES_RELEASE_NPM_REGISTRY"
 NPM_ACCESS_ALIAS_ENV = "ADES_RELEASE_NPM_ACCESS"
+SMOKE_DEPENDENCY_PACK_ID = "general-en"
 SMOKE_PULL_PACK_ID = "finance-en"
 SMOKE_EXPECTED_PACK_IDS = ("general-en", "finance-en")
+SMOKE_REMOVE_REMAINING_PACK_IDS = (SMOKE_DEPENDENCY_PACK_ID,)
+SMOKE_REMOVE_GUARDRAIL_MESSAGE = (
+    f"Cannot remove pack {SMOKE_DEPENDENCY_PACK_ID} while installed dependent packs exist: "
+    f"{SMOKE_PULL_PACK_ID}"
+)
 SMOKE_TAG_TEXT = "Apple said AAPL traded on NASDAQ after USD 12.5 guidance."
 SMOKE_TAG_FILE_NAME = "serve-smoke-input.html"
 SMOKE_TAG_FILE_CONTENT = "<p>Apple said AAPL traded on NASDAQ after USD 12.5 guidance.</p>\n"
@@ -795,6 +801,12 @@ def _missing_smoke_pack_ids(pack_ids: Sequence[str]) -> list[str]:
     return [pack_id for pack_id in SMOKE_EXPECTED_PACK_IDS if pack_id not in available]
 
 
+def _format_smoke_pack_ids(pack_ids: Sequence[str]) -> str:
+    """Return one stable warning fragment for a pack-id collection."""
+
+    return ",".join(pack_ids) if pack_ids else "none"
+
+
 def _write_smoke_input_file(working_dir: Path) -> Path:
     """Persist one deterministic local file used by live service smoke requests."""
 
@@ -911,6 +923,79 @@ def _run_cli_recovery_status_smoke(
     status_result = _run_command_with_env(status_command, cwd=working_dir, env=smoke_env)
     status = _build_command_result(status_command, status_result)
     return status, _parse_status_installed_pack_ids(status)
+
+
+def _run_cli_remove_smoke(
+    *,
+    executable: Path,
+    working_dir: Path,
+    storage_root: Path,
+    expected_version: str,
+    extra_env: dict[str, str] | None = None,
+) -> tuple[
+    ReleaseCommandResult,
+    ReleaseCommandResult,
+    ReleaseCommandResult,
+    list[str],
+]:
+    """Prove dependency-removal guardrails and final remaining-pack state."""
+
+    env_overrides = {"ADES_STORAGE_ROOT": str(storage_root)}
+    if extra_env:
+        env_overrides.update(extra_env)
+    smoke_env = _build_clean_runtime_env(overrides=env_overrides)
+    remove_guardrail_command = [
+        str(executable),
+        "packs",
+        "remove",
+        SMOKE_DEPENDENCY_PACK_ID,
+    ]
+    remove_guardrail_result = _run_command_with_env(
+        remove_guardrail_command,
+        cwd=working_dir,
+        env=smoke_env,
+    )
+    remove_guardrail = _build_command_result(
+        remove_guardrail_command,
+        remove_guardrail_result,
+    )
+    remove_command = [str(executable), "packs", "remove", SMOKE_PULL_PACK_ID]
+    remove_status_command = [str(executable), "status"]
+    if (
+        remove_guardrail.passed
+        or SMOKE_REMOVE_GUARDRAIL_MESSAGE not in remove_guardrail.stderr
+    ):
+        reason = "Skipped because dependency-removal guardrail did not fail as expected."
+        return (
+            remove_guardrail,
+            _skipped_command_result(remove_command, reason=reason),
+            _skipped_command_result(remove_status_command, reason=reason),
+            [],
+        )
+    remove_result = _run_command_with_env(remove_command, cwd=working_dir, env=smoke_env)
+    remove = _build_command_result(remove_command, remove_result)
+    if not remove.passed:
+        return (
+            remove_guardrail,
+            remove,
+            _skipped_command_result(
+                remove_status_command,
+                reason="Skipped because pack removal failed.",
+            ),
+            [],
+        )
+    remove_status_result = _run_command_with_env(
+        remove_status_command,
+        cwd=working_dir,
+        env=smoke_env,
+    )
+    remove_status = _build_command_result(remove_status_command, remove_status_result)
+    return (
+        remove_guardrail,
+        remove,
+        remove_status,
+        _parse_status_installed_pack_ids(remove_status),
+    )
 
 
 def _run_cli_service_smoke(
@@ -1352,6 +1437,22 @@ def _run_python_install_smoke(
                     ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag/files"],
                     reason="Skipped because virtual environment creation failed.",
                 ),
+                serve_tag_files_replay=_skipped_command_result(
+                    ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag/files"],
+                    reason="Skipped because virtual environment creation failed.",
+                ),
+                remove_guardrail=_skipped_command_result(
+                    [str(executable), "packs", "remove", SMOKE_DEPENDENCY_PACK_ID],
+                    reason="Skipped because virtual environment creation failed.",
+                ),
+                remove=_skipped_command_result(
+                    [str(executable), "packs", "remove", SMOKE_PULL_PACK_ID],
+                    reason="Skipped because virtual environment creation failed.",
+                ),
+                remove_status=_skipped_command_result(
+                    [str(executable), "status"],
+                    reason="Skipped because virtual environment creation failed.",
+                ),
                 passed=False,
                 reported_version=None,
             )
@@ -1406,6 +1507,17 @@ def _run_python_install_smoke(
                     storage_root=storage_root,
                     expected_version=expected_version,
                 )
+                (
+                    remove_guardrail,
+                    remove,
+                    remove_status,
+                    remaining_pack_ids,
+                ) = _run_cli_remove_smoke(
+                    executable=executable,
+                    working_dir=working_dir,
+                    storage_root=storage_root,
+                    expected_version=expected_version,
+                )
             else:
                 recovery_status = _skipped_command_result(
                     [str(executable), "status"],
@@ -1453,6 +1565,19 @@ def _run_python_install_smoke(
                 serve_tag_file_labels = []
                 serve_tag_files_labels = []
                 serve_tag_files_replay_labels = []
+                remove_guardrail = _skipped_command_result(
+                    [str(executable), "packs", "remove", SMOKE_DEPENDENCY_PACK_ID],
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                remove = _skipped_command_result(
+                    [str(executable), "packs", "remove", SMOKE_PULL_PACK_ID],
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                remove_status = _skipped_command_result(
+                    [str(executable), "status"],
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                remaining_pack_ids = []
         else:
             invoke_command = [str(executable), "status"]
             invoke = _skipped_command_result(
@@ -1517,6 +1642,19 @@ def _run_python_install_smoke(
             serve_tag_file_labels = []
             serve_tag_files_labels = []
             serve_tag_files_replay_labels = []
+            remove_guardrail = _skipped_command_result(
+                [str(executable), "packs", "remove", SMOKE_DEPENDENCY_PACK_ID],
+                reason="Skipped because wheel installation failed.",
+            )
+            remove = _skipped_command_result(
+                [str(executable), "packs", "remove", SMOKE_PULL_PACK_ID],
+                reason="Skipped because wheel installation failed.",
+            )
+            remove_status = _skipped_command_result(
+                [str(executable), "status"],
+                reason="Skipped because wheel installation failed.",
+            )
+            remaining_pack_ids = []
 
         required_labels = set(SMOKE_TAG_REQUIRED_LABELS)
         missing_pulled_pack_ids = _missing_smoke_pack_ids(pulled_pack_ids)
@@ -1700,6 +1838,15 @@ def _run_python_install_smoke(
         has_expected_serve_tag_files_replay_rerun_diff_skipped = (
             serve_tag_files_replay_rerun_diff_skipped == []
         )
+        has_expected_remove_guardrail = (
+            not remove_guardrail.passed
+            and SMOKE_REMOVE_GUARDRAIL_MESSAGE in remove_guardrail.stderr
+        )
+        remove_status_version = _parse_status_version(remove_status)
+        has_expected_remove_status = remove_status_version == expected_version
+        has_expected_remaining_pack_ids = (
+            remaining_pack_ids == list(SMOKE_REMOVE_REMAINING_PACK_IDS)
+        )
         passed = (
             install.passed
             and invoke.passed
@@ -1753,6 +1900,11 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_replay_rerun_diff_reused
             and has_expected_serve_tag_files_replay_rerun_diff_repaired
             and has_expected_serve_tag_files_replay_rerun_diff_skipped
+            and has_expected_remove_guardrail
+            and remove.passed
+            and remove_status.passed
+            and has_expected_remove_status
+            and has_expected_remaining_pack_ids
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="python_wheel",
@@ -1771,12 +1923,16 @@ def _run_python_install_smoke(
             serve_tag_file=serve_tag_file,
             serve_tag_files=serve_tag_files,
             serve_tag_files_replay=serve_tag_files_replay,
+            remove_guardrail=remove_guardrail,
+            remove=remove,
+            remove_status=remove_status,
             passed=passed,
             reported_version=reported_version,
             pulled_pack_ids=pulled_pack_ids,
             tagged_labels=tagged_labels,
             recovered_pack_ids=recovered_pack_ids,
             served_pack_ids=served_pack_ids,
+            remaining_pack_ids=remaining_pack_ids,
             serve_tagged_labels=serve_tagged_labels,
             serve_tag_file_labels=serve_tag_file_labels,
             serve_tag_files_labels=serve_tag_files_labels,
@@ -1868,6 +2024,22 @@ def _run_npm_install_smoke(
                         NPM_RUNTIME_DIR_ENV: str(environment_dir),
                     },
                 )
+                (
+                    remove_guardrail,
+                    remove,
+                    remove_status,
+                    remaining_pack_ids,
+                ) = _run_cli_remove_smoke(
+                    executable=executable,
+                    working_dir=working_dir,
+                    storage_root=storage_root,
+                    expected_version=expected_version,
+                    extra_env={
+                        NPM_PYTHON_BIN_ENV: sys.executable,
+                        NPM_PYTHON_PACKAGE_SPEC_ENV: str(wheel_path),
+                        NPM_RUNTIME_DIR_ENV: str(environment_dir),
+                    },
+                )
             else:
                 recovery_status = _skipped_command_result(
                     [str(executable), "status"],
@@ -1915,6 +2087,19 @@ def _run_npm_install_smoke(
                 serve_tag_file_labels = []
                 serve_tag_files_labels = []
                 serve_tag_files_replay_labels = []
+                remove_guardrail = _skipped_command_result(
+                    [str(executable), "packs", "remove", SMOKE_DEPENDENCY_PACK_ID],
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                remove = _skipped_command_result(
+                    [str(executable), "packs", "remove", SMOKE_PULL_PACK_ID],
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                remove_status = _skipped_command_result(
+                    [str(executable), "status"],
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                remaining_pack_ids = []
         else:
             invoke_command = [str(executable), "status"]
             invoke = _skipped_command_result(
@@ -1979,6 +2164,19 @@ def _run_npm_install_smoke(
             serve_tag_file_labels = []
             serve_tag_files_labels = []
             serve_tag_files_replay_labels = []
+            remove_guardrail = _skipped_command_result(
+                [str(executable), "packs", "remove", SMOKE_DEPENDENCY_PACK_ID],
+                reason="Skipped because npm tarball installation failed.",
+            )
+            remove = _skipped_command_result(
+                [str(executable), "packs", "remove", SMOKE_PULL_PACK_ID],
+                reason="Skipped because npm tarball installation failed.",
+            )
+            remove_status = _skipped_command_result(
+                [str(executable), "status"],
+                reason="Skipped because npm tarball installation failed.",
+            )
+            remaining_pack_ids = []
 
         required_labels = set(SMOKE_TAG_REQUIRED_LABELS)
         missing_pulled_pack_ids = _missing_smoke_pack_ids(pulled_pack_ids)
@@ -2162,6 +2360,15 @@ def _run_npm_install_smoke(
         has_expected_serve_tag_files_replay_rerun_diff_skipped = (
             serve_tag_files_replay_rerun_diff_skipped == []
         )
+        has_expected_remove_guardrail = (
+            not remove_guardrail.passed
+            and SMOKE_REMOVE_GUARDRAIL_MESSAGE in remove_guardrail.stderr
+        )
+        remove_status_version = _parse_status_version(remove_status)
+        has_expected_remove_status = remove_status_version == expected_version
+        has_expected_remaining_pack_ids = (
+            remaining_pack_ids == list(SMOKE_REMOVE_REMAINING_PACK_IDS)
+        )
         passed = (
             install.passed
             and invoke.passed
@@ -2215,6 +2422,11 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_replay_rerun_diff_reused
             and has_expected_serve_tag_files_replay_rerun_diff_repaired
             and has_expected_serve_tag_files_replay_rerun_diff_skipped
+            and has_expected_remove_guardrail
+            and remove.passed
+            and remove_status.passed
+            and has_expected_remove_status
+            and has_expected_remaining_pack_ids
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="npm_tarball",
@@ -2233,12 +2445,16 @@ def _run_npm_install_smoke(
             serve_tag_file=serve_tag_file,
             serve_tag_files=serve_tag_files,
             serve_tag_files_replay=serve_tag_files_replay,
+            remove_guardrail=remove_guardrail,
+            remove=remove,
+            remove_status=remove_status,
             passed=passed,
             reported_version=reported_version,
             pulled_pack_ids=pulled_pack_ids,
             tagged_labels=tagged_labels,
             recovered_pack_ids=recovered_pack_ids,
             served_pack_ids=served_pack_ids,
+            remaining_pack_ids=remaining_pack_ids,
             serve_tagged_labels=serve_tagged_labels,
             serve_tag_file_labels=serve_tag_file_labels,
             serve_tag_files_labels=serve_tag_files_labels,
@@ -2583,6 +2799,30 @@ def _smoke_install_warnings(
         return [
             f"{prefix}_serve_tag_files_replay_output_count:"
             f"{len(serve_tag_files_replay_output_paths)}"
+        ]
+    if smoke_result.remove_guardrail is None:
+        return [f"{prefix}_remove_guardrail_missing"]
+    if smoke_result.remove_guardrail.passed:
+        return [f"{prefix}_remove_guardrail_unexpected_success"]
+    if SMOKE_REMOVE_GUARDRAIL_MESSAGE not in smoke_result.remove_guardrail.stderr:
+        return [f"{prefix}_remove_guardrail_missing_dependency_message"]
+    if smoke_result.remove is None or not smoke_result.remove.passed:
+        exit_code = None if smoke_result.remove is None else smoke_result.remove.exit_code
+        return [f"{prefix}_remove_failed:{exit_code}"]
+    if smoke_result.remove_status is None or not smoke_result.remove_status.passed:
+        exit_code = (
+            None if smoke_result.remove_status is None else smoke_result.remove_status.exit_code
+        )
+        return [f"{prefix}_remove_status_failed:{exit_code}"]
+    remove_status_version = _parse_status_version(smoke_result.remove_status)
+    if remove_status_version is None:
+        return [f"{prefix}_remove_status_missing_reported_version"]
+    if remove_status_version != expected_version:
+        return [f"{prefix}_remove_status_version_mismatch:{remove_status_version}"]
+    if smoke_result.remaining_pack_ids != list(SMOKE_REMOVE_REMAINING_PACK_IDS):
+        return [
+            f"{prefix}_remove_status_invalid_remaining_packs:"
+            f"{_format_smoke_pack_ids(smoke_result.remaining_pack_ids)}"
         ]
     return []
 

@@ -624,6 +624,64 @@ def build_fake_recovery_status(
     return status, ["general-en", "finance-en"]
 
 
+def build_fake_remove_smoke(
+    *,
+    version: str,
+    storage_root: Path,
+) -> tuple[
+    ReleaseCommandResult,
+    ReleaseCommandResult,
+    ReleaseCommandResult,
+    list[str],
+]:
+    """Return deterministic fake remove-smoke results after service smoke."""
+
+    remove_guardrail = ReleaseCommandResult(
+        command=["ades", "packs", "remove", "general-en"],
+        exit_code=1,
+        passed=False,
+        stdout="",
+        stderr="Cannot remove pack general-en while installed dependent packs exist: finance-en",
+    )
+    remove = ReleaseCommandResult(
+        command=["ades", "packs", "remove", "finance-en"],
+        exit_code=0,
+        passed=True,
+        stdout=json.dumps(
+            {
+                "pack_id": "finance-en",
+                "version": version,
+                "language": "en",
+                "domain": "finance",
+                "tier": "extension",
+                "description": "Finance tagging pack",
+                "tags": ["finance"],
+                "active": True,
+            }
+        ),
+        stderr="",
+    )
+    remove_status = ReleaseCommandResult(
+        command=["ades", "status"],
+        exit_code=0,
+        passed=True,
+        stdout=json.dumps(
+            {
+                "service": "ades",
+                "version": version,
+                "runtime_target": "local",
+                "metadata_backend": "sqlite",
+                "storage_root": str(storage_root),
+                "host": "127.0.0.1",
+                "port": 8734,
+                "installed_packs": ["general-en"],
+            }
+        ),
+        stderr="",
+    )
+    return remove_guardrail, remove, remove_status, ["general-en"]
+
+
 def patch_release_runner(monkeypatch: Any, runner: Callable[..., subprocess.CompletedProcess[str]]) -> None:
     """Patch both release command helpers to the same fake runner."""
 
@@ -642,6 +700,13 @@ def patch_release_runner(monkeypatch: Any, runner: Callable[..., subprocess.Comp
     monkeypatch.setattr(
         "ades.release._run_cli_service_smoke",
         lambda *, executable, working_dir, storage_root, expected_version, extra_env=None: build_fake_service_smoke(
+            version=expected_version,
+            storage_root=storage_root,
+        ),
+    )
+    monkeypatch.setattr(
+        "ades.release._run_cli_remove_smoke",
+        lambda *, executable, working_dir, storage_root, expected_version, extra_env=None: build_fake_remove_smoke(
             version=expected_version,
             storage_root=storage_root,
         ),
