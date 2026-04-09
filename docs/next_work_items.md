@@ -1,11 +1,11 @@
 # ades Next Work Items
 
-Updated after completing dependency-aware activation/deactivation guardrails on 2026-04-09.
+Updated after completing clean-environment pull-and-tag smoke validation on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Finish the remaining production-like clean-environment lifecycle checks around install, pull, bootstrap, serve, tag, and recovery behavior against published registry artifacts.
+   - Finish the remaining production-like clean-environment lifecycle checks around bootstrap, serve, and recovery behavior against published registry artifacts now that installed pull/tag smoke behavior is covered.
    - Keep the rollback-safe install path, same-version metadata-repair semantics, and new dependency-chain guardrails stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
@@ -67,6 +67,12 @@ Updated after completing dependency-aware activation/deactivation guardrails on 
    - blocks pack deactivation when active installed dependents would be left pointing at an inactive dependency, and makes pack activation recursively reactivate inactive installed dependencies before reactivating the requested pack
    - keeps the existing public activation/deactivation surfaces unchanged while preventing broken active pack chains
    - includes categorized unit, component, integration, and API coverage for blocked dependency deactivation and recursive dependency reactivation
+
+- Clean-environment pull-and-tag smoke validation:
+   - implemented in `src/ades/release.py` and `src/ades/service/models.py`, with fake-runner updates in `tests/release_helpers.py`
+   - extends release smoke verification from `status` only to `status`, `pull general-en`, and deterministic `tag` execution through both the installed wheel and npm wrapper in clean environments
+   - keeps the existing release verify/validate contracts intact while exposing structured pull/tag command results plus pulled-pack and tagged-label metadata for each smoke-install artifact
+   - includes categorized unit, component, integration, and API coverage for successful clean-environment pull/tag smoke validation and explicit tag-failure warnings
 
 ## Not Next
 

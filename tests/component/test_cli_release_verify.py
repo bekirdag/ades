@@ -31,7 +31,19 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert verify_payload["overall_success"] is True
     assert verify_payload["smoke_install"] is True
     assert verify_payload["python_install_smoke"]["passed"] is True
+    assert verify_payload["python_install_smoke"]["pull"]["passed"] is True
+    assert verify_payload["python_install_smoke"]["tag"]["passed"] is True
+    assert "general-en" in verify_payload["python_install_smoke"]["pulled_pack_ids"]
+    assert {"organization", "email_address"} <= set(
+        verify_payload["python_install_smoke"]["tagged_labels"]
+    )
     assert verify_payload["npm_install_smoke"]["passed"] is True
+    assert verify_payload["npm_install_smoke"]["pull"]["passed"] is True
+    assert verify_payload["npm_install_smoke"]["tag"]["passed"] is True
+    assert "general-en" in verify_payload["npm_install_smoke"]["pulled_pack_ids"]
+    assert {"organization", "email_address"} <= set(
+        verify_payload["npm_install_smoke"]["tagged_labels"]
+    )
 
 
 def test_cli_release_commands_sync_versions_and_write_manifest(

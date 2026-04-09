@@ -73,9 +73,21 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert response.python_install_smoke is not None
     assert response.python_install_smoke.passed is True
     assert response.python_install_smoke.reported_version == __version__
+    assert response.python_install_smoke.pull is not None
+    assert response.python_install_smoke.pull.passed is True
+    assert response.python_install_smoke.tag is not None
+    assert response.python_install_smoke.tag.passed is True
+    assert "general-en" in response.python_install_smoke.pulled_pack_ids
+    assert {"organization", "email_address"} <= set(response.python_install_smoke.tagged_labels)
     assert response.npm_install_smoke is not None
     assert response.npm_install_smoke.passed is True
     assert response.npm_install_smoke.reported_version == __version__
+    assert response.npm_install_smoke.pull is not None
+    assert response.npm_install_smoke.pull.passed is True
+    assert response.npm_install_smoke.tag is not None
+    assert response.npm_install_smoke.tag.passed is True
+    assert "general-en" in response.npm_install_smoke.pulled_pack_ids
+    assert {"organization", "email_address"} <= set(response.npm_install_smoke.tagged_labels)
     assert len(response.wheel.sha256) == 64
     assert len(response.sdist.sha256) == 64
     assert len(response.npm_tarball.sha256) == 64
@@ -175,6 +187,34 @@ def test_verify_release_artifacts_reports_smoke_install_failures(
         == "Skipped because npm tarball installation failed."
     )
     assert response.warnings == ["npm_tarball_install_failed:4"]
+
+
+def test_verify_release_artifacts_reports_tag_smoke_failures(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(
+        monkeypatch,
+        build_fake_release_runner(
+            npm_tag_returncode=7,
+            npm_tag_stderr="tag failed",
+        ),
+    )
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.pull is not None
+    assert response.npm_install_smoke.pull.passed is True
+    assert response.npm_install_smoke.tag is not None
+    assert response.npm_install_smoke.tag.passed is False
+    assert response.npm_install_smoke.tag.exit_code == 7
+    assert response.npm_install_smoke.tag.stderr == "tag failed"
+    assert response.warnings == ["npm_tarball_tag_failed:7"]
 
 
 def test_parse_status_version_accepts_wrapper_logs_before_json() -> None:

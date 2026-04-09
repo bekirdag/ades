@@ -74,10 +74,18 @@ def build_fake_release_runner(
     wheel_install_stderr: str = "",
     wheel_invoke_returncode: int = 0,
     wheel_invoke_stderr: str = "",
+    wheel_pull_returncode: int = 0,
+    wheel_pull_stderr: str = "",
+    wheel_tag_returncode: int = 0,
+    wheel_tag_stderr: str = "",
     npm_install_returncode: int = 0,
     npm_install_stderr: str = "",
     npm_invoke_returncode: int = 0,
     npm_invoke_stderr: str = "",
+    npm_pull_returncode: int = 0,
+    npm_pull_stderr: str = "",
+    npm_tag_returncode: int = 0,
+    npm_tag_stderr: str = "",
     twine_upload_returncode: int = 0,
     twine_upload_stdout: str = "uploaded",
     twine_upload_stderr: str = "",
@@ -156,31 +164,88 @@ def build_fake_release_runner(
                 stderr=npm_install_stderr,
             )
         if command and Path(command[0]).name.startswith("ades"):
-            payload = json.dumps(
-                {
-                    "service": "ades",
-                    "version": python_version,
-                    "runtime_target": "local",
-                    "metadata_backend": "sqlite",
-                    "storage_root": str(Path(cwd) / "storage"),
-                    "host": "127.0.0.1",
-                    "port": 8734,
-                    "installed_packs": [],
-                }
-            )
-            if "node_modules/.bin" in command[0]:
+            is_npm_wrapper = "node_modules/.bin" in command[0]
+            subcommand = command[1] if len(command) > 1 else "status"
+
+            if subcommand == "status":
+                payload = json.dumps(
+                    {
+                        "service": "ades",
+                        "version": python_version,
+                        "runtime_target": "local",
+                        "metadata_backend": "sqlite",
+                        "storage_root": str(Path(cwd) / "storage"),
+                        "host": "127.0.0.1",
+                        "port": 8734,
+                        "installed_packs": [],
+                    }
+                )
                 return subprocess.CompletedProcess(
                     command,
-                    npm_invoke_returncode,
-                    stdout=payload if npm_invoke_returncode == 0 else "",
-                    stderr=npm_invoke_stderr,
+                    npm_invoke_returncode if is_npm_wrapper else wheel_invoke_returncode,
+                    stdout=payload
+                    if (npm_invoke_returncode if is_npm_wrapper else wheel_invoke_returncode) == 0
+                    else "",
+                    stderr=npm_invoke_stderr if is_npm_wrapper else wheel_invoke_stderr,
                 )
-            return subprocess.CompletedProcess(
-                command,
-                wheel_invoke_returncode,
-                stdout=payload if wheel_invoke_returncode == 0 else "",
-                stderr=wheel_invoke_stderr,
-            )
+
+            if subcommand == "pull":
+                requested_pack = command[2]
+                payload = json.dumps(
+                    {
+                        "requested_pack": requested_pack,
+                        "registry_url": "file:///fake-registry/index.json",
+                        "installed": [requested_pack],
+                        "skipped": [],
+                    }
+                )
+                return subprocess.CompletedProcess(
+                    command,
+                    npm_pull_returncode if is_npm_wrapper else wheel_pull_returncode,
+                    stdout=payload
+                    if (npm_pull_returncode if is_npm_wrapper else wheel_pull_returncode) == 0
+                    else "",
+                    stderr=npm_pull_stderr if is_npm_wrapper else wheel_pull_stderr,
+                )
+
+            if subcommand == "tag":
+                payload = json.dumps(
+                    {
+                        "version": python_version,
+                        "pack": "general-en",
+                        "language": "en",
+                        "content_type": "text/plain",
+                        "entities": [
+                            {
+                                "text": "OpenAI",
+                                "label": "organization",
+                                "start": 8,
+                                "end": 14,
+                                "confidence": 1.0,
+                            },
+                            {
+                                "text": "smoke@example.com",
+                                "label": "email_address",
+                                "start": 19,
+                                "end": 36,
+                                "confidence": 0.85,
+                            },
+                        ],
+                        "topics": [],
+                        "warnings": [],
+                        "timing_ms": 1,
+                    }
+                )
+                return subprocess.CompletedProcess(
+                    command,
+                    npm_tag_returncode if is_npm_wrapper else wheel_tag_returncode,
+                    stdout=payload
+                    if (npm_tag_returncode if is_npm_wrapper else wheel_tag_returncode) == 0
+                    else "",
+                    stderr=npm_tag_stderr if is_npm_wrapper else wheel_tag_stderr,
+                )
+
+            raise AssertionError(f"Unexpected ades subcommand: {subcommand!r}")
         raise AssertionError(f"Unexpected command: {command!r} (cwd={cwd})")
 
     return runner

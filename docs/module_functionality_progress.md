@@ -30,7 +30,7 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- add clean-environment recovery and bootstrap validation after the dependency-chain guardrails
+- add clean-environment serve, recovery, and bootstrap validation after the installed pull/tag smoke slice
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
 - keep the new rollback-safe install semantics stable while finishing the remaining pack-lifecycle recovery work
 
@@ -52,3 +52,6 @@ Planned work:
 - 2026-04-09: updated CLI and local service error handling in `src/ades/cli.py` and `src/ades/service/app.py` so dependency-chain guardrail failures return deterministic CLI errors and HTTP `400` responses instead of partially mutating pack state.
 - 2026-04-09: added categorized dependency-guardrail coverage in `tests/unit/test_pack_install_reactivation.py`, `tests/component/test_cli_pack_reactivation.py`, `tests/integration/test_pack_reactivation_api.py`, and `tests/api/test_pack_reactivation_endpoint.py`, with focused activation/deactivation validation passing across the lifecycle and top-level API/service tests.
 - 2026-04-09: full repo release validation passed again after the dependency-guardrail slice through `docdexd run-tests --repo /home/wodo/apps/ades`, including `169 passed` under `pytest -q` plus successful Python/npm smoke-install checks.
+- 2026-04-09: extended `src/ades/release.py` so clean-environment release smoke verification now runs `status`, `pull general-en`, and a deterministic `tag` command through both the installed wheel and the installed npm wrapper instead of validating `status` only.
+- 2026-04-09: extended the shared release smoke response shape in `src/ades/service/models.py` and updated `tests/release_helpers.py` plus the categorized release verify/validate tests so pull/tag smoke behavior and tag-failure warnings are covered across unit, component, integration, and API layers.
+- 2026-04-09: focused release verification/validation tests passed with `22 passed`, and `python -m compileall src/ades` passed for the clean-environment pull/tag smoke slice.

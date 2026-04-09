@@ -185,8 +185,12 @@ class ReleaseInstallSmokeResult(BaseModel):
     storage_root: str
     install: ReleaseCommandResult
     invoke: ReleaseCommandResult
+    pull: ReleaseCommandResult | None = None
+    tag: ReleaseCommandResult | None = None
     passed: bool
     reported_version: str | None = None
+    pulled_pack_ids: list[str] = Field(default_factory=list)
+    tagged_labels: list[str] = Field(default_factory=list)
 
 
 class ReleaseValidationSummary(BaseModel):

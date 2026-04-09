@@ -242,6 +242,14 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added categorized unit, component, integration, and API coverage for blocked dependency deactivation and recursive dependency reactivation behavior.
 - Verified the item through focused lifecycle/API tests plus the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `169 passed` under `pytest -q` and successful Python/npm smoke-install checks.
 
+### 34. Clean-environment pull-and-tag smoke validation for release artifacts
+
+- Extended `src/ades/release.py` so release smoke verification now runs the installed CLI through `ades status`, `ades pull general-en`, and `ades tag "Contact OpenAI via smoke@example.com"` instead of stopping at `status` only.
+- Added deterministic pull/tag parsing and warning logic so release verification now proves bundled-registry pull and post-pull tagging behavior for both the installed Python wheel and the installed npm wrapper in clean environments.
+- Extended the shared release smoke response model in `src/ades/service/models.py` so callers can inspect the pull command result, tag command result, pulled pack ids, and tagged labels for each smoke-install artifact.
+- Updated the fake release runner and categorized unit, component, integration, and API coverage so the release verify/validate surfaces exercise the new pull/tag smoke path and explicit tag-failure warnings.
+- Verified the item through focused release verification/validation tests plus `python -m compileall src/ades`.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -315,4 +323,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Finish the remaining pack lifecycle hardening around clean-environment install, pull, serve, tag, bootstrap, and recovery validation against the published registry and current production deployment flow.
+- Finish the remaining pack lifecycle hardening around clean-environment serve, bootstrap, and recovery validation against the published registry and current production deployment flow now that installed pull/tag smoke behavior is covered.

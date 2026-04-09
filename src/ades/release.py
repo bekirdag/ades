@@ -56,6 +56,9 @@ TWINE_REPOSITORY_URL_ALIAS_ENV = "ADES_RELEASE_TWINE_REPOSITORY_URL"
 NPM_TOKEN_ALIAS_ENV = "ADES_RELEASE_NPM_TOKEN"
 NPM_REGISTRY_ALIAS_ENV = "ADES_RELEASE_NPM_REGISTRY"
 NPM_ACCESS_ALIAS_ENV = "ADES_RELEASE_NPM_ACCESS"
+SMOKE_PULL_PACK_ID = "general-en"
+SMOKE_TAG_TEXT = "Contact OpenAI via smoke@example.com"
+SMOKE_TAG_REQUIRED_LABELS = ("organization", "email_address")
 
 
 def _run_command(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -304,7 +307,7 @@ def _resolve_npm_installed_command(prefix_dir: Path, command_name: str) -> Path:
     return bin_dir / command_name
 
 
-def _parse_status_payload(output: str) -> dict[str, object] | None:
+def _parse_last_json_object(output: str) -> dict[str, object] | None:
     """Return the last JSON object found in one command stdout stream."""
 
     text = output.strip()
@@ -312,15 +315,18 @@ def _parse_status_payload(output: str) -> dict[str, object] | None:
         return None
     decoder = json.JSONDecoder()
     payload: dict[str, object] | None = None
+    payload_end = -1
     for index, character in enumerate(text):
         if character != "{":
             continue
         try:
-            candidate, _ = decoder.raw_decode(text[index:])
+            candidate, consumed = decoder.raw_decode(text[index:])
         except json.JSONDecodeError:
             continue
-        if isinstance(candidate, dict):
+        end_index = index + consumed
+        if isinstance(candidate, dict) and end_index >= payload_end:
             payload = candidate
+            payload_end = end_index
     return payload
 
 
@@ -329,11 +335,51 @@ def _parse_status_version(result: ReleaseCommandResult) -> str | None:
 
     if not result.passed:
         return None
-    payload = _parse_status_payload(result.stdout or "")
+    payload = _parse_last_json_object(result.stdout or "")
     if payload is None:
         return None
     version = payload.get("version")
     return version if isinstance(version, str) and version else None
+
+
+def _parse_pull_pack_ids(result: ReleaseCommandResult) -> list[str]:
+    """Extract pack ids reported by one JSON `ades pull` payload."""
+
+    if not result.passed:
+        return []
+    payload = _parse_last_json_object(result.stdout or "")
+    if payload is None:
+        return []
+    pack_ids: list[str] = []
+    for field_name in ("installed", "skipped"):
+        values = payload.get(field_name)
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            if isinstance(value, str) and value:
+                pack_ids.append(value)
+    return list(dict.fromkeys(pack_ids))
+
+
+def _parse_tag_labels(result: ReleaseCommandResult) -> list[str]:
+    """Extract entity labels reported by one JSON `ades tag` payload."""
+
+    if not result.passed:
+        return []
+    payload = _parse_last_json_object(result.stdout or "")
+    if payload is None:
+        return []
+    entities = payload.get("entities")
+    if not isinstance(entities, list):
+        return []
+    labels: list[str] = []
+    for item in entities:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label")
+        if isinstance(label, str) and label:
+            labels.append(label)
+    return list(dict.fromkeys(labels))
 
 
 def _sha256(path: Path) -> str:
@@ -355,6 +401,62 @@ def _build_artifact_summary(path: Path) -> ReleaseArtifactSummary:
         file_name=resolved_path.name,
         size_bytes=resolved_path.stat().st_size,
         sha256=_sha256(resolved_path),
+    )
+
+
+def _run_cli_runtime_smoke(
+    *,
+    executable: Path,
+    working_dir: Path,
+    storage_root: Path,
+    extra_env: dict[str, str] | None = None,
+) -> tuple[
+    ReleaseCommandResult,
+    ReleaseCommandResult,
+    ReleaseCommandResult,
+    str | None,
+    list[str],
+    list[str],
+]:
+    """Run clean-environment status, pull, and tag checks for one installed CLI."""
+
+    env_overrides = {"ADES_STORAGE_ROOT": str(storage_root)}
+    if extra_env:
+        env_overrides.update(extra_env)
+    smoke_env = _build_clean_runtime_env(overrides=env_overrides)
+
+    status_command = [str(executable), "status"]
+    status_result = _run_command_with_env(status_command, cwd=working_dir, env=smoke_env)
+    status = _build_command_result(status_command, status_result)
+    reported_version = _parse_status_version(status)
+
+    pull_command = [str(executable), "pull", SMOKE_PULL_PACK_ID]
+    if status.passed:
+        pull_result = _run_command_with_env(pull_command, cwd=working_dir, env=smoke_env)
+        pull = _build_command_result(pull_command, pull_result)
+    else:
+        pull = _skipped_command_result(
+            pull_command,
+            reason="Skipped because status invocation failed.",
+        )
+
+    tag_command = [str(executable), "tag", SMOKE_TAG_TEXT]
+    if pull.passed:
+        tag_result = _run_command_with_env(tag_command, cwd=working_dir, env=smoke_env)
+        tag = _build_command_result(tag_command, tag_result)
+    else:
+        tag = _skipped_command_result(
+            tag_command,
+            reason="Skipped because pack pull failed.",
+        )
+
+    return (
+        status,
+        pull,
+        tag,
+        reported_version,
+        _parse_pull_pack_ids(pull),
+        _parse_tag_labels(tag),
     )
 
 
@@ -538,9 +640,20 @@ def _run_python_install_smoke(
         create_env_result = _run_command(create_env_command, cwd=working_dir)
         if create_env_result.returncode != 0:
             install = _build_command_result(create_env_command, create_env_result)
-            invoke_command = [str(_resolve_venv_command(environment_dir, "ades")), "status"]
+            executable = _resolve_venv_command(environment_dir, "ades")
+            invoke_command = [str(executable), "status"]
             invoke = _skipped_command_result(
                 invoke_command,
+                reason="Skipped because virtual environment creation failed.",
+            )
+            pull_command = [str(executable), "pull", SMOKE_PULL_PACK_ID]
+            pull = _skipped_command_result(
+                pull_command,
+                reason="Skipped because virtual environment creation failed.",
+            )
+            tag_command = [str(executable), "tag", SMOKE_TAG_TEXT]
+            tag = _skipped_command_result(
+                tag_command,
                 reason="Skipped because virtual environment creation failed.",
             )
             return ReleaseInstallSmokeResult(
@@ -550,6 +663,8 @@ def _run_python_install_smoke(
                 storage_root=str(storage_root),
                 install=install,
                 invoke=invoke,
+                pull=pull,
+                tag=tag,
                 passed=False,
                 reported_version=None,
             )
@@ -563,24 +678,50 @@ def _run_python_install_smoke(
         )
         install = _build_command_result(install_command, install_result)
 
-        invoke_command = [str(_resolve_venv_command(environment_dir, "ades")), "status"]
+        executable = _resolve_venv_command(environment_dir, "ades")
         if install.passed:
-            invoke_result = _run_command_with_env(
-                invoke_command,
-                cwd=working_dir,
-                env=_build_clean_runtime_env(
-                    overrides={"ADES_STORAGE_ROOT": str(storage_root)},
-                ),
+            (
+                invoke,
+                pull,
+                tag,
+                reported_version,
+                pulled_pack_ids,
+                tagged_labels,
+            ) = _run_cli_runtime_smoke(
+                executable=executable,
+                working_dir=working_dir,
+                storage_root=storage_root,
             )
-            invoke = _build_command_result(invoke_command, invoke_result)
         else:
+            invoke_command = [str(executable), "status"]
             invoke = _skipped_command_result(
                 invoke_command,
                 reason="Skipped because wheel installation failed.",
             )
+            pull_command = [str(executable), "pull", SMOKE_PULL_PACK_ID]
+            pull = _skipped_command_result(
+                pull_command,
+                reason="Skipped because wheel installation failed.",
+            )
+            tag_command = [str(executable), "tag", SMOKE_TAG_TEXT]
+            tag = _skipped_command_result(
+                tag_command,
+                reason="Skipped because wheel installation failed.",
+            )
+            reported_version = None
+            pulled_pack_ids = []
+            tagged_labels = []
 
-        reported_version = _parse_status_version(invoke)
-        passed = install.passed and invoke.passed and reported_version == expected_version
+        required_labels = set(SMOKE_TAG_REQUIRED_LABELS)
+        passed = (
+            install.passed
+            and invoke.passed
+            and reported_version == expected_version
+            and pull.passed
+            and SMOKE_PULL_PACK_ID in pulled_pack_ids
+            and tag.passed
+            and required_labels.issubset(set(tagged_labels))
+        )
         return ReleaseInstallSmokeResult(
             artifact_kind="python_wheel",
             working_dir=str(working_dir),
@@ -588,8 +729,12 @@ def _run_python_install_smoke(
             storage_root=str(storage_root),
             install=install,
             invoke=invoke,
+            pull=pull,
+            tag=tag,
             passed=passed,
             reported_version=reported_version,
+            pulled_pack_ids=pulled_pack_ids,
+            tagged_labels=tagged_labels,
         )
 
 
@@ -621,29 +766,55 @@ def _run_npm_install_smoke(
         )
         install = _build_command_result(install_command, install_result)
 
-        invoke_command = [str(_resolve_npm_installed_command(install_prefix, NPM_COMMAND_NAME)), "status"]
+        executable = _resolve_npm_installed_command(install_prefix, NPM_COMMAND_NAME)
         if install.passed:
-            invoke_result = _run_command_with_env(
-                invoke_command,
-                cwd=working_dir,
-                env=_build_clean_runtime_env(
-                    overrides={
-                        "ADES_STORAGE_ROOT": str(storage_root),
-                        NPM_PYTHON_BIN_ENV: sys.executable,
-                        NPM_PYTHON_PACKAGE_SPEC_ENV: str(wheel_path),
-                        NPM_RUNTIME_DIR_ENV: str(environment_dir),
-                    },
-                ),
+            (
+                invoke,
+                pull,
+                tag,
+                reported_version,
+                pulled_pack_ids,
+                tagged_labels,
+            ) = _run_cli_runtime_smoke(
+                executable=executable,
+                working_dir=working_dir,
+                storage_root=storage_root,
+                extra_env={
+                    NPM_PYTHON_BIN_ENV: sys.executable,
+                    NPM_PYTHON_PACKAGE_SPEC_ENV: str(wheel_path),
+                    NPM_RUNTIME_DIR_ENV: str(environment_dir),
+                },
             )
-            invoke = _build_command_result(invoke_command, invoke_result)
         else:
+            invoke_command = [str(executable), "status"]
             invoke = _skipped_command_result(
                 invoke_command,
                 reason="Skipped because npm tarball installation failed.",
             )
+            pull_command = [str(executable), "pull", SMOKE_PULL_PACK_ID]
+            pull = _skipped_command_result(
+                pull_command,
+                reason="Skipped because npm tarball installation failed.",
+            )
+            tag_command = [str(executable), "tag", SMOKE_TAG_TEXT]
+            tag = _skipped_command_result(
+                tag_command,
+                reason="Skipped because npm tarball installation failed.",
+            )
+            reported_version = None
+            pulled_pack_ids = []
+            tagged_labels = []
 
-        reported_version = _parse_status_version(invoke)
-        passed = install.passed and invoke.passed and reported_version == expected_version
+        required_labels = set(SMOKE_TAG_REQUIRED_LABELS)
+        passed = (
+            install.passed
+            and invoke.passed
+            and reported_version == expected_version
+            and pull.passed
+            and SMOKE_PULL_PACK_ID in pulled_pack_ids
+            and tag.passed
+            and required_labels.issubset(set(tagged_labels))
+        )
         return ReleaseInstallSmokeResult(
             artifact_kind="npm_tarball",
             working_dir=str(working_dir),
@@ -651,8 +822,12 @@ def _run_npm_install_smoke(
             storage_root=str(storage_root),
             install=install,
             invoke=invoke,
+            pull=pull,
+            tag=tag,
             passed=passed,
             reported_version=reported_version,
+            pulled_pack_ids=pulled_pack_ids,
+            tagged_labels=tagged_labels,
         )
 
 
@@ -672,6 +847,17 @@ def _smoke_install_warnings(
         return [f"{prefix}_missing_reported_version"]
     if smoke_result.reported_version != expected_version:
         return [f"{prefix}_version_mismatch:{smoke_result.reported_version}"]
+    if smoke_result.pull is None or not smoke_result.pull.passed:
+        exit_code = None if smoke_result.pull is None else smoke_result.pull.exit_code
+        return [f"{prefix}_pull_failed:{exit_code}"]
+    if SMOKE_PULL_PACK_ID not in smoke_result.pulled_pack_ids:
+        return [f"{prefix}_pull_missing_pack:{SMOKE_PULL_PACK_ID}"]
+    if smoke_result.tag is None or not smoke_result.tag.passed:
+        exit_code = None if smoke_result.tag is None else smoke_result.tag.exit_code
+        return [f"{prefix}_tag_failed:{exit_code}"]
+    missing_labels = sorted(set(SMOKE_TAG_REQUIRED_LABELS) - set(smoke_result.tagged_labels))
+    if missing_labels:
+        return [f"{prefix}_tag_missing_labels:{','.join(missing_labels)}"]
     return []
 
 
