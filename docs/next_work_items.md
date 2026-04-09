@@ -5,9 +5,9 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. CLI and service operational hardening
-   - The status, pack-listing, lookup, pack-mutation, and registry-build slices are now closed; next tighten the remaining real operator surfaces such as the pack-access read/pull seams and release-flow failures across `ades`, the public Python API, and the localhost service.
+   - The status, pack-listing, lookup, pack-mutation, registry-build, direct pack-read, and non-ambiguous pull-config slices are now closed; next tighten the remaining real operator surfaces such as the ambiguous pull parsing seam and release-flow failures across `ades`, the public Python API, and the localhost service.
    - Avoid inventing config hardening for pure metadata helpers like installer bootstrap info or release-version inspection when those reads do not cross the runtime-config boundary.
-   - Keep pack lifecycle, storage, and release-flow failures aligned so CLI exits and HTTP responses expose the same effective contract.
+   - Keep pack lifecycle, storage, and release-flow failures aligned so CLI exits and HTTP responses expose the same effective contract, but do not mask real install failures under configuration wrappers.
 
 2. End-to-end production-readiness validation
    - Keep extending clean-environment release validation so installed artifacts prove the real shipped wheel/npm behavior together rather than only through narrower source-tree regressions.
@@ -22,6 +22,12 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Sixth Phase B1 pack-access operational-hardening slice:
+  - implemented in `src/ades/service/app.py` and `src/ades/cli.py`
+  - aligns `GET /v0/packs/{pack_id}` with the existing missing-config-file `404` and invalid-runtime `400` localhost-service contract, and aligns `ades pull` with the same deterministic CLI stderr plus exit code `1` handling for the non-ambiguous configuration/runtime failures
+  - keeps the underlying Python API `get_pack()` and `pull_pack()` helpers on their original exception types, and intentionally leaves generic pull-side `ValueError` parsing failures for a later seam so checksum or artifact install failures are not relabeled as configuration errors
+  - adds categorized unit, component, integration, and API coverage for pack-access configuration failures while the existing checksum-mismatch CLI regression continues to prove install failures still bubble
 
 - Fifth Phase B1 registry-build operational-hardening slice:
   - implemented in `src/ades/cli.py` with the existing localhost-service contract locked in by new tests

@@ -267,7 +267,12 @@ def pull(
 ) -> None:
     """Install a pack and any required dependencies."""
 
-    result = api_pull_pack(pack, registry_url=registry_url)
+    try:
+        result = api_pull_pack(pack, registry_url=registry_url)
+    except FileNotFoundError as exc:
+        _exit_with_configuration_error(exc)
+    except UnsupportedRuntimeConfigurationError as exc:
+        _exit_with_configuration_error(exc)
     _echo_json(
         {
             "requested_pack": result.requested_pack,

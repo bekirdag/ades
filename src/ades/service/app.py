@@ -209,7 +209,12 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     def runtime_get_pack(pack_id: str) -> PackSummary:
         """Get a single installed pack."""
 
-        pack = get_pack(pack_id, storage_root=storage_root)
+        try:
+            pack = get_pack(pack_id, storage_root=storage_root)
+        except FileNotFoundError as exc:
+            _raise_configuration_http_exception(exc)
+        except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+            _raise_configuration_http_exception(exc)
         if pack is None:
             raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
         return pack
