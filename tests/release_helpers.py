@@ -71,6 +71,15 @@ def build_expected_batch_summary_item_counts() -> dict[str, int]:
     }
 
 
+def build_expected_batch_zero_state_summary_counts() -> dict[str, int]:
+    return {
+        "excluded_count": 0,
+        "skipped_count": 0,
+        "rejected_count": 0,
+        "limit_skipped_count": 0,
+    }
+
+
 def build_expected_batch_summary_input_bytes() -> dict[str, int]:
     total_input_bytes = sum(build_expected_batch_input_sizes())
     return {
@@ -486,6 +495,7 @@ def build_fake_service_smoke(
                 ),
                 "summary": {
                     **build_expected_batch_summary_item_counts(),
+                    **build_expected_batch_zero_state_summary_counts(),
                     **build_expected_batch_summary_input_bytes(),
                 },
                 "lineage": {
@@ -577,6 +587,7 @@ def build_fake_service_smoke(
                 ),
                 "summary": {
                     **build_expected_batch_summary_item_counts(),
+                    **build_expected_batch_zero_state_summary_counts(),
                     **build_expected_batch_summary_input_bytes(),
                     "manifest_input_path": str(
                         (

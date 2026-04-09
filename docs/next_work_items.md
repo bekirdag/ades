@@ -18,6 +18,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 
 ## Recently Closed
 
+- Exact zero-state batch-summary counter validation for installed-artifact `/v0/tag/files` smoke:
+  - implemented in `src/ades/release.py`
+  - tightens clean-environment wheel/npm release smoke so both the root batch payload and replay payload must keep the exact deterministic `summary.excluded_count`, `summary.skipped_count`, `summary.rejected_count`, and `summary.limit_skipped_count` values for the clean two-file smoke corpus
+  - adds categorized unit, component, integration, and API coverage for successful root/replay zero-state counter parity plus explicit invalid zero-state warnings on the packaged serve flow
+
 - Exact batch-summary item-count parity validation for installed-artifact `/v0/tag/files` smoke:
   - implemented in `src/ades/release.py`
   - tightens clean-environment wheel/npm release smoke so both the root batch payload and replay payload must keep the exact deterministic aggregate `summary.discovered_count`, `summary.included_count`, and `summary.processed_count` totals for the two packaged smoke inputs, distinct from the already-validated replay manifest candidate/selected counts

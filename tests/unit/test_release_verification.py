@@ -18,6 +18,7 @@ from tests.release_helpers import (
     build_expected_batch_output_paths,
     build_expected_batch_summary_item_counts,
     build_expected_batch_summary_input_bytes,
+    build_expected_batch_zero_state_summary_counts,
     build_expected_batch_source_fingerprints,
     build_expected_batch_source_paths,
     build_expected_batch_replay_manifest_path,
@@ -52,6 +53,7 @@ def _served_batch_manifest_payload(
     source_paths: list[str] | None = None,
     input_sizes: list[int] | None = None,
     summary_counts: dict[str, int] | None = None,
+    zero_state_summary_counts: dict[str, int] | None = None,
     summary_input_bytes: dict[str, int] | None = None,
     source_fingerprints: list[dict[str, object]] | None = None,
     saved_output_paths: list[str] | None = None,
@@ -93,6 +95,11 @@ def _served_batch_manifest_payload(
         if summary_counts is None
         else summary_counts
     )
+    effective_zero_state_summary_counts = (
+        build_expected_batch_zero_state_summary_counts()
+        if zero_state_summary_counts is None
+        else zero_state_summary_counts
+    )
     effective_summary_input_bytes = (
         build_expected_batch_summary_input_bytes()
         if summary_input_bytes is None
@@ -131,6 +138,7 @@ def _served_batch_manifest_payload(
         "item_count": len(items) if item_count is None else item_count,
         "summary": {
             **effective_summary_counts,
+            **effective_zero_state_summary_counts,
             **effective_summary_input_bytes,
         },
         "lineage": {},
@@ -209,6 +217,7 @@ def _served_batch_manifest_replay_payload(
     source_paths: list[str] | None = None,
     input_sizes: list[int] | None = None,
     summary_counts: dict[str, int] | None = None,
+    zero_state_summary_counts: dict[str, int] | None = None,
     summary_input_bytes: dict[str, int] | None = None,
     source_fingerprints: list[dict[str, object]] | None = None,
     saved_output_paths: list[str] | None = None,
@@ -250,6 +259,11 @@ def _served_batch_manifest_replay_payload(
         build_expected_batch_summary_item_counts()
         if summary_counts is None
         else summary_counts
+    )
+    effective_zero_state_summary_counts = (
+        build_expected_batch_zero_state_summary_counts()
+        if zero_state_summary_counts is None
+        else zero_state_summary_counts
     )
     effective_summary_input_bytes = (
         build_expected_batch_summary_input_bytes()
@@ -298,6 +312,7 @@ def _served_batch_manifest_replay_payload(
         ),
         "summary": {
             **effective_summary_counts,
+            **effective_zero_state_summary_counts,
             **effective_summary_input_bytes,
             "manifest_replay_mode": replay_mode,
         },
@@ -700,6 +715,9 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     python_expected_source_paths = build_expected_batch_source_paths(python_working_dir)
     python_expected_input_sizes = build_expected_batch_input_sizes()
     python_expected_summary_counts = build_expected_batch_summary_item_counts()
+    python_expected_zero_state_summary_counts = (
+        build_expected_batch_zero_state_summary_counts()
+    )
     python_expected_summary_input_bytes = build_expected_batch_summary_input_bytes()
     python_expected_source_fingerprints = build_expected_batch_source_fingerprints()
     python_expected_output_paths = build_expected_batch_output_paths(python_working_dir)
@@ -725,6 +743,10 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         field_name: python_batch_payload["summary"][field_name]
         for field_name in python_expected_summary_counts
     } == python_expected_summary_counts
+    assert {
+        field_name: python_batch_payload["summary"][field_name]
+        for field_name in python_expected_zero_state_summary_counts
+    } == python_expected_zero_state_summary_counts
     assert {
         field_name: python_batch_payload["summary"][field_name]
         for field_name in python_expected_summary_input_bytes
@@ -764,6 +786,10 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         field_name: python_replay_payload["summary"][field_name]
         for field_name in python_expected_summary_counts
     } == python_expected_summary_counts
+    assert {
+        field_name: python_replay_payload["summary"][field_name]
+        for field_name in python_expected_zero_state_summary_counts
+    } == python_expected_zero_state_summary_counts
     assert {
         field_name: python_replay_payload["summary"][field_name]
         for field_name in python_expected_summary_input_bytes
@@ -849,6 +875,9 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     npm_expected_source_paths = build_expected_batch_source_paths(npm_working_dir)
     npm_expected_input_sizes = build_expected_batch_input_sizes()
     npm_expected_summary_counts = build_expected_batch_summary_item_counts()
+    npm_expected_zero_state_summary_counts = (
+        build_expected_batch_zero_state_summary_counts()
+    )
     npm_expected_summary_input_bytes = build_expected_batch_summary_input_bytes()
     npm_expected_source_fingerprints = build_expected_batch_source_fingerprints()
     npm_expected_output_paths = build_expected_batch_output_paths(npm_working_dir)
@@ -874,6 +903,10 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         field_name: npm_batch_payload["summary"][field_name]
         for field_name in npm_expected_summary_counts
     } == npm_expected_summary_counts
+    assert {
+        field_name: npm_batch_payload["summary"][field_name]
+        for field_name in npm_expected_zero_state_summary_counts
+    } == npm_expected_zero_state_summary_counts
     assert {
         field_name: npm_batch_payload["summary"][field_name]
         for field_name in npm_expected_summary_input_bytes
@@ -913,6 +946,10 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         field_name: npm_replay_payload["summary"][field_name]
         for field_name in npm_expected_summary_counts
     } == npm_expected_summary_counts
+    assert {
+        field_name: npm_replay_payload["summary"][field_name]
+        for field_name in npm_expected_zero_state_summary_counts
+    } == npm_expected_zero_state_summary_counts
     assert {
         field_name: npm_replay_payload["summary"][field_name]
         for field_name in npm_expected_summary_input_bytes
@@ -2462,6 +2499,49 @@ def test_verify_release_artifacts_reports_live_service_batch_summary_item_count_
     assert response.warnings == ["npm_tarball_serve_tag_files_invalid_summary_item_counts"]
 
 
+def test_verify_release_artifacts_reports_live_service_batch_zero_state_summary_count_mismatches(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        if "node_modules/.bin" not in str(executable):
+            return _service_smoke_tuple(
+                executable=Path(executable),
+                working_dir=working_dir,
+                expected_version=expected_version,
+            )
+        invalid_zero_state_counts = build_expected_batch_zero_state_summary_counts()
+        invalid_zero_state_counts["excluded_count"] = 1
+        return _service_smoke_tuple(
+            executable=Path(executable),
+            working_dir=working_dir,
+            expected_version=expected_version,
+            batch_payload=_served_batch_manifest_payload(
+                working_dir,
+                version=expected_version,
+                zero_state_summary_counts=invalid_zero_state_counts,
+            ),
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.serve_tag_files is not None
+    assert response.npm_install_smoke.serve_tag_files.passed is True
+    assert response.warnings == [
+        "npm_tarball_serve_tag_files_invalid_zero_state_summary_counts"
+    ]
+
+
 def test_verify_release_artifacts_reports_live_service_batch_source_fingerprint_mismatches(
     monkeypatch,
     tmp_path: Path,
@@ -2771,6 +2851,49 @@ def test_verify_release_artifacts_reports_live_service_batch_replay_summary_item
     assert response.npm_install_smoke.serve_tag_files_replay.passed is True
     assert response.warnings == [
         "npm_tarball_serve_tag_files_replay_invalid_summary_item_counts"
+    ]
+
+
+def test_verify_release_artifacts_reports_live_service_batch_replay_zero_state_summary_count_mismatches(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        if "node_modules/.bin" not in str(executable):
+            return _service_smoke_tuple(
+                executable=Path(executable),
+                working_dir=working_dir,
+                expected_version=expected_version,
+            )
+        invalid_zero_state_counts = build_expected_batch_zero_state_summary_counts()
+        invalid_zero_state_counts["limit_skipped_count"] = 1
+        return _service_smoke_tuple(
+            executable=Path(executable),
+            working_dir=working_dir,
+            expected_version=expected_version,
+            replay_payload=_served_batch_manifest_replay_payload(
+                working_dir,
+                version=expected_version,
+                zero_state_summary_counts=invalid_zero_state_counts,
+            ),
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.serve_tag_files_replay is not None
+    assert response.npm_install_smoke.serve_tag_files_replay.passed is True
+    assert response.warnings == [
+        "npm_tarball_serve_tag_files_replay_invalid_zero_state_summary_counts"
     ]
 
 
