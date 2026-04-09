@@ -110,6 +110,8 @@ def test_cli_release_verify_reports_smoke_install_results(
         python_replay_payload["lineage"]["source_manifest_path"]
         == python_batch_payload["saved_manifest_path"]
     )
+    assert python_replay_payload["lineage"]["run_id"] == "ades-run-replay-smoke"
+    assert python_replay_payload["lineage"]["run_id"] != python_batch_payload["lineage"]["run_id"]
     assert python_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert python_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
     assert len(
@@ -195,6 +197,8 @@ def test_cli_release_verify_reports_smoke_install_results(
         npm_replay_payload["lineage"]["source_manifest_path"]
         == npm_batch_payload["saved_manifest_path"]
     )
+    assert npm_replay_payload["lineage"]["run_id"] == "ades-run-replay-smoke"
+    assert npm_replay_payload["lineage"]["run_id"] != npm_batch_payload["lineage"]["run_id"]
     assert npm_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert npm_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
     assert len(

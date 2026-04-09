@@ -122,6 +122,8 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
         python_replay_payload["lineage"]["source_manifest_path"]
         == python_batch_payload["saved_manifest_path"]
     )
+    assert python_replay_payload["lineage"]["run_id"] == "ades-run-replay-smoke"
+    assert python_replay_payload["lineage"]["run_id"] != python_batch_payload["lineage"]["run_id"]
     assert python_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert python_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
     assert len(
@@ -208,6 +210,8 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
         npm_replay_payload["lineage"]["source_manifest_path"]
         == npm_batch_payload["saved_manifest_path"]
     )
+    assert npm_replay_payload["lineage"]["run_id"] == "ades-run-replay-smoke"
+    assert npm_replay_payload["lineage"]["run_id"] != npm_batch_payload["lineage"]["run_id"]
     assert npm_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert npm_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
     assert len(

@@ -369,6 +369,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated `tests/release_helpers.py` plus the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful replay lineage validation and explicit invalid lineage run-id warnings are covered across unit, component, integration, and API layers.
 - Verified the item through focused release verification tests with `39 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `202 passed` under `pytest -q` plus successful clean-environment wheel/npm live `/v0/tag/files` replay lineage smoke checks.
 
+### 52. Live batch-manifest replay child run-id smoke validation for installed artifacts
+
+- Extended `src/ades/release.py` so the replayed live `/v0/tag/files` release smoke now requires the child replay payload to expose a non-empty `lineage.run_id` that stays distinct from the parent batch `lineage.run_id` through both the served wheel and the npm wrapper, instead of only checking replay root/parent lineage wiring.
+- Kept the release verify/validate surface additive by reusing the existing `serve_tag_files` and `serve_tag_files_replay` results while tightening both the internal smoke pass/fail checks and warning generation for missing or invalid replay child run-id metadata.
+- Updated the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful replay child run-id validation and explicit missing/invalid replay child run-id warnings are covered across unit, component, integration, and API layers.
+- Verified the item through focused release verification tests with `41 passed`, `python -m compileall src/ades tests`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `204 passed` under `pytest -q` plus successful clean-environment wheel/npm live `/v0/tag/files` replay child run-id smoke checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -442,4 +449,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Extend installed-artifact live-service smoke so replayed `POST /v0/tag/files` responses also prove child-manifest lineage identity, especially the expected non-empty replay `lineage.run_id` and its distinction from the parent batch run id in the packaged clean-environment replay path.
+- Extend installed-artifact live-service smoke so the initial `POST /v0/tag/files` batch manifest also proves root-lineage identity by keeping `lineage.parent_run_id` and `lineage.source_manifest_path` unset on the root manifest while the replay child keeps those linkage fields populated in the packaged clean-environment replay path.

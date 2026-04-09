@@ -88,6 +88,7 @@ def _served_batch_manifest_replay_payload(
     pack: str = "finance-en",
     include_manifest_input_path: bool = True,
     include_lineage_source_manifest_path: bool = True,
+    include_lineage_run_id: bool = True,
     include_lineage_root_run_id: bool = True,
     include_lineage_parent_run_id: bool = True,
     include_manifest_candidate_count: bool = True,
@@ -103,6 +104,7 @@ def _served_batch_manifest_replay_payload(
     manifest_file_name: str = "serve-smoke-batch-replay.finance-en.ades-manifest.json",
     rerun_diff_manifest_input_file_name: str | None = None,
     replay_mode: str = "processed",
+    lineage_run_id: str = "ades-run-replay-smoke",
     lineage_root_run_id: str = "ades-run-parent-smoke",
     lineage_parent_run_id: str = "ades-run-parent-smoke",
     manifest_candidate_count: int = 2,
@@ -174,6 +176,10 @@ def _served_batch_manifest_replay_payload(
         lineage = payload["lineage"]
         assert isinstance(lineage, dict)
         lineage["source_manifest_path"] = manifest_input_path
+    if include_lineage_run_id:
+        lineage = payload["lineage"]
+        assert isinstance(lineage, dict)
+        lineage["run_id"] = lineage_run_id
     if include_lineage_root_run_id:
         lineage = payload["lineage"]
         assert isinstance(lineage, dict)
@@ -348,6 +354,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         python_replay_payload["lineage"]["source_manifest_path"]
         == python_batch_payload["saved_manifest_path"]
     )
+    assert python_replay_payload["lineage"]["run_id"] == "ades-run-replay-smoke"
+    assert python_replay_payload["lineage"]["run_id"] != python_batch_payload["lineage"]["run_id"]
     assert python_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert python_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
     assert len(
@@ -435,6 +443,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         npm_replay_payload["lineage"]["source_manifest_path"]
         == npm_batch_payload["saved_manifest_path"]
     )
+    assert npm_replay_payload["lineage"]["run_id"] == "ades-run-replay-smoke"
+    assert npm_replay_payload["lineage"]["run_id"] != npm_batch_payload["lineage"]["run_id"]
     assert npm_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert npm_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
     assert len(
@@ -2403,6 +2413,16 @@ def test_verify_release_artifacts_reports_live_service_batch_replay_rerun_diff_e
             {"include_lineage_run_id": False},
             {},
             "npm_tarball_serve_tag_files_missing_lineage_run_id",
+        ),
+        (
+            {},
+            {"include_lineage_run_id": False},
+            "npm_tarball_serve_tag_files_replay_missing_lineage_run_id",
+        ),
+        (
+            {},
+            {"lineage_run_id": "ades-run-parent-smoke"},
+            "npm_tarball_serve_tag_files_replay_invalid_lineage_run_id",
         ),
         (
             {"lineage_root_run_id": "ades-run-wrong-root"},
