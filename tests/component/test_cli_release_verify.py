@@ -8,6 +8,7 @@ from tests.release_helpers import (
     build_expected_batch_input_sizes,
     build_expected_batch_manifest_path,
     build_expected_batch_output_paths,
+    build_expected_batch_summary_item_counts,
     build_expected_batch_summary_input_bytes,
     build_expected_batch_source_fingerprints,
     build_expected_batch_source_paths,
@@ -83,6 +84,7 @@ def test_cli_release_verify_reports_smoke_install_results(
     python_working_dir = Path(verify_payload["python_install_smoke"]["working_dir"])
     python_expected_source_paths = build_expected_batch_source_paths(python_working_dir)
     python_expected_input_sizes = build_expected_batch_input_sizes()
+    python_expected_summary_counts = build_expected_batch_summary_item_counts()
     python_expected_summary_input_bytes = build_expected_batch_summary_input_bytes()
     python_expected_source_fingerprints = build_expected_batch_source_fingerprints()
     python_expected_output_paths = build_expected_batch_output_paths(python_working_dir)
@@ -106,6 +108,10 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert [item["input_size_bytes"] for item in python_batch_payload["items"]] == (
         python_expected_input_sizes
     )
+    assert {
+        field_name: python_batch_payload["summary"][field_name]
+        for field_name in python_expected_summary_counts
+    } == python_expected_summary_counts
     assert {
         field_name: python_batch_payload["summary"][field_name]
         for field_name in python_expected_summary_input_bytes
@@ -143,6 +149,10 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert python_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert python_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert python_replay_payload["summary"]["manifest_selected_count"] == 2
+    assert {
+        field_name: python_replay_payload["summary"][field_name]
+        for field_name in python_expected_summary_counts
+    } == python_expected_summary_counts
     assert {
         field_name: python_replay_payload["summary"][field_name]
         for field_name in python_expected_summary_input_bytes
@@ -218,6 +228,7 @@ def test_cli_release_verify_reports_smoke_install_results(
     npm_working_dir = Path(verify_payload["npm_install_smoke"]["working_dir"])
     npm_expected_source_paths = build_expected_batch_source_paths(npm_working_dir)
     npm_expected_input_sizes = build_expected_batch_input_sizes()
+    npm_expected_summary_counts = build_expected_batch_summary_item_counts()
     npm_expected_summary_input_bytes = build_expected_batch_summary_input_bytes()
     npm_expected_source_fingerprints = build_expected_batch_source_fingerprints()
     npm_expected_output_paths = build_expected_batch_output_paths(npm_working_dir)
@@ -241,6 +252,10 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert [item["input_size_bytes"] for item in npm_batch_payload["items"]] == (
         npm_expected_input_sizes
     )
+    assert {
+        field_name: npm_batch_payload["summary"][field_name]
+        for field_name in npm_expected_summary_counts
+    } == npm_expected_summary_counts
     assert {
         field_name: npm_batch_payload["summary"][field_name]
         for field_name in npm_expected_summary_input_bytes
@@ -278,6 +293,10 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert npm_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert npm_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert npm_replay_payload["summary"]["manifest_selected_count"] == 2
+    assert {
+        field_name: npm_replay_payload["summary"][field_name]
+        for field_name in npm_expected_summary_counts
+    } == npm_expected_summary_counts
     assert {
         field_name: npm_replay_payload["summary"][field_name]
         for field_name in npm_expected_summary_input_bytes

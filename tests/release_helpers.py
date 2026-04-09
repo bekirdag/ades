@@ -62,6 +62,15 @@ def build_expected_batch_input_sizes() -> list[int]:
     ]
 
 
+def build_expected_batch_summary_item_counts() -> dict[str, int]:
+    total_items = len(build_expected_batch_input_sizes())
+    return {
+        "discovered_count": total_items,
+        "included_count": total_items,
+        "processed_count": total_items,
+    }
+
+
 def build_expected_batch_summary_input_bytes() -> dict[str, int]:
     total_input_bytes = sum(build_expected_batch_input_sizes())
     return {
@@ -475,7 +484,10 @@ def build_fake_service_smoke(
                         / "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
                     ).resolve()
                 ),
-                "summary": build_expected_batch_summary_input_bytes(),
+                "summary": {
+                    **build_expected_batch_summary_item_counts(),
+                    **build_expected_batch_summary_input_bytes(),
+                },
                 "lineage": {
                     "run_id": "ades-run-parent-smoke",
                     "root_run_id": "ades-run-parent-smoke",
@@ -564,6 +576,7 @@ def build_fake_service_smoke(
                     ).resolve()
                 ),
                 "summary": {
+                    **build_expected_batch_summary_item_counts(),
                     **build_expected_batch_summary_input_bytes(),
                     "manifest_input_path": str(
                         (

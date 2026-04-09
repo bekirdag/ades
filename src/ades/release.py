@@ -84,6 +84,11 @@ SMOKE_TAG_BATCH_REPLAY_MANIFEST_FILE_NAME = (
     f"serve-smoke-batch-replay.{SMOKE_PULL_PACK_ID}.ades-manifest.json"
 )
 SMOKE_TAG_BATCH_REPLAY_MODE = "processed"
+SMOKE_TAG_BATCH_SUMMARY_ITEM_COUNT_FIELDS = (
+    "discovered_count",
+    "included_count",
+    "processed_count",
+)
 SMOKE_TAG_BATCH_SUMMARY_INPUT_BYTE_FIELDS = (
     "discovered_input_bytes",
     "included_input_bytes",
@@ -939,6 +944,25 @@ def _expected_smoke_batch_source_paths(working_dir: Path) -> list[str]:
 
 def _expected_smoke_batch_input_sizes() -> list[int]:
     return [len(content.encode("utf-8")) for _, content in SMOKE_TAG_BATCH_FILES]
+
+
+def _expected_smoke_batch_summary_item_counts() -> dict[str, int]:
+    total_items = len(SMOKE_TAG_BATCH_FILES)
+    return {
+        field_name: total_items for field_name in SMOKE_TAG_BATCH_SUMMARY_ITEM_COUNT_FIELDS
+    }
+
+
+def _parse_batch_summary_item_counts(
+    result: ReleaseCommandResult,
+) -> dict[str, int] | None:
+    summary_counts: dict[str, int] = {}
+    for field_name in SMOKE_TAG_BATCH_SUMMARY_ITEM_COUNT_FIELDS:
+        value = _parse_batch_summary_int_value(result, field_name)
+        if value is None:
+            return None
+        summary_counts[field_name] = value
+    return summary_counts
 
 
 def _expected_smoke_batch_summary_input_bytes() -> dict[str, int]:
@@ -1874,6 +1898,9 @@ def _run_python_install_smoke(
         serve_tag_files_output_paths = _parse_batch_saved_output_paths(serve_tag_files)
         serve_tag_files_source_paths = _parse_batch_source_paths(serve_tag_files)
         serve_tag_files_input_sizes = _parse_batch_input_sizes(serve_tag_files)
+        serve_tag_files_summary_item_counts = _parse_batch_summary_item_counts(
+            serve_tag_files
+        )
         serve_tag_files_summary_input_bytes = _parse_batch_summary_input_bytes(
             serve_tag_files
         )
@@ -1972,6 +1999,9 @@ def _run_python_install_smoke(
             working_dir
         )
         expected_serve_tag_files_input_sizes = _expected_smoke_batch_input_sizes()
+        expected_serve_tag_files_summary_item_counts = (
+            _expected_smoke_batch_summary_item_counts()
+        )
         expected_serve_tag_files_summary_input_bytes = (
             _expected_smoke_batch_summary_input_bytes()
         )
@@ -1999,6 +2029,9 @@ def _run_python_install_smoke(
         has_expected_serve_tag_files_input_sizes = (
             serve_tag_files_input_sizes == expected_serve_tag_files_input_sizes
         )
+        has_expected_serve_tag_files_summary_item_counts = (
+            serve_tag_files_summary_item_counts == expected_serve_tag_files_summary_item_counts
+        )
         has_expected_serve_tag_files_summary_input_bytes = (
             serve_tag_files_summary_input_bytes
             == expected_serve_tag_files_summary_input_bytes
@@ -2019,6 +2052,10 @@ def _run_python_install_smoke(
         )
         has_expected_serve_tag_files_replay_input_sizes = (
             serve_tag_files_replay_input_sizes == expected_serve_tag_files_input_sizes
+        )
+        has_expected_serve_tag_files_replay_summary_item_counts = (
+            _parse_batch_summary_item_counts(serve_tag_files_replay)
+            == expected_serve_tag_files_summary_item_counts
         )
         has_expected_serve_tag_files_replay_summary_input_bytes = (
             _parse_batch_summary_input_bytes(serve_tag_files_replay)
@@ -2146,6 +2183,7 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_manifest_path
             and has_expected_serve_tag_files_source_paths
             and has_expected_serve_tag_files_input_sizes
+            and has_expected_serve_tag_files_summary_item_counts
             and has_expected_serve_tag_files_summary_input_bytes
             and has_expected_serve_tag_files_source_fingerprints
             and has_expected_serve_tag_files_output_paths
@@ -2171,6 +2209,7 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_replay_manifest_path
             and has_expected_serve_tag_files_replay_source_paths
             and has_expected_serve_tag_files_replay_input_sizes
+            and has_expected_serve_tag_files_replay_summary_item_counts
             and has_expected_serve_tag_files_replay_summary_input_bytes
             and has_expected_serve_tag_files_replay_source_fingerprints
             and has_expected_serve_tag_files_replay_output_paths
@@ -2475,6 +2514,9 @@ def _run_npm_install_smoke(
         serve_tag_files_output_paths = _parse_batch_saved_output_paths(serve_tag_files)
         serve_tag_files_source_paths = _parse_batch_source_paths(serve_tag_files)
         serve_tag_files_input_sizes = _parse_batch_input_sizes(serve_tag_files)
+        serve_tag_files_summary_item_counts = _parse_batch_summary_item_counts(
+            serve_tag_files
+        )
         serve_tag_files_summary_input_bytes = _parse_batch_summary_input_bytes(
             serve_tag_files
         )
@@ -2573,6 +2615,9 @@ def _run_npm_install_smoke(
             working_dir
         )
         expected_serve_tag_files_input_sizes = _expected_smoke_batch_input_sizes()
+        expected_serve_tag_files_summary_item_counts = (
+            _expected_smoke_batch_summary_item_counts()
+        )
         expected_serve_tag_files_summary_input_bytes = (
             _expected_smoke_batch_summary_input_bytes()
         )
@@ -2600,6 +2645,9 @@ def _run_npm_install_smoke(
         has_expected_serve_tag_files_input_sizes = (
             serve_tag_files_input_sizes == expected_serve_tag_files_input_sizes
         )
+        has_expected_serve_tag_files_summary_item_counts = (
+            serve_tag_files_summary_item_counts == expected_serve_tag_files_summary_item_counts
+        )
         has_expected_serve_tag_files_summary_input_bytes = (
             serve_tag_files_summary_input_bytes
             == expected_serve_tag_files_summary_input_bytes
@@ -2620,6 +2668,10 @@ def _run_npm_install_smoke(
         )
         has_expected_serve_tag_files_replay_input_sizes = (
             serve_tag_files_replay_input_sizes == expected_serve_tag_files_input_sizes
+        )
+        has_expected_serve_tag_files_replay_summary_item_counts = (
+            _parse_batch_summary_item_counts(serve_tag_files_replay)
+            == expected_serve_tag_files_summary_item_counts
         )
         has_expected_serve_tag_files_replay_summary_input_bytes = (
             _parse_batch_summary_input_bytes(serve_tag_files_replay)
@@ -2747,6 +2799,7 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_manifest_path
             and has_expected_serve_tag_files_source_paths
             and has_expected_serve_tag_files_input_sizes
+            and has_expected_serve_tag_files_summary_item_counts
             and has_expected_serve_tag_files_summary_input_bytes
             and has_expected_serve_tag_files_source_fingerprints
             and has_expected_serve_tag_files_output_paths
@@ -2772,6 +2825,7 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_replay_manifest_path
             and has_expected_serve_tag_files_replay_source_paths
             and has_expected_serve_tag_files_replay_input_sizes
+            and has_expected_serve_tag_files_replay_summary_item_counts
             and has_expected_serve_tag_files_replay_summary_input_bytes
             and has_expected_serve_tag_files_replay_source_fingerprints
             and has_expected_serve_tag_files_replay_output_paths
@@ -2946,6 +3000,14 @@ def _smoke_install_warnings(
     expected_serve_tag_files_input_sizes = _expected_smoke_batch_input_sizes()
     if serve_tag_files_input_sizes != expected_serve_tag_files_input_sizes:
         return [f"{prefix}_serve_tag_files_invalid_input_sizes"]
+    serve_tag_files_summary_item_counts = _parse_batch_summary_item_counts(
+        smoke_result.serve_tag_files
+    )
+    expected_serve_tag_files_summary_item_counts = (
+        _expected_smoke_batch_summary_item_counts()
+    )
+    if serve_tag_files_summary_item_counts != expected_serve_tag_files_summary_item_counts:
+        return [f"{prefix}_serve_tag_files_invalid_summary_item_counts"]
     serve_tag_files_summary_input_bytes = _parse_batch_summary_input_bytes(
         smoke_result.serve_tag_files
     )
@@ -3208,6 +3270,14 @@ def _smoke_install_warnings(
     )
     if serve_tag_files_replay_input_sizes != expected_serve_tag_files_input_sizes:
         return [f"{prefix}_serve_tag_files_replay_invalid_input_sizes"]
+    serve_tag_files_replay_summary_item_counts = _parse_batch_summary_item_counts(
+        smoke_result.serve_tag_files_replay
+    )
+    if (
+        serve_tag_files_replay_summary_item_counts
+        != expected_serve_tag_files_summary_item_counts
+    ):
+        return [f"{prefix}_serve_tag_files_replay_invalid_summary_item_counts"]
     serve_tag_files_replay_summary_input_bytes = _parse_batch_summary_input_bytes(
         smoke_result.serve_tag_files_replay
     )
