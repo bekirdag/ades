@@ -30,7 +30,6 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- add explicit tagger-level validation for partial installed-pack row loss now that direct lookup repairs missing SQLite rows on demand
 - add broader clean-environment recovery combinations after the installed pull/tag, direct lookup-repair, serve-smoke, and metadata-bootstrap recovery slices
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
 - keep the new rollback-safe install semantics, lookup-driven metadata repair, and SQLite recovery behavior stable while finishing the remaining pack-lifecycle recovery work
@@ -68,3 +67,5 @@ Planned work:
 - 2026-04-09: hardened `src/ades/packs/registry.py` so lookup misses now repair missing installed-pack SQLite rows from on-disk manifests before retrying, which removes the previous requirement that `list_packs`, `ades packs list`, or `/v0/packs` run first to heal a deleted pack row.
 - 2026-04-09: updated categorized lookup-repair coverage in `tests/unit/test_pack_install_reactivation.py`, `tests/component/test_cli_pack_reactivation.py`, `tests/integration/test_pack_reactivation_api.py`, and `tests/api/test_pack_reactivation_endpoint.py`, with focused validation passing again at `21 passed`.
 - 2026-04-09: full repo release validation passed again after the direct lookup-repair slice through `docdexd run-tests --repo /home/wodo/apps/ades`, including `176 passed` under `pytest -q` plus successful Python/npm smoke-install, recovery, and serve checks.
+- 2026-04-09: added explicit tagger-regression coverage in `tests/test_tagger.py`, `tests/component/test_lookup_driven_tagger.py`, `tests/integration/test_lookup_driven_tag_api.py`, and `tests/api/test_tag_lookup_aliases.py` so alias-driven finance tagging is proven to survive partial installed-pack row loss after deleting the `finance-en` SQLite row.
+- 2026-04-09: focused tagger-regression validation passed with `9 passed`, `python -m compileall src/ades` passed again, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, now including `180 passed` under `pytest -q`.

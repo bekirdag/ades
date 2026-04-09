@@ -278,6 +278,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated the categorized pack-reactivation coverage in `tests/unit/test_pack_install_reactivation.py`, `tests/component/test_cli_pack_reactivation.py`, `tests/integration/test_pack_reactivation_api.py`, and `tests/api/test_pack_reactivation_endpoint.py` so those surfaces now prove lookup-driven repair and verify the restored row remains visible to list calls as a side effect.
 - Verified the item through focused lookup-recovery tests with `21 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `176 passed` under `pytest -q` plus successful wheel/npm clean-environment smoke validation.
 
+### 39. Tagger regression coverage for partial installed-pack row loss
+
+- Added explicit alias-driven regression coverage so the tagger surfaces now prove `finance-en` entity extraction still works after the installed-pack SQLite row is deleted while the on-disk pack files remain available.
+- Kept product code unchanged because the runtime already recovered through the current registry/runtime seam; this item closes the coverage gap that previously left the tagger path unproven under the same partial metadata-loss condition.
+- Extended the categorized tagger tests in `tests/test_tagger.py`, `tests/component/test_lookup_driven_tagger.py`, `tests/integration/test_lookup_driven_tag_api.py`, and `tests/api/test_tag_lookup_aliases.py` with alias-only assertions on `AAPL` and `NASDAQ` after deleting the `finance-en` row from `storage_root/registry/ades.db`.
+- Verified the item through focused tagger-regression tests with `9 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `180 passed` under `pytest -q` plus successful wheel/npm clean-environment smoke validation.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -351,4 +358,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Add explicit tagger-level regression coverage for partial installed-pack row loss so the lookup-driven alias extraction path is proven to recover cleanly without relying on ambiguous rule-based matches, then continue the broader clean-environment recovery combinations against published registry artifacts.
+- Finish the remaining pack lifecycle hardening around broader clean-environment recovery combinations and end-to-end production-readiness validation against the published registry and current production deployment flow now that list-driven repair, direct lookup repair, and tagger-level recovery regressions are all covered.

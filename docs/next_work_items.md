@@ -1,11 +1,10 @@
 # ades Next Work Items
 
-Updated after completing lookup-driven installed-pack metadata repair on 2026-04-09.
+Updated after completing tagger regression coverage for partial installed-pack row loss on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Add explicit tagger-level regression coverage for partial installed-pack row loss now that direct lookup repairs missing SQLite rows on demand, so alias-driven extraction is proven to recover cleanly without depending on a prior list call.
    - Finish the remaining production-like clean-environment lifecycle checks around broader recovery combinations against published registry artifacts now that installed pull/tag, direct lookup repair, serve startup, and metadata-bootstrap recovery smoke behavior is covered.
    - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, and new dependency-chain guardrails stable while closing the remaining pack-lifecycle gaps.
 
@@ -98,6 +97,11 @@ Updated after completing lookup-driven installed-pack metadata repair on 2026-04
    - retries lookup misses after reconciling on-disk pack manifests back into SQLite, so direct `lookup_candidates`, `ades packs lookup`, and `GET /v0/lookup` calls can heal a deleted installed-pack row without requiring a preceding list operation
    - keeps the public lookup contracts unchanged while restoring alias/rule metadata for packs that still exist on disk
    - includes categorized unit, component, integration, and API coverage for direct lookup repair against published registry artifacts
+
+- Tagger regression coverage for partial installed-pack row loss:
+   - implemented in `tests/test_tagger.py`, `tests/component/test_lookup_driven_tagger.py`, `tests/integration/test_lookup_driven_tag_api.py`, and `tests/api/test_tag_lookup_aliases.py`
+   - proves alias-driven `finance-en` tagging still extracts `AAPL` and `NASDAQ` after the `finance-en` SQLite row is deleted while the on-disk pack remains installed
+   - keeps product behavior unchanged while locking in the existing recovery path with categorized unit, component, integration, and API coverage
 
 ## Not Next
 
