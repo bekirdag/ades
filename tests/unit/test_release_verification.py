@@ -28,6 +28,7 @@ def _served_batch_manifest_payload(
     working_dir: Path,
     *,
     version: str = __version__,
+    pack: str = "finance-en",
     include_manifest_path: bool = True,
     manifest_file_name: str = "serve-smoke-batch-manifest.finance-en.ades-manifest.json",
     saved_manifest_path: str | None = None,
@@ -41,6 +42,7 @@ def _served_batch_manifest_payload(
     lineage_parent_run_id: str | None = None,
     lineage_source_manifest_path: str | None = None,
     lineage_created_at: str = "2026-04-09T14:57:00Z",
+    item_count: int | None = None,
     output_count: int = 2,
     saved_output_paths: list[str] | None = None,
 ) -> dict[str, object]:
@@ -77,8 +79,8 @@ def _served_batch_manifest_payload(
         },
     ]
     payload: dict[str, object] = {
-        "pack": "finance-en",
-        "item_count": len(items),
+        "pack": pack,
+        "item_count": len(items) if item_count is None else item_count,
         "lineage": {},
         "warnings": [],
         "items": items[:output_count],
@@ -604,6 +606,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         python_batch_payload["saved_manifest_path"]
         == build_expected_batch_manifest_path(python_working_dir)
     )
+    assert python_batch_payload["pack"] == "finance-en"
+    assert python_batch_payload["item_count"] == 2
     assert python_batch_payload["lineage"]["run_id"] == "ades-run-parent-smoke"
     assert python_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert python_batch_payload["lineage"].get("parent_run_id") is None
@@ -712,6 +716,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         npm_batch_payload["saved_manifest_path"]
         == build_expected_batch_manifest_path(npm_working_dir)
     )
+    assert npm_batch_payload["pack"] == "finance-en"
+    assert npm_batch_payload["item_count"] == 2
     assert npm_batch_payload["lineage"]["run_id"] == "ades-run-parent-smoke"
     assert npm_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert npm_batch_payload["lineage"].get("parent_run_id") is None
@@ -2111,6 +2117,57 @@ def test_verify_release_artifacts_reports_live_service_batch_output_path_mismatc
     assert response.npm_install_smoke.serve_tag_files is not None
     assert response.npm_install_smoke.serve_tag_files.passed is True
     assert response.warnings == ["npm_tarball_serve_tag_files_invalid_output_paths"]
+
+
+@pytest.mark.parametrize(
+    ("batch_kwargs", "expected_warning"),
+    [
+        (
+            {"pack": "general-en"},
+            "npm_tarball_serve_tag_files_invalid_pack:general-en",
+        ),
+        (
+            {"item_count": 1},
+            "npm_tarball_serve_tag_files_invalid_item_count:1",
+        ),
+    ],
+)
+def test_verify_release_artifacts_reports_live_service_batch_identity_mismatches(
+    monkeypatch,
+    tmp_path: Path,
+    batch_kwargs: dict[str, str | int],
+    expected_warning: str,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        batch_payload_kwargs: dict[str, str | int] = (
+            {} if "node_modules/.bin" not in str(executable) else batch_kwargs
+        )
+        return _service_smoke_tuple(
+            executable=Path(executable),
+            working_dir=working_dir,
+            expected_version=expected_version,
+            batch_payload=_served_batch_manifest_payload(
+                working_dir,
+                version=expected_version,
+                **batch_payload_kwargs,
+            ),
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.serve_tag_files is not None
+    assert response.npm_install_smoke.serve_tag_files.passed is True
+    assert response.warnings == [expected_warning]
 
 
 def test_verify_release_artifacts_reports_live_service_batch_replay_output_path_mismatches(

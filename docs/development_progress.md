@@ -394,6 +394,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated `tests/release_helpers.py`, `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful exact-path parity plus explicit invalid root/replay saved-path warnings are covered across unit, component, integration, and API layers.
 - Verified the item through focused release verification tests with `90 passed` and `python -m compileall src/ades tests`, keeping the active queue on end-to-end production-readiness validation.
 
+### 55. Root batch identity validation for installed-artifact batch smoke
+
+- Tightened `src/ades/release.py` so clean-environment wheel/npm `/v0/tag/files` smoke now requires the initial root batch response itself to report the expected top-level `pack=finance-en` and `item_count=2`, matching the replay payload identity checks instead of trusting only replay-side identity.
+- Reused the existing packaged serve-smoke response shape while strengthening both the internal pass/fail checks and warning generation for invalid root batch `pack` and `item_count`.
+- Updated `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful root batch identity plus explicit invalid root pack/item-count warnings are covered across unit, component, integration, and API layers.
+- Verified the item through focused release verification tests with `92 passed`, `python -m compileall src/ades tests`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `340 passed` under `pytest -q` plus successful clean-environment wheel/npm root-batch-identity smoke checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`

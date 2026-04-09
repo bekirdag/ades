@@ -18,6 +18,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 
 ## Recently Closed
 
+- Root batch identity validation for installed-artifact `/v0/tag/files` smoke:
+  - implemented in `src/ades/release.py`
+  - tightens clean-environment wheel/npm release smoke so the initial batch response itself must report `pack=finance-en` and `item_count=2`, matching the already-hardened replay payload identity checks instead of only validating replay-side identity
+  - adds categorized unit, component, integration, and API coverage for successful root batch identity plus explicit invalid root pack/item-count warnings on the packaged serve flow
+
 - Exact saved-path parity validation for installed-artifact `/v0/tag/files` smoke:
   - implemented in `src/ades/release.py`
   - tightens clean-environment wheel/npm release smoke so the root batch manifest path, replay manifest path, and both per-item saved output paths must match the exact deterministic paths under the smoke output directory rather than only matching filename suffixes or item counts

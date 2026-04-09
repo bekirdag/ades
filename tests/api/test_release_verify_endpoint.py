@@ -85,6 +85,8 @@ def test_release_verify_endpoint_reports_smoke_install_results(
         python_batch_payload["saved_manifest_path"]
         == build_expected_batch_manifest_path(python_working_dir)
     )
+    assert python_batch_payload["pack"] == "finance-en"
+    assert python_batch_payload["item_count"] == 2
     assert python_batch_payload["lineage"]["run_id"] == "ades-run-parent-smoke"
     assert python_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert python_batch_payload["lineage"].get("parent_run_id") is None
@@ -188,6 +190,8 @@ def test_release_verify_endpoint_reports_smoke_install_results(
         npm_batch_payload["saved_manifest_path"]
         == build_expected_batch_manifest_path(npm_working_dir)
     )
+    assert npm_batch_payload["pack"] == "finance-en"
+    assert npm_batch_payload["item_count"] == 2
     assert npm_batch_payload["lineage"]["run_id"] == "ades-run-parent-smoke"
     assert npm_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert npm_batch_payload["lineage"].get("parent_run_id") is None

@@ -1689,6 +1689,8 @@ def _run_python_install_smoke(
         missing_serve_tag_files_replay_labels = sorted(
             required_labels - set(serve_tag_files_replay_labels)
         )
+        serve_tag_files_pack_id = _parse_batch_pack_id(serve_tag_files)
+        serve_tag_files_item_count = _parse_batch_item_count(serve_tag_files)
         serve_tag_files_manifest_path = _parse_batch_saved_manifest_path(serve_tag_files)
         serve_tag_files_output_paths = _parse_batch_saved_output_paths(serve_tag_files)
         serve_tag_files_lineage_run_id = _parse_batch_lineage_run_id(serve_tag_files)
@@ -1775,6 +1777,12 @@ def _run_python_install_smoke(
         )
         expected_serve_tag_files_replay_manifest_path = (
             _expected_smoke_batch_manifest_path(working_dir, replay=True)
+        )
+        has_expected_serve_tag_files_pack_id = (
+            serve_tag_files_pack_id == SMOKE_PULL_PACK_ID
+        )
+        has_expected_serve_tag_files_item_count = (
+            serve_tag_files_item_count == len(SMOKE_TAG_BATCH_FILES)
         )
         has_expected_serve_tag_files_manifest_path = (
             serve_tag_files_manifest_path == expected_serve_tag_files_manifest_path
@@ -1899,6 +1907,8 @@ def _run_python_install_smoke(
             and not missing_serve_tag_file_labels
             and serve_tag_files.passed
             and not missing_serve_tag_files_labels
+            and has_expected_serve_tag_files_pack_id
+            and has_expected_serve_tag_files_item_count
             and has_expected_serve_tag_files_manifest_path
             and has_expected_serve_tag_files_output_paths
             and has_expected_serve_tag_files_lineage_run_id
@@ -2217,6 +2227,8 @@ def _run_npm_install_smoke(
         missing_serve_tag_files_replay_labels = sorted(
             required_labels - set(serve_tag_files_replay_labels)
         )
+        serve_tag_files_pack_id = _parse_batch_pack_id(serve_tag_files)
+        serve_tag_files_item_count = _parse_batch_item_count(serve_tag_files)
         serve_tag_files_manifest_path = _parse_batch_saved_manifest_path(serve_tag_files)
         serve_tag_files_output_paths = _parse_batch_saved_output_paths(serve_tag_files)
         serve_tag_files_lineage_run_id = _parse_batch_lineage_run_id(serve_tag_files)
@@ -2303,6 +2315,12 @@ def _run_npm_install_smoke(
         )
         expected_serve_tag_files_replay_manifest_path = (
             _expected_smoke_batch_manifest_path(working_dir, replay=True)
+        )
+        has_expected_serve_tag_files_pack_id = (
+            serve_tag_files_pack_id == SMOKE_PULL_PACK_ID
+        )
+        has_expected_serve_tag_files_item_count = (
+            serve_tag_files_item_count == len(SMOKE_TAG_BATCH_FILES)
         )
         has_expected_serve_tag_files_manifest_path = (
             serve_tag_files_manifest_path == expected_serve_tag_files_manifest_path
@@ -2427,6 +2445,8 @@ def _run_npm_install_smoke(
             and not missing_serve_tag_file_labels
             and serve_tag_files.passed
             and not missing_serve_tag_files_labels
+            and has_expected_serve_tag_files_pack_id
+            and has_expected_serve_tag_files_item_count
             and has_expected_serve_tag_files_manifest_path
             and has_expected_serve_tag_files_output_paths
             and has_expected_serve_tag_files_lineage_run_id
@@ -2590,6 +2610,18 @@ def _smoke_install_warnings(
     if missing_serve_tag_files_labels:
         return [
             f"{prefix}_serve_tag_files_missing_labels:{','.join(missing_serve_tag_files_labels)}"
+        ]
+    serve_tag_files_pack_id = _parse_batch_pack_id(smoke_result.serve_tag_files)
+    if serve_tag_files_pack_id is None:
+        return [f"{prefix}_serve_tag_files_missing_pack"]
+    if serve_tag_files_pack_id != SMOKE_PULL_PACK_ID:
+        return [f"{prefix}_serve_tag_files_invalid_pack:{serve_tag_files_pack_id}"]
+    serve_tag_files_item_count = _parse_batch_item_count(smoke_result.serve_tag_files)
+    if serve_tag_files_item_count is None:
+        return [f"{prefix}_serve_tag_files_missing_item_count"]
+    if serve_tag_files_item_count != len(SMOKE_TAG_BATCH_FILES):
+        return [
+            f"{prefix}_serve_tag_files_invalid_item_count:{serve_tag_files_item_count}"
         ]
     serve_tag_files_manifest_path = _parse_batch_saved_manifest_path(smoke_result.serve_tag_files)
     if serve_tag_files_manifest_path is None:
