@@ -48,11 +48,17 @@ def _echo_json(payload: object) -> None:
     typer.echo(json.dumps(payload, indent=2))
 
 
-def _exit_with_configuration_error(exc: Exception) -> None:
-    """Render one configuration/runtime error and stop the CLI command."""
+def _exit_with_cli_error(exc: Exception) -> None:
+    """Render one operator-facing CLI error and stop the command."""
 
     typer.echo(str(exc), err=True)
     raise typer.Exit(code=1) from exc
+
+
+def _exit_with_configuration_error(exc: Exception) -> None:
+    """Render one configuration/runtime error and stop the CLI command."""
+
+    _exit_with_cli_error(exc)
 
 
 def _installer(*, registry_url: str | None = None) -> PackInstaller:
@@ -283,7 +289,10 @@ def registry_build(
 ) -> None:
     """Build a static file-based registry from local pack directories."""
 
-    response = api_build_registry(pack_dirs, output_dir=output_dir)
+    try:
+        response = api_build_registry(pack_dirs, output_dir=output_dir)
+    except (FileNotFoundError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
 

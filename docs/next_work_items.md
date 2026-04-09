@@ -5,7 +5,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. CLI and service operational hardening
-   - The status, pack-listing, lookup, and pack-mutation slices are now closed; next tighten the remaining real operator surfaces such as pack pull flows, registry-build failures, and release-flow failures across `ades`, the public Python API, and the localhost service.
+   - The status, pack-listing, lookup, pack-mutation, and registry-build slices are now closed; next tighten the remaining real operator surfaces such as the pack-access read/pull seams and release-flow failures across `ades`, the public Python API, and the localhost service.
    - Avoid inventing config hardening for pure metadata helpers like installer bootstrap info or release-version inspection when those reads do not cross the runtime-config boundary.
    - Keep pack lifecycle, storage, and release-flow failures aligned so CLI exits and HTTP responses expose the same effective contract.
 
@@ -22,6 +22,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Fifth Phase B1 registry-build operational-hardening slice:
+  - implemented in `src/ades/cli.py` with the existing localhost-service contract locked in by new tests
+  - aligns `ades registry build` with the existing operator-facing failure contract so missing pack directories and related request failures now surface deterministic CLI stderr plus exit code `1`, while `/v0/registry/build` keeps its existing `404`/`400` mapping
+  - keeps the underlying Python API `build_registry()` helper on its original exceptions while adding categorized unit, component, integration, and API coverage for registry-build failure cases
 
 - Fourth Phase B1 pack-mutation operational-hardening slice:
   - implemented in `src/ades/cli.py` and `src/ades/service/app.py`
