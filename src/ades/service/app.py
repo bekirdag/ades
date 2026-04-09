@@ -27,6 +27,7 @@ from ..api import (
     verify_release,
     write_release_manifest,
 )
+from ..storage import UnsupportedRuntimeConfigurationError
 from ..version import __version__
 from .models import (
     AvailablePackSummary,
@@ -70,7 +71,12 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     def runtime_status() -> StatusResponse:
         """Report local runtime status."""
 
-        return status(storage_root=storage_root)
+        try:
+            return status(storage_root=storage_root)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/v0/installers/npm", response_model=NpmInstallerInfo)
     def runtime_npm_installer_info() -> NpmInstallerInfo:

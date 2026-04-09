@@ -1,7 +1,13 @@
 from pathlib import Path
 
+import pytest
+
 from ades.config import Settings
-from ades.storage import MetadataBackend, RuntimeTarget
+from ades.storage import (
+    MetadataBackend,
+    RuntimeTarget,
+    UnsupportedRuntimeConfigurationError,
+)
 
 
 def test_settings_can_load_values_from_toml_config(tmp_path: Path, monkeypatch) -> None:
@@ -44,3 +50,31 @@ def test_settings_can_load_values_from_toml_config(tmp_path: Path, monkeypatch) 
     assert settings.metadata_backend is MetadataBackend.POSTGRESQL
     assert settings.database_url == "postgresql://ades:secret@127.0.0.1:5432/ades"
     assert settings.config_path == config_path
+
+
+def test_settings_reject_missing_explicit_config_file(
+    tmp_path: Path, monkeypatch
+) -> None:
+    missing_config = tmp_path / "missing.toml"
+    monkeypatch.setenv("ADES_CONFIG_FILE", str(missing_config))
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=f"ades config file not found: {missing_config}",
+    ):
+        Settings.from_env()
+
+
+def test_settings_reject_invalid_runtime_target(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config_path = tmp_path / "ades.toml"
+    config_path.write_text("", encoding="utf-8")
+    monkeypatch.setenv("ADES_CONFIG_FILE", str(config_path))
+    monkeypatch.setenv("ADES_RUNTIME_TARGET", "broken-runtime")
+
+    with pytest.raises(
+        UnsupportedRuntimeConfigurationError,
+        match="Unsupported ades runtime target",
+    ):
+        Settings.from_env()

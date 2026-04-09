@@ -18,7 +18,7 @@ Current goal: make the shipped local-tool modules operationally complete before 
    Goal: ensure first-run bootstrap, repair, stale-state cleanup, and idempotent metadata operations are safe.
 
 4. CLI and service operational hardening
-   Status: pending
+   Status: in progress
    Goal: tighten startup validation, error paths, exit behavior, and operator-facing responses.
 
 5. End-to-end production-readiness validation
@@ -30,8 +30,8 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 4, CLI and service operational hardening.
 
 Planned work:
-- tighten startup validation and configuration error messaging across the direct CLI and localhost service surfaces
-- keep CLI exit behavior and HTTP error responses aligned when pack lifecycle, storage configuration, or release-flow operations fail
+- extend the new status/configuration error contract to the adjacent pack-listing and registry-driven operator surfaces
+- keep CLI exit behavior and HTTP error responses aligned when pack lifecycle, storage configuration, registry lookups, or release-flow operations fail
 - preserve the clean-environment release-validation gate while converting broader operational-hardening goals into narrow additive assertions
 
 ## Work Log
@@ -115,3 +115,6 @@ Planned work:
 - 2026-04-09: completed the remaining storage-seam deletion gap by adding explicit shared-contract coverage in `tests/unit/test_metadata_backend_delete_pack.py` and `tests/component/test_metadata_backend_factory.py`, which now prove `delete_pack` returns `True` only when the pack exists, cascades pack metadata cleanup, and leaves sibling installed packs intact for both the local SQLite store and the deferred PostgreSQL seam.
 - 2026-04-09: focused storage-seam and remove-regression validation passed with `17 passed`, `python -m compileall src/ades tests` stayed green, and the full repo release-validation gate passed again through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `230 passed` under `pytest -q`.
 - 2026-04-09: with the clean-environment wheel/npm lifecycle smoke, metadata-loss recovery, direct lookup/list repair, public removal surface, and explicit backend-seam deletion contract all covered, step 2 pack lifecycle hardening and step 3 storage and metadata recovery are now complete; the next active work moves to step 4 CLI and service operational hardening.
+- 2026-04-09: hardened `ades status` and `GET /v0/status` so missing explicit config files now surface deterministic CLI stderr plus exit code `1` and HTTP `404`, while invalid runtime/backend configuration now surfaces deterministic CLI stderr plus exit code `1` and HTTP `400` without changing the underlying Python API status contract.
+- 2026-04-09: added categorized unit, component, integration, and API coverage in `tests/unit/test_config_file.py`, `tests/component/test_cli_status.py`, `tests/integration/test_local_runtime_status.py`, and `tests/api/test_status_runtime_mode.py` so the first Phase B1 status/config slice now proves missing-config-file and invalid-runtime behavior across the shared surfaces.
+- 2026-04-09: focused status/config validation passed with `11 passed`, `python -m compileall src/ades tests` stayed green, and the full repo release-validation gate passed again through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `238 passed` under `pytest -q` while keeping the installed wheel/npm smoke-install flow green.

@@ -27,6 +27,7 @@ from .api import verify_release as api_verify_release
 from .api import write_release_manifest as api_write_release_manifest
 from .config import get_settings
 from .packs.installer import PackInstaller
+from .storage import UnsupportedRuntimeConfigurationError
 from .storage.paths import build_storage_layout, ensure_storage_layout
 
 
@@ -107,7 +108,14 @@ def _render_pack_listing(
 def status() -> None:
     """Show the local ades runtime status."""
 
-    payload = api_status()
+    try:
+        payload = api_status()
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
     _echo_json(payload.model_dump(mode="json"))
 
 

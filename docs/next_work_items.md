@@ -5,7 +5,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. CLI and service operational hardening
-   - Tighten startup validation, configuration error messaging, and operator-facing responses across `ades`, the public Python API, and the localhost service.
+   - The first status/config slice is now closed for `ades status` and `GET /v0/status`; next tighten the adjacent pack-listing and registry/list operator surfaces across `ades`, the public Python API, and the localhost service.
    - Keep pack lifecycle, storage, and release-flow failures aligned so CLI exits and HTTP responses expose the same effective contract.
 
 2. End-to-end production-readiness validation
@@ -21,6 +21,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- First Phase B1 status/config operational-hardening slice:
+  - implemented in `src/ades/cli.py` and `src/ades/service/app.py`
+  - aligns direct `ades status` and localhost `GET /v0/status` behavior so a missing explicit config file yields deterministic CLI stderr plus exit code `1` and HTTP `404`, while invalid runtime/backend configuration yields deterministic CLI stderr plus exit code `1` and HTTP `400`
+  - keeps the underlying Python API contract unchanged while adding categorized unit, component, integration, and API coverage for missing-config-file and invalid-runtime cases
 
 - Phase A pack lifecycle hardening:
   - completed across rollback-safe installs, same-version metadata repair, dependency-aware activate/deactivate semantics, direct/public pack removal, and clean-environment wheel/npm smoke validation
