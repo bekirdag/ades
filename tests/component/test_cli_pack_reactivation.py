@@ -4,7 +4,11 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from ades.cli import app
-from tests.pack_registry_helpers import append_pack_alias, create_finance_registry_sources
+from tests.pack_registry_helpers import (
+    append_pack_alias,
+    create_finance_registry_sources,
+    delete_installed_pack_metadata,
+)
 
 
 def test_cli_repull_reactivates_inactive_dependency(tmp_path: Path) -> None:
@@ -134,6 +138,69 @@ def test_cli_repull_repairs_stale_pack_alias_metadata(tmp_path: Path) -> None:
         and candidate["pack_id"] == "general-en"
         and candidate["value"] == "ceo@example.com"
         and candidate["label"] == "email_address"
+        for candidate in json.loads(lookup_after.stdout)["candidates"]
+    )
+
+
+def test_cli_list_repairs_missing_pack_metadata_rows(tmp_path: Path) -> None:
+    general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
+    registry_dir = tmp_path / "registry"
+    install_root = tmp_path / "install"
+    runner = CliRunner()
+
+    build_result = runner.invoke(
+        app,
+        [
+            "registry",
+            "build",
+            str(general_dir),
+            str(finance_dir),
+            "--output-dir",
+            str(registry_dir),
+        ],
+    )
+    assert build_result.exit_code == 0
+    registry_index = json.loads(build_result.stdout)["index_url"]
+
+    first_pull = runner.invoke(
+        app,
+        ["pull", "finance-en", "--registry-url", registry_index],
+        env={"ADES_STORAGE_ROOT": str(install_root)},
+    )
+    assert first_pull.exit_code == 0
+
+    delete_installed_pack_metadata(install_root, "finance-en")
+
+    lookup_before = runner.invoke(
+        app,
+        ["packs", "lookup", "AAPL", "--exact-alias"],
+        env={"ADES_STORAGE_ROOT": str(install_root)},
+    )
+    assert lookup_before.exit_code == 0
+    assert json.loads(lookup_before.stdout)["candidates"] == []
+
+    listed = runner.invoke(
+        app,
+        ["packs", "list"],
+        env={"ADES_STORAGE_ROOT": str(install_root)},
+    )
+    assert listed.exit_code == 0
+    assert {pack["pack_id"] for pack in json.loads(listed.stdout)["packs"]} == {
+        "finance-en",
+        "general-en",
+    }
+
+    lookup_after = runner.invoke(
+        app,
+        ["packs", "lookup", "AAPL", "--exact-alias"],
+        env={"ADES_STORAGE_ROOT": str(install_root)},
+    )
+    assert lookup_after.exit_code == 0
+    assert any(
+        candidate["kind"] == "alias"
+        and candidate["pack_id"] == "finance-en"
+        and candidate["value"] == "AAPL"
+        and candidate["label"] == "ticker"
         for candidate in json.loads(lookup_after.stdout)["candidates"]
     )
 

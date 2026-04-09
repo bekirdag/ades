@@ -2,9 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from ades import activate_pack, build_registry, deactivate_pack, list_packs, tag
+from ades import activate_pack, build_registry, deactivate_pack, list_packs, lookup_candidates, tag
 from ades.packs.installer import PackInstaller
-from tests.pack_registry_helpers import append_pack_alias, create_finance_registry_sources
+from tests.pack_registry_helpers import (
+    append_pack_alias,
+    create_finance_registry_sources,
+    delete_installed_pack_metadata,
+)
 
 
 def test_repull_reactivates_inactive_dependency_same_version(tmp_path: Path) -> None:
@@ -77,6 +81,37 @@ def test_repull_repairs_stale_alias_metadata_before_skipping_same_version(
         and candidate["value"] == "ceo@example.com"
         and candidate["label"] == "email_address"
         for candidate in installer.registry.lookup_candidates("ceo@example.com", exact_alias=True)
+    )
+
+
+def test_list_packs_repairs_missing_metadata_rows_from_filesystem(tmp_path: Path) -> None:
+    general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
+    registry = build_registry([general_dir, finance_dir], output_dir=tmp_path / "registry")
+
+    install_root = tmp_path / "install"
+    installer = PackInstaller(install_root, registry_url=registry.index_url)
+    installer.install("finance-en")
+
+    delete_installed_pack_metadata(install_root, "finance-en")
+    assert lookup_candidates(
+        "AAPL",
+        storage_root=install_root,
+        exact_alias=True,
+    ).candidates == []
+
+    repaired = list_packs(storage_root=install_root)
+
+    assert {pack.pack_id for pack in repaired} == {"finance-en", "general-en"}
+    assert any(
+        candidate.kind == "alias"
+        and candidate.pack_id == "finance-en"
+        and candidate.value == "AAPL"
+        and candidate.label == "ticker"
+        for candidate in lookup_candidates(
+            "AAPL",
+            storage_root=install_root,
+            exact_alias=True,
+        ).candidates
     )
 
 

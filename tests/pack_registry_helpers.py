@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import sqlite3
 
 
 def create_pack_source(
@@ -128,3 +129,10 @@ def append_pack_alias(pack_dir: Path, *, text: str, label: str) -> None:
     payload = json.loads(aliases_path.read_text())
     payload.setdefault("aliases", []).append({"text": text, "label": label})
     aliases_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def delete_installed_pack_metadata(storage_root: Path, pack_id: str) -> None:
+    db_path = storage_root / "registry" / "ades.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("DELETE FROM installed_packs WHERE pack_id = ?", (pack_id,))

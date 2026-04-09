@@ -1,6 +1,6 @@
 # ades Next Work Items
 
-Updated after completing clean-environment pull-and-tag smoke validation on 2026-04-09.
+Updated after completing installed-pack list metadata repair on 2026-04-09.
 
 ## Priority Queue
 
@@ -9,7 +9,7 @@ Updated after completing clean-environment pull-and-tag smoke validation on 2026
    - Keep the rollback-safe install path, same-version metadata-repair semantics, and new dependency-chain guardrails stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
-   - Harden first-run bootstrap, stale-record cleanup, and repair behavior around the local SQLite registry so the shipped local tool can recover cleanly from interrupted or inconsistent state.
+   - Keep hardening first-run bootstrap, stale-record cleanup, and repair behavior around the local SQLite registry now that list-driven recovery can repair missing installed-pack rows from on-disk manifests.
    - Keep the storage seam explicit so future PostgreSQL work can reuse the public contracts without inheriting local-only assumptions.
 
 3. CLI and service operational hardening
@@ -73,6 +73,12 @@ Updated after completing clean-environment pull-and-tag smoke validation on 2026
    - extends release smoke verification from `status` only to `status`, `pull general-en`, and deterministic `tag` execution through both the installed wheel and npm wrapper in clean environments
    - keeps the existing release verify/validate contracts intact while exposing structured pull/tag command results plus pulled-pack and tagged-label metadata for each smoke-install artifact
    - includes categorized unit, component, integration, and API coverage for successful clean-environment pull/tag smoke validation and explicit tag-failure warnings
+
+- Installed-pack list metadata repair:
+   - implemented in `src/ades/packs/registry.py`, with shared SQLite test support in `tests/pack_registry_helpers.py`
+   - repairs missing installed-pack metadata rows from on-disk manifests even when other valid SQLite rows still exist, so `list_packs`, `ades packs list`, and `/v0/packs` can heal inconsistent local registry state
+   - keeps the existing public list and lookup contracts unchanged while restoring alias, rule, label, and dependency metadata for repaired packs
+   - includes categorized unit, component, integration, and API coverage for list-driven metadata repair against published registry artifacts
 
 ## Not Next
 

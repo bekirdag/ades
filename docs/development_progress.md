@@ -250,6 +250,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated the fake release runner and categorized unit, component, integration, and API coverage so the release verify/validate surfaces exercise the new pull/tag smoke path and explicit tag-failure warnings.
 - Verified the item through focused release verification/validation tests plus `python -m compileall src/ades`.
 
+### 35. Installed-pack list repair for missing SQLite metadata rows
+
+- Hardened `src/ades/packs/registry.py` so `PackRegistry.list_installed_packs()` now reconciles on-disk `packs/*/manifest.json` directories back into the metadata store even when other valid installed-pack rows still exist in SQLite.
+- Kept the existing public `list_packs`, CLI `ades packs list`, and local service `/v0/packs` contracts unchanged while making those list-driven surfaces repair missing alias, rule, label, and dependency metadata for packs that still exist on disk.
+- Added a shared SQLite test helper in `tests/pack_registry_helpers.py` plus categorized unit, component, integration, and API coverage for the recovery path where a single installed-pack row is deleted from `storage_root/registry/ades.db` while sibling pack rows remain.
+- Verified the item through focused list-repair lifecycle tests with `21 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `174 passed` under `pytest -q` plus successful Python/npm smoke-install checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -323,4 +330,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Finish the remaining pack lifecycle hardening around clean-environment serve, bootstrap, and recovery validation against the published registry and current production deployment flow now that installed pull/tag smoke behavior is covered.
+- Finish the remaining pack lifecycle hardening around clean-environment serve, bootstrap, and recovery validation against the published registry and current production deployment flow now that installed pull/tag smoke behavior and list-driven SQLite metadata repair are covered.

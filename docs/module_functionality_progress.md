@@ -14,7 +14,7 @@ Current goal: make the shipped local-tool modules operationally complete before 
    Goal: validate pull/install/activate/deactivate/remove behavior against real artifacts and failure cases.
 
 3. Storage and metadata recovery
-   Status: pending
+   Status: in progress
    Goal: ensure first-run bootstrap, repair, stale-state cleanup, and idempotent metadata operations are safe.
 
 4. CLI and service operational hardening
@@ -30,9 +30,9 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- add clean-environment serve, recovery, and bootstrap validation after the installed pull/tag smoke slice
+- add clean-environment serve, recovery, and bootstrap validation after the installed pull/tag smoke and list-repair slices
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
-- keep the new rollback-safe install semantics stable while finishing the remaining pack-lifecycle recovery work
+- keep the new rollback-safe install semantics, list-driven metadata repair, and SQLite recovery behavior stable while finishing the remaining pack-lifecycle recovery work
 
 ## Work Log
 
@@ -55,3 +55,6 @@ Planned work:
 - 2026-04-09: extended `src/ades/release.py` so clean-environment release smoke verification now runs `status`, `pull general-en`, and a deterministic `tag` command through both the installed wheel and the installed npm wrapper instead of validating `status` only.
 - 2026-04-09: extended the shared release smoke response shape in `src/ades/service/models.py` and updated `tests/release_helpers.py` plus the categorized release verify/validate tests so pull/tag smoke behavior and tag-failure warnings are covered across unit, component, integration, and API layers.
 - 2026-04-09: focused release verification/validation tests passed with `22 passed`, and `python -m compileall src/ades` passed for the clean-environment pull/tag smoke slice.
+- 2026-04-09: hardened `src/ades/packs/registry.py` so installed-pack listing now repairs missing SQLite metadata rows from on-disk manifests even when other valid installed-pack rows still remain.
+- 2026-04-09: added categorized list-repair coverage in `tests/unit/test_pack_install_reactivation.py`, `tests/component/test_cli_pack_reactivation.py`, `tests/integration/test_pack_reactivation_api.py`, and `tests/api/test_pack_reactivation_endpoint.py`, with focused recovery validation passing at `21 passed`.
+- 2026-04-09: full repo release validation passed again after the list-repair slice through `docdexd run-tests --repo /home/wodo/apps/ades`, including `174 passed` under `pytest -q` plus successful Python/npm smoke-install checks.

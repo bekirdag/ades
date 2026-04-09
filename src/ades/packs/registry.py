@@ -43,6 +43,9 @@ class PackRegistry:
         """Return all installed packs that have a manifest."""
 
         packs = self.store.list_installed_packs(active_only=active_only)
+        known_packs = packs if not active_only else self.store.list_installed_packs(active_only=False)
+        if self._sync_missing_filesystem_packs(known_packs):
+            return self.store.list_installed_packs(active_only=active_only)
         if packs or self.store.count_installed_packs() > 0:
             return packs
         self.store.sync_from_filesystem(self.layout.packs_dir)
@@ -115,6 +118,19 @@ class PackRegistry:
     def _bootstrap_if_needed(self) -> None:
         if self.store.count_installed_packs() == 0:
             self.store.sync_from_filesystem(self.layout.packs_dir)
+
+    def _sync_missing_filesystem_packs(self, packs: list[PackManifest]) -> bool:
+        if not self.layout.packs_dir.exists():
+            return False
+        known_ids = {pack.pack_id for pack in packs}
+        repaired = False
+        for manifest_path in sorted(self.layout.packs_dir.glob("*/manifest.json")):
+            pack_dir = manifest_path.parent
+            if pack_dir.name in known_ids:
+                continue
+            self.store.sync_pack_from_dir(pack_dir)
+            repaired = True
+        return repaired
 
 
 def default_registry_url() -> str:
