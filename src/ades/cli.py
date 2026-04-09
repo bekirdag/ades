@@ -232,13 +232,18 @@ def packs_lookup(
 ) -> None:
     """Search deterministic alias and rule metadata from the local SQLite store."""
 
-    response = api_lookup_candidates(
-        query,
-        pack_id=pack,
-        exact_alias=exact_alias,
-        active_only=active_only,
-        limit=limit,
-    )
+    try:
+        response = api_lookup_candidates(
+            query,
+            pack_id=pack,
+            exact_alias=exact_alias,
+            active_only=active_only,
+            limit=limit,
+        )
+    except FileNotFoundError as exc:
+        _exit_with_configuration_error(exc)
+    except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+        _exit_with_configuration_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
 

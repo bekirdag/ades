@@ -374,14 +374,19 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     ) -> LookupResponse:
         """Search deterministic alias and rule metadata candidates."""
 
-        return lookup_candidates(
-            q,
-            storage_root=storage_root,
-            pack_id=pack_id,
-            exact_alias=exact_alias,
-            active_only=active_only,
-            limit=limit,
-        )
+        try:
+            return lookup_candidates(
+                q,
+                storage_root=storage_root,
+                pack_id=pack_id,
+                exact_alias=exact_alias,
+                active_only=active_only,
+                limit=limit,
+            )
+        except FileNotFoundError as exc:
+            _raise_configuration_http_exception(exc)
+        except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+            _raise_configuration_http_exception(exc)
 
     return app
 

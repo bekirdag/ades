@@ -5,7 +5,8 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. CLI and service operational hardening
-   - The status and pack-listing slices are now closed; next tighten the remaining read-mostly operator surfaces such as lookup, installer metadata, and release-version reads across `ades`, the public Python API, and the localhost service.
+   - The status, pack-listing, and lookup slices are now closed; next tighten the remaining real operator surfaces such as pack lifecycle mutations, registry-build failures, and release-flow failures across `ades`, the public Python API, and the localhost service.
+   - Avoid inventing config hardening for pure metadata helpers like installer bootstrap info or release-version inspection when those reads do not cross the runtime-config boundary.
    - Keep pack lifecycle, storage, and release-flow failures aligned so CLI exits and HTTP responses expose the same effective contract.
 
 2. End-to-end production-readiness validation
@@ -21,6 +22,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Third Phase B1 lookup operational-hardening slice:
+  - implemented in `src/ades/cli.py` and `src/ades/service/app.py`
+  - aligns `ades packs lookup` and `GET /v0/lookup` with the same missing-config-file `404` and invalid-runtime `400` operator contract already present on the status and pack-listing surfaces
+  - keeps the underlying Python API `lookup_candidates()` helper on its original exceptions while adding categorized unit, component, integration, and API coverage for lookup configuration failures
 
 - Second Phase B1 pack-listing operational-hardening slice:
   - implemented in `src/ades/cli.py` and `src/ades/service/app.py`
