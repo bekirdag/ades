@@ -56,6 +56,14 @@ from .models import (
 )
 
 
+def _raise_configuration_http_exception(exc: Exception) -> None:
+    """Map one configuration/runtime failure onto the public HTTP contract."""
+
+    if isinstance(exc, FileNotFoundError):
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     """Create a FastAPI application bound to a storage root."""
 
@@ -74,9 +82,9 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         try:
             return status(storage_root=storage_root)
         except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            _raise_configuration_http_exception(exc)
         except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            _raise_configuration_http_exception(exc)
 
     @app.get("/v0/installers/npm", response_model=NpmInstallerInfo)
     def runtime_npm_installer_info() -> NpmInstallerInfo:
@@ -177,7 +185,12 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     def runtime_list_packs(active_only: bool = Query(False)) -> list[PackSummary]:
         """List locally installed packs."""
 
-        return list_packs(storage_root=storage_root, active_only=active_only)
+        try:
+            return list_packs(storage_root=storage_root, active_only=active_only)
+        except FileNotFoundError as exc:
+            _raise_configuration_http_exception(exc)
+        except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+            _raise_configuration_http_exception(exc)
 
     @app.get("/v0/packs/available", response_model=list[AvailablePackSummary])
     def runtime_list_available_packs(
@@ -185,7 +198,12 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     ) -> list[AvailablePackSummary]:
         """List installable packs from the configured registry."""
 
-        return list_available_packs(registry_url=registry_url)
+        try:
+            return list_available_packs(registry_url=registry_url)
+        except FileNotFoundError as exc:
+            _raise_configuration_http_exception(exc)
+        except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+            _raise_configuration_http_exception(exc)
 
     @app.get("/v0/packs/{pack_id}", response_model=PackSummary)
     def runtime_get_pack(pack_id: str) -> PackSummary:

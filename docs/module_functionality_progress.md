@@ -30,8 +30,8 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 4, CLI and service operational hardening.
 
 Planned work:
-- extend the new status/configuration error contract to the adjacent pack-listing and registry-driven operator surfaces
-- keep CLI exit behavior and HTTP error responses aligned when pack lifecycle, storage configuration, registry lookups, or release-flow operations fail
+- extend the new configuration-error contract to the remaining read-mostly operator surfaces such as lookup, installer metadata, and release-version reads
+- keep CLI exit behavior and HTTP error responses aligned when pack lifecycle, storage configuration, registry lookups, metadata reads, or release-flow operations fail
 - preserve the clean-environment release-validation gate while converting broader operational-hardening goals into narrow additive assertions
 
 ## Work Log
@@ -118,3 +118,6 @@ Planned work:
 - 2026-04-09: hardened `ades status` and `GET /v0/status` so missing explicit config files now surface deterministic CLI stderr plus exit code `1` and HTTP `404`, while invalid runtime/backend configuration now surfaces deterministic CLI stderr plus exit code `1` and HTTP `400` without changing the underlying Python API status contract.
 - 2026-04-09: added categorized unit, component, integration, and API coverage in `tests/unit/test_config_file.py`, `tests/component/test_cli_status.py`, `tests/integration/test_local_runtime_status.py`, and `tests/api/test_status_runtime_mode.py` so the first Phase B1 status/config slice now proves missing-config-file and invalid-runtime behavior across the shared surfaces.
 - 2026-04-09: focused status/config validation passed with `11 passed`, `python -m compileall src/ades tests` stayed green, and the full repo release-validation gate passed again through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `238 passed` under `pytest -q` while keeping the installed wheel/npm smoke-install flow green.
+- 2026-04-09: hardened the adjacent installed-pack and available-pack listing surfaces in `src/ades/cli.py` and `src/ades/service/app.py` so `ades packs list`, `ades list packs`, `GET /v0/packs`, and `GET /v0/packs/available` now surface missing explicit config files as deterministic CLI stderr plus exit code `1` and HTTP `404`, while invalid runtime/backend configuration surfaces as deterministic CLI stderr plus exit code `1` and HTTP `400`.
+- 2026-04-09: added categorized unit, component, integration, and API coverage in `tests/unit/test_pack_listing_config_errors.py`, `tests/component/test_cli_pack_list_errors.py`, `tests/integration/test_pack_listing_api.py`, and `tests/api/test_pack_list_endpoint_errors.py` so the second Phase B1 slice proves the same configuration-error contract across both installed-pack and available-pack listing surfaces while keeping the underlying Python API exceptions unchanged.
+- 2026-04-09: focused listing-surface validation passed with `19 passed`, `python -m compileall src/ades tests` stayed green, and the full repo release-validation gate passed again through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `246 passed` under `pytest -q` while keeping the installed wheel/npm smoke-install flow green.

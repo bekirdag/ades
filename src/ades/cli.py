@@ -48,6 +48,13 @@ def _echo_json(payload: object) -> None:
     typer.echo(json.dumps(payload, indent=2))
 
 
+def _exit_with_configuration_error(exc: Exception) -> None:
+    """Render one configuration/runtime error and stop the CLI command."""
+
+    typer.echo(str(exc), err=True)
+    raise typer.Exit(code=1) from exc
+
+
 def _installer(*, registry_url: str | None = None) -> PackInstaller:
     settings = get_settings()
     return PackInstaller(
@@ -83,11 +90,16 @@ def _render_pack_listing(
     if available:
         if active_only:
             raise typer.BadParameter("--active-only cannot be used with available pack listings.")
-        packs = [
-            pack.model_dump(mode="json")
-            for pack in api_list_available_packs(registry_url=registry_url)
-        ]
-        effective_registry_url = registry_url or get_settings().registry_url
+        try:
+            packs = [
+                pack.model_dump(mode="json")
+                for pack in api_list_available_packs(registry_url=registry_url)
+            ]
+            effective_registry_url = registry_url or get_settings().registry_url
+        except FileNotFoundError as exc:
+            _exit_with_configuration_error(exc)
+        except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+            _exit_with_configuration_error(exc)
         _echo_pack_listing(
             mode="available",
             packs=packs,
@@ -97,10 +109,15 @@ def _render_pack_listing(
 
     if registry_url is not None:
         raise typer.BadParameter("--registry-url can only be used with available pack listings.")
-    packs = [
-        pack.model_dump(mode="json")
-        for pack in api_list_packs(active_only=active_only)
-    ]
+    try:
+        packs = [
+            pack.model_dump(mode="json")
+            for pack in api_list_packs(active_only=active_only)
+        ]
+    except FileNotFoundError as exc:
+        _exit_with_configuration_error(exc)
+    except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+        _exit_with_configuration_error(exc)
     _echo_pack_listing(mode="installed", packs=packs)
 
 
@@ -111,11 +128,9 @@ def status() -> None:
     try:
         payload = api_status()
     except FileNotFoundError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+        _exit_with_configuration_error(exc)
     except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+        _exit_with_configuration_error(exc)
     _echo_json(payload.model_dump(mode="json"))
 
 
