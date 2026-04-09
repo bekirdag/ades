@@ -66,6 +66,67 @@ def _served_batch_manifest_payload(
     return payload
 
 
+def _served_batch_manifest_replay_payload(
+    working_dir: Path,
+    *,
+    version: str = __version__,
+    include_manifest_input_path: bool = True,
+    include_lineage_source_manifest_path: bool = True,
+    manifest_input_file_name: str = "serve-smoke-batch-manifest.finance-en.ades-manifest.json",
+    manifest_file_name: str = "serve-smoke-batch-replay.finance-en.ades-manifest.json",
+    replay_mode: str = "processed",
+    output_count: int = 2,
+) -> dict[str, object]:
+    """Return one deterministic live replay `/v0/tag/files` payload."""
+
+    output_dir = (working_dir / "serve-smoke-batch-outputs").resolve()
+    manifest_input_path = str((output_dir / manifest_input_file_name).resolve())
+    items: list[dict[str, object]] = [
+        {
+            "version": version,
+            "pack": "finance-en",
+            "language": "en",
+            "content_type": "text/html",
+            "source_path": str((working_dir / "serve-smoke-batch-alpha.html").resolve()),
+            "saved_output_path": str(
+                (output_dir / "serve-smoke-batch-alpha.finance-en.ades.json").resolve()
+            ),
+            "entities": [{"label": "organization"}, {"label": "ticker"}],
+        },
+        {
+            "version": version,
+            "pack": "finance-en",
+            "language": "en",
+            "content_type": "text/html",
+            "source_path": str((working_dir / "serve-smoke-batch-beta.html").resolve()),
+            "saved_output_path": str(
+                (output_dir / "serve-smoke-batch-beta.finance-en.ades.json").resolve()
+            ),
+            "entities": [{"label": "exchange"}, {"label": "currency_amount"}],
+        },
+    ]
+    payload: dict[str, object] = {
+        "pack": "finance-en",
+        "item_count": len(items),
+        "saved_manifest_path": str((output_dir / manifest_file_name).resolve()),
+        "summary": {
+            "manifest_replay_mode": replay_mode,
+        },
+        "lineage": {},
+        "warnings": [],
+        "items": items[:output_count],
+    }
+    if include_manifest_input_path:
+        summary = payload["summary"]
+        assert isinstance(summary, dict)
+        summary["manifest_input_path"] = manifest_input_path
+    if include_lineage_source_manifest_path:
+        lineage = payload["lineage"]
+        assert isinstance(lineage, dict)
+        lineage["source_manifest_path"] = manifest_input_path
+    return payload
+
+
 def test_release_versions_reports_synchronized_state(monkeypatch, tmp_path: Path) -> None:
     project_root, npm_package_dir = create_release_project(tmp_path / "repo")
     monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
@@ -138,6 +199,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert response.python_install_smoke.serve_tag_file.passed is True
     assert response.python_install_smoke.serve_tag_files is not None
     assert response.python_install_smoke.serve_tag_files.passed is True
+    assert response.python_install_smoke.serve_tag_files_replay is not None
+    assert response.python_install_smoke.serve_tag_files_replay.passed is True
     assert {"general-en", "finance-en"} <= set(response.python_install_smoke.pulled_pack_ids)
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         response.python_install_smoke.tagged_labels
@@ -153,6 +216,9 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         response.python_install_smoke.serve_tag_files_labels
     )
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        response.python_install_smoke.serve_tag_files_replay_labels
+    )
     python_batch_payload = json.loads(response.python_install_smoke.serve_tag_files.stdout)
     assert str(python_batch_payload["saved_manifest_path"]).endswith(
         "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
@@ -161,6 +227,26 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         [
             item["saved_output_path"]
             for item in python_batch_payload["items"]
+            if item.get("saved_output_path")
+        ]
+    ) == 2
+    python_replay_payload = json.loads(response.python_install_smoke.serve_tag_files_replay.stdout)
+    assert str(python_replay_payload["saved_manifest_path"]).endswith(
+        "serve-smoke-batch-replay.finance-en.ades-manifest.json"
+    )
+    assert (
+        python_replay_payload["summary"]["manifest_input_path"]
+        == python_batch_payload["saved_manifest_path"]
+    )
+    assert python_replay_payload["summary"]["manifest_replay_mode"] == "processed"
+    assert (
+        python_replay_payload["lineage"]["source_manifest_path"]
+        == python_batch_payload["saved_manifest_path"]
+    )
+    assert len(
+        [
+            item["saved_output_path"]
+            for item in python_replay_payload["items"]
             if item.get("saved_output_path")
         ]
     ) == 2
@@ -185,6 +271,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert response.npm_install_smoke.serve_tag_file.passed is True
     assert response.npm_install_smoke.serve_tag_files is not None
     assert response.npm_install_smoke.serve_tag_files.passed is True
+    assert response.npm_install_smoke.serve_tag_files_replay is not None
+    assert response.npm_install_smoke.serve_tag_files_replay.passed is True
     assert {"general-en", "finance-en"} <= set(response.npm_install_smoke.pulled_pack_ids)
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         response.npm_install_smoke.tagged_labels
@@ -200,12 +288,31 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         response.npm_install_smoke.serve_tag_files_labels
     )
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        response.npm_install_smoke.serve_tag_files_replay_labels
+    )
     npm_batch_payload = json.loads(response.npm_install_smoke.serve_tag_files.stdout)
     assert str(npm_batch_payload["saved_manifest_path"]).endswith(
         "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
     )
     assert len(
         [item["saved_output_path"] for item in npm_batch_payload["items"] if item.get("saved_output_path")]
+    ) == 2
+    npm_replay_payload = json.loads(response.npm_install_smoke.serve_tag_files_replay.stdout)
+    assert str(npm_replay_payload["saved_manifest_path"]).endswith(
+        "serve-smoke-batch-replay.finance-en.ades-manifest.json"
+    )
+    assert (
+        npm_replay_payload["summary"]["manifest_input_path"]
+        == npm_batch_payload["saved_manifest_path"]
+    )
+    assert npm_replay_payload["summary"]["manifest_replay_mode"] == "processed"
+    assert (
+        npm_replay_payload["lineage"]["source_manifest_path"]
+        == npm_batch_payload["saved_manifest_path"]
+    )
+    assert len(
+        [item["saved_output_path"] for item in npm_replay_payload["items"] if item.get("saved_output_path")]
     ) == 2
     assert len(response.wheel.sha256) == 64
     assert len(response.sdist.sha256) == 64
@@ -411,7 +518,15 @@ def test_verify_release_artifacts_reports_serve_smoke_failures(
                     stdout=json.dumps(_served_batch_manifest_payload(working_dir)),
                     stderr="",
                 ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(_served_batch_manifest_replay_payload(working_dir)),
+                    stderr="",
+                ),
                 ["general-en", "finance-en"],
+                ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
@@ -459,6 +574,14 @@ def test_verify_release_artifacts_reports_serve_smoke_failures(
                 stdout="",
                 stderr="Skipped because service startup did not pass the health probe.",
             ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=-1,
+                passed=False,
+                stdout="",
+                stderr="Skipped because service startup did not pass the health probe.",
+            ),
+            [],
             [],
             [],
             [],
@@ -556,7 +679,20 @@ def test_verify_release_artifacts_reports_live_service_tag_failures(
                     ),
                     stderr="",
                 ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(
+                        _served_batch_manifest_replay_payload(
+                            working_dir,
+                            version=expected_version,
+                        )
+                    ),
+                    stderr="",
+                ),
                 ["general-en", "finance-en"],
+                ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
@@ -619,10 +755,18 @@ def test_verify_release_artifacts_reports_live_service_tag_failures(
                 ),
                 stderr="",
             ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=-1,
+                passed=False,
+                stdout="",
+                stderr="Skipped because live service tag endpoint failed.",
+            ),
             ["general-en", "finance-en"],
             [],
             ["organization", "ticker", "exchange", "currency_amount"],
             ["organization", "ticker", "exchange", "currency_amount"],
+            [],
         )
 
     monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
@@ -716,7 +860,20 @@ def test_verify_release_artifacts_reports_live_service_file_tag_failures(
                     ),
                     stderr="",
                 ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(
+                        _served_batch_manifest_replay_payload(
+                            working_dir,
+                            version=expected_version,
+                        )
+                    ),
+                    stderr="",
+                ),
                 ["general-en", "finance-en"],
+                ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
@@ -779,10 +936,18 @@ def test_verify_release_artifacts_reports_live_service_file_tag_failures(
                 ),
                 stderr="",
             ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=-1,
+                passed=False,
+                stdout="",
+                stderr="Skipped because live service file-tag endpoint failed.",
+            ),
             ["general-en", "finance-en"],
             ["organization", "ticker", "exchange", "currency_amount"],
             [],
             ["organization", "ticker", "exchange", "currency_amount"],
+            [],
         )
 
     monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
@@ -876,7 +1041,20 @@ def test_verify_release_artifacts_reports_live_service_batch_file_tag_failures(
                     ),
                     stderr="",
                 ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(
+                        _served_batch_manifest_replay_payload(
+                            working_dir,
+                            version=expected_version,
+                        )
+                    ),
+                    stderr="",
+                ),
                 ["general-en", "finance-en"],
+                ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
@@ -946,9 +1124,17 @@ def test_verify_release_artifacts_reports_live_service_batch_file_tag_failures(
                 stdout="",
                 stderr="batch tag endpoint failed",
             ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=-1,
+                passed=False,
+                stdout="",
+                stderr="Skipped because live service batch tag endpoint failed.",
+            ),
             ["general-en", "finance-en"],
             ["organization", "ticker", "exchange", "currency_amount"],
             ["organization", "ticker", "exchange", "currency_amount"],
+            [],
             [],
         )
 
@@ -1043,7 +1229,20 @@ def test_verify_release_artifacts_reports_live_service_batch_manifest_failures(
                     ),
                     stderr="",
                 ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(
+                        _served_batch_manifest_replay_payload(
+                            working_dir,
+                            version=expected_version,
+                        )
+                    ),
+                    stderr="",
+                ),
                 ["general-en", "finance-en"],
+                ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
@@ -1119,10 +1318,18 @@ def test_verify_release_artifacts_reports_live_service_batch_manifest_failures(
                 ),
                 stderr="",
             ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=-1,
+                passed=False,
+                stdout="",
+                stderr="Skipped because live batch tagging did not write a manifest.",
+            ),
             ["general-en", "finance-en"],
             ["organization", "ticker", "exchange", "currency_amount"],
             ["organization", "ticker", "exchange", "currency_amount"],
             ["organization", "ticker", "exchange", "currency_amount"],
+            [],
         )
 
     monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
@@ -1215,7 +1422,20 @@ def test_verify_release_artifacts_reports_live_service_batch_manifest_path_misma
                     ),
                     stderr="",
                 ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(
+                        _served_batch_manifest_replay_payload(
+                            working_dir,
+                            version=expected_version,
+                        )
+                    ),
+                    stderr="",
+                ),
                 ["general-en", "finance-en"],
+                ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
                 ["organization", "ticker", "exchange", "currency_amount"],
@@ -1291,10 +1511,18 @@ def test_verify_release_artifacts_reports_live_service_batch_manifest_path_misma
                 ),
                 stderr="",
             ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=-1,
+                passed=False,
+                stdout="",
+                stderr="Skipped because live batch tagging wrote an unexpected manifest path.",
+            ),
             ["general-en", "finance-en"],
             ["organization", "ticker", "exchange", "currency_amount"],
             ["organization", "ticker", "exchange", "currency_amount"],
             ["organization", "ticker", "exchange", "currency_amount"],
+            [],
         )
 
     monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
@@ -1307,6 +1535,201 @@ def test_verify_release_artifacts_reports_live_service_batch_manifest_path_misma
     assert response.npm_install_smoke.serve_tag_files is not None
     assert response.npm_install_smoke.serve_tag_files.passed is True
     assert response.warnings == ["npm_tarball_serve_tag_files_invalid_manifest_path"]
+
+
+def test_verify_release_artifacts_reports_live_service_batch_replay_manifest_input_mismatches(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        if "node_modules/.bin" not in str(executable):
+            return (
+                ReleaseCommandResult(
+                    command=[str(executable), "serve"],
+                    exit_code=0,
+                    passed=True,
+                    stdout="Using storage root\n",
+                    stderr="",
+                ),
+                ReleaseCommandResult(
+                    command=["GET", "http://127.0.0.1:8734/healthz"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=f'{{"status":"ok","version":"{expected_version}"}}',
+                    stderr="",
+                ),
+                ReleaseCommandResult(
+                    command=["GET", "http://127.0.0.1:8734/v0/status"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=(
+                        '{"service":"ades","version":"'
+                        + expected_version
+                        + '","installed_packs":["general-en","finance-en"]}'
+                    ),
+                    stderr="",
+                ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(
+                        {
+                            "entities": [
+                                {"label": "organization"},
+                                {"label": "ticker"},
+                                {"label": "exchange"},
+                                {"label": "currency_amount"},
+                            ]
+                        }
+                    ),
+                    stderr="",
+                ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag/file"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(
+                        {
+                            "entities": [
+                                {"label": "organization"},
+                                {"label": "ticker"},
+                                {"label": "exchange"},
+                                {"label": "currency_amount"},
+                            ]
+                        }
+                    ),
+                    stderr="",
+                ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(
+                        _served_batch_manifest_payload(working_dir, version=expected_version)
+                    ),
+                    stderr="",
+                ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(
+                        _served_batch_manifest_replay_payload(
+                            working_dir,
+                            version=expected_version,
+                        )
+                    ),
+                    stderr="",
+                ),
+                ["general-en", "finance-en"],
+                ["organization", "ticker", "exchange", "currency_amount"],
+                ["organization", "ticker", "exchange", "currency_amount"],
+                ["organization", "ticker", "exchange", "currency_amount"],
+                ["organization", "ticker", "exchange", "currency_amount"],
+            )
+        return (
+            ReleaseCommandResult(
+                command=[str(executable), "serve"],
+                exit_code=0,
+                passed=True,
+                stdout="Using storage root\n",
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["GET", "http://127.0.0.1:8734/healthz"],
+                exit_code=0,
+                passed=True,
+                stdout=f'{{"status":"ok","version":"{expected_version}"}}',
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["GET", "http://127.0.0.1:8734/v0/status"],
+                exit_code=0,
+                passed=True,
+                stdout=(
+                    '{"service":"ades","version":"'
+                    + expected_version
+                    + '","installed_packs":["general-en","finance-en"]}'
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    {
+                        "entities": [
+                            {"label": "organization"},
+                            {"label": "ticker"},
+                            {"label": "exchange"},
+                            {"label": "currency_amount"},
+                        ]
+                    }
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/file"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    {
+                        "entities": [
+                            {"label": "organization"},
+                            {"label": "ticker"},
+                            {"label": "exchange"},
+                            {"label": "currency_amount"},
+                        ]
+                    }
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    _served_batch_manifest_payload(working_dir, version=expected_version)
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    _served_batch_manifest_replay_payload(
+                        working_dir,
+                        version=expected_version,
+                        manifest_input_file_name="wrong.finance-en.ades-manifest.json",
+                    )
+                ),
+                stderr="",
+            ),
+            ["general-en", "finance-en"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.serve_tag_files_replay is not None
+    assert response.npm_install_smoke.serve_tag_files_replay.passed is True
+    assert response.warnings == ["npm_tarball_serve_tag_files_replay_invalid_manifest_input_path"]
 
 
 def test_verify_release_artifacts_reports_recovery_status_failures(

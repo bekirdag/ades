@@ -291,6 +291,8 @@ def build_fake_service_smoke(
     ReleaseCommandResult,
     ReleaseCommandResult,
     ReleaseCommandResult,
+    ReleaseCommandResult,
+    list[str],
     list[str],
     list[str],
     list[str],
@@ -459,6 +461,95 @@ def build_fake_service_smoke(
         ),
         stderr="",
     )
+    serve_tag_files_replay = ReleaseCommandResult(
+        command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+        exit_code=0,
+        passed=True,
+        stdout=json.dumps(
+            {
+                "pack": "finance-en",
+                "item_count": 2,
+                "saved_manifest_path": str(
+                    (
+                        storage_root.parent
+                        / "serve-smoke-batch-outputs"
+                        / "serve-smoke-batch-replay.finance-en.ades-manifest.json"
+                    ).resolve()
+                ),
+                "summary": {
+                    "manifest_input_path": str(
+                        (
+                            storage_root.parent
+                            / "serve-smoke-batch-outputs"
+                            / "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
+                        ).resolve()
+                    ),
+                    "manifest_replay_mode": "processed",
+                },
+                "lineage": {
+                    "source_manifest_path": str(
+                        (
+                            storage_root.parent
+                            / "serve-smoke-batch-outputs"
+                            / "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
+                        ).resolve()
+                    )
+                },
+                "warnings": [],
+                "items": [
+                    {
+                        "version": version,
+                        "pack": "finance-en",
+                        "language": "en",
+                        "content_type": "text/html",
+                        "source_path": str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
+                        "saved_output_path": str(
+                            (
+                                storage_root.parent
+                                / "serve-smoke-batch-outputs"
+                                / "serve-smoke-batch-alpha.finance-en.ades.json"
+                            ).resolve()
+                        ),
+                        "entities": [
+                            {"text": "Apple", "label": "organization", "start": 3, "end": 8, "confidence": 1.0},
+                            {"text": "AAPL", "label": "ticker", "start": 14, "end": 18, "confidence": 1.0},
+                        ],
+                        "topics": [],
+                        "warnings": [],
+                        "timing_ms": 1,
+                    },
+                    {
+                        "version": version,
+                        "pack": "finance-en",
+                        "language": "en",
+                        "content_type": "text/html",
+                        "source_path": str((storage_root.parent / "serve-smoke-batch-beta.html").resolve()),
+                        "saved_output_path": str(
+                            (
+                                storage_root.parent
+                                / "serve-smoke-batch-outputs"
+                                / "serve-smoke-batch-beta.finance-en.ades.json"
+                            ).resolve()
+                        ),
+                        "entities": [
+                            {"text": "NASDAQ", "label": "exchange", "start": 3, "end": 9, "confidence": 1.0},
+                            {
+                                "text": "USD 12.5",
+                                "label": "currency_amount",
+                                "start": 23,
+                                "end": 31,
+                                "confidence": 0.9,
+                            },
+                        ],
+                        "topics": [],
+                        "warnings": [],
+                        "timing_ms": 1,
+                    },
+                ],
+            }
+        ),
+        stderr="",
+    )
     return (
         serve,
         healthz,
@@ -466,7 +557,9 @@ def build_fake_service_smoke(
         serve_tag,
         serve_tag_file,
         serve_tag_files,
+        serve_tag_files_replay,
         ["general-en", "finance-en"],
+        ["organization", "ticker", "exchange", "currency_amount"],
         ["organization", "ticker", "exchange", "currency_amount"],
         ["organization", "ticker", "exchange", "currency_amount"],
         ["organization", "ticker", "exchange", "currency_amount"],

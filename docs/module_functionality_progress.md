@@ -30,9 +30,9 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- extend installed-artifact clean-environment validation so live `/v0/tag/files` requests also prove manifest replay and lineage through the served wheel and npm wrapper after finance-pack pull and metadata recovery
+- extend installed-artifact clean-environment validation so live `/v0/tag/files` replay through the served wheel and npm wrapper also proves replay-summary counts such as `manifest_candidate_count` and `manifest_selected_count` after finance-pack pull and metadata recovery
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
-- keep the new rollback-safe install semantics, lookup-driven metadata repair, SQLite recovery behavior, dependency-bearing release smoke, and live `/v0/tag`, `/v0/tag/file`, plus `/v0/tag/files` persistence smoke stable while finishing the remaining pack-lifecycle recovery work
+- keep the new rollback-safe install semantics, lookup-driven metadata repair, SQLite recovery behavior, dependency-bearing release smoke, and live `/v0/tag`, `/v0/tag/file`, plus `/v0/tag/files` persistence and replay smoke stable while finishing the remaining pack-lifecycle recovery work
 
 ## Work Log
 
@@ -87,3 +87,6 @@ Planned work:
 - 2026-04-09: extended `src/ades/release.py` so the live `/v0/tag/files` release smoke now sets an explicit `output.manifest_path` override and requires the served wheel and npm wrapper to return that exact path instead of silently falling back to the default batch manifest filename.
 - 2026-04-09: updated `tests/release_helpers.py` plus the categorized release verify tests so successful explicit manifest-path overrides and explicit invalid-manifest-path warnings are covered consistently across unit, component, integration, and API layers.
 - 2026-04-09: focused release verification passed with `22 passed`, `python -m compileall src/ades` passed again, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `185 passed` under `pytest -q`.
+- 2026-04-09: extended `src/ades/release.py` so the live `/v0/tag/files` release smoke now replays the manifest it just wrote through the served wheel and npm wrapper, writes an explicit replay child manifest, and requires replay-summary plus lineage fields from the packaged serve path.
+- 2026-04-09: updated `src/ades/service/models.py`, `tests/release_helpers.py`, and the categorized release verify tests so additive `serve_tag_files_replay` results plus explicit replay-manifest-input warnings are covered consistently across unit, component, integration, and API layers.
+- 2026-04-09: focused release verification passed with `23 passed`, `python -m compileall src/ades` passed again, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `186 passed` under `pytest -q`.

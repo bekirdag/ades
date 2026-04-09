@@ -40,6 +40,7 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert verify_payload["python_install_smoke"]["serve_tag"]["passed"] is True
     assert verify_payload["python_install_smoke"]["serve_tag_file"]["passed"] is True
     assert verify_payload["python_install_smoke"]["serve_tag_files"]["passed"] is True
+    assert verify_payload["python_install_smoke"]["serve_tag_files_replay"]["passed"] is True
     assert {"general-en", "finance-en"} <= set(
         verify_payload["python_install_smoke"]["pulled_pack_ids"]
     )
@@ -61,6 +62,9 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verify_payload["python_install_smoke"]["serve_tag_files_labels"]
     )
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        verify_payload["python_install_smoke"]["serve_tag_files_replay_labels"]
+    )
     python_batch_payload = json.loads(
         verify_payload["python_install_smoke"]["serve_tag_files"]["stdout"]
     )
@@ -74,6 +78,28 @@ def test_release_verify_endpoint_reports_smoke_install_results(
             if item.get("saved_output_path")
         ]
     ) == 2
+    python_replay_payload = json.loads(
+        verify_payload["python_install_smoke"]["serve_tag_files_replay"]["stdout"]
+    )
+    assert str(python_replay_payload["saved_manifest_path"]).endswith(
+        "serve-smoke-batch-replay.finance-en.ades-manifest.json"
+    )
+    assert (
+        python_replay_payload["summary"]["manifest_input_path"]
+        == python_batch_payload["saved_manifest_path"]
+    )
+    assert python_replay_payload["summary"]["manifest_replay_mode"] == "processed"
+    assert (
+        python_replay_payload["lineage"]["source_manifest_path"]
+        == python_batch_payload["saved_manifest_path"]
+    )
+    assert len(
+        [
+            item["saved_output_path"]
+            for item in python_replay_payload["items"]
+            if item.get("saved_output_path")
+        ]
+    ) == 2
     assert verify_payload["npm_install_smoke"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["pull"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["tag"]["passed"] is True
@@ -84,6 +110,7 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert verify_payload["npm_install_smoke"]["serve_tag"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["serve_tag_file"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["serve_tag_files"]["passed"] is True
+    assert verify_payload["npm_install_smoke"]["serve_tag_files_replay"]["passed"] is True
     assert {"general-en", "finance-en"} <= set(
         verify_payload["npm_install_smoke"]["pulled_pack_ids"]
     )
@@ -105,6 +132,9 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         verify_payload["npm_install_smoke"]["serve_tag_files_labels"]
     )
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        verify_payload["npm_install_smoke"]["serve_tag_files_replay_labels"]
+    )
     npm_batch_payload = json.loads(
         verify_payload["npm_install_smoke"]["serve_tag_files"]["stdout"]
     )
@@ -113,6 +143,24 @@ def test_release_verify_endpoint_reports_smoke_install_results(
     )
     assert len(
         [item["saved_output_path"] for item in npm_batch_payload["items"] if item.get("saved_output_path")]
+    ) == 2
+    npm_replay_payload = json.loads(
+        verify_payload["npm_install_smoke"]["serve_tag_files_replay"]["stdout"]
+    )
+    assert str(npm_replay_payload["saved_manifest_path"]).endswith(
+        "serve-smoke-batch-replay.finance-en.ades-manifest.json"
+    )
+    assert (
+        npm_replay_payload["summary"]["manifest_input_path"]
+        == npm_batch_payload["saved_manifest_path"]
+    )
+    assert npm_replay_payload["summary"]["manifest_replay_mode"] == "processed"
+    assert (
+        npm_replay_payload["lineage"]["source_manifest_path"]
+        == npm_batch_payload["saved_manifest_path"]
+    )
+    assert len(
+        [item["saved_output_path"] for item in npm_replay_payload["items"] if item.get("saved_output_path")]
     ) == 2
 
 

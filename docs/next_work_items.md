@@ -1,11 +1,11 @@
 # ades Next Work Items
 
-Updated after completing live batch-manifest path override smoke validation for installed artifacts on 2026-04-09.
+Updated after completing live batch-manifest replay smoke validation for installed artifacts on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` requests also replay the manifest they just wrote after `finance-en` pull and metadata recovery, so the packaged serve path proves manifest replay, lineage, and replay-summary behavior instead of only one-shot batch persistence.
+   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` replay through the served wheel and npm wrapper also proves replay-summary counts such as `manifest_candidate_count` and `manifest_selected_count` after `finance-en` pull and metadata recovery, not just manifest-input, replay-mode, and lineage wiring.
    - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, dependency-chain guardrails, and dependency-bearing release smoke stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
@@ -138,6 +138,12 @@ Updated after completing live batch-manifest path override smoke validation for 
    - extends release smoke verification so both the installed wheel and npm wrapper now provide an explicit `output.manifest_path` override through the live `POST /v0/tag/files` request after finance-pack pull, metadata bootstrap recovery, and `ades serve` startup
    - keeps the release verify/validate contracts unchanged while requiring the existing `serve_tag_files` result to report that exact manifest path instead of the default batch manifest filename
    - includes categorized unit, component, integration, and API coverage for successful explicit manifest-path overrides and explicit invalid-manifest-path warnings
+
+- Live batch-manifest replay smoke validation for installed artifacts:
+   - implemented in `src/ades/release.py`, `src/ades/service/models.py`, and `tests/release_helpers.py`
+   - extends release smoke verification so both the installed wheel and npm wrapper now replay the manifest they just wrote through a second live `POST /v0/tag/files` request after finance-pack pull, metadata bootstrap recovery, and `ades serve` startup
+   - keeps the release verify/validate contracts additive by exposing `serve_tag_files_replay` and `serve_tag_files_replay_labels`, while requiring replay summary, lineage source-manifest, and child manifest-path behavior from the packaged serve path
+   - includes categorized unit, component, integration, and API coverage for successful manifest replay plus explicit invalid replay-manifest-input warnings
 
 ## Not Next
 

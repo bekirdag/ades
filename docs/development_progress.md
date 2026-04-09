@@ -327,6 +327,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated `tests/release_helpers.py` and the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful explicit manifest-path overrides and explicit invalid-manifest-path warnings are covered across unit, component, integration, and API layers.
 - Verified the item through focused release verification tests with `22 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `185 passed` under `pytest -q` plus successful clean-environment wheel/npm live `/v0/tag/files` manifest-path override smoke checks.
 
+### 46. Live batch-manifest replay smoke validation for installed artifacts
+
+- Extended `src/ades/release.py` so the live `/v0/tag/files` release smoke now replays the manifest it just wrote through the served wheel and npm wrapper, writing an explicit child replay manifest and requiring replay-summary plus lineage fields instead of validating only the initial batch persistence call.
+- Extended the shared smoke response model in `src/ades/service/models.py` so each packaged-artifact smoke result now exposes additive `serve_tag_files_replay` command output plus `serve_tag_files_replay_labels`, while the warning flow now reports replay-specific manifest-input, replay-mode, lineage, and child-manifest-path failures deterministically.
+- Updated `tests/release_helpers.py` and the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful manifest replay plus explicit invalid replay-manifest-input warnings are covered across unit, component, integration, and API layers.
+- Verified the item through focused release verification tests with `23 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `186 passed` under `pytest -q` plus successful clean-environment wheel/npm live `/v0/tag/files` manifest replay and lineage smoke checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
