@@ -566,17 +566,27 @@ def _parse_batch_rerun_diff_manifest_input_path(
     )
 
 
+def _parse_batch_rerun_diff_list(
+    result: ReleaseCommandResult,
+    field_name: str,
+) -> list[object] | None:
+    """Extract one rerun-diff list field from a JSON `ades tag-files` payload."""
+
+    rerun_diff = _parse_batch_rerun_diff(result)
+    if rerun_diff is None:
+        return None
+    values = rerun_diff.get(field_name)
+    return values if isinstance(values, list) else None
+
+
 def _parse_batch_rerun_diff_path_list(
     result: ReleaseCommandResult,
     field_name: str,
 ) -> list[str] | None:
     """Extract one rerun-diff path list from a JSON `ades tag-files` payload."""
 
-    rerun_diff = _parse_batch_rerun_diff(result)
-    if rerun_diff is None:
-        return None
-    values = rerun_diff.get(field_name)
-    if not isinstance(values, list):
+    values = _parse_batch_rerun_diff_list(result, field_name)
+    if values is None:
         return None
     paths: list[str] = []
     for value in values:
@@ -1496,6 +1506,22 @@ def _run_python_install_smoke(
             serve_tag_files_replay,
             "changed",
         )
+        serve_tag_files_replay_rerun_diff_newly_processed = _parse_batch_rerun_diff_path_list(
+            serve_tag_files_replay,
+            "newly_processed",
+        )
+        serve_tag_files_replay_rerun_diff_reused = _parse_batch_rerun_diff_path_list(
+            serve_tag_files_replay,
+            "reused",
+        )
+        serve_tag_files_replay_rerun_diff_repaired = _parse_batch_rerun_diff_path_list(
+            serve_tag_files_replay,
+            "repaired",
+        )
+        serve_tag_files_replay_rerun_diff_skipped = _parse_batch_rerun_diff_list(
+            serve_tag_files_replay,
+            "skipped",
+        )
         expected_serve_tag_files_replay_rerun_diff_changed_paths = sorted(
             str((working_dir / file_name).resolve())
             for file_name, _ in SMOKE_TAG_BATCH_FILES
@@ -1552,6 +1578,18 @@ def _run_python_install_smoke(
             and sorted(serve_tag_files_replay_rerun_diff_changed_paths)
             == expected_serve_tag_files_replay_rerun_diff_changed_paths
         )
+        has_expected_serve_tag_files_replay_rerun_diff_newly_processed = (
+            serve_tag_files_replay_rerun_diff_newly_processed == []
+        )
+        has_expected_serve_tag_files_replay_rerun_diff_reused = (
+            serve_tag_files_replay_rerun_diff_reused == []
+        )
+        has_expected_serve_tag_files_replay_rerun_diff_repaired = (
+            serve_tag_files_replay_rerun_diff_repaired == []
+        )
+        has_expected_serve_tag_files_replay_rerun_diff_skipped = (
+            serve_tag_files_replay_rerun_diff_skipped == []
+        )
         passed = (
             install.passed
             and invoke.passed
@@ -1591,6 +1629,10 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_replay_rerun_diff
             and has_expected_serve_tag_files_replay_rerun_diff_manifest_input_path
             and has_expected_serve_tag_files_replay_rerun_diff_changed_paths
+            and has_expected_serve_tag_files_replay_rerun_diff_newly_processed
+            and has_expected_serve_tag_files_replay_rerun_diff_reused
+            and has_expected_serve_tag_files_replay_rerun_diff_repaired
+            and has_expected_serve_tag_files_replay_rerun_diff_skipped
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="python_wheel",
@@ -1860,6 +1902,22 @@ def _run_npm_install_smoke(
             serve_tag_files_replay,
             "changed",
         )
+        serve_tag_files_replay_rerun_diff_newly_processed = _parse_batch_rerun_diff_path_list(
+            serve_tag_files_replay,
+            "newly_processed",
+        )
+        serve_tag_files_replay_rerun_diff_reused = _parse_batch_rerun_diff_path_list(
+            serve_tag_files_replay,
+            "reused",
+        )
+        serve_tag_files_replay_rerun_diff_repaired = _parse_batch_rerun_diff_path_list(
+            serve_tag_files_replay,
+            "repaired",
+        )
+        serve_tag_files_replay_rerun_diff_skipped = _parse_batch_rerun_diff_list(
+            serve_tag_files_replay,
+            "skipped",
+        )
         expected_serve_tag_files_replay_rerun_diff_changed_paths = sorted(
             str((working_dir / file_name).resolve())
             for file_name, _ in SMOKE_TAG_BATCH_FILES
@@ -1916,6 +1974,18 @@ def _run_npm_install_smoke(
             and sorted(serve_tag_files_replay_rerun_diff_changed_paths)
             == expected_serve_tag_files_replay_rerun_diff_changed_paths
         )
+        has_expected_serve_tag_files_replay_rerun_diff_newly_processed = (
+            serve_tag_files_replay_rerun_diff_newly_processed == []
+        )
+        has_expected_serve_tag_files_replay_rerun_diff_reused = (
+            serve_tag_files_replay_rerun_diff_reused == []
+        )
+        has_expected_serve_tag_files_replay_rerun_diff_repaired = (
+            serve_tag_files_replay_rerun_diff_repaired == []
+        )
+        has_expected_serve_tag_files_replay_rerun_diff_skipped = (
+            serve_tag_files_replay_rerun_diff_skipped == []
+        )
         passed = (
             install.passed
             and invoke.passed
@@ -1955,6 +2025,10 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_replay_rerun_diff
             and has_expected_serve_tag_files_replay_rerun_diff_manifest_input_path
             and has_expected_serve_tag_files_replay_rerun_diff_changed_paths
+            and has_expected_serve_tag_files_replay_rerun_diff_newly_processed
+            and has_expected_serve_tag_files_replay_rerun_diff_reused
+            and has_expected_serve_tag_files_replay_rerun_diff_repaired
+            and has_expected_serve_tag_files_replay_rerun_diff_skipped
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="npm_tarball",
@@ -2152,6 +2226,58 @@ def _smoke_install_warnings(
         != expected_serve_tag_files_replay_rerun_diff_changed_paths
     ):
         return [f"{prefix}_serve_tag_files_replay_invalid_rerun_diff_changed_paths"]
+    serve_tag_files_replay_rerun_diff_newly_processed = serve_tag_files_replay_rerun_diff.get(
+        "newly_processed"
+    )
+    if serve_tag_files_replay_rerun_diff_newly_processed is None:
+        return [f"{prefix}_serve_tag_files_replay_missing_rerun_diff_newly_processed"]
+    if (
+        not isinstance(serve_tag_files_replay_rerun_diff_newly_processed, list)
+        or any(
+            not isinstance(value, str) or not value
+            for value in serve_tag_files_replay_rerun_diff_newly_processed
+        )
+        or serve_tag_files_replay_rerun_diff_newly_processed != []
+    ):
+        return [f"{prefix}_serve_tag_files_replay_invalid_rerun_diff_newly_processed"]
+    serve_tag_files_replay_rerun_diff_reused = serve_tag_files_replay_rerun_diff.get(
+        "reused"
+    )
+    if serve_tag_files_replay_rerun_diff_reused is None:
+        return [f"{prefix}_serve_tag_files_replay_missing_rerun_diff_reused"]
+    if (
+        not isinstance(serve_tag_files_replay_rerun_diff_reused, list)
+        or any(
+            not isinstance(value, str) or not value
+            for value in serve_tag_files_replay_rerun_diff_reused
+        )
+        or serve_tag_files_replay_rerun_diff_reused != []
+    ):
+        return [f"{prefix}_serve_tag_files_replay_invalid_rerun_diff_reused"]
+    serve_tag_files_replay_rerun_diff_repaired = serve_tag_files_replay_rerun_diff.get(
+        "repaired"
+    )
+    if serve_tag_files_replay_rerun_diff_repaired is None:
+        return [f"{prefix}_serve_tag_files_replay_missing_rerun_diff_repaired"]
+    if (
+        not isinstance(serve_tag_files_replay_rerun_diff_repaired, list)
+        or any(
+            not isinstance(value, str) or not value
+            for value in serve_tag_files_replay_rerun_diff_repaired
+        )
+        or serve_tag_files_replay_rerun_diff_repaired != []
+    ):
+        return [f"{prefix}_serve_tag_files_replay_invalid_rerun_diff_repaired"]
+    serve_tag_files_replay_rerun_diff_skipped = serve_tag_files_replay_rerun_diff.get(
+        "skipped"
+    )
+    if serve_tag_files_replay_rerun_diff_skipped is None:
+        return [f"{prefix}_serve_tag_files_replay_missing_rerun_diff_skipped"]
+    if (
+        not isinstance(serve_tag_files_replay_rerun_diff_skipped, list)
+        or serve_tag_files_replay_rerun_diff_skipped != []
+    ):
+        return [f"{prefix}_serve_tag_files_replay_invalid_rerun_diff_skipped"]
     serve_tag_files_replay_manifest_input_path = _parse_batch_manifest_input_path(
         smoke_result.serve_tag_files_replay
     )

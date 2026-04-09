@@ -78,6 +78,10 @@ def _served_batch_manifest_replay_payload(
     include_rerun_diff: bool = True,
     include_rerun_diff_manifest_input_path: bool = True,
     include_rerun_diff_changed: bool = True,
+    include_rerun_diff_newly_processed: bool = True,
+    include_rerun_diff_reused: bool = True,
+    include_rerun_diff_repaired: bool = True,
+    include_rerun_diff_skipped: bool = True,
     manifest_input_file_name: str = "serve-smoke-batch-manifest.finance-en.ades-manifest.json",
     manifest_file_name: str = "serve-smoke-batch-replay.finance-en.ades-manifest.json",
     rerun_diff_manifest_input_file_name: str | None = None,
@@ -85,6 +89,10 @@ def _served_batch_manifest_replay_payload(
     manifest_candidate_count: int = 2,
     manifest_selected_count: int = 2,
     changed_paths: list[str] | None = None,
+    rerun_diff_newly_processed: list[str] | None = None,
+    rerun_diff_reused: list[str] | None = None,
+    rerun_diff_repaired: list[str] | None = None,
+    rerun_diff_skipped: list[object] | None = None,
     item_count: int | None = None,
     output_count: int = 2,
 ) -> dict[str, object]:
@@ -148,12 +156,7 @@ def _served_batch_manifest_replay_payload(
         assert isinstance(lineage, dict)
         lineage["source_manifest_path"] = manifest_input_path
     if include_rerun_diff:
-        rerun_diff: dict[str, object] = {
-            "newly_processed": [],
-            "reused": [],
-            "repaired": [],
-            "skipped": [],
-        }
+        rerun_diff: dict[str, object] = {}
         if include_rerun_diff_manifest_input_path:
             rerun_diff["manifest_input_path"] = str(
                 (
@@ -169,6 +172,18 @@ def _served_batch_manifest_replay_payload(
             rerun_diff["changed"] = (
                 default_changed_paths if changed_paths is None else changed_paths
             )
+        if include_rerun_diff_newly_processed:
+            rerun_diff["newly_processed"] = (
+                [] if rerun_diff_newly_processed is None else rerun_diff_newly_processed
+            )
+        if include_rerun_diff_reused:
+            rerun_diff["reused"] = [] if rerun_diff_reused is None else rerun_diff_reused
+        if include_rerun_diff_repaired:
+            rerun_diff["repaired"] = (
+                [] if rerun_diff_repaired is None else rerun_diff_repaired
+            )
+        if include_rerun_diff_skipped:
+            rerun_diff["skipped"] = [] if rerun_diff_skipped is None else rerun_diff_skipped
         payload["rerun_diff"] = rerun_diff
     return payload
 
@@ -293,6 +308,10 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert python_replay_payload["rerun_diff"]["changed"] == [
         item["source_path"] for item in python_batch_payload["items"]
     ]
+    assert python_replay_payload["rerun_diff"]["newly_processed"] == []
+    assert python_replay_payload["rerun_diff"]["reused"] == []
+    assert python_replay_payload["rerun_diff"]["repaired"] == []
+    assert python_replay_payload["rerun_diff"]["skipped"] == []
     assert python_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert python_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert python_replay_payload["summary"]["manifest_selected_count"] == 2
@@ -372,6 +391,10 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert npm_replay_payload["rerun_diff"]["changed"] == [
         item["source_path"] for item in npm_batch_payload["items"]
     ]
+    assert npm_replay_payload["rerun_diff"]["newly_processed"] == []
+    assert npm_replay_payload["rerun_diff"]["reused"] == []
+    assert npm_replay_payload["rerun_diff"]["repaired"] == []
+    assert npm_replay_payload["rerun_diff"]["skipped"] == []
     assert npm_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert npm_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert npm_replay_payload["summary"]["manifest_selected_count"] == 2
@@ -2077,6 +2100,152 @@ def test_verify_release_artifacts_reports_live_service_batch_replay_identity_mis
     ],
 )
 def test_verify_release_artifacts_reports_live_service_batch_replay_rerun_diff_mismatches(
+    monkeypatch,
+    tmp_path: Path,
+    replay_kwargs: dict[str, object],
+    expected_warning: str,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        replay_payload_kwargs: dict[str, object] = (
+            {} if "node_modules/.bin" not in str(executable) else replay_kwargs
+        )
+        return (
+            ReleaseCommandResult(
+                command=[str(executable), "serve", "--host", "127.0.0.1", "--port", "8734"],
+                exit_code=0,
+                passed=True,
+                stdout="ready",
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["GET", "http://127.0.0.1:8734/healthz"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps({"status": "ok", "version": expected_version}),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["GET", "http://127.0.0.1:8734/v0/status"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    {
+                        "service": "ades",
+                        "version": expected_version,
+                        "installed_packs": ["general-en", "finance-en"],
+                    }
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    {
+                        "entities": [
+                            {"label": "organization"},
+                            {"label": "ticker"},
+                            {"label": "exchange"},
+                            {"label": "currency_amount"},
+                        ]
+                    }
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/file"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    {
+                        "entities": [
+                            {"label": "organization"},
+                            {"label": "ticker"},
+                            {"label": "exchange"},
+                            {"label": "currency_amount"},
+                        ]
+                    }
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    _served_batch_manifest_payload(working_dir, version=expected_version)
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    _served_batch_manifest_replay_payload(
+                        working_dir,
+                        version=expected_version,
+                        **replay_payload_kwargs,
+                    )
+                ),
+                stderr="",
+            ),
+            ["general-en", "finance-en"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.serve_tag_files_replay is not None
+    assert response.npm_install_smoke.serve_tag_files_replay.passed is True
+    assert response.warnings == [expected_warning]
+
+
+@pytest.mark.parametrize(
+    ("replay_kwargs", "expected_warning"),
+    [
+        (
+            {"rerun_diff_newly_processed": ["/tmp/unexpected-new.html"]},
+            "npm_tarball_serve_tag_files_replay_invalid_rerun_diff_newly_processed",
+        ),
+        (
+            {"rerun_diff_reused": ["/tmp/unexpected-reused.html"]},
+            "npm_tarball_serve_tag_files_replay_invalid_rerun_diff_reused",
+        ),
+        (
+            {"rerun_diff_repaired": ["/tmp/unexpected-repaired.html"]},
+            "npm_tarball_serve_tag_files_replay_invalid_rerun_diff_repaired",
+        ),
+        (
+            {
+                "rerun_diff_skipped": [
+                    {
+                        "reference": "/tmp/unexpected-skipped.html",
+                        "reason": "unexpected",
+                        "source_kind": "limit",
+                        "size_bytes": 1,
+                    }
+                ]
+            },
+            "npm_tarball_serve_tag_files_replay_invalid_rerun_diff_skipped",
+        ),
+    ],
+)
+def test_verify_release_artifacts_reports_live_service_batch_replay_rerun_diff_empty_collection_mismatches(
     monkeypatch,
     tmp_path: Path,
     replay_kwargs: dict[str, object],

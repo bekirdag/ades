@@ -355,6 +355,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated `tests/release_helpers.py` and the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful replay rerun-diff validation and explicit invalid replay rerun-diff warnings are covered across unit, component, integration, and API layers.
 - Verified the item through focused release verification tests with `29 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `192 passed` under `pytest -q` plus successful clean-environment wheel/npm live `/v0/tag/files` replay rerun-diff smoke checks.
 
+### 50. Live batch-manifest replay empty rerun-diff collection smoke validation for installed artifacts
+
+- Extended `src/ades/release.py` so the replayed live `/v0/tag/files` release smoke now requires top-level `rerun_diff.newly_processed`, `rerun_diff.reused`, `rerun_diff.repaired`, and `rerun_diff.skipped` to remain deterministic empty lists through both the served wheel and the npm wrapper.
+- Kept the release verify/validate surface additive by reusing the existing `serve_tag_files_replay` result while tightening the internal smoke pass/fail checks and warning generation for missing or invalid replay rerun-diff empty-collection metadata.
+- Updated the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful replay empty-collection validation and explicit invalid replay rerun-diff collection warnings are covered across unit, component, integration, and API layers.
+- Verified the item through focused release verification tests with `33 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `196 passed` under `pytest -q` plus successful clean-environment wheel/npm live `/v0/tag/files` replay rerun-diff empty-collection smoke checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -428,4 +435,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Extend installed-artifact live-service smoke so replayed `POST /v0/tag/files` responses also prove the remaining deterministic rerun-diff categories, especially the expected empty `newly_processed`, `reused`, `repaired`, and `skipped` collections in the packaged clean-environment replay path.
+- Extend installed-artifact live-service smoke so replayed `POST /v0/tag/files` responses also prove lineage stability, especially the expected `lineage.root_run_id` carry-forward and `lineage.parent_run_id` parent-child relationship in the packaged clean-environment replay path.

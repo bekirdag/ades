@@ -97,6 +97,10 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert python_replay_payload["rerun_diff"]["changed"] == [
         item["source_path"] for item in python_batch_payload["items"]
     ]
+    assert python_replay_payload["rerun_diff"]["newly_processed"] == []
+    assert python_replay_payload["rerun_diff"]["reused"] == []
+    assert python_replay_payload["rerun_diff"]["repaired"] == []
+    assert python_replay_payload["rerun_diff"]["skipped"] == []
     assert python_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert python_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert python_replay_payload["summary"]["manifest_selected_count"] == 2
@@ -174,6 +178,10 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert npm_replay_payload["rerun_diff"]["changed"] == [
         item["source_path"] for item in npm_batch_payload["items"]
     ]
+    assert npm_replay_payload["rerun_diff"]["newly_processed"] == []
+    assert npm_replay_payload["rerun_diff"]["reused"] == []
+    assert npm_replay_payload["rerun_diff"]["repaired"] == []
+    assert npm_replay_payload["rerun_diff"]["skipped"] == []
     assert npm_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert npm_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert npm_replay_payload["summary"]["manifest_selected_count"] == 2

@@ -1,11 +1,11 @@
 # ades Next Work Items
 
-Updated after completing live batch-manifest replay rerun-diff smoke validation for installed artifacts on 2026-04-09.
+Updated after completing live batch-manifest replay empty rerun-diff collection smoke validation for installed artifacts on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` replay through the served wheel and npm wrapper also proves the remaining deterministic rerun-diff collections, especially the expected empty `newly_processed`, `reused`, `repaired`, and `skipped` lists after `finance-en` pull and metadata recovery, not just rerun-diff manifest-input wiring and the deterministic changed-source set.
+   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` replay through the served wheel and npm wrapper also proves lineage stability, especially the expected `lineage.root_run_id` carry-forward and `lineage.parent_run_id` parent-child relationship after `finance-en` pull and metadata recovery, not just replay summary and rerun-diff wiring.
    - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, dependency-chain guardrails, and dependency-bearing release smoke stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
@@ -29,6 +29,12 @@ Updated after completing live batch-manifest replay rerun-diff smoke validation 
    - Keep future local-tool changes from leaking SQLite-only assumptions into the contracts that the later production server should reuse.
 
 ## Recently Closed
+
+- Live batch-manifest replay empty rerun-diff collection smoke validation for installed artifacts:
+  - implemented in `src/ades/release.py`
+  - extends release smoke verification so both the installed wheel and npm wrapper now require replay `rerun_diff.newly_processed`, `rerun_diff.reused`, `rerun_diff.repaired`, and `rerun_diff.skipped` to stay empty lists in the live `/v0/tag/files` replay path
+  - keeps the release verify/validate contracts additive while surfacing explicit warning codes for missing or invalid replay rerun-diff empty-collection metadata in the packaged serve path
+  - includes categorized unit, component, integration, and API coverage for successful replay empty-collection validation plus explicit invalid rerun-diff collection warning paths
 
 - Live batch-manifest replay rerun-diff smoke validation for installed artifacts:
   - implemented in `src/ades/release.py`, with fake-runner support in `tests/release_helpers.py`
