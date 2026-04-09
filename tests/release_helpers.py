@@ -80,6 +80,15 @@ def build_expected_batch_zero_state_summary_counts() -> dict[str, int]:
     }
 
 
+def build_expected_batch_zero_state_reuse_summary_counts() -> dict[str, int]:
+    return {
+        "unchanged_skipped_count": 0,
+        "unchanged_reused_count": 0,
+        "reused_output_missing_count": 0,
+        "repaired_reused_output_count": 0,
+    }
+
+
 def build_expected_batch_summary_input_bytes() -> dict[str, int]:
     total_input_bytes = sum(build_expected_batch_input_sizes())
     return {
@@ -496,6 +505,7 @@ def build_fake_service_smoke(
                 "summary": {
                     **build_expected_batch_summary_item_counts(),
                     **build_expected_batch_zero_state_summary_counts(),
+                    **build_expected_batch_zero_state_reuse_summary_counts(),
                     **build_expected_batch_summary_input_bytes(),
                 },
                 "lineage": {
@@ -588,6 +598,7 @@ def build_fake_service_smoke(
                 "summary": {
                     **build_expected_batch_summary_item_counts(),
                     **build_expected_batch_zero_state_summary_counts(),
+                    **build_expected_batch_zero_state_reuse_summary_counts(),
                     **build_expected_batch_summary_input_bytes(),
                     "manifest_input_path": str(
                         (

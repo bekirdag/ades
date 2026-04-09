@@ -11,6 +11,7 @@ from tests.release_helpers import (
     build_expected_batch_summary_item_counts,
     build_expected_batch_summary_input_bytes,
     build_expected_batch_zero_state_summary_counts,
+    build_expected_batch_zero_state_reuse_summary_counts,
     build_expected_batch_source_fingerprints,
     build_expected_batch_source_paths,
     build_expected_batch_replay_manifest_path,
@@ -89,6 +90,9 @@ def test_cli_release_verify_reports_smoke_install_results(
     python_expected_zero_state_summary_counts = (
         build_expected_batch_zero_state_summary_counts()
     )
+    python_expected_zero_state_reuse_summary_counts = (
+        build_expected_batch_zero_state_reuse_summary_counts()
+    )
     python_expected_summary_input_bytes = build_expected_batch_summary_input_bytes()
     python_expected_source_fingerprints = build_expected_batch_source_fingerprints()
     python_expected_output_paths = build_expected_batch_output_paths(python_working_dir)
@@ -120,6 +124,10 @@ def test_cli_release_verify_reports_smoke_install_results(
         field_name: python_batch_payload["summary"][field_name]
         for field_name in python_expected_zero_state_summary_counts
     } == python_expected_zero_state_summary_counts
+    assert {
+        field_name: python_batch_payload["summary"][field_name]
+        for field_name in python_expected_zero_state_reuse_summary_counts
+    } == python_expected_zero_state_reuse_summary_counts
     assert {
         field_name: python_batch_payload["summary"][field_name]
         for field_name in python_expected_summary_input_bytes
@@ -165,6 +173,10 @@ def test_cli_release_verify_reports_smoke_install_results(
         field_name: python_replay_payload["summary"][field_name]
         for field_name in python_expected_zero_state_summary_counts
     } == python_expected_zero_state_summary_counts
+    assert {
+        field_name: python_replay_payload["summary"][field_name]
+        for field_name in python_expected_zero_state_reuse_summary_counts
+    } == python_expected_zero_state_reuse_summary_counts
     assert {
         field_name: python_replay_payload["summary"][field_name]
         for field_name in python_expected_summary_input_bytes
@@ -244,6 +256,9 @@ def test_cli_release_verify_reports_smoke_install_results(
     npm_expected_zero_state_summary_counts = (
         build_expected_batch_zero_state_summary_counts()
     )
+    npm_expected_zero_state_reuse_summary_counts = (
+        build_expected_batch_zero_state_reuse_summary_counts()
+    )
     npm_expected_summary_input_bytes = build_expected_batch_summary_input_bytes()
     npm_expected_source_fingerprints = build_expected_batch_source_fingerprints()
     npm_expected_output_paths = build_expected_batch_output_paths(npm_working_dir)
@@ -275,6 +290,10 @@ def test_cli_release_verify_reports_smoke_install_results(
         field_name: npm_batch_payload["summary"][field_name]
         for field_name in npm_expected_zero_state_summary_counts
     } == npm_expected_zero_state_summary_counts
+    assert {
+        field_name: npm_batch_payload["summary"][field_name]
+        for field_name in npm_expected_zero_state_reuse_summary_counts
+    } == npm_expected_zero_state_reuse_summary_counts
     assert {
         field_name: npm_batch_payload["summary"][field_name]
         for field_name in npm_expected_summary_input_bytes
@@ -320,6 +339,10 @@ def test_cli_release_verify_reports_smoke_install_results(
         field_name: npm_replay_payload["summary"][field_name]
         for field_name in npm_expected_zero_state_summary_counts
     } == npm_expected_zero_state_summary_counts
+    assert {
+        field_name: npm_replay_payload["summary"][field_name]
+        for field_name in npm_expected_zero_state_reuse_summary_counts
+    } == npm_expected_zero_state_reuse_summary_counts
     assert {
         field_name: npm_replay_payload["summary"][field_name]
         for field_name in npm_expected_summary_input_bytes
