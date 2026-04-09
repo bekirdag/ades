@@ -85,10 +85,12 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert response.python_install_smoke.serve_healthz.passed is True
     assert response.python_install_smoke.serve_status is not None
     assert response.python_install_smoke.serve_status.passed is True
-    assert "general-en" in response.python_install_smoke.pulled_pack_ids
-    assert {"organization", "email_address"} <= set(response.python_install_smoke.tagged_labels)
-    assert "general-en" in response.python_install_smoke.recovered_pack_ids
-    assert "general-en" in response.python_install_smoke.served_pack_ids
+    assert {"general-en", "finance-en"} <= set(response.python_install_smoke.pulled_pack_ids)
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        response.python_install_smoke.tagged_labels
+    )
+    assert {"general-en", "finance-en"} <= set(response.python_install_smoke.recovered_pack_ids)
+    assert {"general-en", "finance-en"} <= set(response.python_install_smoke.served_pack_ids)
     assert response.npm_install_smoke is not None
     assert response.npm_install_smoke.passed is True
     assert response.npm_install_smoke.reported_version == __version__
@@ -104,10 +106,12 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert response.npm_install_smoke.serve_healthz.passed is True
     assert response.npm_install_smoke.serve_status is not None
     assert response.npm_install_smoke.serve_status.passed is True
-    assert "general-en" in response.npm_install_smoke.pulled_pack_ids
-    assert {"organization", "email_address"} <= set(response.npm_install_smoke.tagged_labels)
-    assert "general-en" in response.npm_install_smoke.recovered_pack_ids
-    assert "general-en" in response.npm_install_smoke.served_pack_ids
+    assert {"general-en", "finance-en"} <= set(response.npm_install_smoke.pulled_pack_ids)
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        response.npm_install_smoke.tagged_labels
+    )
+    assert {"general-en", "finance-en"} <= set(response.npm_install_smoke.recovered_pack_ids)
+    assert {"general-en", "finance-en"} <= set(response.npm_install_smoke.served_pack_ids)
     assert len(response.wheel.sha256) == 64
     assert len(response.sdist.sha256) == 64
     assert len(response.npm_tarball.sha256) == 64
@@ -267,10 +271,13 @@ def test_verify_release_artifacts_reports_serve_smoke_failures(
                     command=["GET", "http://127.0.0.1:8734/v0/status"],
                     exit_code=0,
                     passed=True,
-                    stdout='{"service":"ades","version":"0.1.0","installed_packs":["general-en"]}',
+                    stdout=(
+                        '{"service":"ades","version":"0.1.0","installed_packs":'
+                        '["general-en","finance-en"]}'
+                    ),
                     stderr="",
                 ),
-                ["general-en"],
+                ["general-en", "finance-en"],
             )
         return (
             ReleaseCommandResult(
@@ -329,11 +336,11 @@ def test_verify_release_artifacts_reports_recovery_status_failures(
                     stdout=(
                         '{"service":"ades","version":"'
                         + expected_version
-                        + '","installed_packs":["general-en"]}'
+                        + '","installed_packs":["general-en","finance-en"]}'
                     ),
                     stderr="",
                 ),
-                ["general-en"],
+                ["general-en", "finance-en"],
             )
         return (
             ReleaseCommandResult(

@@ -1,12 +1,12 @@
 # ades Next Work Items
 
-Updated after completing tagger regression coverage for partial installed-pack row loss on 2026-04-09.
+Updated after completing dependency-bearing release smoke validation for installed artifacts on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Finish the remaining production-like clean-environment lifecycle checks around broader recovery combinations against published registry artifacts now that installed pull/tag, direct lookup repair, serve startup, and metadata-bootstrap recovery smoke behavior is covered.
-   - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, and new dependency-chain guardrails stable while closing the remaining pack-lifecycle gaps.
+   - Extend the installed-artifact release smoke from health/status probes to a real live-service tagging request after `finance-en` pull and metadata recovery, so the packaged serve path proves end-to-end tagging instead of only startup visibility.
+   - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, dependency-chain guardrails, and dependency-bearing release smoke stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
    - Keep hardening first-run bootstrap, stale-record cleanup, and repair behavior around the local SQLite registry now that both list-driven and lookup-driven recovery can repair missing installed-pack rows from on-disk manifests.
@@ -102,6 +102,12 @@ Updated after completing tagger regression coverage for partial installed-pack r
    - implemented in `tests/test_tagger.py`, `tests/component/test_lookup_driven_tagger.py`, `tests/integration/test_lookup_driven_tag_api.py`, and `tests/api/test_tag_lookup_aliases.py`
    - proves alias-driven `finance-en` tagging still extracts `AAPL` and `NASDAQ` after the `finance-en` SQLite row is deleted while the on-disk pack remains installed
    - keeps product behavior unchanged while locking in the existing recovery path with categorized unit, component, integration, and API coverage
+
+- Dependency-bearing release smoke validation for installed artifacts:
+   - implemented in `src/ades/release.py`, with fake-runner updates in `tests/release_helpers.py`
+   - extends release smoke verification so both the installed wheel and npm wrapper pull `finance-en`, tag with `--pack finance-en`, and keep both `general-en` and `finance-en` visible through pull, recovery, and serve status checks
+   - proves the packaged artifacts emit `organization`, `ticker`, `exchange`, and `currency_amount` labels from the finance-pack dependency chain instead of only validating a base-pack tagging path
+   - includes categorized unit, component, integration, and API coverage for the stronger finance-pack smoke contract
 
 ## Not Next
 

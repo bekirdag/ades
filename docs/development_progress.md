@@ -285,6 +285,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Extended the categorized tagger tests in `tests/test_tagger.py`, `tests/component/test_lookup_driven_tagger.py`, `tests/integration/test_lookup_driven_tag_api.py`, and `tests/api/test_tag_lookup_aliases.py` with alias-only assertions on `AAPL` and `NASDAQ` after deleting the `finance-en` row from `storage_root/registry/ades.db`.
 - Verified the item through focused tagger-regression tests with `9 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `180 passed` under `pytest -q` plus successful wheel/npm clean-environment smoke validation.
 
+### 40. Dependency-bearing release smoke validation for installed artifacts
+
+- Hardened `src/ades/release.py` so clean-environment release smoke verification now pulls `finance-en`, tags with `--pack finance-en`, and requires both `finance-en` and its dependency `general-en` to remain visible through pull, recovery, and serve status checks instead of only proving a single `general-en` pack path.
+- Tightened the smoke contract so the installed wheel and npm wrapper now must produce `organization`, `ticker`, `exchange`, and `currency_amount` labels from the pulled finance pack chain, which proves dependency aliases plus finance-specific alias/rule behavior in the packaged artifacts.
+- Updated `tests/release_helpers.py` and the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so the finance-pack dependency chain is covered consistently across fake-runner and real release-validation flows.
+- Verified the item through focused release verification tests with `17 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `180 passed` under `pytest -q` plus successful clean-environment wheel/npm finance-pack pull, tag, recovery, and serve checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -358,4 +365,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Finish the remaining pack lifecycle hardening around broader clean-environment recovery combinations and end-to-end production-readiness validation against the published registry and current production deployment flow now that list-driven repair, direct lookup repair, and tagger-level recovery regressions are all covered.
+- Extend installed-artifact release smoke beyond `/healthz` and `/v0/status` by exercising a live `/v0/tag` request through the served wheel and npm wrapper, so the clean-environment production-readiness path proves real service tagging after finance-pack pull and metadata recovery.

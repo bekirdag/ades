@@ -60,9 +60,10 @@ TWINE_REPOSITORY_URL_ALIAS_ENV = "ADES_RELEASE_TWINE_REPOSITORY_URL"
 NPM_TOKEN_ALIAS_ENV = "ADES_RELEASE_NPM_TOKEN"
 NPM_REGISTRY_ALIAS_ENV = "ADES_RELEASE_NPM_REGISTRY"
 NPM_ACCESS_ALIAS_ENV = "ADES_RELEASE_NPM_ACCESS"
-SMOKE_PULL_PACK_ID = "general-en"
-SMOKE_TAG_TEXT = "Contact OpenAI via smoke@example.com"
-SMOKE_TAG_REQUIRED_LABELS = ("organization", "email_address")
+SMOKE_PULL_PACK_ID = "finance-en"
+SMOKE_EXPECTED_PACK_IDS = ("general-en", "finance-en")
+SMOKE_TAG_TEXT = "Apple said AAPL traded on NASDAQ after USD 12.5 guidance."
+SMOKE_TAG_REQUIRED_LABELS = ("organization", "ticker", "exchange", "currency_amount")
 SMOKE_SERVE_HOST = "127.0.0.1"
 SMOKE_SERVE_STARTUP_TIMEOUT_SECONDS = 20.0
 SMOKE_SERVE_POLL_INTERVAL_SECONDS = 0.2
@@ -468,6 +469,13 @@ def _clear_registry_metadata_files(storage_root: Path) -> None:
             metadata_path.unlink()
 
 
+def _missing_smoke_pack_ids(pack_ids: Sequence[str]) -> list[str]:
+    """Return the required smoke pack IDs missing from one installed-pack list."""
+
+    available = set(pack_ids)
+    return [pack_id for pack_id in SMOKE_EXPECTED_PACK_IDS if pack_id not in available]
+
+
 def _sha256(path: Path) -> str:
     """Return the SHA-256 digest for one file."""
 
@@ -526,7 +534,7 @@ def _run_cli_runtime_smoke(
             reason="Skipped because status invocation failed.",
         )
 
-    tag_command = [str(executable), "tag", SMOKE_TAG_TEXT]
+    tag_command = [str(executable), "tag", SMOKE_TAG_TEXT, "--pack", SMOKE_PULL_PACK_ID]
     if pull.passed:
         tag_result = _run_command_with_env(tag_command, cwd=working_dir, env=smoke_env)
         tag = _build_command_result(tag_command, tag_result)
@@ -654,7 +662,11 @@ def _run_cli_service_smoke(
     )
     served_pack_ids = _parse_status_installed_pack_ids(serve_status)
     served_version = _parse_status_version(serve_status)
-    if started and served_version == expected_version and SMOKE_PULL_PACK_ID in served_pack_ids:
+    if (
+        started
+        and served_version == expected_version
+        and not _missing_smoke_pack_ids(served_pack_ids)
+    ):
         return serve, serve_healthz, serve_status, served_pack_ids
     return serve, serve_healthz, serve_status, served_pack_ids
 
@@ -850,7 +862,13 @@ def _run_python_install_smoke(
                 pull_command,
                 reason="Skipped because virtual environment creation failed.",
             )
-            tag_command = [str(executable), "tag", SMOKE_TAG_TEXT]
+            tag_command = [
+                str(executable),
+                "tag",
+                SMOKE_TAG_TEXT,
+                "--pack",
+                SMOKE_PULL_PACK_ID,
+            ]
             tag = _skipped_command_result(
                 tag_command,
                 reason="Skipped because virtual environment creation failed.",
@@ -964,7 +982,13 @@ def _run_python_install_smoke(
                 pull_command,
                 reason="Skipped because wheel installation failed.",
             )
-            tag_command = [str(executable), "tag", SMOKE_TAG_TEXT]
+            tag_command = [
+                str(executable),
+                "tag",
+                SMOKE_TAG_TEXT,
+                "--pack",
+                SMOKE_PULL_PACK_ID,
+            ]
             tag = _skipped_command_result(
                 tag_command,
                 reason="Skipped because wheel installation failed.",
@@ -993,23 +1017,26 @@ def _run_python_install_smoke(
             served_pack_ids = []
 
         required_labels = set(SMOKE_TAG_REQUIRED_LABELS)
+        missing_pulled_pack_ids = _missing_smoke_pack_ids(pulled_pack_ids)
+        missing_recovered_pack_ids = _missing_smoke_pack_ids(recovered_pack_ids)
+        missing_served_pack_ids = _missing_smoke_pack_ids(served_pack_ids)
         passed = (
             install.passed
             and invoke.passed
             and reported_version == expected_version
             and pull.passed
-            and SMOKE_PULL_PACK_ID in pulled_pack_ids
+            and not missing_pulled_pack_ids
             and tag.passed
             and required_labels.issubset(set(tagged_labels))
             and recovery_status.passed
             and _parse_status_version(recovery_status) == expected_version
-            and SMOKE_PULL_PACK_ID in recovered_pack_ids
+            and not missing_recovered_pack_ids
             and serve.passed
             and serve_healthz.passed
             and _healthz_matches_expected(serve_healthz, expected_version=expected_version)
             and serve_status.passed
             and _parse_status_version(serve_status) == expected_version
-            and SMOKE_PULL_PACK_ID in served_pack_ids
+            and not missing_served_pack_ids
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="python_wheel",
@@ -1142,7 +1169,13 @@ def _run_npm_install_smoke(
                 pull_command,
                 reason="Skipped because npm tarball installation failed.",
             )
-            tag_command = [str(executable), "tag", SMOKE_TAG_TEXT]
+            tag_command = [
+                str(executable),
+                "tag",
+                SMOKE_TAG_TEXT,
+                "--pack",
+                SMOKE_PULL_PACK_ID,
+            ]
             tag = _skipped_command_result(
                 tag_command,
                 reason="Skipped because npm tarball installation failed.",
@@ -1171,23 +1204,26 @@ def _run_npm_install_smoke(
             served_pack_ids = []
 
         required_labels = set(SMOKE_TAG_REQUIRED_LABELS)
+        missing_pulled_pack_ids = _missing_smoke_pack_ids(pulled_pack_ids)
+        missing_recovered_pack_ids = _missing_smoke_pack_ids(recovered_pack_ids)
+        missing_served_pack_ids = _missing_smoke_pack_ids(served_pack_ids)
         passed = (
             install.passed
             and invoke.passed
             and reported_version == expected_version
             and pull.passed
-            and SMOKE_PULL_PACK_ID in pulled_pack_ids
+            and not missing_pulled_pack_ids
             and tag.passed
             and required_labels.issubset(set(tagged_labels))
             and recovery_status.passed
             and _parse_status_version(recovery_status) == expected_version
-            and SMOKE_PULL_PACK_ID in recovered_pack_ids
+            and not missing_recovered_pack_ids
             and serve.passed
             and serve_healthz.passed
             and _healthz_matches_expected(serve_healthz, expected_version=expected_version)
             and serve_status.passed
             and _parse_status_version(serve_status) == expected_version
-            and SMOKE_PULL_PACK_ID in served_pack_ids
+            and not missing_served_pack_ids
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="npm_tarball",
@@ -1230,8 +1266,9 @@ def _smoke_install_warnings(
     if smoke_result.pull is None or not smoke_result.pull.passed:
         exit_code = None if smoke_result.pull is None else smoke_result.pull.exit_code
         return [f"{prefix}_pull_failed:{exit_code}"]
-    if SMOKE_PULL_PACK_ID not in smoke_result.pulled_pack_ids:
-        return [f"{prefix}_pull_missing_pack:{SMOKE_PULL_PACK_ID}"]
+    missing_pulled_pack_ids = _missing_smoke_pack_ids(smoke_result.pulled_pack_ids)
+    if missing_pulled_pack_ids:
+        return [f"{prefix}_pull_missing_pack:{','.join(missing_pulled_pack_ids)}"]
     if smoke_result.tag is None or not smoke_result.tag.passed:
         exit_code = None if smoke_result.tag is None else smoke_result.tag.exit_code
         return [f"{prefix}_tag_failed:{exit_code}"]
@@ -1248,8 +1285,11 @@ def _smoke_install_warnings(
         return [f"{prefix}_recovery_status_missing_reported_version"]
     if recovered_version != expected_version:
         return [f"{prefix}_recovery_status_version_mismatch:{recovered_version}"]
-    if SMOKE_PULL_PACK_ID not in smoke_result.recovered_pack_ids:
-        return [f"{prefix}_recovery_status_missing_pack:{SMOKE_PULL_PACK_ID}"]
+    missing_recovered_pack_ids = _missing_smoke_pack_ids(smoke_result.recovered_pack_ids)
+    if missing_recovered_pack_ids:
+        return [
+            f"{prefix}_recovery_status_missing_pack:{','.join(missing_recovered_pack_ids)}"
+        ]
     if smoke_result.serve is None or not smoke_result.serve.passed:
         exit_code = None if smoke_result.serve is None else smoke_result.serve.exit_code
         return [f"{prefix}_serve_failed:{exit_code}"]
@@ -1266,8 +1306,9 @@ def _smoke_install_warnings(
         return [f"{prefix}_serve_status_missing_reported_version"]
     if served_version != expected_version:
         return [f"{prefix}_serve_status_version_mismatch:{served_version}"]
-    if SMOKE_PULL_PACK_ID not in smoke_result.served_pack_ids:
-        return [f"{prefix}_serve_status_missing_pack:{SMOKE_PULL_PACK_ID}"]
+    missing_served_pack_ids = _missing_smoke_pack_ids(smoke_result.served_pack_ids)
+    if missing_served_pack_ids:
+        return [f"{prefix}_serve_status_missing_pack:{','.join(missing_served_pack_ids)}"]
     return []
 
 

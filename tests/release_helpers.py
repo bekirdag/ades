@@ -192,11 +192,16 @@ def build_fake_release_runner(
 
             if subcommand == "pull":
                 requested_pack = command[2]
+                installed = (
+                    ["general-en", "finance-en"]
+                    if requested_pack == "finance-en"
+                    else [requested_pack]
+                )
                 payload = json.dumps(
                     {
                         "requested_pack": requested_pack,
                         "registry_url": "file:///fake-registry/index.json",
-                        "installed": [requested_pack],
+                        "installed": installed,
                         "skipped": [],
                     }
                 )
@@ -213,23 +218,37 @@ def build_fake_release_runner(
                 payload = json.dumps(
                     {
                         "version": python_version,
-                        "pack": "general-en",
+                        "pack": "finance-en",
                         "language": "en",
                         "content_type": "text/plain",
                         "entities": [
                             {
-                                "text": "OpenAI",
+                                "text": "Apple",
                                 "label": "organization",
-                                "start": 8,
-                                "end": 14,
+                                "start": 0,
+                                "end": 5,
                                 "confidence": 1.0,
                             },
                             {
-                                "text": "smoke@example.com",
-                                "label": "email_address",
-                                "start": 19,
-                                "end": 36,
-                                "confidence": 0.85,
+                                "text": "AAPL",
+                                "label": "ticker",
+                                "start": 11,
+                                "end": 15,
+                                "confidence": 1.0,
+                            },
+                            {
+                                "text": "NASDAQ",
+                                "label": "exchange",
+                                "start": 26,
+                                "end": 32,
+                                "confidence": 1.0,
+                            },
+                            {
+                                "text": "USD 12.5",
+                                "label": "currency_amount",
+                                "start": 39,
+                                "end": 47,
+                                "confidence": 0.9,
                             },
                         ],
                         "topics": [],
@@ -295,12 +314,12 @@ def build_fake_service_smoke(
                 "storage_root": str(storage_root),
                 "host": "127.0.0.1",
                 "port": 8734,
-                "installed_packs": ["general-en"],
+                "installed_packs": ["general-en", "finance-en"],
             }
         ),
         stderr="",
     )
-    return serve, healthz, status, ["general-en"]
+    return serve, healthz, status, ["general-en", "finance-en"]
 
 
 def build_fake_recovery_status(
@@ -323,12 +342,12 @@ def build_fake_recovery_status(
                 "storage_root": str(storage_root),
                 "host": "127.0.0.1",
                 "port": 8734,
-                "installed_packs": ["general-en"],
+                "installed_packs": ["general-en", "finance-en"],
             }
         ),
         stderr="",
     )
-    return status, ["general-en"]
+    return status, ["general-en", "finance-en"]
 
 
 def patch_release_runner(monkeypatch: Any, runner: Callable[..., subprocess.CompletedProcess[str]]) -> None:

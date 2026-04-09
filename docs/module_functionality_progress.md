@@ -30,9 +30,9 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- add broader clean-environment recovery combinations after the installed pull/tag, direct lookup-repair, serve-smoke, and metadata-bootstrap recovery slices
+- extend installed-artifact clean-environment validation from status-only service probes to live service tagging after finance-pack pull and metadata recovery
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
-- keep the new rollback-safe install semantics, lookup-driven metadata repair, and SQLite recovery behavior stable while finishing the remaining pack-lifecycle recovery work
+- keep the new rollback-safe install semantics, lookup-driven metadata repair, SQLite recovery behavior, and dependency-bearing release smoke stable while finishing the remaining pack-lifecycle recovery work
 
 ## Work Log
 
@@ -69,3 +69,6 @@ Planned work:
 - 2026-04-09: full repo release validation passed again after the direct lookup-repair slice through `docdexd run-tests --repo /home/wodo/apps/ades`, including `176 passed` under `pytest -q` plus successful Python/npm smoke-install, recovery, and serve checks.
 - 2026-04-09: added explicit tagger-regression coverage in `tests/test_tagger.py`, `tests/component/test_lookup_driven_tagger.py`, `tests/integration/test_lookup_driven_tag_api.py`, and `tests/api/test_tag_lookup_aliases.py` so alias-driven finance tagging is proven to survive partial installed-pack row loss after deleting the `finance-en` SQLite row.
 - 2026-04-09: focused tagger-regression validation passed with `9 passed`, `python -m compileall src/ades` passed again, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, now including `180 passed` under `pytest -q`.
+- 2026-04-09: hardened `src/ades/release.py` so clean-environment release smoke verification now pulls `finance-en`, tags with `--pack finance-en`, and requires both `general-en` and `finance-en` to remain visible through pull, recovery, and serve status checks.
+- 2026-04-09: updated `tests/release_helpers.py` plus the categorized release verify tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so installed wheel/npm validation proves finance-pack dependency tagging with `organization`, `ticker`, `exchange`, and `currency_amount` labels.
+- 2026-04-09: focused release verification tests passed with `17 passed`, `python -m compileall src/ades` passed again, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, keeping the overall repo at `180 passed` under `pytest -q`.
