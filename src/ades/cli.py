@@ -15,6 +15,7 @@ from .api import list_available_packs as api_list_available_packs
 from .api import list_packs as api_list_packs
 from .api import publish_release as api_publish_release
 from .api import pull_pack as api_pull_pack
+from .api import remove_pack as api_remove_pack
 from .api import release_versions as api_release_versions
 from .api import status as api_status
 from .api import sync_release_version as api_sync_release_version
@@ -176,6 +177,20 @@ def packs_deactivate(pack: str) -> None:
 
     try:
         result = api_deactivate_pack(pack)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    if result is None:
+        raise typer.Exit(code=1)
+    _echo_json(result.model_dump(mode="json"))
+
+
+@packs_app.command("remove")
+def packs_remove(pack: str) -> None:
+    """Remove an installed pack."""
+
+    try:
+        result = api_remove_pack(pack)
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc

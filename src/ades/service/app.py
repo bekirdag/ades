@@ -17,6 +17,7 @@ from ..api import (
     npm_installer_info,
     publish_release,
     release_versions,
+    remove_pack,
     status,
     sync_release_version,
     tag,
@@ -207,6 +208,18 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
 
         try:
             pack = deactivate_pack(pack_id, storage_root=storage_root)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if pack is None:
+            raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
+        return pack
+
+    @app.delete("/v0/packs/{pack_id}", response_model=PackSummary)
+    def runtime_remove_pack(pack_id: str) -> PackSummary:
+        """Remove a single installed pack."""
+
+        try:
+            pack = remove_pack(pack_id, storage_root=storage_root)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if pack is None:

@@ -683,6 +683,32 @@ def deactivate_pack(pack_id: str, *, storage_root: str | Path | None = None) -> 
     return set_pack_active(pack_id, False, storage_root=storage_root)
 
 
+def remove_pack(pack_id: str, *, storage_root: str | Path | None = None) -> PackSummary | None:
+    """Remove an installed pack and return the removed summary snapshot."""
+
+    settings = _resolve_settings(storage_root=storage_root)
+    registry = PackRegistry(
+        settings.storage_root,
+        runtime_target=settings.runtime_target,
+        metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
+    )
+    manifest = registry.get_pack(pack_id, active_only=False)
+    if manifest is None:
+        return None
+    installed_dependents = _installed_dependent_pack_ids(registry, pack_id)
+    if installed_dependents:
+        dependents = ", ".join(installed_dependents)
+        raise ValueError(
+            f"Cannot remove pack {pack_id} while installed dependent packs exist: "
+            f"{dependents}"
+        )
+    removed = registry.remove_pack(pack_id)
+    if not removed:
+        return None
+    return PackSummary(**manifest.to_summary())
+
+
 def _activate_pack_dependencies(
     registry: PackRegistry,
     pack_id: str,
@@ -711,9 +737,22 @@ def _activate_pack_dependencies(
 
 
 def _active_dependent_pack_ids(registry: PackRegistry, pack_id: str) -> list[str]:
+    return _dependent_pack_ids(registry, pack_id, active_only=True)
+
+
+def _installed_dependent_pack_ids(registry: PackRegistry, pack_id: str) -> list[str]:
+    return _dependent_pack_ids(registry, pack_id, active_only=False)
+
+
+def _dependent_pack_ids(
+    registry: PackRegistry,
+    pack_id: str,
+    *,
+    active_only: bool,
+) -> list[str]:
     dependents = {
         manifest.pack_id
-        for manifest in registry.list_installed_packs(active_only=True)
+        for manifest in registry.list_installed_packs(active_only=active_only)
         if manifest.pack_id != pack_id and pack_id in manifest.dependencies
     }
     return sorted(dependents)

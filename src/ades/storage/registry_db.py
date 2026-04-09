@@ -248,6 +248,14 @@ class PackMetadataStore:
             )
         return cursor.rowcount > 0
 
+    def delete_pack(self, pack_id: str) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM installed_packs WHERE pack_id = ?",
+                (pack_id,),
+            )
+        return cursor.rowcount > 0
+
     def list_pack_labels(self, pack_id: str) -> list[str]:
         with self._connect() as connection:
             rows = connection.execute(

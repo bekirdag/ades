@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 
 from .fetch import normalize_source_url, read_text
 from ..storage.backend import (
@@ -80,6 +81,17 @@ class PackRegistry:
         """Mark a pack active or inactive in local metadata."""
 
         return self.store.set_pack_active(pack_id, active)
+
+    def remove_pack(self, pack_id: str) -> bool:
+        """Remove one installed pack from metadata and disk."""
+
+        pack_dir = self.layout.packs_dir / pack_id
+        removed_from_store = self.store.delete_pack(pack_id)
+        removed_from_disk = False
+        if pack_dir.exists():
+            shutil.rmtree(pack_dir)
+            removed_from_disk = True
+        return removed_from_store or removed_from_disk
 
     def list_pack_labels(self, pack_id: str) -> list[str]:
         """Return indexed label entries for a pack."""
