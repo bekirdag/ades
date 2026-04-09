@@ -30,10 +30,12 @@ def _served_batch_manifest_payload(
     include_lineage_root_run_id: bool = True,
     include_lineage_parent_run_id: bool = True,
     include_lineage_source_manifest_path: bool = True,
+    include_lineage_created_at: bool = True,
     lineage_run_id: str = "ades-run-parent-smoke",
     lineage_root_run_id: str | None = None,
     lineage_parent_run_id: str | None = None,
     lineage_source_manifest_path: str | None = None,
+    lineage_created_at: str = "2026-04-09T14:57:00Z",
     output_count: int = 2,
 ) -> dict[str, object]:
     """Return one deterministic live `/v0/tag/files` payload with manifest output paths."""
@@ -90,6 +92,10 @@ def _served_batch_manifest_payload(
         lineage = payload["lineage"]
         assert isinstance(lineage, dict)
         lineage["source_manifest_path"] = lineage_source_manifest_path
+    if include_lineage_created_at:
+        lineage = payload["lineage"]
+        assert isinstance(lineage, dict)
+        lineage["created_at"] = lineage_created_at
     return payload
 
 
@@ -103,6 +109,7 @@ def _served_batch_manifest_replay_payload(
     include_lineage_run_id: bool = True,
     include_lineage_root_run_id: bool = True,
     include_lineage_parent_run_id: bool = True,
+    include_lineage_created_at: bool = True,
     include_manifest_candidate_count: bool = True,
     include_manifest_selected_count: bool = True,
     include_rerun_diff: bool = True,
@@ -119,6 +126,7 @@ def _served_batch_manifest_replay_payload(
     lineage_run_id: str = "ades-run-replay-smoke",
     lineage_root_run_id: str = "ades-run-parent-smoke",
     lineage_parent_run_id: str = "ades-run-parent-smoke",
+    lineage_created_at: str = "2026-04-09T14:57:01Z",
     manifest_candidate_count: int = 2,
     manifest_selected_count: int = 2,
     changed_paths: list[str] | None = None,
@@ -200,6 +208,10 @@ def _served_batch_manifest_replay_payload(
         lineage = payload["lineage"]
         assert isinstance(lineage, dict)
         lineage["parent_run_id"] = lineage_parent_run_id
+    if include_lineage_created_at:
+        lineage = payload["lineage"]
+        assert isinstance(lineage, dict)
+        lineage["created_at"] = lineage_created_at
     if include_rerun_diff:
         rerun_diff: dict[str, object] = {}
         if include_rerun_diff_manifest_input_path:
@@ -333,6 +345,7 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert python_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert python_batch_payload["lineage"].get("parent_run_id") is None
     assert python_batch_payload["lineage"].get("source_manifest_path") is None
+    assert python_batch_payload["lineage"]["created_at"] == "2026-04-09T14:57:00Z"
     assert len(
         [
             item["saved_output_path"]
@@ -372,6 +385,11 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert python_replay_payload["lineage"]["run_id"] != python_batch_payload["lineage"]["run_id"]
     assert python_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert python_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
+    assert python_replay_payload["lineage"]["created_at"] == "2026-04-09T14:57:01Z"
+    assert (
+        python_replay_payload["lineage"]["created_at"]
+        > python_batch_payload["lineage"]["created_at"]
+    )
     assert len(
         [
             item["saved_output_path"]
@@ -428,6 +446,7 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert npm_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert npm_batch_payload["lineage"].get("parent_run_id") is None
     assert npm_batch_payload["lineage"].get("source_manifest_path") is None
+    assert npm_batch_payload["lineage"]["created_at"] == "2026-04-09T14:57:00Z"
     assert len(
         [item["saved_output_path"] for item in npm_batch_payload["items"] if item.get("saved_output_path")]
     ) == 2
@@ -463,6 +482,11 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert npm_replay_payload["lineage"]["run_id"] != npm_batch_payload["lineage"]["run_id"]
     assert npm_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert npm_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
+    assert npm_replay_payload["lineage"]["created_at"] == "2026-04-09T14:57:01Z"
+    assert (
+        npm_replay_payload["lineage"]["created_at"]
+        > npm_batch_payload["lineage"]["created_at"]
+    )
     assert len(
         [item["saved_output_path"] for item in npm_replay_payload["items"] if item.get("saved_output_path")]
     ) == 2
@@ -2476,6 +2500,31 @@ def test_verify_release_artifacts_reports_live_service_batch_replay_rerun_diff_e
             {},
             {"lineage_parent_run_id": "ades-run-wrong-parent"},
             "npm_tarball_serve_tag_files_replay_invalid_lineage_parent_run_id",
+        ),
+        (
+            {"include_lineage_created_at": False},
+            {},
+            "npm_tarball_serve_tag_files_missing_lineage_created_at",
+        ),
+        (
+            {"lineage_created_at": "not-a-timestamp"},
+            {},
+            "npm_tarball_serve_tag_files_invalid_lineage_created_at",
+        ),
+        (
+            {},
+            {"include_lineage_created_at": False},
+            "npm_tarball_serve_tag_files_replay_missing_lineage_created_at",
+        ),
+        (
+            {},
+            {"lineage_created_at": "not-a-timestamp"},
+            "npm_tarball_serve_tag_files_replay_invalid_lineage_created_at",
+        ),
+        (
+            {},
+            {"lineage_created_at": "2026-04-09T14:56:59Z"},
+            "npm_tarball_serve_tag_files_replay_invalid_lineage_created_at_order",
         ),
     ],
 )

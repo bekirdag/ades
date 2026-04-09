@@ -89,6 +89,7 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert python_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert python_batch_payload["lineage"].get("parent_run_id") is None
     assert python_batch_payload["lineage"].get("source_manifest_path") is None
+    assert python_batch_payload["lineage"]["created_at"] == "2026-04-09T14:57:00Z"
     assert len(
         [
             item["saved_output_path"]
@@ -128,6 +129,11 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert python_replay_payload["lineage"]["run_id"] != python_batch_payload["lineage"]["run_id"]
     assert python_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert python_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
+    assert python_replay_payload["lineage"]["created_at"] == "2026-04-09T14:57:01Z"
+    assert (
+        python_replay_payload["lineage"]["created_at"]
+        > python_batch_payload["lineage"]["created_at"]
+    )
     assert len(
         [
             item["saved_output_path"]
@@ -183,6 +189,7 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert npm_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert npm_batch_payload["lineage"].get("parent_run_id") is None
     assert npm_batch_payload["lineage"].get("source_manifest_path") is None
+    assert npm_batch_payload["lineage"]["created_at"] == "2026-04-09T14:57:00Z"
     assert len(
         [item["saved_output_path"] for item in npm_batch_payload["items"] if item.get("saved_output_path")]
     ) == 2
@@ -218,6 +225,11 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert npm_replay_payload["lineage"]["run_id"] != npm_batch_payload["lineage"]["run_id"]
     assert npm_replay_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
     assert npm_replay_payload["lineage"]["parent_run_id"] == "ades-run-parent-smoke"
+    assert npm_replay_payload["lineage"]["created_at"] == "2026-04-09T14:57:01Z"
+    assert (
+        npm_replay_payload["lineage"]["created_at"]
+        > npm_batch_payload["lineage"]["created_at"]
+    )
     assert len(
         [item["saved_output_path"] for item in npm_replay_payload["items"] if item.get("saved_output_path")]
     ) == 2

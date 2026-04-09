@@ -636,6 +636,27 @@ def _parse_batch_lineage_parent_run_id(result: ReleaseCommandResult) -> str | No
     return _parse_batch_lineage_value(result, "parent_run_id")
 
 
+def _parse_iso8601_datetime(value: str) -> datetime | None:
+    """Parse one timezone-aware ISO 8601 datetime string."""
+
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(UTC)
+
+
+def _parse_batch_lineage_created_at(result: ReleaseCommandResult) -> datetime | None:
+    """Extract the lineage creation timestamp from a JSON `ades tag-files` payload."""
+
+    value = _parse_batch_lineage_value(result, "created_at")
+    if value is None:
+        return None
+    return _parse_iso8601_datetime(value)
+
+
 def _batch_lineage_field_is_unset(
     result: ReleaseCommandResult,
     field_name: str,
@@ -1513,6 +1534,9 @@ def _run_python_install_smoke(
         serve_tag_files_lineage_root_run_id = _parse_batch_lineage_root_run_id(
             serve_tag_files
         )
+        serve_tag_files_lineage_created_at = _parse_batch_lineage_created_at(
+            serve_tag_files
+        )
         has_expected_serve_tag_files_lineage_parent_run_id = _batch_lineage_field_is_unset(
             serve_tag_files,
             "parent_run_id",
@@ -1550,6 +1574,9 @@ def _run_python_install_smoke(
             serve_tag_files_replay
         )
         serve_tag_files_replay_parent_run_id = _parse_batch_lineage_parent_run_id(
+            serve_tag_files_replay
+        )
+        serve_tag_files_replay_created_at = _parse_batch_lineage_created_at(
             serve_tag_files_replay
         )
         serve_tag_files_replay_rerun_diff_manifest_input_path = (
@@ -1629,6 +1656,9 @@ def _run_python_install_smoke(
         has_expected_serve_tag_files_lineage_root_run_id = (
             serve_tag_files_lineage_root_run_id == serve_tag_files_lineage_run_id
         )
+        has_expected_serve_tag_files_lineage_created_at = (
+            serve_tag_files_lineage_created_at is not None
+        )
         has_expected_serve_tag_files_replay_root_run_id = (
             serve_tag_files_lineage_root_run_id is not None
             and serve_tag_files_replay_root_run_id == serve_tag_files_lineage_root_run_id
@@ -1636,6 +1666,14 @@ def _run_python_install_smoke(
         has_expected_serve_tag_files_replay_parent_run_id = (
             serve_tag_files_lineage_run_id is not None
             and serve_tag_files_replay_parent_run_id == serve_tag_files_lineage_run_id
+        )
+        has_expected_serve_tag_files_replay_created_at = (
+            serve_tag_files_replay_created_at is not None
+        )
+        has_expected_serve_tag_files_replay_created_at_order = (
+            serve_tag_files_lineage_created_at is not None
+            and serve_tag_files_replay_created_at is not None
+            and serve_tag_files_replay_created_at > serve_tag_files_lineage_created_at
         )
         has_expected_serve_tag_files_replay_rerun_diff = (
             _parse_batch_rerun_diff(serve_tag_files_replay) is not None
@@ -1689,6 +1727,7 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_output_count
             and has_expected_serve_tag_files_lineage_run_id
             and has_expected_serve_tag_files_lineage_root_run_id
+            and has_expected_serve_tag_files_lineage_created_at
             and has_expected_serve_tag_files_lineage_parent_run_id
             and has_expected_serve_tag_files_lineage_source_manifest_path
             and serve_tag_files_replay.passed
@@ -1703,6 +1742,8 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_replay_run_id
             and has_expected_serve_tag_files_replay_root_run_id
             and has_expected_serve_tag_files_replay_parent_run_id
+            and has_expected_serve_tag_files_replay_created_at
+            and has_expected_serve_tag_files_replay_created_at_order
             and has_expected_serve_tag_files_replay_manifest_path
             and has_expected_serve_tag_files_replay_output_count
             and has_expected_serve_tag_files_replay_rerun_diff
@@ -1955,6 +1996,9 @@ def _run_npm_install_smoke(
         serve_tag_files_lineage_root_run_id = _parse_batch_lineage_root_run_id(
             serve_tag_files
         )
+        serve_tag_files_lineage_created_at = _parse_batch_lineage_created_at(
+            serve_tag_files
+        )
         has_expected_serve_tag_files_lineage_parent_run_id = _batch_lineage_field_is_unset(
             serve_tag_files,
             "parent_run_id",
@@ -1992,6 +2036,9 @@ def _run_npm_install_smoke(
             serve_tag_files_replay
         )
         serve_tag_files_replay_parent_run_id = _parse_batch_lineage_parent_run_id(
+            serve_tag_files_replay
+        )
+        serve_tag_files_replay_created_at = _parse_batch_lineage_created_at(
             serve_tag_files_replay
         )
         serve_tag_files_replay_rerun_diff_manifest_input_path = (
@@ -2071,6 +2118,9 @@ def _run_npm_install_smoke(
         has_expected_serve_tag_files_lineage_root_run_id = (
             serve_tag_files_lineage_root_run_id == serve_tag_files_lineage_run_id
         )
+        has_expected_serve_tag_files_lineage_created_at = (
+            serve_tag_files_lineage_created_at is not None
+        )
         has_expected_serve_tag_files_replay_root_run_id = (
             serve_tag_files_lineage_root_run_id is not None
             and serve_tag_files_replay_root_run_id == serve_tag_files_lineage_root_run_id
@@ -2078,6 +2128,14 @@ def _run_npm_install_smoke(
         has_expected_serve_tag_files_replay_parent_run_id = (
             serve_tag_files_lineage_run_id is not None
             and serve_tag_files_replay_parent_run_id == serve_tag_files_lineage_run_id
+        )
+        has_expected_serve_tag_files_replay_created_at = (
+            serve_tag_files_replay_created_at is not None
+        )
+        has_expected_serve_tag_files_replay_created_at_order = (
+            serve_tag_files_lineage_created_at is not None
+            and serve_tag_files_replay_created_at is not None
+            and serve_tag_files_replay_created_at > serve_tag_files_lineage_created_at
         )
         has_expected_serve_tag_files_replay_rerun_diff = (
             _parse_batch_rerun_diff(serve_tag_files_replay) is not None
@@ -2131,6 +2189,7 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_output_count
             and has_expected_serve_tag_files_lineage_run_id
             and has_expected_serve_tag_files_lineage_root_run_id
+            and has_expected_serve_tag_files_lineage_created_at
             and has_expected_serve_tag_files_lineage_parent_run_id
             and has_expected_serve_tag_files_lineage_source_manifest_path
             and serve_tag_files_replay.passed
@@ -2145,6 +2204,8 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_replay_run_id
             and has_expected_serve_tag_files_replay_root_run_id
             and has_expected_serve_tag_files_replay_parent_run_id
+            and has_expected_serve_tag_files_replay_created_at
+            and has_expected_serve_tag_files_replay_created_at_order
             and has_expected_serve_tag_files_replay_manifest_path
             and has_expected_serve_tag_files_replay_output_count
             and has_expected_serve_tag_files_replay_rerun_diff
@@ -2468,6 +2529,17 @@ def _smoke_install_warnings(
         "source_manifest_path",
     ):
         return [f"{prefix}_serve_tag_files_invalid_lineage_source_manifest_path"]
+    serve_tag_files_lineage_created_at_value = _parse_batch_lineage_value(
+        smoke_result.serve_tag_files,
+        "created_at",
+    )
+    if serve_tag_files_lineage_created_at_value is None:
+        return [f"{prefix}_serve_tag_files_missing_lineage_created_at"]
+    serve_tag_files_lineage_created_at = _parse_iso8601_datetime(
+        serve_tag_files_lineage_created_at_value
+    )
+    if serve_tag_files_lineage_created_at is None:
+        return [f"{prefix}_serve_tag_files_invalid_lineage_created_at"]
     serve_tag_files_replay_root_run_id = _parse_batch_lineage_root_run_id(
         smoke_result.serve_tag_files_replay
     )
@@ -2482,6 +2554,19 @@ def _smoke_install_warnings(
         return [f"{prefix}_serve_tag_files_replay_missing_lineage_parent_run_id"]
     if serve_tag_files_replay_parent_run_id != serve_tag_files_lineage_run_id:
         return [f"{prefix}_serve_tag_files_replay_invalid_lineage_parent_run_id"]
+    serve_tag_files_replay_created_at_value = _parse_batch_lineage_value(
+        smoke_result.serve_tag_files_replay,
+        "created_at",
+    )
+    if serve_tag_files_replay_created_at_value is None:
+        return [f"{prefix}_serve_tag_files_replay_missing_lineage_created_at"]
+    serve_tag_files_replay_created_at = _parse_iso8601_datetime(
+        serve_tag_files_replay_created_at_value
+    )
+    if serve_tag_files_replay_created_at is None:
+        return [f"{prefix}_serve_tag_files_replay_invalid_lineage_created_at"]
+    if serve_tag_files_replay_created_at <= serve_tag_files_lineage_created_at:
+        return [f"{prefix}_serve_tag_files_replay_invalid_lineage_created_at_order"]
     serve_tag_files_replay_manifest_path = _parse_batch_saved_manifest_path(
         smoke_result.serve_tag_files_replay
     )
