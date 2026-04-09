@@ -264,6 +264,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added deterministic fake serve-smoke support in `tests/release_helpers.py` and extended categorized unit, component, integration, and API release-verify coverage so successful serve startup and explicit serve-failure warnings are exercised without changing the public release command contracts.
 - Verified the item through focused release verification/validation tests with `23 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `175 passed` under `pytest -q` plus successful wheel/npm clean-environment serve probes.
 
+### 37. Clean-environment bootstrap recovery smoke validation
+
+- Extended `src/ades/release.py` so clean-environment release smoke verification now deletes `storage_root/registry/ades.db` after pull/tag, proves `ades status` can bootstrap `general-en` back from on-disk pack manifests, deletes the registry metadata again, and then starts `ades serve`.
+- Extended the shared smoke response model in `src/ades/service/models.py` so each artifact now exposes additive `recovery_status` command results plus `recovered_pack_ids` alongside the existing install, status, pull, tag, and serve results.
+- Updated `tests/release_helpers.py` and the categorized release verify tests so successful metadata-bootstrap recovery and explicit recovery-status failures are covered across unit, component, integration, and API layers without changing the public release command contracts.
+- Verified the item through focused release verification/validation tests with `24 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `176 passed` under `pytest -q` plus successful wheel/npm clean-environment bootstrap recovery checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -337,4 +344,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Finish the remaining pack lifecycle hardening around clean-environment bootstrap and recovery validation against the published registry and current production deployment flow now that installed pull/tag smoke behavior, list-driven SQLite metadata repair, and clean-environment serve startup are covered.
+- Finish the remaining pack lifecycle hardening around broader clean-environment recovery combinations and end-to-end production-readiness validation against the published registry and current production deployment flow now that installed pull/tag smoke behavior, list-driven SQLite metadata repair, clean-environment serve startup, and metadata-bootstrap recovery are covered.

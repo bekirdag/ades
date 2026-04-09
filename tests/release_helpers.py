@@ -303,6 +303,34 @@ def build_fake_service_smoke(
     return serve, healthz, status, ["general-en"]
 
 
+def build_fake_recovery_status(
+    *,
+    version: str,
+    storage_root: Path,
+) -> tuple[ReleaseCommandResult, list[str]]:
+    """Return a deterministic fake recovery `ades status` result."""
+
+    status = ReleaseCommandResult(
+        command=["ades", "status"],
+        exit_code=0,
+        passed=True,
+        stdout=json.dumps(
+            {
+                "service": "ades",
+                "version": version,
+                "runtime_target": "local",
+                "metadata_backend": "sqlite",
+                "storage_root": str(storage_root),
+                "host": "127.0.0.1",
+                "port": 8734,
+                "installed_packs": ["general-en"],
+            }
+        ),
+        stderr="",
+    )
+    return status, ["general-en"]
+
+
 def patch_release_runner(monkeypatch: Any, runner: Callable[..., subprocess.CompletedProcess[str]]) -> None:
     """Patch both release command helpers to the same fake runner."""
 
@@ -310,6 +338,13 @@ def patch_release_runner(monkeypatch: Any, runner: Callable[..., subprocess.Comp
     monkeypatch.setattr(
         "ades.release._run_command_with_env",
         lambda command, *, cwd, env: runner(command, cwd=cwd),
+    )
+    monkeypatch.setattr(
+        "ades.release._run_cli_recovery_status_smoke",
+        lambda *, executable, working_dir, storage_root, expected_version, extra_env=None: build_fake_recovery_status(
+            version=expected_version,
+            storage_root=storage_root,
+        ),
     )
     monkeypatch.setattr(
         "ades.release._run_cli_service_smoke",

@@ -44,6 +44,8 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert verification.python_install_smoke.pull.passed is True
     assert verification.python_install_smoke.tag is not None
     assert verification.python_install_smoke.tag.passed is True
+    assert verification.python_install_smoke.recovery_status is not None
+    assert verification.python_install_smoke.recovery_status.passed is True
     assert verification.python_install_smoke.serve is not None
     assert verification.python_install_smoke.serve.passed is True
     assert verification.python_install_smoke.serve_healthz is not None
@@ -52,6 +54,7 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert verification.python_install_smoke.serve_status.passed is True
     assert "general-en" in verification.python_install_smoke.pulled_pack_ids
     assert {"organization", "email_address"} <= set(verification.python_install_smoke.tagged_labels)
+    assert "general-en" in verification.python_install_smoke.recovered_pack_ids
     assert "general-en" in verification.python_install_smoke.served_pack_ids
     assert verification.npm_install_smoke is not None
     assert verification.npm_install_smoke.passed is True
@@ -59,6 +62,8 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert verification.npm_install_smoke.pull.passed is True
     assert verification.npm_install_smoke.tag is not None
     assert verification.npm_install_smoke.tag.passed is True
+    assert verification.npm_install_smoke.recovery_status is not None
+    assert verification.npm_install_smoke.recovery_status.passed is True
     assert verification.npm_install_smoke.serve is not None
     assert verification.npm_install_smoke.serve.passed is True
     assert verification.npm_install_smoke.serve_healthz is not None
@@ -67,6 +72,7 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert verification.npm_install_smoke.serve_status.passed is True
     assert "general-en" in verification.npm_install_smoke.pulled_pack_ids
     assert {"organization", "email_address"} <= set(verification.npm_install_smoke.tagged_labels)
+    assert "general-en" in verification.npm_install_smoke.recovered_pack_ids
     assert "general-en" in verification.npm_install_smoke.served_pack_ids
     assert manifest.release_version == "0.3.0"
     assert manifest.verification.smoke_install is False

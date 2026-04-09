@@ -33,6 +33,7 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert verify_payload["python_install_smoke"]["passed"] is True
     assert verify_payload["python_install_smoke"]["pull"]["passed"] is True
     assert verify_payload["python_install_smoke"]["tag"]["passed"] is True
+    assert verify_payload["python_install_smoke"]["recovery_status"]["passed"] is True
     assert verify_payload["python_install_smoke"]["serve"]["passed"] is True
     assert verify_payload["python_install_smoke"]["serve_healthz"]["passed"] is True
     assert verify_payload["python_install_smoke"]["serve_status"]["passed"] is True
@@ -40,10 +41,12 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert {"organization", "email_address"} <= set(
         verify_payload["python_install_smoke"]["tagged_labels"]
     )
+    assert "general-en" in verify_payload["python_install_smoke"]["recovered_pack_ids"]
     assert "general-en" in verify_payload["python_install_smoke"]["served_pack_ids"]
     assert verify_payload["npm_install_smoke"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["pull"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["tag"]["passed"] is True
+    assert verify_payload["npm_install_smoke"]["recovery_status"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["serve"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["serve_healthz"]["passed"] is True
     assert verify_payload["npm_install_smoke"]["serve_status"]["passed"] is True
@@ -51,6 +54,7 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert {"organization", "email_address"} <= set(
         verify_payload["npm_install_smoke"]["tagged_labels"]
     )
+    assert "general-en" in verify_payload["npm_install_smoke"]["recovered_pack_ids"]
     assert "general-en" in verify_payload["npm_install_smoke"]["served_pack_ids"]
 
 

@@ -187,6 +187,7 @@ class ReleaseInstallSmokeResult(BaseModel):
     invoke: ReleaseCommandResult
     pull: ReleaseCommandResult | None = None
     tag: ReleaseCommandResult | None = None
+    recovery_status: ReleaseCommandResult | None = None
     serve: ReleaseCommandResult | None = None
     serve_healthz: ReleaseCommandResult | None = None
     serve_status: ReleaseCommandResult | None = None
@@ -194,6 +195,7 @@ class ReleaseInstallSmokeResult(BaseModel):
     reported_version: str | None = None
     pulled_pack_ids: list[str] = Field(default_factory=list)
     tagged_labels: list[str] = Field(default_factory=list)
+    recovered_pack_ids: list[str] = Field(default_factory=list)
     served_pack_ids: list[str] = Field(default_factory=list)
 
 

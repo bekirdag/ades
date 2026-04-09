@@ -30,7 +30,7 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- add clean-environment recovery and bootstrap validation after the installed pull/tag, list-repair, and serve-smoke slices
+- add broader clean-environment recovery combinations after the installed pull/tag, list-repair, serve-smoke, and metadata-bootstrap recovery slices
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
 - keep the new rollback-safe install semantics, list-driven metadata repair, and SQLite recovery behavior stable while finishing the remaining pack-lifecycle recovery work
 
@@ -61,3 +61,6 @@ Planned work:
 - 2026-04-09: extended `src/ades/release.py` so clean-environment release smoke verification now launches installed-artifact `ades serve` for both the wheel and npm wrapper, probes `/healthz` plus `/v0/status`, and records the running service results before shutdown.
 - 2026-04-09: extended `src/ades/service/models.py` plus `tests/release_helpers.py` and the categorized release verify tests so additive serve-smoke results and serve-failure warnings are covered across unit, component, integration, and API layers, with focused validation passing at `23 passed`.
 - 2026-04-09: full repo release validation passed again after the serve-smoke slice through `docdexd run-tests --repo /home/wodo/apps/ades`, including `175 passed` under `pytest -q` plus successful wheel/npm clean-environment serve probes.
+- 2026-04-09: extended `src/ades/release.py` so clean-environment release smoke verification now deletes the local SQLite registry after pull/tag, validates bootstrap recovery through a fresh `status` call, deletes the registry again, and then starts `ades serve` so the packaged artifacts prove metadata-loss recovery against on-disk packs.
+- 2026-04-09: extended `src/ades/service/models.py` plus `tests/release_helpers.py` and the categorized release verify tests so additive `recovery_status` plus `recovered_pack_ids` results and explicit recovery-failure warnings are covered across unit, component, integration, and API layers.
+- 2026-04-09: focused bootstrap-recovery verification/validation tests passed with `24 passed`, `python -m compileall src/ades` passed, and the full repo release-validation gate passed again through `docdexd run-tests --repo /home/wodo/apps/ades`, including `176 passed` under `pytest -q`.
