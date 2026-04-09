@@ -826,6 +826,27 @@ def _write_batch_smoke_input_files(working_dir: Path) -> list[Path]:
     return paths
 
 
+def _smoke_batch_output_dir(working_dir: Path) -> Path:
+    return (working_dir / SMOKE_TAG_BATCH_OUTPUT_DIR_NAME).resolve()
+
+
+def _expected_smoke_batch_manifest_path(working_dir: Path, *, replay: bool = False) -> str:
+    file_name = (
+        SMOKE_TAG_BATCH_REPLAY_MANIFEST_FILE_NAME
+        if replay
+        else SMOKE_TAG_BATCH_MANIFEST_FILE_NAME
+    )
+    return str((_smoke_batch_output_dir(working_dir) / file_name).resolve())
+
+
+def _expected_smoke_batch_output_paths(working_dir: Path) -> list[str]:
+    output_dir = _smoke_batch_output_dir(working_dir)
+    return [
+        str((output_dir / f"{Path(file_name).stem}.{SMOKE_PULL_PACK_ID}.ades.json").resolve())
+        for file_name, _ in SMOKE_TAG_BATCH_FILES
+    ]
+
+
 def _sha256(path: Path) -> str:
     """Return the SHA-256 digest for one file."""
 
@@ -1042,10 +1063,12 @@ def _run_cli_service_smoke(
     tag_files_url = f"http://{SMOKE_SERVE_HOST}:{port}/v0/tag/files"
     smoke_input_path = _write_smoke_input_file(working_dir)
     smoke_batch_input_paths = _write_batch_smoke_input_files(working_dir)
-    smoke_batch_output_dir = (working_dir / SMOKE_TAG_BATCH_OUTPUT_DIR_NAME).resolve()
-    smoke_batch_manifest_path = (smoke_batch_output_dir / SMOKE_TAG_BATCH_MANIFEST_FILE_NAME).resolve()
-    smoke_batch_replay_manifest_path = (
-        smoke_batch_output_dir / SMOKE_TAG_BATCH_REPLAY_MANIFEST_FILE_NAME
+    smoke_batch_output_dir = _smoke_batch_output_dir(working_dir)
+    smoke_batch_manifest_path = Path(
+        _expected_smoke_batch_manifest_path(working_dir)
+    ).resolve()
+    smoke_batch_replay_manifest_path = Path(
+        _expected_smoke_batch_manifest_path(working_dir, replay=True)
     ).resolve()
     process = subprocess.Popen(
         serve_command,
@@ -1744,21 +1767,27 @@ def _run_python_install_smoke(
             str((working_dir / file_name).resolve())
             for file_name, _ in SMOKE_TAG_BATCH_FILES
         )
-        has_expected_serve_tag_files_manifest_path = (
-            serve_tag_files_manifest_path is not None
-            and serve_tag_files_manifest_path.endswith(SMOKE_TAG_BATCH_MANIFEST_FILE_NAME)
+        expected_serve_tag_files_manifest_path = _expected_smoke_batch_manifest_path(
+            working_dir
         )
-        has_expected_serve_tag_files_output_count = (
-            len(serve_tag_files_output_paths) == len(SMOKE_TAG_BATCH_FILES)
+        expected_serve_tag_files_output_paths = _expected_smoke_batch_output_paths(
+            working_dir
+        )
+        expected_serve_tag_files_replay_manifest_path = (
+            _expected_smoke_batch_manifest_path(working_dir, replay=True)
+        )
+        has_expected_serve_tag_files_manifest_path = (
+            serve_tag_files_manifest_path == expected_serve_tag_files_manifest_path
+        )
+        has_expected_serve_tag_files_output_paths = (
+            serve_tag_files_output_paths == expected_serve_tag_files_output_paths
         )
         has_expected_serve_tag_files_replay_manifest_path = (
-            serve_tag_files_replay_manifest_path is not None
-            and serve_tag_files_replay_manifest_path.endswith(
-                SMOKE_TAG_BATCH_REPLAY_MANIFEST_FILE_NAME
-            )
+            serve_tag_files_replay_manifest_path
+            == expected_serve_tag_files_replay_manifest_path
         )
-        has_expected_serve_tag_files_replay_output_count = (
-            len(serve_tag_files_replay_output_paths) == len(SMOKE_TAG_BATCH_FILES)
+        has_expected_serve_tag_files_replay_output_paths = (
+            serve_tag_files_replay_output_paths == expected_serve_tag_files_output_paths
         )
         has_expected_serve_tag_files_replay_pack_id = (
             serve_tag_files_replay_pack_id == SMOKE_PULL_PACK_ID
@@ -1871,7 +1900,7 @@ def _run_python_install_smoke(
             and serve_tag_files.passed
             and not missing_serve_tag_files_labels
             and has_expected_serve_tag_files_manifest_path
-            and has_expected_serve_tag_files_output_count
+            and has_expected_serve_tag_files_output_paths
             and has_expected_serve_tag_files_lineage_run_id
             and has_expected_serve_tag_files_lineage_root_run_id
             and has_expected_serve_tag_files_lineage_created_at
@@ -1892,7 +1921,7 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_replay_created_at
             and has_expected_serve_tag_files_replay_created_at_order
             and has_expected_serve_tag_files_replay_manifest_path
-            and has_expected_serve_tag_files_replay_output_count
+            and has_expected_serve_tag_files_replay_output_paths
             and has_expected_serve_tag_files_replay_rerun_diff
             and has_expected_serve_tag_files_replay_rerun_diff_manifest_input_path
             and has_expected_serve_tag_files_replay_rerun_diff_changed_paths
@@ -2266,21 +2295,27 @@ def _run_npm_install_smoke(
             str((working_dir / file_name).resolve())
             for file_name, _ in SMOKE_TAG_BATCH_FILES
         )
-        has_expected_serve_tag_files_manifest_path = (
-            serve_tag_files_manifest_path is not None
-            and serve_tag_files_manifest_path.endswith(SMOKE_TAG_BATCH_MANIFEST_FILE_NAME)
+        expected_serve_tag_files_manifest_path = _expected_smoke_batch_manifest_path(
+            working_dir
         )
-        has_expected_serve_tag_files_output_count = (
-            len(serve_tag_files_output_paths) == len(SMOKE_TAG_BATCH_FILES)
+        expected_serve_tag_files_output_paths = _expected_smoke_batch_output_paths(
+            working_dir
+        )
+        expected_serve_tag_files_replay_manifest_path = (
+            _expected_smoke_batch_manifest_path(working_dir, replay=True)
+        )
+        has_expected_serve_tag_files_manifest_path = (
+            serve_tag_files_manifest_path == expected_serve_tag_files_manifest_path
+        )
+        has_expected_serve_tag_files_output_paths = (
+            serve_tag_files_output_paths == expected_serve_tag_files_output_paths
         )
         has_expected_serve_tag_files_replay_manifest_path = (
-            serve_tag_files_replay_manifest_path is not None
-            and serve_tag_files_replay_manifest_path.endswith(
-                SMOKE_TAG_BATCH_REPLAY_MANIFEST_FILE_NAME
-            )
+            serve_tag_files_replay_manifest_path
+            == expected_serve_tag_files_replay_manifest_path
         )
-        has_expected_serve_tag_files_replay_output_count = (
-            len(serve_tag_files_replay_output_paths) == len(SMOKE_TAG_BATCH_FILES)
+        has_expected_serve_tag_files_replay_output_paths = (
+            serve_tag_files_replay_output_paths == expected_serve_tag_files_output_paths
         )
         has_expected_serve_tag_files_replay_pack_id = (
             serve_tag_files_replay_pack_id == SMOKE_PULL_PACK_ID
@@ -2393,7 +2428,7 @@ def _run_npm_install_smoke(
             and serve_tag_files.passed
             and not missing_serve_tag_files_labels
             and has_expected_serve_tag_files_manifest_path
-            and has_expected_serve_tag_files_output_count
+            and has_expected_serve_tag_files_output_paths
             and has_expected_serve_tag_files_lineage_run_id
             and has_expected_serve_tag_files_lineage_root_run_id
             and has_expected_serve_tag_files_lineage_created_at
@@ -2414,7 +2449,7 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_replay_created_at
             and has_expected_serve_tag_files_replay_created_at_order
             and has_expected_serve_tag_files_replay_manifest_path
-            and has_expected_serve_tag_files_replay_output_count
+            and has_expected_serve_tag_files_replay_output_paths
             and has_expected_serve_tag_files_replay_rerun_diff
             and has_expected_serve_tag_files_replay_rerun_diff_manifest_input_path
             and has_expected_serve_tag_files_replay_rerun_diff_changed_paths
@@ -2559,11 +2594,17 @@ def _smoke_install_warnings(
     serve_tag_files_manifest_path = _parse_batch_saved_manifest_path(smoke_result.serve_tag_files)
     if serve_tag_files_manifest_path is None:
         return [f"{prefix}_serve_tag_files_missing_manifest_path"]
-    if not serve_tag_files_manifest_path.endswith(SMOKE_TAG_BATCH_MANIFEST_FILE_NAME):
+    expected_serve_tag_files_manifest_path = _expected_smoke_batch_manifest_path(
+        Path(smoke_result.working_dir)
+    )
+    if serve_tag_files_manifest_path != expected_serve_tag_files_manifest_path:
         return [f"{prefix}_serve_tag_files_invalid_manifest_path"]
     serve_tag_files_output_paths = _parse_batch_saved_output_paths(smoke_result.serve_tag_files)
-    if len(serve_tag_files_output_paths) != len(SMOKE_TAG_BATCH_FILES):
-        return [f"{prefix}_serve_tag_files_output_count:{len(serve_tag_files_output_paths)}"]
+    expected_serve_tag_files_output_paths = _expected_smoke_batch_output_paths(
+        Path(smoke_result.working_dir)
+    )
+    if serve_tag_files_output_paths != expected_serve_tag_files_output_paths:
+        return [f"{prefix}_serve_tag_files_invalid_output_paths"]
     if smoke_result.serve_tag_files_replay is None or not smoke_result.serve_tag_files_replay.passed:
         exit_code = (
             None
@@ -2788,18 +2829,17 @@ def _smoke_install_warnings(
     )
     if serve_tag_files_replay_manifest_path is None:
         return [f"{prefix}_serve_tag_files_replay_missing_manifest_path"]
-    if not serve_tag_files_replay_manifest_path.endswith(
-        SMOKE_TAG_BATCH_REPLAY_MANIFEST_FILE_NAME
-    ):
+    expected_serve_tag_files_replay_manifest_path = _expected_smoke_batch_manifest_path(
+        Path(smoke_result.working_dir),
+        replay=True,
+    )
+    if serve_tag_files_replay_manifest_path != expected_serve_tag_files_replay_manifest_path:
         return [f"{prefix}_serve_tag_files_replay_invalid_manifest_path"]
     serve_tag_files_replay_output_paths = _parse_batch_saved_output_paths(
         smoke_result.serve_tag_files_replay
     )
-    if len(serve_tag_files_replay_output_paths) != len(SMOKE_TAG_BATCH_FILES):
-        return [
-            f"{prefix}_serve_tag_files_replay_output_count:"
-            f"{len(serve_tag_files_replay_output_paths)}"
-        ]
+    if serve_tag_files_replay_output_paths != expected_serve_tag_files_output_paths:
+        return [f"{prefix}_serve_tag_files_replay_invalid_output_paths"]
     if smoke_result.remove_guardrail is None:
         return [f"{prefix}_remove_guardrail_missing"]
     if smoke_result.remove_guardrail.passed:

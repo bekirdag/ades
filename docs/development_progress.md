@@ -387,6 +387,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added categorized release-helper failure coverage in `tests/unit/test_release_verification.py`, `tests/unit/test_release_validation.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so missing release-layout files and invalid release-version metadata/update failures are proven consistently across unit, component, integration, and API layers.
 - Verified the slice through focused release suites with `91 passed` plus `python -m compileall src/ades tests`, which closes the remaining CLI/service operational-hardening queue and moves the active work to end-to-end production-readiness validation.
 
+### 54. Exact saved-path parity validation for installed-artifact batch smoke
+
+- Tightened `src/ades/release.py` so clean-environment wheel/npm `/v0/tag/files` smoke now requires the exact deterministic root manifest path, replay manifest path, and both saved output paths under `serve-smoke-batch-outputs`, rather than accepting any path with the right filename suffix or output count.
+- Reused the existing packaged serve-smoke response shape while strengthening both the internal pass/fail checks and warning generation for root/replay saved-path mismatches.
+- Updated `tests/release_helpers.py`, `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful exact-path parity plus explicit invalid root/replay saved-path warnings are covered across unit, component, integration, and API layers.
+- Verified the item through focused release verification tests with `90 passed` and `python -m compileall src/ades tests`, keeping the active queue on end-to-end production-readiness validation.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`

@@ -18,6 +18,34 @@ def _write_text(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def build_expected_batch_manifest_path(working_dir: Path) -> str:
+    return str(
+        (
+            working_dir.resolve()
+            / "serve-smoke-batch-outputs"
+            / "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
+        ).resolve()
+    )
+
+
+def build_expected_batch_replay_manifest_path(working_dir: Path) -> str:
+    return str(
+        (
+            working_dir.resolve()
+            / "serve-smoke-batch-outputs"
+            / "serve-smoke-batch-replay.finance-en.ades-manifest.json"
+        ).resolve()
+    )
+
+
+def build_expected_batch_output_paths(working_dir: Path) -> list[str]:
+    output_dir = (working_dir.resolve() / "serve-smoke-batch-outputs").resolve()
+    return [
+        str((output_dir / "serve-smoke-batch-alpha.finance-en.ades.json").resolve()),
+        str((output_dir / "serve-smoke-batch-beta.finance-en.ades.json").resolve()),
+    ]
+
+
 def create_release_project(
     root: Path,
     *,

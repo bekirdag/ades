@@ -18,6 +18,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 
 ## Recently Closed
 
+- Exact saved-path parity validation for installed-artifact `/v0/tag/files` smoke:
+  - implemented in `src/ades/release.py`
+  - tightens clean-environment wheel/npm release smoke so the root batch manifest path, replay manifest path, and both per-item saved output paths must match the exact deterministic paths under the smoke output directory rather than only matching filename suffixes or item counts
+  - adds categorized unit, component, integration, and API coverage for successful exact-path parity plus explicit invalid saved-path warnings on the packaged serve flow
+
 - Final Phase B1 release-helper operational-hardening closure:
   - implemented in `src/ades/cli.py` and `src/ades/service/app.py`
   - aligns `ades release verify`, `ades release validate`, `ades release versions`, `ades release sync-version`, `ades release manifest`, and `GET /v0/release/versions` with the existing operator-facing release failure contract so missing release-layout files now surface deterministic CLI stderr plus exit code `1` and HTTP `404`, while invalid release-version metadata or version-update failures surface deterministic CLI stderr plus exit code `1` and HTTP `400`
