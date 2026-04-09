@@ -289,6 +289,8 @@ def build_fake_service_smoke(
     ReleaseCommandResult,
     ReleaseCommandResult,
     ReleaseCommandResult,
+    ReleaseCommandResult,
+    list[str],
     list[str],
     list[str],
 ]:
@@ -355,12 +357,44 @@ def build_fake_service_smoke(
         ),
         stderr="",
     )
+    serve_tag_file = ReleaseCommandResult(
+        command=["POST", "http://127.0.0.1:8734/v0/tag/file"],
+        exit_code=0,
+        passed=True,
+        stdout=json.dumps(
+            {
+                "version": version,
+                "pack": "finance-en",
+                "language": "en",
+                "content_type": "text/html",
+                "source_path": str((storage_root.parent / "serve-smoke-input.html").resolve()),
+                "entities": [
+                    {"text": "Apple", "label": "organization", "start": 3, "end": 8, "confidence": 1.0},
+                    {"text": "AAPL", "label": "ticker", "start": 14, "end": 18, "confidence": 1.0},
+                    {"text": "NASDAQ", "label": "exchange", "start": 29, "end": 35, "confidence": 1.0},
+                    {
+                        "text": "USD 12.5",
+                        "label": "currency_amount",
+                        "start": 42,
+                        "end": 50,
+                        "confidence": 0.9,
+                    },
+                ],
+                "topics": [],
+                "warnings": [],
+                "timing_ms": 1,
+            }
+        ),
+        stderr="",
+    )
     return (
         serve,
         healthz,
         status,
         serve_tag,
+        serve_tag_file,
         ["general-en", "finance-en"],
+        ["organization", "ticker", "exchange", "currency_amount"],
         ["organization", "ticker", "exchange", "currency_amount"],
     )
 

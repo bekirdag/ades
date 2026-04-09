@@ -30,9 +30,9 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- extend installed-artifact clean-environment validation from live service text tagging to live `/v0/tag/file` requests after finance-pack pull and metadata recovery
+- extend installed-artifact clean-environment validation from live `/v0/tag/file` requests to live `/v0/tag/files` requests after finance-pack pull and metadata recovery
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
-- keep the new rollback-safe install semantics, lookup-driven metadata repair, SQLite recovery behavior, dependency-bearing release smoke, and live `/v0/tag` smoke stable while finishing the remaining pack-lifecycle recovery work
+- keep the new rollback-safe install semantics, lookup-driven metadata repair, SQLite recovery behavior, dependency-bearing release smoke, and live `/v0/tag` plus `/v0/tag/file` smoke stable while finishing the remaining pack-lifecycle recovery work
 
 ## Work Log
 
@@ -75,3 +75,6 @@ Planned work:
 - 2026-04-09: extended `src/ades/release.py` so clean-environment release smoke verification now drives a live `POST /v0/tag` request through the served wheel and npm wrapper after finance-pack pull, metadata bootstrap recovery, and serve startup.
 - 2026-04-09: extended `src/ades/service/models.py` plus `tests/release_helpers.py` and the categorized release verify tests so additive `serve_tag` plus `serve_tagged_labels` results and explicit live service-tag failure warnings are covered across unit, component, integration, and API layers.
 - 2026-04-09: focused live-service tagging verification passed with `18 passed`, `python -m compileall src/ades` passed again, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `181 passed` under `pytest -q`.
+- 2026-04-09: extended `src/ades/release.py` so clean-environment release smoke verification now writes a deterministic local HTML file and drives a live `POST /v0/tag/file` request through the served wheel and npm wrapper after finance-pack pull, metadata bootstrap recovery, and serve startup.
+- 2026-04-09: extended `src/ades/service/models.py` plus `tests/release_helpers.py` and the categorized release verify tests so additive `serve_tag_file` plus `serve_tag_file_labels` results and explicit live file-tag failure warnings are covered across unit, component, integration, and API layers.
+- 2026-04-09: focused live file-tagging verification passed with `19 passed`, `python -m compileall src/ades` passed again, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `182 passed` under `pytest -q`.

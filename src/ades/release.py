@@ -63,6 +63,8 @@ NPM_ACCESS_ALIAS_ENV = "ADES_RELEASE_NPM_ACCESS"
 SMOKE_PULL_PACK_ID = "finance-en"
 SMOKE_EXPECTED_PACK_IDS = ("general-en", "finance-en")
 SMOKE_TAG_TEXT = "Apple said AAPL traded on NASDAQ after USD 12.5 guidance."
+SMOKE_TAG_FILE_NAME = "serve-smoke-input.html"
+SMOKE_TAG_FILE_CONTENT = "<p>Apple said AAPL traded on NASDAQ after USD 12.5 guidance.</p>\n"
 SMOKE_TAG_REQUIRED_LABELS = ("organization", "ticker", "exchange", "currency_amount")
 SMOKE_SERVE_HOST = "127.0.0.1"
 SMOKE_SERVE_STARTUP_TIMEOUT_SECONDS = 20.0
@@ -515,6 +517,14 @@ def _missing_smoke_pack_ids(pack_ids: Sequence[str]) -> list[str]:
     return [pack_id for pack_id in SMOKE_EXPECTED_PACK_IDS if pack_id not in available]
 
 
+def _write_smoke_input_file(working_dir: Path) -> Path:
+    """Persist one deterministic local file used by live service smoke requests."""
+
+    input_path = working_dir / SMOKE_TAG_FILE_NAME
+    input_path.write_text(SMOKE_TAG_FILE_CONTENT, encoding="utf-8")
+    return input_path.resolve()
+
+
 def _sha256(path: Path) -> str:
     """Return the SHA-256 digest for one file."""
 
@@ -626,6 +636,8 @@ def _run_cli_service_smoke(
     ReleaseCommandResult,
     ReleaseCommandResult,
     ReleaseCommandResult,
+    ReleaseCommandResult,
+    list[str],
     list[str],
     list[str],
 ]:
@@ -648,6 +660,8 @@ def _run_cli_service_smoke(
     healthz_url = f"http://{SMOKE_SERVE_HOST}:{port}/healthz"
     status_url = f"http://{SMOKE_SERVE_HOST}:{port}/v0/status"
     tag_url = f"http://{SMOKE_SERVE_HOST}:{port}/v0/tag"
+    tag_file_url = f"http://{SMOKE_SERVE_HOST}:{port}/v0/tag/file"
+    smoke_input_path = _write_smoke_input_file(working_dir)
     process = subprocess.Popen(
         serve_command,
         cwd=working_dir,
@@ -671,10 +685,15 @@ def _run_cli_service_smoke(
         ["POST", tag_url],
         reason="Skipped because service startup did not pass the health probe.",
     )
+    serve_tag_file = _skipped_command_result(
+        ["POST", tag_file_url],
+        reason="Skipped because service startup did not pass the health probe.",
+    )
     started = False
     serve_stdout = ""
     serve_stderr = ""
     serve_tagged_labels: list[str] = []
+    serve_tag_file_labels: list[str] = []
     try:
         deadline = time.monotonic() + SMOKE_SERVE_STARTUP_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
@@ -697,6 +716,14 @@ def _run_cli_service_smoke(
                     },
                 )
                 serve_tagged_labels = _parse_tag_labels(serve_tag)
+                serve_tag_file = _post_http_json_endpoint(
+                    tag_file_url,
+                    {
+                        "path": str(smoke_input_path),
+                        "pack": SMOKE_PULL_PACK_ID,
+                    },
+                )
+                serve_tag_file_labels = _parse_tag_labels(serve_tag_file)
     finally:
         if process.poll() is None:
             process.terminate()
@@ -723,8 +750,10 @@ def _run_cli_service_smoke(
         serve_healthz,
         serve_status,
         serve_tag,
+        serve_tag_file,
         served_pack_ids,
         serve_tagged_labels,
+        serve_tag_file_labels,
     )
 
 
@@ -964,6 +993,10 @@ def _run_python_install_smoke(
                     ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag"],
                     reason="Skipped because virtual environment creation failed.",
                 ),
+                serve_tag_file=_skipped_command_result(
+                    ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag/file"],
+                    reason="Skipped because virtual environment creation failed.",
+                ),
                 passed=False,
                 reported_version=None,
             )
@@ -1004,8 +1037,10 @@ def _run_python_install_smoke(
                     serve_healthz,
                     serve_status,
                     serve_tag,
+                    serve_tag_file,
                     served_pack_ids,
                     serve_tagged_labels,
+                    serve_tag_file_labels,
                 ) = _run_cli_service_smoke(
                     executable=executable,
                     working_dir=working_dir,
@@ -1041,9 +1076,14 @@ def _run_python_install_smoke(
                     ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag"],
                     reason="Skipped because post-pull tagging failed.",
                 )
+                serve_tag_file = _skipped_command_result(
+                    ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag/file"],
+                    reason="Skipped because post-pull tagging failed.",
+                )
                 recovered_pack_ids = []
                 served_pack_ids = []
                 serve_tagged_labels = []
+                serve_tag_file_labels = []
         else:
             invoke_command = [str(executable), "status"]
             invoke = _skipped_command_result(
@@ -1087,18 +1127,24 @@ def _run_python_install_smoke(
                 ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag"],
                 reason="Skipped because wheel installation failed.",
             )
+            serve_tag_file = _skipped_command_result(
+                ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag/file"],
+                reason="Skipped because wheel installation failed.",
+            )
             reported_version = None
             pulled_pack_ids = []
             tagged_labels = []
             recovered_pack_ids = []
             served_pack_ids = []
             serve_tagged_labels = []
+            serve_tag_file_labels = []
 
         required_labels = set(SMOKE_TAG_REQUIRED_LABELS)
         missing_pulled_pack_ids = _missing_smoke_pack_ids(pulled_pack_ids)
         missing_recovered_pack_ids = _missing_smoke_pack_ids(recovered_pack_ids)
         missing_served_pack_ids = _missing_smoke_pack_ids(served_pack_ids)
         missing_serve_tag_labels = sorted(required_labels - set(serve_tagged_labels))
+        missing_serve_tag_file_labels = sorted(required_labels - set(serve_tag_file_labels))
         passed = (
             install.passed
             and invoke.passed
@@ -1118,6 +1164,8 @@ def _run_python_install_smoke(
             and not missing_served_pack_ids
             and serve_tag.passed
             and not missing_serve_tag_labels
+            and serve_tag_file.passed
+            and not missing_serve_tag_file_labels
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="python_wheel",
@@ -1133,6 +1181,7 @@ def _run_python_install_smoke(
             serve_healthz=serve_healthz,
             serve_status=serve_status,
             serve_tag=serve_tag,
+            serve_tag_file=serve_tag_file,
             passed=passed,
             reported_version=reported_version,
             pulled_pack_ids=pulled_pack_ids,
@@ -1140,6 +1189,7 @@ def _run_python_install_smoke(
             recovered_pack_ids=recovered_pack_ids,
             served_pack_ids=served_pack_ids,
             serve_tagged_labels=serve_tagged_labels,
+            serve_tag_file_labels=serve_tag_file_labels,
         )
 
 
@@ -1208,8 +1258,10 @@ def _run_npm_install_smoke(
                     serve_healthz,
                     serve_status,
                     serve_tag,
+                    serve_tag_file,
                     served_pack_ids,
                     serve_tagged_labels,
+                    serve_tag_file_labels,
                 ) = _run_cli_service_smoke(
                     executable=executable,
                     working_dir=working_dir,
@@ -1250,9 +1302,14 @@ def _run_npm_install_smoke(
                     ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag"],
                     reason="Skipped because post-pull tagging failed.",
                 )
+                serve_tag_file = _skipped_command_result(
+                    ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag/file"],
+                    reason="Skipped because post-pull tagging failed.",
+                )
                 recovered_pack_ids = []
                 served_pack_ids = []
                 serve_tagged_labels = []
+                serve_tag_file_labels = []
         else:
             invoke_command = [str(executable), "status"]
             invoke = _skipped_command_result(
@@ -1296,18 +1353,24 @@ def _run_npm_install_smoke(
                 ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag"],
                 reason="Skipped because npm tarball installation failed.",
             )
+            serve_tag_file = _skipped_command_result(
+                ["POST", f"http://{SMOKE_SERVE_HOST}:0/v0/tag/file"],
+                reason="Skipped because npm tarball installation failed.",
+            )
             reported_version = None
             pulled_pack_ids = []
             tagged_labels = []
             recovered_pack_ids = []
             served_pack_ids = []
             serve_tagged_labels = []
+            serve_tag_file_labels = []
 
         required_labels = set(SMOKE_TAG_REQUIRED_LABELS)
         missing_pulled_pack_ids = _missing_smoke_pack_ids(pulled_pack_ids)
         missing_recovered_pack_ids = _missing_smoke_pack_ids(recovered_pack_ids)
         missing_served_pack_ids = _missing_smoke_pack_ids(served_pack_ids)
         missing_serve_tag_labels = sorted(required_labels - set(serve_tagged_labels))
+        missing_serve_tag_file_labels = sorted(required_labels - set(serve_tag_file_labels))
         passed = (
             install.passed
             and invoke.passed
@@ -1327,6 +1390,8 @@ def _run_npm_install_smoke(
             and not missing_served_pack_ids
             and serve_tag.passed
             and not missing_serve_tag_labels
+            and serve_tag_file.passed
+            and not missing_serve_tag_file_labels
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="npm_tarball",
@@ -1342,6 +1407,7 @@ def _run_npm_install_smoke(
             serve_healthz=serve_healthz,
             serve_status=serve_status,
             serve_tag=serve_tag,
+            serve_tag_file=serve_tag_file,
             passed=passed,
             reported_version=reported_version,
             pulled_pack_ids=pulled_pack_ids,
@@ -1349,6 +1415,7 @@ def _run_npm_install_smoke(
             recovered_pack_ids=recovered_pack_ids,
             served_pack_ids=served_pack_ids,
             serve_tagged_labels=serve_tagged_labels,
+            serve_tag_file_labels=serve_tag_file_labels,
         )
 
 
@@ -1422,6 +1489,18 @@ def _smoke_install_warnings(
     )
     if missing_serve_tag_labels:
         return [f"{prefix}_serve_tag_missing_labels:{','.join(missing_serve_tag_labels)}"]
+    if smoke_result.serve_tag_file is None or not smoke_result.serve_tag_file.passed:
+        exit_code = (
+            None if smoke_result.serve_tag_file is None else smoke_result.serve_tag_file.exit_code
+        )
+        return [f"{prefix}_serve_tag_file_failed:{exit_code}"]
+    missing_serve_tag_file_labels = sorted(
+        set(SMOKE_TAG_REQUIRED_LABELS) - set(smoke_result.serve_tag_file_labels)
+    )
+    if missing_serve_tag_file_labels:
+        return [
+            f"{prefix}_serve_tag_file_missing_labels:{','.join(missing_serve_tag_file_labels)}"
+        ]
     return []
 
 
