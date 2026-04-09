@@ -88,6 +88,9 @@ class PackInstaller:
 
             installed = self.registry.get_pack(pack_id)
             if installed is not None and installed.version == manifest.version:
+                self.registry.sync_pack_from_disk(pack_id, active=installed.active)
+                installed = self.registry.get_pack(pack_id)
+            if installed is not None and installed.version == manifest.version:
                 if installed.active:
                     if pack_id not in result.skipped:
                         result.skipped.append(pack_id)

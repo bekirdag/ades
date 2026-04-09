@@ -30,8 +30,8 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- add coverage for stale metadata cleanup and repeated idempotent pack operations against published registry artifacts
-- verify activation and deactivation continue to behave correctly after real registry installs and failure recovery
+- add guardrails for activation and deactivation across dependency chains after real registry installs and repeated pulls
+- keep validating stale metadata cleanup and repeated idempotent pack operations against published registry artifacts
 - keep the new rollback-safe install semantics stable while finishing the remaining pack-lifecycle recovery work
 
 ## Work Log
@@ -44,3 +44,7 @@ Planned work:
 - 2026-04-08: hardened `src/ades/packs/installer.py` so pack installs now stage extracted artifacts into hidden temporary directories, only replace the destination after extraction succeeds, and restore the previous installed pack if metadata sync fails during an update.
 - 2026-04-08: added categorized rollback and cleanup coverage in `tests/unit/test_pack_install_rollback.py`, `tests/component/test_cli_pack_install_failures.py`, `tests/integration/test_pack_install_failures_api.py`, and `tests/api/test_pack_install_rollback_endpoint.py`.
 - 2026-04-08: focused failure-path tests, nearby pack/service regressions, and `python -m compileall src/ades` passed for the rollback-safe install slice.
+- 2026-04-09: hardened repeated same-version pulls so `src/ades/packs/installer.py` now refreshes on-disk pack metadata into SQLite before skipping or reactivating an installed pack, which repairs stale alias/rule/label state without changing the public pull contract.
+- 2026-04-09: added categorized stale-metadata repair coverage in `tests/unit/test_pack_install_reactivation.py`, `tests/component/test_cli_pack_reactivation.py`, `tests/integration/test_pack_reactivation_api.py`, and `tests/api/test_pack_reactivation_endpoint.py`.
+- 2026-04-09: focused stale-metadata repair tests passed with `9 passed` across the reactivation coverage files, and `python -m compileall src/ades` passed for the slice.
+- 2026-04-09: full repo release validation passed through `docdexd run-tests --repo /home/wodo/apps/ades`, including `161 passed` under `pytest -q` plus successful Python/npm smoke-install checks.

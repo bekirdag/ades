@@ -121,3 +121,10 @@ def create_finance_registry_sources(
         ),
     )
     return general_dir, finance_dir
+
+
+def append_pack_alias(pack_dir: Path, *, text: str, label: str) -> None:
+    aliases_path = pack_dir / "aliases.json"
+    payload = json.loads(aliases_path.read_text())
+    payload.setdefault("aliases", []).append({"text": text, "label": label})
+    aliases_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

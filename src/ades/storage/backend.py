@@ -35,7 +35,12 @@ class MetadataStore(Protocol):
 
     def sync_from_filesystem(self, packs_dir: object | None = None) -> None: ...
 
-    def sync_pack_from_dir(self, pack_dir: object) -> "PackManifest | None": ...
+    def sync_pack_from_dir(
+        self,
+        pack_dir: object,
+        *,
+        active: bool | None = None,
+    ) -> "PackManifest | None": ...
 
     def list_installed_packs(self, *, active_only: bool = False) -> list["PackManifest"]: ...
 

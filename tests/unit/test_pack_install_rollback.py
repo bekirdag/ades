@@ -55,11 +55,11 @@ def test_failed_update_restores_existing_pack_after_replacement_starts(
     original_sync = updater.registry.store.sync_pack_from_dir
     sync_calls = {"finance": 0}
 
-    def fail_once(pack_dir: Path) -> object:
+    def fail_once(pack_dir: Path, *, active: bool | None = None) -> object:
         if Path(pack_dir).name == "finance-en" and sync_calls["finance"] == 0:
             sync_calls["finance"] += 1
             raise RuntimeError("sync failed")
-        return original_sync(pack_dir)
+        return original_sync(pack_dir, active=active)
 
     monkeypatch.setattr(updater.registry.store, "sync_pack_from_dir", fail_once)
 

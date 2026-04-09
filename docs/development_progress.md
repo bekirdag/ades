@@ -226,6 +226,14 @@ This file records the implementation progress of `ades` as the project moves tow
 - Kept the existing public Python API, CLI `ades pull`, and local service pack surfaces unchanged while improving the underlying pack lifecycle safety.
 - Added categorized unit, component, integration, and API coverage for failed fresh installs, failed update recovery, and real static-registry artifact corruption paths.
 
+### 32. Same-version pull metadata repair for installed packs
+
+- Hardened repeated same-version pulls so `src/ades/packs/installer.py` now refreshes installed pack metadata from the on-disk pack directory before deciding to skip or reactivate a pack.
+- Extended `src/ades/storage/registry_db.py` and `src/ades/packs/registry.py` so pack metadata resync can preserve the current active state while repairing stale alias, rule, label, and dependency rows in the local SQLite store.
+- Kept the existing `ades pull`, public Python API, CLI lookup, and local service lookup surfaces unchanged while making repeated pulls heal stale same-version metadata drift instead of leaving SQLite search state behind the filesystem state.
+- Added categorized unit, component, integration, and API coverage for repeated same-version pulls that repair stale installed-pack alias metadata before returning a skip result.
+- Verified the item through focused lifecycle tests plus the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `161 passed` under `pytest -q` and successful Python/npm smoke-install checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -299,4 +307,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Decide whether `v0.1.0` stays with the current deterministic tagging baseline or expands to an initial NLP-backed enrichment layer, then either implement that minimum stack or defer it explicitly in the release decisions and implementation plan.
+- Finish the remaining pack lifecycle hardening around dependency-chain activation/deactivation guardrails and then continue with clean-environment install, pull, serve, tag, and recovery validation.

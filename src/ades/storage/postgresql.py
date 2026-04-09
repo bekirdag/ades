@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -126,11 +127,18 @@ class PostgreSQLMetadataStore:
             return 0
         return int(row["count"])
 
-    def sync_pack_from_dir(self, pack_dir: Path) -> PackManifest | None:
+    def sync_pack_from_dir(
+        self,
+        pack_dir: Path,
+        *,
+        active: bool | None = None,
+    ) -> PackManifest | None:
         manifest_path = pack_dir / "manifest.json"
         if not manifest_path.exists():
             return None
         manifest = PackManifest.load(manifest_path)
+        if active is not None:
+            manifest = replace(manifest, active=active)
         self.sync_pack(manifest, pack_dir)
         return manifest
 

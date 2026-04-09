@@ -67,6 +67,12 @@ class PackRegistry:
 
         return self.get_pack(pack_id, active_only=active_only) is not None
 
+    def sync_pack_from_disk(self, pack_id: str, *, active: bool | None = None) -> bool:
+        """Refresh one installed pack from its on-disk metadata when present."""
+
+        pack_dir = self.layout.packs_dir / pack_id
+        return self.store.sync_pack_from_dir(pack_dir, active=active) is not None
+
     def set_pack_active(self, pack_id: str, active: bool) -> bool:
         """Mark a pack active or inactive in local metadata."""
 

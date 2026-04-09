@@ -1,12 +1,12 @@
 # ades Next Work Items
 
-Updated after completing rollback-safe pack install recovery on 2026-04-08.
+Updated after completing same-version pack metadata repair on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Finish the remaining production-like lifecycle checks around stale metadata cleanup, repeated idempotent pull/install behavior, and activation/deactivation flows against published registry artifacts.
-   - Keep the new rollback-safe install and update recovery semantics stable while closing the remaining stale-state and repeated-operation gaps.
+   - Finish the remaining production-like lifecycle checks around dependency-chain activation/deactivation flows and clean-environment recovery behavior against published registry artifacts.
+   - Keep the rollback-safe install path and the new same-version metadata-repair semantics stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
    - Harden first-run bootstrap, stale-record cleanup, and repair behavior around the local SQLite registry so the shipped local tool can recover cleanly from interrupted or inconsistent state.
@@ -55,6 +55,12 @@ Updated after completing rollback-safe pack install recovery on 2026-04-08.
   - stages fresh installs into hidden temporary pack directories and restores the previous installed pack when an update fails after replacement begins
   - keeps the existing `ades pull`, public Python API, and installed-pack service surfaces unchanged while preventing broken partial pack state from surviving failed installs
   - includes categorized unit, component, integration, and API coverage for fresh-install cleanup and update rollback against published registry artifacts
+
+- Same-version pull metadata repair:
+   - implemented in `src/ades/packs/installer.py`, `src/ades/packs/registry.py`, and `src/ades/storage/registry_db.py`
+   - refreshes installed pack metadata from disk before repeated same-version pulls decide to skip or reactivate a pack, which repairs stale alias/rule/label state in SQLite without changing the public pull contract
+   - keeps CLI, public Python API, and local service lookup behavior aligned with the on-disk pack contents after repeated pulls
+   - includes categorized unit, component, integration, and API coverage for repeated same-version metadata repair against published registry artifacts
 
 ## Not Next
 
