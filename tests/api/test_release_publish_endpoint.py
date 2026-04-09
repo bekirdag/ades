@@ -65,3 +65,18 @@ def test_release_publish_endpoint_rejects_unvalidated_manifest(
 
     assert publish_response.status_code == 400
     assert "ades release validate" in publish_response.json()["detail"]
+
+
+def test_release_publish_endpoint_reports_missing_manifest_path(tmp_path: Path) -> None:
+    missing_manifest = tmp_path / "missing-release-manifest.json"
+    client = TestClient(create_app())
+
+    publish_response = client.post(
+        "/v0/release/publish",
+        json={"manifest_path": str(missing_manifest), "dry_run": True},
+    )
+
+    assert publish_response.status_code == 404
+    assert publish_response.json() == {
+        "detail": f"Release manifest not found: {missing_manifest.resolve()}"
+    }

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from ades import publish_release, validate_release
 from tests.release_helpers import (
     build_fake_release_runner,
@@ -27,3 +29,13 @@ def test_public_release_publish_api_uses_validated_manifest(
     assert response.overall_success is True
     assert response.python_publish.command.command[1:3] == ["-m", "twine"]
     assert response.npm_publish.command.command[:2] == ["npm", "publish"]
+
+
+def test_public_release_publish_api_requires_existing_manifest_path(tmp_path: Path) -> None:
+    missing_manifest = tmp_path / "missing-release-manifest.json"
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=f"Release manifest not found: {missing_manifest.resolve()}",
+    ):
+        publish_release(manifest_path=missing_manifest)

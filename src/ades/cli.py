@@ -394,10 +394,13 @@ def release_publish(
 ) -> None:
     """Publish one validated release manifest to Python and npm registries."""
 
-    response = api_publish_release(
-        manifest_path=manifest_path,
-        dry_run=dry_run,
-    )
+    try:
+        response = api_publish_release(
+            manifest_path=manifest_path,
+            dry_run=dry_run,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
     if not response.overall_success:
         raise typer.Exit(code=1)

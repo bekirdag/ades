@@ -57,6 +57,16 @@ def test_publish_release_manifest_requires_validated_manifest(
         publish_release_manifest(manifest_path=manifest.manifest_path)
 
 
+def test_publish_release_manifest_requires_existing_manifest_path(tmp_path: Path) -> None:
+    missing_manifest = tmp_path / "missing-release-manifest.json"
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=f"Release manifest not found: {missing_manifest.resolve()}",
+    ):
+        publish_release_manifest(manifest_path=missing_manifest)
+
+
 def test_publish_release_manifest_can_dry_run(
     monkeypatch,
     tmp_path: Path,

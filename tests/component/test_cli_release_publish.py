@@ -4,7 +4,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from ades.cli import app
-from ades.release import validate_release_workflow
+from ades.release import validate_release_workflow, write_release_manifest
 from tests.release_helpers import (
     build_fake_release_runner,
     create_release_project,
@@ -81,3 +81,55 @@ def test_cli_release_publish_exits_nonzero_when_publish_fails(
         "python_publish_failed:1",
         "npm_publish_skipped:python_publish_failed",
     ]
+
+
+def test_cli_release_publish_reports_missing_manifest_path(tmp_path: Path) -> None:
+    runner = CliRunner()
+    missing_manifest = tmp_path / "missing-release-manifest.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "release",
+            "publish",
+            "--manifest-path",
+            str(missing_manifest),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert result.stderr == f"Release manifest not found: {missing_manifest.resolve()}\n"
+
+
+def test_cli_release_publish_reports_unvalidated_manifest(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+    manifest = write_release_manifest(
+        output_dir=tmp_path / "dist",
+        smoke_install=False,
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "release",
+            "publish",
+            "--manifest-path",
+            manifest.manifest_path,
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert (
+        result.stderr
+        == "Release publish requires a manifest created by `ades release validate`.\n"
+    )

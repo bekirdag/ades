@@ -5,7 +5,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. CLI and service operational hardening
-   - The status, pack-listing, lookup, pack-mutation, registry-build, and pack-access slices are now closed; next tighten the remaining real operator surfaces such as release-flow failures across `ades`, the public Python API, and the localhost service.
+   - The status, pack-listing, lookup, pack-mutation, registry-build, pack-access, and release-publish slices are now closed; next tighten the remaining real operator surfaces such as `release verify` and `release manifest` request-failure handling across `ades`, the public Python API, and the localhost service.
    - Avoid inventing config hardening for pure metadata helpers like installer bootstrap info or release-version inspection when those reads do not cross the runtime-config boundary.
    - Keep pack lifecycle, storage, and release-flow failures aligned so CLI exits and HTTP responses expose the same effective contract, but do not mask real install failures under configuration wrappers.
 
@@ -22,6 +22,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Eighth Phase B1 release-publish operational-hardening slice:
+  - implemented in `src/ades/cli.py`
+  - aligns `ades release publish` with the existing operator-facing publish request contract so missing manifest files and invalid/unvalidated release manifests now surface deterministic CLI stderr plus exit code `1`, while the shared Python API keeps raw exceptions and `POST /v0/release/publish` keeps its existing `404`/`400` mapping
+  - adds categorized unit, component, integration, and API coverage for missing-manifest and unvalidated-manifest publish failures without changing coordinated publish success or publish-command failure warnings
 
 - Seventh Phase B1 pack-access config-parse hardening slice:
   - implemented in `src/ades/config.py` and `src/ades/cli.py`
