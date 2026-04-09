@@ -1,11 +1,11 @@
 # ades Next Work Items
 
-Updated after completing live batch-manifest replay summary-count smoke validation for installed artifacts on 2026-04-09.
+Updated after completing live batch-manifest replay payload-identity smoke validation for installed artifacts on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` replay through the served wheel and npm wrapper also proves top-level replay payload identity such as `pack` and `item_count` after `finance-en` pull and metadata recovery, not just manifest-input, replay-mode, lineage wiring, and replay summary counts.
+   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` replay through the served wheel and npm wrapper also proves rerun-diff metadata such as `rerun_diff.manifest_input_path` and the expected changed-source set after `finance-en` pull and metadata recovery, not just manifest-input, replay-mode, lineage wiring, replay summary counts, and top-level payload identity.
    - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, dependency-chain guardrails, and dependency-bearing release smoke stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
@@ -150,6 +150,12 @@ Updated after completing live batch-manifest replay summary-count smoke validati
    - extends release smoke verification so both the installed wheel and npm wrapper now require replay `summary.manifest_candidate_count` and `summary.manifest_selected_count` to match the deterministic two-file finance-pack smoke corpus
    - keeps the release verify/validate contracts unchanged while making replay-count mismatches surface as explicit warning codes in the packaged smoke path
    - includes categorized unit, component, integration, and API coverage for successful replay summary-count validation plus explicit invalid replay-count warnings
+
+- Live batch-manifest replay payload-identity smoke validation for installed artifacts:
+   - implemented in `src/ades/release.py`
+   - extends release smoke verification so both the installed wheel and npm wrapper now require replay top-level `pack=\"finance-en\"` and `item_count=2` in addition to the existing replay summary and lineage contract
+   - keeps the release verify/validate contracts unchanged while making replay pack/item-count mismatches surface as explicit warning codes in the packaged smoke path
+   - includes categorized unit, component, integration, and API coverage for successful replay payload-identity validation plus explicit invalid replay pack/item-count warnings
 
 ## Not Next
 

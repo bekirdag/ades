@@ -84,6 +84,8 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert str(python_replay_payload["saved_manifest_path"]).endswith(
         "serve-smoke-batch-replay.finance-en.ades-manifest.json"
     )
+    assert python_replay_payload["pack"] == "finance-en"
+    assert python_replay_payload["item_count"] == 2
     assert (
         python_replay_payload["summary"]["manifest_input_path"]
         == python_batch_payload["saved_manifest_path"]
@@ -152,6 +154,8 @@ def test_cli_release_verify_reports_smoke_install_results(
     assert str(npm_replay_payload["saved_manifest_path"]).endswith(
         "serve-smoke-batch-replay.finance-en.ades-manifest.json"
     )
+    assert npm_replay_payload["pack"] == "finance-en"
+    assert npm_replay_payload["item_count"] == 2
     assert (
         npm_replay_payload["summary"]["manifest_input_path"]
         == npm_batch_payload["saved_manifest_path"]

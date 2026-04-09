@@ -341,6 +341,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated `tests/release_helpers.py` and the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful replay summary-count validation and explicit invalid replay-count warnings are covered across unit, component, integration, and API layers.
 - Verified the item through focused release verification tests with `25 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `188 passed` under `pytest -q` plus successful clean-environment wheel/npm live `/v0/tag/files` replay summary-count smoke checks.
 
+### 48. Live batch-manifest replay payload-identity smoke validation for installed artifacts
+
+- Extended `src/ades/release.py` so the replayed live `/v0/tag/files` release smoke now requires the top-level replay payload to keep `pack=\"finance-en\"` and `item_count=2` through both the served wheel and the npm wrapper, not just the replay summary metadata.
+- Kept the release verify/validate surface additive by reusing the existing `serve_tag_files_replay` result while tightening the internal smoke pass/fail checks and warning generation for missing or invalid replay payload identity fields.
+- Updated the categorized release verification tests in `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful replay payload-identity validation and explicit invalid replay pack/item-count warnings are covered across unit, component, integration, and API layers.
+- Verified the item through focused release verification tests with `27 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `190 passed` under `pytest -q` plus successful clean-environment wheel/npm live `/v0/tag/files` replay payload-identity smoke checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
