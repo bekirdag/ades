@@ -401,6 +401,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful root batch identity plus explicit invalid root pack/item-count warnings are covered across unit, component, integration, and API layers.
 - Verified the item through focused release verification tests with `92 passed`, `python -m compileall src/ades tests`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `340 passed` under `pytest -q` plus successful clean-environment wheel/npm root-batch-identity smoke checks.
 
+### 56. Exact source-path parity validation for installed-artifact batch smoke
+
+- Tightened `src/ades/release.py` so clean-environment wheel/npm `/v0/tag/files` smoke now requires both the root batch payload and replay payload to keep the exact deterministic per-item `source_path` list for the two packaged smoke inputs, instead of only agreeing on rerun-diff changed paths.
+- Reused the existing packaged serve-smoke response shape while strengthening both the internal pass/fail checks and warning generation for invalid root/replay `source_path` lists.
+- Updated `tests/release_helpers.py`, `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful root/replay source-path parity plus explicit invalid source-path warnings are covered across unit, component, integration, and API layers.
+- Verified the item through focused release verification tests with `94 passed`, `python -m compileall src/ades tests`, `docdexd hook pre-commit --repo /home/wodo/apps/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `342 passed` under `pytest -q` plus successful clean-environment wheel/npm source-path smoke checks.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -474,4 +481,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Extend installed-artifact release validation with the next additive clean-environment assertions so the shipped wheel and npm wrapper keep proving the remaining broad production-readiness goals together instead of relying on narrower source-tree regressions.
+- Extend installed-artifact release validation with the next additive clean-environment assertions, starting with exact root/replay per-item `input_size_bytes` parity, so the shipped wheel and npm wrapper keep proving the remaining broad production-readiness goals together instead of relying on narrower source-tree regressions.

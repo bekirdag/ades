@@ -15,6 +15,7 @@ from ades.version import __version__
 from tests.release_helpers import (
     build_expected_batch_manifest_path,
     build_expected_batch_output_paths,
+    build_expected_batch_source_paths,
     build_expected_batch_replay_manifest_path,
     build_fake_remove_smoke,
     build_failed_release_runner,
@@ -44,6 +45,7 @@ def _served_batch_manifest_payload(
     lineage_created_at: str = "2026-04-09T14:57:00Z",
     item_count: int | None = None,
     output_count: int = 2,
+    source_paths: list[str] | None = None,
     saved_output_paths: list[str] | None = None,
 ) -> dict[str, object]:
     """Return one deterministic live `/v0/tag/files` payload with manifest output paths."""
@@ -57,14 +59,23 @@ def _served_batch_manifest_payload(
         if saved_output_paths is None
         else saved_output_paths
     )
+    effective_source_paths = (
+        [
+            str((working_dir / "serve-smoke-batch-alpha.html").resolve()),
+            str((working_dir / "serve-smoke-batch-beta.html").resolve()),
+        ]
+        if source_paths is None
+        else source_paths
+    )
     assert len(effective_saved_output_paths) >= 2
+    assert len(effective_source_paths) >= 2
     items: list[dict[str, object]] = [
         {
             "version": version,
             "pack": "finance-en",
             "language": "en",
             "content_type": "text/html",
-            "source_path": str((working_dir / "serve-smoke-batch-alpha.html").resolve()),
+            "source_path": effective_source_paths[0],
             "saved_output_path": effective_saved_output_paths[0],
             "entities": [{"label": "organization"}, {"label": "ticker"}],
         },
@@ -73,7 +84,7 @@ def _served_batch_manifest_payload(
             "pack": "finance-en",
             "language": "en",
             "content_type": "text/html",
-            "source_path": str((working_dir / "serve-smoke-batch-beta.html").resolve()),
+            "source_path": effective_source_paths[1],
             "saved_output_path": effective_saved_output_paths[1],
             "entities": [{"label": "exchange"}, {"label": "currency_amount"}],
         },
@@ -154,6 +165,7 @@ def _served_batch_manifest_replay_payload(
     rerun_diff_skipped: list[object] | None = None,
     item_count: int | None = None,
     output_count: int = 2,
+    source_paths: list[str] | None = None,
     saved_output_paths: list[str] | None = None,
 ) -> dict[str, object]:
     """Return one deterministic live replay `/v0/tag/files` payload."""
@@ -168,14 +180,23 @@ def _served_batch_manifest_replay_payload(
         if saved_output_paths is None
         else saved_output_paths
     )
+    effective_source_paths = (
+        [
+            str((working_dir / "serve-smoke-batch-alpha.html").resolve()),
+            str((working_dir / "serve-smoke-batch-beta.html").resolve()),
+        ]
+        if source_paths is None
+        else source_paths
+    )
     assert len(effective_saved_output_paths) >= 2
+    assert len(effective_source_paths) >= 2
     items: list[dict[str, object]] = [
         {
             "version": version,
             "pack": "finance-en",
             "language": "en",
             "content_type": "text/html",
-            "source_path": str((working_dir / "serve-smoke-batch-alpha.html").resolve()),
+            "source_path": effective_source_paths[0],
             "saved_output_path": effective_saved_output_paths[0],
             "entities": [{"label": "organization"}, {"label": "ticker"}],
         },
@@ -184,7 +205,7 @@ def _served_batch_manifest_replay_payload(
             "pack": "finance-en",
             "language": "en",
             "content_type": "text/html",
-            "source_path": str((working_dir / "serve-smoke-batch-beta.html").resolve()),
+            "source_path": effective_source_paths[1],
             "saved_output_path": effective_saved_output_paths[1],
             "entities": [{"label": "exchange"}, {"label": "currency_amount"}],
         },
@@ -600,6 +621,7 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         response.python_install_smoke.serve_tag_files_replay_labels
     )
     python_working_dir = Path(response.python_install_smoke.working_dir)
+    python_expected_source_paths = build_expected_batch_source_paths(python_working_dir)
     python_expected_output_paths = build_expected_batch_output_paths(python_working_dir)
     python_batch_payload = json.loads(response.python_install_smoke.serve_tag_files.stdout)
     assert (
@@ -613,6 +635,9 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert python_batch_payload["lineage"].get("parent_run_id") is None
     assert python_batch_payload["lineage"].get("source_manifest_path") is None
     assert python_batch_payload["lineage"]["created_at"] == "2026-04-09T14:57:00Z"
+    assert [item["source_path"] for item in python_batch_payload["items"]] == (
+        python_expected_source_paths
+    )
     assert [item["saved_output_path"] for item in python_batch_payload["items"]] == (
         python_expected_output_paths
     )
@@ -653,6 +678,9 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert (
         python_replay_payload["lineage"]["created_at"]
         > python_batch_payload["lineage"]["created_at"]
+    )
+    assert [item["source_path"] for item in python_replay_payload["items"]] == (
+        python_expected_source_paths
     )
     assert [item["saved_output_path"] for item in python_replay_payload["items"]] == (
         python_expected_output_paths
@@ -710,6 +738,7 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         response.npm_install_smoke.serve_tag_files_replay_labels
     )
     npm_working_dir = Path(response.npm_install_smoke.working_dir)
+    npm_expected_source_paths = build_expected_batch_source_paths(npm_working_dir)
     npm_expected_output_paths = build_expected_batch_output_paths(npm_working_dir)
     npm_batch_payload = json.loads(response.npm_install_smoke.serve_tag_files.stdout)
     assert (
@@ -723,6 +752,9 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert npm_batch_payload["lineage"].get("parent_run_id") is None
     assert npm_batch_payload["lineage"].get("source_manifest_path") is None
     assert npm_batch_payload["lineage"]["created_at"] == "2026-04-09T14:57:00Z"
+    assert [item["source_path"] for item in npm_batch_payload["items"]] == (
+        npm_expected_source_paths
+    )
     assert [item["saved_output_path"] for item in npm_batch_payload["items"]] == (
         npm_expected_output_paths
     )
@@ -763,6 +795,9 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert (
         npm_replay_payload["lineage"]["created_at"]
         > npm_batch_payload["lineage"]["created_at"]
+    )
+    assert [item["source_path"] for item in npm_replay_payload["items"]] == (
+        npm_expected_source_paths
     )
     assert [item["saved_output_path"] for item in npm_replay_payload["items"]] == (
         npm_expected_output_paths
@@ -2119,6 +2154,49 @@ def test_verify_release_artifacts_reports_live_service_batch_output_path_mismatc
     assert response.warnings == ["npm_tarball_serve_tag_files_invalid_output_paths"]
 
 
+def test_verify_release_artifacts_reports_live_service_batch_source_path_mismatches(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        if "node_modules/.bin" not in str(executable):
+            return _service_smoke_tuple(
+                executable=Path(executable),
+                working_dir=working_dir,
+                expected_version=expected_version,
+            )
+        invalid_source_paths = build_expected_batch_source_paths(working_dir)
+        invalid_source_paths[1] = str((working_dir / "serve-smoke-batch-gamma.html").resolve())
+        return _service_smoke_tuple(
+            executable=Path(executable),
+            working_dir=working_dir,
+            expected_version=expected_version,
+            batch_payload=_served_batch_manifest_payload(
+                working_dir,
+                version=expected_version,
+                source_paths=invalid_source_paths,
+            ),
+            replay_passed=False,
+            replay_stderr="Skipped because live batch tagging wrote unexpected source paths.",
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.serve_tag_files is not None
+    assert response.npm_install_smoke.serve_tag_files.passed is True
+    assert response.warnings == ["npm_tarball_serve_tag_files_invalid_source_paths"]
+
+
 @pytest.mark.parametrize(
     ("batch_kwargs", "expected_warning"),
     [
@@ -2215,6 +2293,47 @@ def test_verify_release_artifacts_reports_live_service_batch_replay_output_path_
     assert response.npm_install_smoke.serve_tag_files_replay is not None
     assert response.npm_install_smoke.serve_tag_files_replay.passed is True
     assert response.warnings == ["npm_tarball_serve_tag_files_replay_invalid_output_paths"]
+
+
+def test_verify_release_artifacts_reports_live_service_batch_replay_source_path_mismatches(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        if "node_modules/.bin" not in str(executable):
+            return _service_smoke_tuple(
+                executable=Path(executable),
+                working_dir=working_dir,
+                expected_version=expected_version,
+            )
+        invalid_source_paths = build_expected_batch_source_paths(working_dir)
+        invalid_source_paths[0] = str((working_dir / "serve-smoke-batch-delta.html").resolve())
+        return _service_smoke_tuple(
+            executable=Path(executable),
+            working_dir=working_dir,
+            expected_version=expected_version,
+            replay_payload=_served_batch_manifest_replay_payload(
+                working_dir,
+                version=expected_version,
+                source_paths=invalid_source_paths,
+            ),
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.serve_tag_files_replay is not None
+    assert response.npm_install_smoke.serve_tag_files_replay.passed is True
+    assert response.warnings == ["npm_tarball_serve_tag_files_replay_invalid_source_paths"]
 
 
 def test_verify_release_artifacts_reports_live_service_batch_replay_manifest_path_mismatches(

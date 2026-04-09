@@ -46,6 +46,14 @@ def build_expected_batch_output_paths(working_dir: Path) -> list[str]:
     ]
 
 
+def build_expected_batch_source_paths(working_dir: Path) -> list[str]:
+    resolved_working_dir = working_dir.resolve()
+    return [
+        str((resolved_working_dir / "serve-smoke-batch-alpha.html").resolve()),
+        str((resolved_working_dir / "serve-smoke-batch-beta.html").resolve()),
+    ]
+
+
 def create_release_project(
     root: Path,
     *,
