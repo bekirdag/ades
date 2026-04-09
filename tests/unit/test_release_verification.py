@@ -75,11 +75,16 @@ def _served_batch_manifest_replay_payload(
     include_lineage_source_manifest_path: bool = True,
     include_manifest_candidate_count: bool = True,
     include_manifest_selected_count: bool = True,
+    include_rerun_diff: bool = True,
+    include_rerun_diff_manifest_input_path: bool = True,
+    include_rerun_diff_changed: bool = True,
     manifest_input_file_name: str = "serve-smoke-batch-manifest.finance-en.ades-manifest.json",
     manifest_file_name: str = "serve-smoke-batch-replay.finance-en.ades-manifest.json",
+    rerun_diff_manifest_input_file_name: str | None = None,
     replay_mode: str = "processed",
     manifest_candidate_count: int = 2,
     manifest_selected_count: int = 2,
+    changed_paths: list[str] | None = None,
     item_count: int | None = None,
     output_count: int = 2,
 ) -> dict[str, object]:
@@ -111,6 +116,10 @@ def _served_batch_manifest_replay_payload(
             "entities": [{"label": "exchange"}, {"label": "currency_amount"}],
         },
     ]
+    default_changed_paths = [
+        str((working_dir / "serve-smoke-batch-alpha.html").resolve()),
+        str((working_dir / "serve-smoke-batch-beta.html").resolve()),
+    ]
     payload: dict[str, object] = {
         "pack": pack,
         "item_count": len(items) if item_count is None else item_count,
@@ -138,6 +147,29 @@ def _served_batch_manifest_replay_payload(
         lineage = payload["lineage"]
         assert isinstance(lineage, dict)
         lineage["source_manifest_path"] = manifest_input_path
+    if include_rerun_diff:
+        rerun_diff: dict[str, object] = {
+            "newly_processed": [],
+            "reused": [],
+            "repaired": [],
+            "skipped": [],
+        }
+        if include_rerun_diff_manifest_input_path:
+            rerun_diff["manifest_input_path"] = str(
+                (
+                    output_dir
+                    / (
+                        rerun_diff_manifest_input_file_name
+                        if rerun_diff_manifest_input_file_name is not None
+                        else manifest_input_file_name
+                    )
+                ).resolve()
+            )
+        if include_rerun_diff_changed:
+            rerun_diff["changed"] = (
+                default_changed_paths if changed_paths is None else changed_paths
+            )
+        payload["rerun_diff"] = rerun_diff
     return payload
 
 
@@ -254,6 +286,13 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         python_replay_payload["summary"]["manifest_input_path"]
         == python_batch_payload["saved_manifest_path"]
     )
+    assert (
+        python_replay_payload["rerun_diff"]["manifest_input_path"]
+        == python_batch_payload["saved_manifest_path"]
+    )
+    assert python_replay_payload["rerun_diff"]["changed"] == [
+        item["source_path"] for item in python_batch_payload["items"]
+    ]
     assert python_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert python_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert python_replay_payload["summary"]["manifest_selected_count"] == 2
@@ -326,6 +365,13 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
         npm_replay_payload["summary"]["manifest_input_path"]
         == npm_batch_payload["saved_manifest_path"]
     )
+    assert (
+        npm_replay_payload["rerun_diff"]["manifest_input_path"]
+        == npm_batch_payload["saved_manifest_path"]
+    )
+    assert npm_replay_payload["rerun_diff"]["changed"] == [
+        item["source_path"] for item in npm_batch_payload["items"]
+    ]
     assert npm_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert npm_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert npm_replay_payload["summary"]["manifest_selected_count"] == 2
@@ -1731,6 +1777,9 @@ def test_verify_release_artifacts_reports_live_service_batch_replay_manifest_inp
                         working_dir,
                         version=expected_version,
                         manifest_input_file_name="wrong.finance-en.ades-manifest.json",
+                        rerun_diff_manifest_input_file_name=(
+                            "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
+                        ),
                     )
                 ),
                 stderr="",
@@ -1909,6 +1958,137 @@ def test_verify_release_artifacts_reports_live_service_batch_replay_identity_mis
 
     def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
         replay_payload_kwargs: dict[str, str | int] = (
+            {} if "node_modules/.bin" not in str(executable) else replay_kwargs
+        )
+        return (
+            ReleaseCommandResult(
+                command=[str(executable), "serve", "--host", "127.0.0.1", "--port", "8734"],
+                exit_code=0,
+                passed=True,
+                stdout="ready",
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["GET", "http://127.0.0.1:8734/healthz"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps({"status": "ok", "version": expected_version}),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["GET", "http://127.0.0.1:8734/v0/status"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    {
+                        "service": "ades",
+                        "version": expected_version,
+                        "installed_packs": ["general-en", "finance-en"],
+                    }
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    {
+                        "entities": [
+                            {"label": "organization"},
+                            {"label": "ticker"},
+                            {"label": "exchange"},
+                            {"label": "currency_amount"},
+                        ]
+                    }
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/file"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    {
+                        "entities": [
+                            {"label": "organization"},
+                            {"label": "ticker"},
+                            {"label": "exchange"},
+                            {"label": "currency_amount"},
+                        ]
+                    }
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    _served_batch_manifest_payload(working_dir, version=expected_version)
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag/files"],
+                exit_code=0,
+                passed=True,
+                stdout=json.dumps(
+                    _served_batch_manifest_replay_payload(
+                        working_dir,
+                        version=expected_version,
+                        **replay_payload_kwargs,
+                    )
+                ),
+                stderr="",
+            ),
+            ["general-en", "finance-en"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+            ["organization", "ticker", "exchange", "currency_amount"],
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.passed is False
+    assert response.npm_install_smoke.serve_tag_files_replay is not None
+    assert response.npm_install_smoke.serve_tag_files_replay.passed is True
+    assert response.warnings == [expected_warning]
+
+
+@pytest.mark.parametrize(
+    ("replay_kwargs", "expected_warning"),
+    [
+        (
+            {
+                "rerun_diff_manifest_input_file_name": "wrong.finance-en.ades-manifest.json"
+            },
+            "npm_tarball_serve_tag_files_replay_invalid_rerun_diff_manifest_input_path",
+        ),
+        (
+            {"changed_paths": []},
+            "npm_tarball_serve_tag_files_replay_invalid_rerun_diff_changed_paths",
+        ),
+    ],
+)
+def test_verify_release_artifacts_reports_live_service_batch_replay_rerun_diff_mismatches(
+    monkeypatch,
+    tmp_path: Path,
+    replay_kwargs: dict[str, object],
+    expected_warning: str,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        replay_payload_kwargs: dict[str, object] = (
             {} if "node_modules/.bin" not in str(executable) else replay_kwargs
         )
         return (

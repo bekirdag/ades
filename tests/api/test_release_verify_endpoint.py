@@ -90,6 +90,13 @@ def test_release_verify_endpoint_reports_smoke_install_results(
         python_replay_payload["summary"]["manifest_input_path"]
         == python_batch_payload["saved_manifest_path"]
     )
+    assert (
+        python_replay_payload["rerun_diff"]["manifest_input_path"]
+        == python_batch_payload["saved_manifest_path"]
+    )
+    assert python_replay_payload["rerun_diff"]["changed"] == [
+        item["source_path"] for item in python_batch_payload["items"]
+    ]
     assert python_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert python_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert python_replay_payload["summary"]["manifest_selected_count"] == 2
@@ -160,6 +167,13 @@ def test_release_verify_endpoint_reports_smoke_install_results(
         npm_replay_payload["summary"]["manifest_input_path"]
         == npm_batch_payload["saved_manifest_path"]
     )
+    assert (
+        npm_replay_payload["rerun_diff"]["manifest_input_path"]
+        == npm_batch_payload["saved_manifest_path"]
+    )
+    assert npm_replay_payload["rerun_diff"]["changed"] == [
+        item["source_path"] for item in npm_batch_payload["items"]
+    ]
     assert npm_replay_payload["summary"]["manifest_replay_mode"] == "processed"
     assert npm_replay_payload["summary"]["manifest_candidate_count"] == 2
     assert npm_replay_payload["summary"]["manifest_selected_count"] == 2

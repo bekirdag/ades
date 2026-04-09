@@ -540,6 +540,52 @@ def _parse_batch_manifest_selected_count(result: ReleaseCommandResult) -> int | 
     return _parse_batch_summary_int_value(result, "manifest_selected_count")
 
 
+def _parse_batch_rerun_diff(result: ReleaseCommandResult) -> dict[str, object] | None:
+    """Extract the rerun-diff payload reported by one JSON `ades tag-files` payload."""
+
+    payload = _parse_command_payload(result)
+    if payload is None:
+        return None
+    rerun_diff = payload.get("rerun_diff")
+    return rerun_diff if isinstance(rerun_diff, dict) else None
+
+
+def _parse_batch_rerun_diff_manifest_input_path(
+    result: ReleaseCommandResult,
+) -> str | None:
+    """Extract the rerun-diff manifest input path from one JSON `ades tag-files` payload."""
+
+    rerun_diff = _parse_batch_rerun_diff(result)
+    if rerun_diff is None:
+        return None
+    manifest_input_path = rerun_diff.get("manifest_input_path")
+    return (
+        manifest_input_path
+        if isinstance(manifest_input_path, str) and manifest_input_path
+        else None
+    )
+
+
+def _parse_batch_rerun_diff_path_list(
+    result: ReleaseCommandResult,
+    field_name: str,
+) -> list[str] | None:
+    """Extract one rerun-diff path list from a JSON `ades tag-files` payload."""
+
+    rerun_diff = _parse_batch_rerun_diff(result)
+    if rerun_diff is None:
+        return None
+    values = rerun_diff.get(field_name)
+    if not isinstance(values, list):
+        return None
+    paths: list[str] = []
+    for value in values:
+        if not isinstance(value, str) or not value:
+            return None
+        paths.append(value)
+    return paths
+
+
 def _parse_batch_lineage_value(
     result: ReleaseCommandResult,
     field_name: str,
@@ -1443,6 +1489,17 @@ def _run_python_install_smoke(
         serve_tag_files_replay_source_manifest_path = (
             _parse_batch_lineage_source_manifest_path(serve_tag_files_replay)
         )
+        serve_tag_files_replay_rerun_diff_manifest_input_path = (
+            _parse_batch_rerun_diff_manifest_input_path(serve_tag_files_replay)
+        )
+        serve_tag_files_replay_rerun_diff_changed_paths = _parse_batch_rerun_diff_path_list(
+            serve_tag_files_replay,
+            "changed",
+        )
+        expected_serve_tag_files_replay_rerun_diff_changed_paths = sorted(
+            str((working_dir / file_name).resolve())
+            for file_name, _ in SMOKE_TAG_BATCH_FILES
+        )
         has_expected_serve_tag_files_manifest_path = (
             serve_tag_files_manifest_path is not None
             and serve_tag_files_manifest_path.endswith(SMOKE_TAG_BATCH_MANIFEST_FILE_NAME)
@@ -1482,6 +1539,19 @@ def _run_python_install_smoke(
             serve_tag_files_manifest_path is not None
             and serve_tag_files_replay_source_manifest_path == serve_tag_files_manifest_path
         )
+        has_expected_serve_tag_files_replay_rerun_diff = (
+            _parse_batch_rerun_diff(serve_tag_files_replay) is not None
+        )
+        has_expected_serve_tag_files_replay_rerun_diff_manifest_input_path = (
+            serve_tag_files_manifest_path is not None
+            and serve_tag_files_replay_rerun_diff_manifest_input_path
+            == serve_tag_files_manifest_path
+        )
+        has_expected_serve_tag_files_replay_rerun_diff_changed_paths = (
+            serve_tag_files_replay_rerun_diff_changed_paths is not None
+            and sorted(serve_tag_files_replay_rerun_diff_changed_paths)
+            == expected_serve_tag_files_replay_rerun_diff_changed_paths
+        )
         passed = (
             install.passed
             and invoke.passed
@@ -1518,6 +1588,9 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_replay_source_manifest_path
             and has_expected_serve_tag_files_replay_manifest_path
             and has_expected_serve_tag_files_replay_output_count
+            and has_expected_serve_tag_files_replay_rerun_diff
+            and has_expected_serve_tag_files_replay_rerun_diff_manifest_input_path
+            and has_expected_serve_tag_files_replay_rerun_diff_changed_paths
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="python_wheel",
@@ -1780,6 +1853,17 @@ def _run_npm_install_smoke(
         serve_tag_files_replay_source_manifest_path = (
             _parse_batch_lineage_source_manifest_path(serve_tag_files_replay)
         )
+        serve_tag_files_replay_rerun_diff_manifest_input_path = (
+            _parse_batch_rerun_diff_manifest_input_path(serve_tag_files_replay)
+        )
+        serve_tag_files_replay_rerun_diff_changed_paths = _parse_batch_rerun_diff_path_list(
+            serve_tag_files_replay,
+            "changed",
+        )
+        expected_serve_tag_files_replay_rerun_diff_changed_paths = sorted(
+            str((working_dir / file_name).resolve())
+            for file_name, _ in SMOKE_TAG_BATCH_FILES
+        )
         has_expected_serve_tag_files_manifest_path = (
             serve_tag_files_manifest_path is not None
             and serve_tag_files_manifest_path.endswith(SMOKE_TAG_BATCH_MANIFEST_FILE_NAME)
@@ -1819,6 +1903,19 @@ def _run_npm_install_smoke(
             serve_tag_files_manifest_path is not None
             and serve_tag_files_replay_source_manifest_path == serve_tag_files_manifest_path
         )
+        has_expected_serve_tag_files_replay_rerun_diff = (
+            _parse_batch_rerun_diff(serve_tag_files_replay) is not None
+        )
+        has_expected_serve_tag_files_replay_rerun_diff_manifest_input_path = (
+            serve_tag_files_manifest_path is not None
+            and serve_tag_files_replay_rerun_diff_manifest_input_path
+            == serve_tag_files_manifest_path
+        )
+        has_expected_serve_tag_files_replay_rerun_diff_changed_paths = (
+            serve_tag_files_replay_rerun_diff_changed_paths is not None
+            and sorted(serve_tag_files_replay_rerun_diff_changed_paths)
+            == expected_serve_tag_files_replay_rerun_diff_changed_paths
+        )
         passed = (
             install.passed
             and invoke.passed
@@ -1855,6 +1952,9 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_replay_source_manifest_path
             and has_expected_serve_tag_files_replay_manifest_path
             and has_expected_serve_tag_files_replay_output_count
+            and has_expected_serve_tag_files_replay_rerun_diff
+            and has_expected_serve_tag_files_replay_rerun_diff_manifest_input_path
+            and has_expected_serve_tag_files_replay_rerun_diff_changed_paths
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="npm_tarball",
@@ -2016,6 +2116,42 @@ def _smoke_install_warnings(
             f"{prefix}_serve_tag_files_replay_invalid_item_count:"
             f"{serve_tag_files_replay_item_count}"
         ]
+    serve_tag_files_replay_rerun_diff = _parse_batch_rerun_diff(
+        smoke_result.serve_tag_files_replay
+    )
+    if serve_tag_files_replay_rerun_diff is None:
+        return [f"{prefix}_serve_tag_files_replay_missing_rerun_diff"]
+    serve_tag_files_replay_rerun_diff_manifest_input_path = (
+        serve_tag_files_replay_rerun_diff.get("manifest_input_path")
+    )
+    if serve_tag_files_replay_rerun_diff_manifest_input_path is None:
+        return [f"{prefix}_serve_tag_files_replay_missing_rerun_diff_manifest_input_path"]
+    if (
+        not isinstance(serve_tag_files_replay_rerun_diff_manifest_input_path, str)
+        or not serve_tag_files_replay_rerun_diff_manifest_input_path
+        or serve_tag_files_replay_rerun_diff_manifest_input_path
+        != serve_tag_files_manifest_path
+    ):
+        return [f"{prefix}_serve_tag_files_replay_invalid_rerun_diff_manifest_input_path"]
+    serve_tag_files_replay_rerun_diff_changed = serve_tag_files_replay_rerun_diff.get(
+        "changed"
+    )
+    if serve_tag_files_replay_rerun_diff_changed is None:
+        return [f"{prefix}_serve_tag_files_replay_missing_rerun_diff_changed"]
+    expected_serve_tag_files_replay_rerun_diff_changed_paths = sorted(
+        str((Path(smoke_result.working_dir) / file_name).resolve())
+        for file_name, _ in SMOKE_TAG_BATCH_FILES
+    )
+    if (
+        not isinstance(serve_tag_files_replay_rerun_diff_changed, list)
+        or any(
+            not isinstance(value, str) or not value
+            for value in serve_tag_files_replay_rerun_diff_changed
+        )
+        or sorted(serve_tag_files_replay_rerun_diff_changed)
+        != expected_serve_tag_files_replay_rerun_diff_changed_paths
+    ):
+        return [f"{prefix}_serve_tag_files_replay_invalid_rerun_diff_changed_paths"]
     serve_tag_files_replay_manifest_input_path = _parse_batch_manifest_input_path(
         smoke_result.serve_tag_files_replay
     )

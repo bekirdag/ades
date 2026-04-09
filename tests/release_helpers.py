@@ -497,6 +497,23 @@ def build_fake_service_smoke(
                         ).resolve()
                     )
                 },
+                "rerun_diff": {
+                    "manifest_input_path": str(
+                        (
+                            storage_root.parent
+                            / "serve-smoke-batch-outputs"
+                            / "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
+                        ).resolve()
+                    ),
+                    "changed": [
+                        str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
+                        str((storage_root.parent / "serve-smoke-batch-beta.html").resolve()),
+                    ],
+                    "newly_processed": [],
+                    "reused": [],
+                    "repaired": [],
+                    "skipped": [],
+                },
                 "warnings": [],
                 "items": [
                     {
