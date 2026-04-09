@@ -186,9 +186,10 @@ def packs_activate(pack: str) -> None:
 
     try:
         result = api_activate_pack(pack)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+    except FileNotFoundError as exc:
+        _exit_with_configuration_error(exc)
+    except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+        _exit_with_configuration_error(exc)
     if result is None:
         raise typer.Exit(code=1)
     _echo_json(result.model_dump(mode="json"))
@@ -200,9 +201,10 @@ def packs_deactivate(pack: str) -> None:
 
     try:
         result = api_deactivate_pack(pack)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+    except FileNotFoundError as exc:
+        _exit_with_configuration_error(exc)
+    except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+        _exit_with_configuration_error(exc)
     if result is None:
         raise typer.Exit(code=1)
     _echo_json(result.model_dump(mode="json"))
@@ -214,9 +216,10 @@ def packs_remove(pack: str) -> None:
 
     try:
         result = api_remove_pack(pack)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+    except FileNotFoundError as exc:
+        _exit_with_configuration_error(exc)
+    except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+        _exit_with_configuration_error(exc)
     if result is None:
         raise typer.Exit(code=1)
     _echo_json(result.model_dump(mode="json"))

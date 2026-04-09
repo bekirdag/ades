@@ -5,7 +5,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. CLI and service operational hardening
-   - The status, pack-listing, and lookup slices are now closed; next tighten the remaining real operator surfaces such as pack lifecycle mutations, registry-build failures, and release-flow failures across `ades`, the public Python API, and the localhost service.
+   - The status, pack-listing, lookup, and pack-mutation slices are now closed; next tighten the remaining real operator surfaces such as pack pull flows, registry-build failures, and release-flow failures across `ades`, the public Python API, and the localhost service.
    - Avoid inventing config hardening for pure metadata helpers like installer bootstrap info or release-version inspection when those reads do not cross the runtime-config boundary.
    - Keep pack lifecycle, storage, and release-flow failures aligned so CLI exits and HTTP responses expose the same effective contract.
 
@@ -22,6 +22,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Fourth Phase B1 pack-mutation operational-hardening slice:
+  - implemented in `src/ades/cli.py` and `src/ades/service/app.py`
+  - aligns `ades packs activate`, `ades packs deactivate`, `ades packs remove`, and the matching localhost service routes with the same missing-config-file `404` and invalid-runtime `400` operator contract already present on the status, pack-listing, and lookup surfaces
+  - keeps the underlying Python API activate/deactivate/remove helpers on their original exceptions while adding categorized unit, component, integration, and API coverage for pack-mutation configuration failures
 
 - Third Phase B1 lookup operational-hardening slice:
   - implemented in `src/ades/cli.py` and `src/ades/service/app.py`

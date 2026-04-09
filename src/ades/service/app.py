@@ -220,8 +220,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
 
         try:
             pack = activate_pack(pack_id, storage_root=storage_root)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except FileNotFoundError as exc:
+            _raise_configuration_http_exception(exc)
+        except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+            _raise_configuration_http_exception(exc)
         if pack is None:
             raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
         return pack
@@ -232,8 +234,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
 
         try:
             pack = deactivate_pack(pack_id, storage_root=storage_root)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except FileNotFoundError as exc:
+            _raise_configuration_http_exception(exc)
+        except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+            _raise_configuration_http_exception(exc)
         if pack is None:
             raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
         return pack
@@ -244,8 +248,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
 
         try:
             pack = remove_pack(pack_id, storage_root=storage_root)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except FileNotFoundError as exc:
+            _raise_configuration_http_exception(exc)
+        except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+            _raise_configuration_http_exception(exc)
         if pack is None:
             raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
         return pack
