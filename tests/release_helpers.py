@@ -401,7 +401,7 @@ def build_fake_service_smoke(
                     (
                         storage_root.parent
                         / "serve-smoke-batch-outputs"
-                        / "batch.finance-en.ades-manifest.json"
+                        / "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
                     ).resolve()
                 ),
                 "warnings": [],

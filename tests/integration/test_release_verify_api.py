@@ -78,7 +78,7 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     )
     python_batch_payload = json.loads(verification.python_install_smoke.serve_tag_files.stdout)
     assert str(python_batch_payload["saved_manifest_path"]).endswith(
-        "batch.finance-en.ades-manifest.json"
+        "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
     )
     assert len(
         [
@@ -124,7 +124,7 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     )
     npm_batch_payload = json.loads(verification.npm_install_smoke.serve_tag_files.stdout)
     assert str(npm_batch_payload["saved_manifest_path"]).endswith(
-        "batch.finance-en.ades-manifest.json"
+        "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
     )
     assert len(
         [item["saved_output_path"] for item in npm_batch_payload["items"] if item.get("saved_output_path")]

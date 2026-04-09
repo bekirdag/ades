@@ -1,11 +1,11 @@
 # ades Next Work Items
 
-Updated after completing live batch-manifest write smoke validation for installed artifacts on 2026-04-09.
+Updated after completing live batch-manifest path override smoke validation for installed artifacts on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` requests also prove explicit `output.manifest_path` overrides after `finance-en` pull and metadata recovery, so the packaged serve path locks in deterministic persisted batch-manifest locations as well as default output-directory manifests.
+   - Extend the installed-artifact release smoke so live `POST /v0/tag/files` requests also replay the manifest they just wrote after `finance-en` pull and metadata recovery, so the packaged serve path proves manifest replay, lineage, and replay-summary behavior instead of only one-shot batch persistence.
    - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, dependency-chain guardrails, and dependency-bearing release smoke stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
@@ -132,6 +132,12 @@ Updated after completing live batch-manifest write smoke validation for installe
    - extends release smoke verification so both the installed wheel and npm wrapper now request persisted batch outputs plus manifest writing through a live `POST /v0/tag/files` request after finance-pack pull, metadata bootstrap recovery, and `ades serve` startup
    - keeps the release verify/validate contracts unchanged while requiring `saved_manifest_path` and both per-item `saved_output_path` values inside the existing `serve_tag_files` result
    - includes categorized unit, component, integration, and API coverage for successful live batch-manifest writes and explicit missing-manifest warnings
+
+- Live batch-manifest path override smoke validation for installed artifacts:
+   - implemented in `src/ades/release.py`, with fake-runner updates in `tests/release_helpers.py`
+   - extends release smoke verification so both the installed wheel and npm wrapper now provide an explicit `output.manifest_path` override through the live `POST /v0/tag/files` request after finance-pack pull, metadata bootstrap recovery, and `ades serve` startup
+   - keeps the release verify/validate contracts unchanged while requiring the existing `serve_tag_files` result to report that exact manifest path instead of the default batch manifest filename
+   - includes categorized unit, component, integration, and API coverage for successful explicit manifest-path overrides and explicit invalid-manifest-path warnings
 
 ## Not Next
 

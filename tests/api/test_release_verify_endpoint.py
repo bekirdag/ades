@@ -65,7 +65,7 @@ def test_release_verify_endpoint_reports_smoke_install_results(
         verify_payload["python_install_smoke"]["serve_tag_files"]["stdout"]
     )
     assert str(python_batch_payload["saved_manifest_path"]).endswith(
-        "batch.finance-en.ades-manifest.json"
+        "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
     )
     assert len(
         [
@@ -109,7 +109,7 @@ def test_release_verify_endpoint_reports_smoke_install_results(
         verify_payload["npm_install_smoke"]["serve_tag_files"]["stdout"]
     )
     assert str(npm_batch_payload["saved_manifest_path"]).endswith(
-        "batch.finance-en.ades-manifest.json"
+        "serve-smoke-batch-manifest.finance-en.ades-manifest.json"
     )
     assert len(
         [item["saved_output_path"] for item in npm_batch_payload["items"] if item.get("saved_output_path")]

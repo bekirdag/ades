@@ -70,7 +70,9 @@ SMOKE_TAG_BATCH_FILES = (
     ("serve-smoke-batch-beta.html", "<p>NASDAQ closed near USD 12.5.</p>\n"),
 )
 SMOKE_TAG_BATCH_OUTPUT_DIR_NAME = "serve-smoke-batch-outputs"
-SMOKE_TAG_BATCH_MANIFEST_FILE_NAME = f"batch.{SMOKE_PULL_PACK_ID}.ades-manifest.json"
+SMOKE_TAG_BATCH_MANIFEST_FILE_NAME = (
+    f"serve-smoke-batch-manifest.{SMOKE_PULL_PACK_ID}.ades-manifest.json"
+)
 SMOKE_TAG_REQUIRED_LABELS = ("organization", "ticker", "exchange", "currency_amount")
 SMOKE_SERVE_HOST = "127.0.0.1"
 SMOKE_SERVE_STARTUP_TIMEOUT_SECONDS = 20.0
@@ -742,6 +744,7 @@ def _run_cli_service_smoke(
     smoke_input_path = _write_smoke_input_file(working_dir)
     smoke_batch_input_paths = _write_batch_smoke_input_files(working_dir)
     smoke_batch_output_dir = (working_dir / SMOKE_TAG_BATCH_OUTPUT_DIR_NAME).resolve()
+    smoke_batch_manifest_path = (smoke_batch_output_dir / SMOKE_TAG_BATCH_MANIFEST_FILE_NAME).resolve()
     process = subprocess.Popen(
         serve_command,
         cwd=working_dir,
@@ -817,6 +820,7 @@ def _run_cli_service_smoke(
                         "output": {
                             "directory": str(smoke_batch_output_dir),
                             "write_manifest": True,
+                            "manifest_path": str(smoke_batch_manifest_path),
                         },
                     },
                 )
