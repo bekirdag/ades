@@ -75,6 +75,7 @@ SMOKE_TAG_BATCH_FILES = (
     ("serve-smoke-batch-alpha.html", "<p>Apple said AAPL rallied.</p>\n"),
     ("serve-smoke-batch-beta.html", "<p>NASDAQ closed near USD 12.5.</p>\n"),
 )
+SMOKE_TAG_BATCH_FAKE_MODIFIED_TIME_NS = 1775769721594998319
 SMOKE_TAG_BATCH_OUTPUT_DIR_NAME = "serve-smoke-batch-outputs"
 SMOKE_TAG_BATCH_MANIFEST_FILE_NAME = (
     f"serve-smoke-batch-manifest.{SMOKE_PULL_PACK_ID}.ades-manifest.json"
@@ -508,6 +509,45 @@ def _parse_batch_input_sizes(result: ReleaseCommandResult) -> list[int]:
     return input_sizes
 
 
+def _parse_batch_source_fingerprints(
+    result: ReleaseCommandResult,
+) -> list[dict[str, object]]:
+    """Extract item source fingerprints reported by one JSON `ades tag-files` payload."""
+
+    payload = _parse_command_payload(result)
+    if payload is None:
+        return []
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return []
+    source_fingerprints: list[dict[str, object]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        source_fingerprint = item.get("source_fingerprint")
+        if not isinstance(source_fingerprint, dict):
+            continue
+        size_bytes = source_fingerprint.get("size_bytes")
+        modified_time_ns = source_fingerprint.get("modified_time_ns")
+        sha256 = source_fingerprint.get("sha256")
+        if (
+            isinstance(size_bytes, int)
+            and not isinstance(size_bytes, bool)
+            and isinstance(modified_time_ns, int)
+            and not isinstance(modified_time_ns, bool)
+            and isinstance(sha256, str)
+            and sha256
+        ):
+            source_fingerprints.append(
+                {
+                    "size_bytes": size_bytes,
+                    "modified_time_ns": modified_time_ns,
+                    "sha256": sha256,
+                }
+            )
+    return source_fingerprints
+
+
 def _parse_batch_pack_id(result: ReleaseCommandResult) -> str | None:
     """Extract the top-level pack id reported by one JSON `ades tag-files` payload."""
 
@@ -894,6 +934,71 @@ def _expected_smoke_batch_source_paths(working_dir: Path) -> list[str]:
 
 def _expected_smoke_batch_input_sizes() -> list[int]:
     return [len(content.encode("utf-8")) for _, content in SMOKE_TAG_BATCH_FILES]
+
+
+def _source_fingerprint_payload(
+    path: Path,
+    *,
+    fallback_content: str | None = None,
+) -> dict[str, object]:
+    resolved_path = path.resolve()
+    if resolved_path.exists():
+        stat = resolved_path.stat()
+        return {
+            "size_bytes": stat.st_size,
+            "modified_time_ns": stat.st_mtime_ns,
+            "sha256": _sha256(resolved_path),
+        }
+    if fallback_content is None:
+        raise FileNotFoundError(f"Smoke source file does not exist: {resolved_path}")
+    payload = fallback_content.encode("utf-8")
+    return {
+        "size_bytes": len(payload),
+        "modified_time_ns": SMOKE_TAG_BATCH_FAKE_MODIFIED_TIME_NS,
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def _expected_smoke_batch_source_fingerprints(working_dir: Path) -> list[dict[str, object]]:
+    return [
+        _source_fingerprint_payload(
+            working_dir / file_name,
+            fallback_content=content,
+        )
+        for file_name, content in SMOKE_TAG_BATCH_FILES
+    ]
+
+
+def _source_fingerprints_match_expected_content(
+    source_fingerprints: list[dict[str, object]],
+) -> bool:
+    if len(source_fingerprints) != len(SMOKE_TAG_BATCH_FILES):
+        return False
+    for source_fingerprint, (_, content) in zip(source_fingerprints, SMOKE_TAG_BATCH_FILES):
+        size_bytes = source_fingerprint.get("size_bytes")
+        modified_time_ns = source_fingerprint.get("modified_time_ns")
+        sha256 = source_fingerprint.get("sha256")
+        expected_payload = content.encode("utf-8")
+        if (
+            size_bytes != len(expected_payload)
+            or not isinstance(modified_time_ns, int)
+            or isinstance(modified_time_ns, bool)
+            or sha256 != hashlib.sha256(expected_payload).hexdigest()
+        ):
+            return False
+    return True
+
+
+def _source_fingerprints_have_matching_modified_times(
+    left: list[dict[str, object]],
+    right: list[dict[str, object]],
+) -> bool:
+    if len(left) != len(right):
+        return False
+    return all(
+        left_item.get("modified_time_ns") == right_item.get("modified_time_ns")
+        for left_item, right_item in zip(left, right)
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -1744,6 +1849,9 @@ def _run_python_install_smoke(
         serve_tag_files_output_paths = _parse_batch_saved_output_paths(serve_tag_files)
         serve_tag_files_source_paths = _parse_batch_source_paths(serve_tag_files)
         serve_tag_files_input_sizes = _parse_batch_input_sizes(serve_tag_files)
+        serve_tag_files_source_fingerprints = _parse_batch_source_fingerprints(
+            serve_tag_files
+        )
         serve_tag_files_lineage_run_id = _parse_batch_lineage_run_id(serve_tag_files)
         serve_tag_files_lineage_root_run_id = _parse_batch_lineage_root_run_id(
             serve_tag_files
@@ -1768,6 +1876,9 @@ def _run_python_install_smoke(
             serve_tag_files_replay
         )
         serve_tag_files_replay_input_sizes = _parse_batch_input_sizes(
+            serve_tag_files_replay
+        )
+        serve_tag_files_replay_source_fingerprints = _parse_batch_source_fingerprints(
             serve_tag_files_replay
         )
         serve_tag_files_replay_pack_id = _parse_batch_pack_id(serve_tag_files_replay)
@@ -1833,6 +1944,9 @@ def _run_python_install_smoke(
             working_dir
         )
         expected_serve_tag_files_input_sizes = _expected_smoke_batch_input_sizes()
+        expected_serve_tag_files_source_fingerprints = (
+            _expected_smoke_batch_source_fingerprints(working_dir)
+        )
         expected_serve_tag_files_output_paths = _expected_smoke_batch_output_paths(
             working_dir
         )
@@ -1854,6 +1968,10 @@ def _run_python_install_smoke(
         has_expected_serve_tag_files_input_sizes = (
             serve_tag_files_input_sizes == expected_serve_tag_files_input_sizes
         )
+        has_expected_serve_tag_files_source_fingerprints = (
+            serve_tag_files_source_fingerprints
+            == expected_serve_tag_files_source_fingerprints
+        )
         has_expected_serve_tag_files_output_paths = (
             serve_tag_files_output_paths == expected_serve_tag_files_output_paths
         )
@@ -1866,6 +1984,10 @@ def _run_python_install_smoke(
         )
         has_expected_serve_tag_files_replay_input_sizes = (
             serve_tag_files_replay_input_sizes == expected_serve_tag_files_input_sizes
+        )
+        has_expected_serve_tag_files_replay_source_fingerprints = (
+            serve_tag_files_replay_source_fingerprints
+            == expected_serve_tag_files_source_fingerprints
         )
         has_expected_serve_tag_files_replay_output_paths = (
             serve_tag_files_replay_output_paths == expected_serve_tag_files_output_paths
@@ -1985,6 +2107,7 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_manifest_path
             and has_expected_serve_tag_files_source_paths
             and has_expected_serve_tag_files_input_sizes
+            and has_expected_serve_tag_files_source_fingerprints
             and has_expected_serve_tag_files_output_paths
             and has_expected_serve_tag_files_lineage_run_id
             and has_expected_serve_tag_files_lineage_root_run_id
@@ -2008,6 +2131,7 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_replay_manifest_path
             and has_expected_serve_tag_files_replay_source_paths
             and has_expected_serve_tag_files_replay_input_sizes
+            and has_expected_serve_tag_files_replay_source_fingerprints
             and has_expected_serve_tag_files_replay_output_paths
             and has_expected_serve_tag_files_replay_rerun_diff
             and has_expected_serve_tag_files_replay_rerun_diff_manifest_input_path
@@ -2310,6 +2434,9 @@ def _run_npm_install_smoke(
         serve_tag_files_output_paths = _parse_batch_saved_output_paths(serve_tag_files)
         serve_tag_files_source_paths = _parse_batch_source_paths(serve_tag_files)
         serve_tag_files_input_sizes = _parse_batch_input_sizes(serve_tag_files)
+        serve_tag_files_source_fingerprints = _parse_batch_source_fingerprints(
+            serve_tag_files
+        )
         serve_tag_files_lineage_run_id = _parse_batch_lineage_run_id(serve_tag_files)
         serve_tag_files_lineage_root_run_id = _parse_batch_lineage_root_run_id(
             serve_tag_files
@@ -2334,6 +2461,9 @@ def _run_npm_install_smoke(
             serve_tag_files_replay
         )
         serve_tag_files_replay_input_sizes = _parse_batch_input_sizes(
+            serve_tag_files_replay
+        )
+        serve_tag_files_replay_source_fingerprints = _parse_batch_source_fingerprints(
             serve_tag_files_replay
         )
         serve_tag_files_replay_pack_id = _parse_batch_pack_id(serve_tag_files_replay)
@@ -2399,6 +2529,9 @@ def _run_npm_install_smoke(
             working_dir
         )
         expected_serve_tag_files_input_sizes = _expected_smoke_batch_input_sizes()
+        expected_serve_tag_files_source_fingerprints = (
+            _expected_smoke_batch_source_fingerprints(working_dir)
+        )
         expected_serve_tag_files_output_paths = _expected_smoke_batch_output_paths(
             working_dir
         )
@@ -2420,6 +2553,10 @@ def _run_npm_install_smoke(
         has_expected_serve_tag_files_input_sizes = (
             serve_tag_files_input_sizes == expected_serve_tag_files_input_sizes
         )
+        has_expected_serve_tag_files_source_fingerprints = (
+            serve_tag_files_source_fingerprints
+            == expected_serve_tag_files_source_fingerprints
+        )
         has_expected_serve_tag_files_output_paths = (
             serve_tag_files_output_paths == expected_serve_tag_files_output_paths
         )
@@ -2432,6 +2569,10 @@ def _run_npm_install_smoke(
         )
         has_expected_serve_tag_files_replay_input_sizes = (
             serve_tag_files_replay_input_sizes == expected_serve_tag_files_input_sizes
+        )
+        has_expected_serve_tag_files_replay_source_fingerprints = (
+            serve_tag_files_replay_source_fingerprints
+            == expected_serve_tag_files_source_fingerprints
         )
         has_expected_serve_tag_files_replay_output_paths = (
             serve_tag_files_replay_output_paths == expected_serve_tag_files_output_paths
@@ -2551,6 +2692,7 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_manifest_path
             and has_expected_serve_tag_files_source_paths
             and has_expected_serve_tag_files_input_sizes
+            and has_expected_serve_tag_files_source_fingerprints
             and has_expected_serve_tag_files_output_paths
             and has_expected_serve_tag_files_lineage_run_id
             and has_expected_serve_tag_files_lineage_root_run_id
@@ -2574,6 +2716,7 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_replay_manifest_path
             and has_expected_serve_tag_files_replay_source_paths
             and has_expected_serve_tag_files_replay_input_sizes
+            and has_expected_serve_tag_files_replay_source_fingerprints
             and has_expected_serve_tag_files_replay_output_paths
             and has_expected_serve_tag_files_replay_rerun_diff
             and has_expected_serve_tag_files_replay_rerun_diff_manifest_input_path
@@ -2746,6 +2889,11 @@ def _smoke_install_warnings(
     expected_serve_tag_files_input_sizes = _expected_smoke_batch_input_sizes()
     if serve_tag_files_input_sizes != expected_serve_tag_files_input_sizes:
         return [f"{prefix}_serve_tag_files_invalid_input_sizes"]
+    serve_tag_files_source_fingerprints = _parse_batch_source_fingerprints(
+        smoke_result.serve_tag_files
+    )
+    if not _source_fingerprints_match_expected_content(serve_tag_files_source_fingerprints):
+        return [f"{prefix}_serve_tag_files_invalid_source_fingerprints"]
     serve_tag_files_output_paths = _parse_batch_saved_output_paths(smoke_result.serve_tag_files)
     expected_serve_tag_files_output_paths = _expected_smoke_batch_output_paths(
         Path(smoke_result.working_dir)
@@ -2995,6 +3143,19 @@ def _smoke_install_warnings(
     )
     if serve_tag_files_replay_input_sizes != expected_serve_tag_files_input_sizes:
         return [f"{prefix}_serve_tag_files_replay_invalid_input_sizes"]
+    serve_tag_files_replay_source_fingerprints = _parse_batch_source_fingerprints(
+        smoke_result.serve_tag_files_replay
+    )
+    if (
+        not _source_fingerprints_match_expected_content(
+            serve_tag_files_replay_source_fingerprints
+        )
+        or not _source_fingerprints_have_matching_modified_times(
+            serve_tag_files_source_fingerprints,
+            serve_tag_files_replay_source_fingerprints,
+        )
+    ):
+        return [f"{prefix}_serve_tag_files_replay_invalid_source_fingerprints"]
     if serve_tag_files_replay_output_paths != expected_serve_tag_files_output_paths:
         return [f"{prefix}_serve_tag_files_replay_invalid_output_paths"]
     if smoke_result.remove_guardrail is None:

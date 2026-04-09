@@ -18,6 +18,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 
 ## Recently Closed
 
+- Exact source-fingerprint parity validation for installed-artifact `/v0/tag/files` smoke:
+  - implemented in `src/ades/release.py`
+  - tightens clean-environment wheel/npm release smoke so both the root batch payload and replay payload must keep the exact deterministic per-item `source_fingerprint` list for the two packaged smoke inputs instead of only agreeing on paths and input sizes
+  - adds categorized unit, component, integration, and API coverage for successful root/replay source-fingerprint parity plus explicit invalid source-fingerprint warnings on the packaged serve flow
+
 - Exact input-size parity validation for installed-artifact `/v0/tag/files` smoke:
   - implemented in `src/ades/release.py`
   - tightens clean-environment wheel/npm release smoke so both the root batch payload and replay payload must keep the exact deterministic per-item `input_size_bytes` list for the two packaged smoke inputs instead of only agreeing on the processed source files

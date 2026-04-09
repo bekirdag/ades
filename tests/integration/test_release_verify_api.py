@@ -8,6 +8,7 @@ from tests.release_helpers import (
     build_expected_batch_input_sizes,
     build_expected_batch_manifest_path,
     build_expected_batch_output_paths,
+    build_expected_batch_source_fingerprints,
     build_expected_batch_source_paths,
     build_expected_batch_replay_manifest_path,
     build_fake_release_runner,
@@ -102,6 +103,7 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     python_working_dir = Path(verification.python_install_smoke.working_dir)
     python_expected_source_paths = build_expected_batch_source_paths(python_working_dir)
     python_expected_input_sizes = build_expected_batch_input_sizes()
+    python_expected_source_fingerprints = build_expected_batch_source_fingerprints()
     python_expected_output_paths = build_expected_batch_output_paths(python_working_dir)
     python_batch_payload = json.loads(verification.python_install_smoke.serve_tag_files.stdout)
     assert (
@@ -120,6 +122,9 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     )
     assert [item["input_size_bytes"] for item in python_batch_payload["items"]] == (
         python_expected_input_sizes
+    )
+    assert [item["source_fingerprint"] for item in python_batch_payload["items"]] == (
+        python_expected_source_fingerprints
     )
     assert [item["saved_output_path"] for item in python_batch_payload["items"]] == (
         python_expected_output_paths
@@ -167,6 +172,9 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     )
     assert [item["input_size_bytes"] for item in python_replay_payload["items"]] == (
         python_expected_input_sizes
+    )
+    assert [item["source_fingerprint"] for item in python_replay_payload["items"]] == (
+        python_expected_source_fingerprints
     )
     assert [item["saved_output_path"] for item in python_replay_payload["items"]] == (
         python_expected_output_paths
@@ -225,6 +233,7 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     npm_working_dir = Path(verification.npm_install_smoke.working_dir)
     npm_expected_source_paths = build_expected_batch_source_paths(npm_working_dir)
     npm_expected_input_sizes = build_expected_batch_input_sizes()
+    npm_expected_source_fingerprints = build_expected_batch_source_fingerprints()
     npm_expected_output_paths = build_expected_batch_output_paths(npm_working_dir)
     npm_batch_payload = json.loads(verification.npm_install_smoke.serve_tag_files.stdout)
     assert (
@@ -243,6 +252,9 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     )
     assert [item["input_size_bytes"] for item in npm_batch_payload["items"]] == (
         npm_expected_input_sizes
+    )
+    assert [item["source_fingerprint"] for item in npm_batch_payload["items"]] == (
+        npm_expected_source_fingerprints
     )
     assert [item["saved_output_path"] for item in npm_batch_payload["items"]] == (
         npm_expected_output_paths
@@ -290,6 +302,9 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     )
     assert [item["input_size_bytes"] for item in npm_replay_payload["items"]] == (
         npm_expected_input_sizes
+    )
+    assert [item["source_fingerprint"] for item in npm_replay_payload["items"]] == (
+        npm_expected_source_fingerprints
     )
     assert [item["saved_output_path"] for item in npm_replay_payload["items"]] == (
         npm_expected_output_paths

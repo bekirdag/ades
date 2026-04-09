@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -58,6 +59,22 @@ def build_expected_batch_input_sizes() -> list[int]:
     return [
         len("<p>Apple said AAPL rallied.</p>\n".encode("utf-8")),
         len("<p>NASDAQ closed near USD 12.5.</p>\n".encode("utf-8")),
+    ]
+
+
+def _build_fake_batch_source_fingerprint(content: str) -> dict[str, object]:
+    payload = content.encode("utf-8")
+    return {
+        "size_bytes": len(payload),
+        "modified_time_ns": 1775769721594998319,
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def build_expected_batch_source_fingerprints() -> list[dict[str, object]]:
+    return [
+        _build_fake_batch_source_fingerprint("<p>Apple said AAPL rallied.</p>\n"),
+        _build_fake_batch_source_fingerprint("<p>NASDAQ closed near USD 12.5.</p>\n"),
     ]
 
 
@@ -465,6 +482,9 @@ def build_fake_service_smoke(
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
                         "input_size_bytes": len("<p>Apple said AAPL rallied.</p>\n".encode("utf-8")),
+                        "source_fingerprint": _build_fake_batch_source_fingerprint(
+                            "<p>Apple said AAPL rallied.</p>\n"
+                        ),
                         "saved_output_path": str(
                             (
                                 storage_root.parent
@@ -488,6 +508,9 @@ def build_fake_service_smoke(
                         "source_path": str((storage_root.parent / "serve-smoke-batch-beta.html").resolve()),
                         "input_size_bytes": len(
                             "<p>NASDAQ closed near USD 12.5.</p>\n".encode("utf-8")
+                        ),
+                        "source_fingerprint": _build_fake_batch_source_fingerprint(
+                            "<p>NASDAQ closed near USD 12.5.</p>\n"
                         ),
                         "saved_output_path": str(
                             (
@@ -581,6 +604,9 @@ def build_fake_service_smoke(
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
                         "input_size_bytes": len("<p>Apple said AAPL rallied.</p>\n".encode("utf-8")),
+                        "source_fingerprint": _build_fake_batch_source_fingerprint(
+                            "<p>Apple said AAPL rallied.</p>\n"
+                        ),
                         "saved_output_path": str(
                             (
                                 storage_root.parent
@@ -604,6 +630,9 @@ def build_fake_service_smoke(
                         "source_path": str((storage_root.parent / "serve-smoke-batch-beta.html").resolve()),
                         "input_size_bytes": len(
                             "<p>NASDAQ closed near USD 12.5.</p>\n".encode("utf-8")
+                        ),
+                        "source_fingerprint": _build_fake_batch_source_fingerprint(
+                            "<p>NASDAQ closed near USD 12.5.</p>\n"
                         ),
                         "saved_output_path": str(
                             (
