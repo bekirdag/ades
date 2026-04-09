@@ -1,11 +1,11 @@
 # ades Next Work Items
 
-Updated after completing live batch-manifest replay child run-id smoke validation for installed artifacts on 2026-04-09.
+Updated after completing live batch-manifest root-lineage identity smoke validation for installed artifacts on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Extend the installed-artifact release smoke so the initial live `POST /v0/tag/files` root manifest through the served wheel and npm wrapper also proves root-lineage identity, especially that `lineage.parent_run_id` and `lineage.source_manifest_path` stay unset on the root batch manifest while the replay child keeps those linkage fields populated after `finance-en` pull and metadata recovery.
+   - Extend the installed-artifact release smoke so the initial and replayed live `POST /v0/tag/files` manifests through the served wheel and npm wrapper also prove lineage timestamp hygiene, especially that both expose `lineage.created_at` and the replay child timestamp stays ordered after the root batch manifest after `finance-en` pull and metadata recovery.
    - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, dependency-chain guardrails, and dependency-bearing release smoke stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
@@ -29,6 +29,12 @@ Updated after completing live batch-manifest replay child run-id smoke validatio
    - Keep future local-tool changes from leaking SQLite-only assumptions into the contracts that the later production server should reuse.
 
 ## Recently Closed
+
+- Live batch-manifest root-lineage identity smoke validation for installed artifacts:
+  - implemented in `src/ades/release.py`
+  - extends release smoke verification so both the installed wheel and npm wrapper now require the root batch manifest to keep `lineage.parent_run_id` and `lineage.source_manifest_path` unset/null in the live `/v0/tag/files` path
+  - keeps the release verify/validate contracts additive while surfacing explicit warning codes for invalid root-manifest lineage linkage fields in the packaged serve path
+  - includes categorized unit, component, integration, and API coverage for successful root-lineage validation plus explicit invalid root-manifest lineage warning paths
 
 - Live batch-manifest replay child run-id smoke validation for installed artifacts:
   - implemented in `src/ades/release.py`

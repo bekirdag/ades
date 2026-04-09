@@ -28,8 +28,12 @@ def _served_batch_manifest_payload(
     manifest_file_name: str = "serve-smoke-batch-manifest.finance-en.ades-manifest.json",
     include_lineage_run_id: bool = True,
     include_lineage_root_run_id: bool = True,
+    include_lineage_parent_run_id: bool = True,
+    include_lineage_source_manifest_path: bool = True,
     lineage_run_id: str = "ades-run-parent-smoke",
     lineage_root_run_id: str | None = None,
+    lineage_parent_run_id: str | None = None,
+    lineage_source_manifest_path: str | None = None,
     output_count: int = 2,
 ) -> dict[str, object]:
     """Return one deterministic live `/v0/tag/files` payload with manifest output paths."""
@@ -78,6 +82,14 @@ def _served_batch_manifest_payload(
         lineage["root_run_id"] = (
             lineage_run_id if lineage_root_run_id is None else lineage_root_run_id
         )
+    if include_lineage_parent_run_id:
+        lineage = payload["lineage"]
+        assert isinstance(lineage, dict)
+        lineage["parent_run_id"] = lineage_parent_run_id
+    if include_lineage_source_manifest_path:
+        lineage = payload["lineage"]
+        assert isinstance(lineage, dict)
+        lineage["source_manifest_path"] = lineage_source_manifest_path
     return payload
 
 
@@ -319,6 +331,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     )
     assert python_batch_payload["lineage"]["run_id"] == "ades-run-parent-smoke"
     assert python_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
+    assert python_batch_payload["lineage"].get("parent_run_id") is None
+    assert python_batch_payload["lineage"].get("source_manifest_path") is None
     assert len(
         [
             item["saved_output_path"]
@@ -412,6 +426,8 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     )
     assert npm_batch_payload["lineage"]["run_id"] == "ades-run-parent-smoke"
     assert npm_batch_payload["lineage"]["root_run_id"] == "ades-run-parent-smoke"
+    assert npm_batch_payload["lineage"].get("parent_run_id") is None
+    assert npm_batch_payload["lineage"].get("source_manifest_path") is None
     assert len(
         [item["saved_output_path"] for item in npm_batch_payload["items"] if item.get("saved_output_path")]
     ) == 2
@@ -2413,6 +2429,18 @@ def test_verify_release_artifacts_reports_live_service_batch_replay_rerun_diff_e
             {"include_lineage_run_id": False},
             {},
             "npm_tarball_serve_tag_files_missing_lineage_run_id",
+        ),
+        (
+            {"lineage_parent_run_id": "ades-run-unexpected-parent"},
+            {},
+            "npm_tarball_serve_tag_files_invalid_lineage_parent_run_id",
+        ),
+        (
+            {
+                "lineage_source_manifest_path": "/tmp/serve-smoke-batch-manifest.finance-en.ades-manifest.json"
+            },
+            {},
+            "npm_tarball_serve_tag_files_invalid_lineage_source_manifest_path",
         ),
         (
             {},

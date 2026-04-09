@@ -636,6 +636,21 @@ def _parse_batch_lineage_parent_run_id(result: ReleaseCommandResult) -> str | No
     return _parse_batch_lineage_value(result, "parent_run_id")
 
 
+def _batch_lineage_field_is_unset(
+    result: ReleaseCommandResult,
+    field_name: str,
+) -> bool:
+    """Return whether one lineage field is absent or explicitly null."""
+
+    payload = _parse_command_payload(result)
+    if payload is None:
+        return False
+    lineage = payload.get("lineage")
+    if not isinstance(lineage, dict):
+        return False
+    return field_name not in lineage or lineage.get(field_name) is None
+
+
 def _parse_status_installed_pack_ids(result: ReleaseCommandResult) -> list[str]:
     """Extract installed pack ids reported by one JSON status payload."""
 
@@ -1498,6 +1513,13 @@ def _run_python_install_smoke(
         serve_tag_files_lineage_root_run_id = _parse_batch_lineage_root_run_id(
             serve_tag_files
         )
+        has_expected_serve_tag_files_lineage_parent_run_id = _batch_lineage_field_is_unset(
+            serve_tag_files,
+            "parent_run_id",
+        )
+        has_expected_serve_tag_files_lineage_source_manifest_path = (
+            _batch_lineage_field_is_unset(serve_tag_files, "source_manifest_path")
+        )
         serve_tag_files_replay_manifest_path = _parse_batch_saved_manifest_path(
             serve_tag_files_replay
         )
@@ -1667,6 +1689,8 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_output_count
             and has_expected_serve_tag_files_lineage_run_id
             and has_expected_serve_tag_files_lineage_root_run_id
+            and has_expected_serve_tag_files_lineage_parent_run_id
+            and has_expected_serve_tag_files_lineage_source_manifest_path
             and serve_tag_files_replay.passed
             and not missing_serve_tag_files_replay_labels
             and has_expected_serve_tag_files_replay_pack_id
@@ -1931,6 +1955,13 @@ def _run_npm_install_smoke(
         serve_tag_files_lineage_root_run_id = _parse_batch_lineage_root_run_id(
             serve_tag_files
         )
+        has_expected_serve_tag_files_lineage_parent_run_id = _batch_lineage_field_is_unset(
+            serve_tag_files,
+            "parent_run_id",
+        )
+        has_expected_serve_tag_files_lineage_source_manifest_path = (
+            _batch_lineage_field_is_unset(serve_tag_files, "source_manifest_path")
+        )
         serve_tag_files_replay_manifest_path = _parse_batch_saved_manifest_path(
             serve_tag_files_replay
         )
@@ -2100,6 +2131,8 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_output_count
             and has_expected_serve_tag_files_lineage_run_id
             and has_expected_serve_tag_files_lineage_root_run_id
+            and has_expected_serve_tag_files_lineage_parent_run_id
+            and has_expected_serve_tag_files_lineage_source_manifest_path
             and serve_tag_files_replay.passed
             and not missing_serve_tag_files_replay_labels
             and has_expected_serve_tag_files_replay_pack_id
@@ -2428,6 +2461,13 @@ def _smoke_install_warnings(
         return [f"{prefix}_serve_tag_files_missing_lineage_root_run_id"]
     if serve_tag_files_lineage_root_run_id != serve_tag_files_lineage_run_id:
         return [f"{prefix}_serve_tag_files_invalid_lineage_root_run_id"]
+    if not _batch_lineage_field_is_unset(smoke_result.serve_tag_files, "parent_run_id"):
+        return [f"{prefix}_serve_tag_files_invalid_lineage_parent_run_id"]
+    if not _batch_lineage_field_is_unset(
+        smoke_result.serve_tag_files,
+        "source_manifest_path",
+    ):
+        return [f"{prefix}_serve_tag_files_invalid_lineage_source_manifest_path"]
     serve_tag_files_replay_root_run_id = _parse_batch_lineage_root_run_id(
         smoke_result.serve_tag_files_replay
     )

@@ -30,7 +30,7 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- extend installed-artifact clean-environment validation so the initial live `/v0/tag/files` root manifest through the served wheel and npm wrapper also proves root-lineage identity by keeping `lineage.parent_run_id` and `lineage.source_manifest_path` unset while the replay child keeps those linkage fields populated
+- extend installed-artifact clean-environment validation so the initial and replayed live `/v0/tag/files` manifests through the served wheel and npm wrapper also prove lineage timestamp hygiene by exposing `lineage.created_at` and keeping the replay child timestamp ordered after the root batch manifest
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
 - keep the new rollback-safe install semantics, lookup-driven metadata repair, SQLite recovery behavior, dependency-bearing release smoke, and live `/v0/tag`, `/v0/tag/file`, plus `/v0/tag/files` persistence and replay smoke stable while finishing the remaining pack-lifecycle recovery work
 
@@ -108,3 +108,6 @@ Planned work:
 - 2026-04-09: extended `src/ades/release.py` so the replayed live `/v0/tag/files` release smoke now requires the replay child payload to expose a non-empty `lineage.run_id` that stays distinct from the parent batch `lineage.run_id` for both wheel and npm artifacts.
 - 2026-04-09: updated the categorized release verify tests so successful replay child run-id validation and explicit missing/invalid replay child run-id warnings are covered consistently across unit, component, integration, and API layers.
 - 2026-04-09: focused release verification passed with `41 passed`, `python -m compileall src/ades tests` stayed green, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `204 passed` under `pytest -q` while keeping the clean-environment wheel/npm replay smoke green.
+- 2026-04-09: extended `src/ades/release.py` so the initial live `/v0/tag/files` batch manifest now requires root-lineage identity by keeping `lineage.parent_run_id` and `lineage.source_manifest_path` unset/null for both wheel and npm artifacts.
+- 2026-04-09: updated the categorized release verify tests so successful root-lineage validation and explicit invalid root-manifest lineage warnings are covered consistently across unit, component, integration, and API layers.
+- 2026-04-09: focused release verification passed with `43 passed`, `python -m compileall src/ades tests` stayed green, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `206 passed` under `pytest -q` while keeping the clean-environment wheel/npm root/replay lineage smoke green.
