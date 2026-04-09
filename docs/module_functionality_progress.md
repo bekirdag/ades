@@ -10,11 +10,11 @@ Current goal: make the shipped local-tool modules operationally complete before 
    Goal: add broader ranked lookup over installed-pack metadata without changing the existing lookup API, CLI, or service contracts.
 
 2. Pack lifecycle hardening
-   Status: in progress
+   Status: complete
    Goal: validate pull/install/activate/deactivate/remove behavior against real artifacts and failure cases.
 
 3. Storage and metadata recovery
-   Status: in progress
+   Status: complete
    Goal: ensure first-run bootstrap, repair, stale-state cleanup, and idempotent metadata operations are safe.
 
 4. CLI and service operational hardening
@@ -27,12 +27,12 @@ Current goal: make the shipped local-tool modules operationally complete before 
 
 ## Active Slice
 
-Focus: step 2, pack lifecycle hardening.
+Focus: step 4, CLI and service operational hardening.
 
 Planned work:
-- extend installed-artifact clean-environment validation so the initial and replayed live `/v0/tag/files` manifests through the served wheel and npm wrapper also prove lineage timestamp hygiene by exposing `lineage.created_at` and keeping the replay child timestamp ordered after the root batch manifest
-- keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
-- keep the new rollback-safe install semantics, lookup-driven metadata repair, SQLite recovery behavior, dependency-bearing release smoke, and live `/v0/tag`, `/v0/tag/file`, plus `/v0/tag/files` persistence and replay smoke stable while finishing the remaining pack-lifecycle recovery work
+- tighten startup validation and configuration error messaging across the direct CLI and localhost service surfaces
+- keep CLI exit behavior and HTTP error responses aligned when pack lifecycle, storage configuration, or release-flow operations fail
+- preserve the clean-environment release-validation gate while converting broader operational-hardening goals into narrow additive assertions
 
 ## Work Log
 
@@ -111,3 +111,7 @@ Planned work:
 - 2026-04-09: extended `src/ades/release.py` so the initial live `/v0/tag/files` batch manifest now requires root-lineage identity by keeping `lineage.parent_run_id` and `lineage.source_manifest_path` unset/null for both wheel and npm artifacts.
 - 2026-04-09: updated the categorized release verify tests so successful root-lineage validation and explicit invalid root-manifest lineage warnings are covered consistently across unit, component, integration, and API layers.
 - 2026-04-09: focused release verification passed with `43 passed`, `python -m compileall src/ades tests` stayed green, and the full repo release-validation gate passed through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `206 passed` under `pytest -q` while keeping the clean-environment wheel/npm root/replay lineage smoke green.
+- 2026-04-09: completed the remaining packaged-artifact lifecycle hardening by requiring lineage timestamp hygiene in release verification, tightening direct `tag-files` lineage regressions, exposing public pack removal across the shared Python API, CLI, and localhost service, and extending installed-artifact release smoke with dependency-removal guardrails plus successful packaged removal flows.
+- 2026-04-09: completed the remaining storage-seam deletion gap by adding explicit shared-contract coverage in `tests/unit/test_metadata_backend_delete_pack.py` and `tests/component/test_metadata_backend_factory.py`, which now prove `delete_pack` returns `True` only when the pack exists, cascades pack metadata cleanup, and leaves sibling installed packs intact for both the local SQLite store and the deferred PostgreSQL seam.
+- 2026-04-09: focused storage-seam and remove-regression validation passed with `17 passed`, `python -m compileall src/ades tests` stayed green, and the full repo release-validation gate passed again through `docdexd run-tests --repo /home/wodo/apps/ades`, increasing the overall repo to `230 passed` under `pytest -q`.
+- 2026-04-09: with the clean-environment wheel/npm lifecycle smoke, metadata-loss recovery, direct lookup/list repair, public removal surface, and explicit backend-seam deletion contract all covered, step 2 pack lifecycle hardening and step 3 storage and metadata recovery are now complete; the next active work moves to step 4 CLI and service operational hardening.

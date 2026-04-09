@@ -1,34 +1,36 @@
 # ades Next Work Items
 
-Updated after completing live batch-manifest root-lineage identity smoke validation for installed artifacts on 2026-04-09.
+Updated after closing the Phase A local-tool module hardening track on 2026-04-09.
 
 ## Priority Queue
 
-1. Pack lifecycle hardening
-   - Extend the installed-artifact release smoke so the initial and replayed live `POST /v0/tag/files` manifests through the served wheel and npm wrapper also prove lineage timestamp hygiene, especially that both expose `lineage.created_at` and the replay child timestamp stays ordered after the root batch manifest after `finance-en` pull and metadata recovery.
-   - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, dependency-chain guardrails, and dependency-bearing release smoke stable while closing the remaining pack-lifecycle gaps.
+1. CLI and service operational hardening
+   - Tighten startup validation, configuration error messaging, and operator-facing responses across `ades`, the public Python API, and the localhost service.
+   - Keep pack lifecycle, storage, and release-flow failures aligned so CLI exits and HTTP responses expose the same effective contract.
 
-2. Storage and metadata recovery
-   - Keep hardening first-run bootstrap, stale-record cleanup, and repair behavior around the local SQLite registry now that both list-driven and lookup-driven recovery can repair missing installed-pack rows from on-disk manifests.
-   - Keep the storage seam explicit so future PostgreSQL work can reuse the public contracts without inheriting local-only assumptions.
+2. End-to-end production-readiness validation
+   - Keep extending clean-environment release validation so installed artifacts prove the real shipped wheel/npm behavior together rather than only through narrower source-tree regressions.
+   - Convert the remaining broad readiness goals into additive release assertions and deterministic warning codes.
 
-3. CLI and service operational hardening
-   - Tighten startup validation, config error reporting, exit behavior, and operator-facing machine-readable responses on the active local-tool commands and endpoints.
-   - Confirm the existing local surfaces behave correctly outside the repo checkout and under realistic storage-root conditions.
+3. Production-server seam hardening
+   - Keep future local-tool changes from leaking SQLite-only assumptions into the contracts the later PostgreSQL-backed production server should reuse.
+   - Delay server-only delivery work until the local-tool operational-hardening and release-readiness queues are closed.
 
-4. End-to-end production-readiness validation
-   - Add more clean-environment flows that cover install, pull, serve, tag, and recovery behavior together instead of validating them only in narrower slices.
-   - Keep the completed local-tool modules aligned with the repo’s production-ready completion bar.
-
-5. Post-`v0.1.0` NLP-backed enrichment evaluation
-   - The default runtime is now intentionally deterministic for `v0.1.0`, and `pyproject.toml` still carries no `spaCy`, `GLiNER`, or `FlashText` runtime dependencies.
+4. Post-`v0.1.0` NLP-backed enrichment evaluation
+   - The default runtime is intentionally deterministic for `v0.1.0`, and `pyproject.toml` still carries no `spaCy`, `GLiNER`, or `FlashText` runtime dependencies.
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
-6. Production-server seam hardening
-   - The local-tool release path is real, while the PostgreSQL-backed production server remains a placeholder seam.
-   - Keep future local-tool changes from leaking SQLite-only assumptions into the contracts that the later production server should reuse.
-
 ## Recently Closed
+
+- Phase A pack lifecycle hardening:
+  - completed across rollback-safe installs, same-version metadata repair, dependency-aware activate/deactivate semantics, direct/public pack removal, and clean-environment wheel/npm smoke validation
+  - installed-artifact verification now proves `status`, `pull`, `serve`, live `/v0/tag`, `/v0/tag/file`, `/v0/tag/files`, manifest persistence, replay lineage, timestamp hygiene, dependency-removal guardrails, and packaged remove behavior against the shipped artifacts
+  - keeps the packaged wheel and npm wrapper aligned with the in-repo Python API, CLI, and localhost service pack lifecycle contract
+
+- Phase A storage and metadata recovery:
+  - completed across list-driven repair, direct lookup repair, bootstrap recovery after deleting the local SQLite registry, and tagger regression coverage for partial metadata loss
+  - now includes explicit backend-seam `delete_pack` contract coverage for the local SQLite store and the deferred PostgreSQL seam, proving pack-row deletion, metadata cascade cleanup, and sibling-pack preservation where that contract is shared
+  - keeps the later PostgreSQL-backed server path behind the same public metadata-deletion contract without introducing a Phase C server dependency into the local-tool test flow
 
 - Live batch-manifest root-lineage identity smoke validation for installed artifacts:
   - implemented in `src/ades/release.py`
