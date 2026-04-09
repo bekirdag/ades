@@ -5,7 +5,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. CLI and service operational hardening
-   - The status, pack-listing, lookup, pack-mutation, registry-build, direct pack-read, and non-ambiguous pull-config slices are now closed; next tighten the remaining real operator surfaces such as the ambiguous pull parsing seam and release-flow failures across `ades`, the public Python API, and the localhost service.
+   - The status, pack-listing, lookup, pack-mutation, registry-build, and pack-access slices are now closed; next tighten the remaining real operator surfaces such as release-flow failures across `ades`, the public Python API, and the localhost service.
    - Avoid inventing config hardening for pure metadata helpers like installer bootstrap info or release-version inspection when those reads do not cross the runtime-config boundary.
    - Keep pack lifecycle, storage, and release-flow failures aligned so CLI exits and HTTP responses expose the same effective contract, but do not mask real install failures under configuration wrappers.
 
@@ -22,6 +22,12 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Seventh Phase B1 pack-access config-parse hardening slice:
+  - implemented in `src/ades/config.py` and `src/ades/cli.py`
+  - introduces `InvalidConfigurationError` for invalid TOML and scalar coercion failures such as an invalid `ADES_PORT`, and aligns `ades pull` with the deterministic CLI stderr plus exit code `1` contract for those parse-driven configuration failures
+  - keeps the underlying Python API `get_pack()` and `pull_pack()` helpers on raw exceptions, preserves the existing localhost-service `400` behavior through the `ValueError` subclass boundary, and does not catch generic install-time `ValueError`s so checksum or artifact failures still bubble
+  - adds categorized config, unit, component, integration, and API coverage for invalid config syntax and invalid port parsing without weakening the existing checksum-mismatch regression
 
 - Sixth Phase B1 pack-access operational-hardening slice:
   - implemented in `src/ades/service/app.py` and `src/ades/cli.py`

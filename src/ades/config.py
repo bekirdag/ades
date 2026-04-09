@@ -27,6 +27,10 @@ DEFAULT_CONFIG_PATHS = (
 )
 
 
+class InvalidConfigurationError(ValueError):
+    """Raised when one configuration value cannot be parsed safely."""
+
+
 def _resolve_config_path(env_map: dict[str, str]) -> Path | None:
     explicit = env_map.get(CONFIG_FILE_ENV)
     if explicit:
@@ -44,7 +48,12 @@ def _resolve_config_path(env_map: dict[str, str]) -> Path | None:
 def _load_config_values(path: Path | None) -> dict[str, Any]:
     if path is None:
         return {}
-    payload = tomllib.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise InvalidConfigurationError(
+            f"Invalid ades config file: {path}: {exc}"
+        ) from exc
     section = payload.get("ades")
     if isinstance(section, dict):
         return dict(section)
@@ -134,9 +143,17 @@ class Settings:
             config_name="database_url",
         )
 
+        raw_port = port if port is not None else DEFAULT_PORT
+        try:
+            resolved_port = int(raw_port)
+        except ValueError as exc:
+            raise InvalidConfigurationError(
+                f"Invalid ades port: {raw_port!r}"
+            ) from exc
+
         return cls(
             host=str(host or DEFAULT_HOST),
-            port=int(port if port is not None else DEFAULT_PORT),
+            port=resolved_port,
             storage_root=Path(
                 str(storage_root or DEFAULT_STORAGE_ROOT)
             ).expanduser(),

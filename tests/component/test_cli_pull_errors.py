@@ -41,3 +41,18 @@ def test_cli_pull_reports_invalid_runtime_target(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "Unsupported ades runtime target" in _captured_stderr(result)
+
+
+def test_cli_pull_reports_invalid_port_value(tmp_path: Path) -> None:
+    runner = CliRunner()
+    config_path = tmp_path / "ades.toml"
+    config_path.write_text("port = 'not-a-port'\n", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        ["pull", "general-en"],
+        env={"ADES_CONFIG_FILE": str(config_path)},
+    )
+
+    assert result.exit_code == 1
+    assert "Invalid ades port" in _captured_stderr(result)

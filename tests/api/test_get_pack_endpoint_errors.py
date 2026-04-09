@@ -33,3 +33,17 @@ def test_get_pack_endpoint_returns_400_for_invalid_runtime_target(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Unsupported ades runtime target: 'broken-runtime'"
+
+
+def test_get_pack_endpoint_returns_400_for_invalid_port_value(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config_path = tmp_path / "ades.toml"
+    config_path.write_text("port = 'not-a-port'\n", encoding="utf-8")
+    client = TestClient(create_app(storage_root=tmp_path))
+    monkeypatch.setenv("ADES_CONFIG_FILE", str(config_path))
+
+    response = client.get("/v0/packs/general-en")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid ades port: 'not-a-port'"

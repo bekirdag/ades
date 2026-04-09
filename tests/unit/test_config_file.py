@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ades.config import Settings
+from ades.config import InvalidConfigurationError, Settings
 from ades.storage import (
     MetadataBackend,
     RuntimeTarget,
@@ -76,5 +76,31 @@ def test_settings_reject_invalid_runtime_target(
     with pytest.raises(
         UnsupportedRuntimeConfigurationError,
         match="Unsupported ades runtime target",
+    ):
+        Settings.from_env()
+
+
+def test_settings_reject_invalid_explicit_config_syntax(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config_path = tmp_path / "ades.toml"
+    config_path.write_text("[ades\n", encoding="utf-8")
+    monkeypatch.setenv("ADES_CONFIG_FILE", str(config_path))
+
+    with pytest.raises(
+        InvalidConfigurationError,
+        match="Invalid ades config file",
+    ):
+        Settings.from_env()
+
+
+def test_settings_reject_invalid_port_value(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "ades.toml"
+    config_path.write_text("port = 'not-a-port'\n", encoding="utf-8")
+    monkeypatch.setenv("ADES_CONFIG_FILE", str(config_path))
+
+    with pytest.raises(
+        InvalidConfigurationError,
+        match="Invalid ades port",
     ):
         Settings.from_env()

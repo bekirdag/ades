@@ -25,7 +25,7 @@ from .api import tag_files as api_tag_files
 from .api import validate_release as api_validate_release
 from .api import verify_release as api_verify_release
 from .api import write_release_manifest as api_write_release_manifest
-from .config import get_settings
+from .config import InvalidConfigurationError, get_settings
 from .packs.installer import PackInstaller
 from .storage import UnsupportedRuntimeConfigurationError
 from .storage.paths import build_storage_layout, ensure_storage_layout
@@ -272,6 +272,8 @@ def pull(
     except FileNotFoundError as exc:
         _exit_with_configuration_error(exc)
     except UnsupportedRuntimeConfigurationError as exc:
+        _exit_with_configuration_error(exc)
+    except InvalidConfigurationError as exc:
         _exit_with_configuration_error(exc)
     _echo_json(
         {

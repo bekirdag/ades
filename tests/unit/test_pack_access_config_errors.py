@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from ades.api import get_pack, pull_pack
+from ades.config import InvalidConfigurationError
 from ades.storage import UnsupportedRuntimeConfigurationError
 
 
@@ -56,5 +57,31 @@ def test_api_pull_rejects_invalid_runtime_target(
     with pytest.raises(
         UnsupportedRuntimeConfigurationError,
         match="Unsupported ades runtime target",
+    ):
+        pull_pack("general-en", storage_root=tmp_path)
+
+
+def test_api_get_pack_rejects_invalid_port_value(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config_path = tmp_path / "ades.toml"
+    config_path.write_text("port = 'not-a-port'\n", encoding="utf-8")
+    monkeypatch.setenv("ADES_CONFIG_FILE", str(config_path))
+
+    with pytest.raises(
+        InvalidConfigurationError,
+        match="Invalid ades port",
+    ):
+        get_pack("general-en", storage_root=tmp_path)
+
+
+def test_api_pull_rejects_invalid_port_value(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "ades.toml"
+    config_path.write_text("port = 'not-a-port'\n", encoding="utf-8")
+    monkeypatch.setenv("ADES_CONFIG_FILE", str(config_path))
+
+    with pytest.raises(
+        InvalidConfigurationError,
+        match="Invalid ades port",
     ):
         pull_pack("general-en", storage_root=tmp_path)
