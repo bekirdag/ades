@@ -4,6 +4,7 @@ import subprocess
 from typing import Callable
 from typing import Any
 
+from ades.service.models import ReleaseCommandResult
 from ades.version import __version__
 
 
@@ -260,6 +261,48 @@ def build_failed_release_runner(*, stderr: str) -> Callable[..., subprocess.Comp
     return runner
 
 
+def build_fake_service_smoke(
+    *,
+    version: str,
+    storage_root: Path,
+) -> tuple[ReleaseCommandResult, ReleaseCommandResult, ReleaseCommandResult, list[str]]:
+    """Return a deterministic fake `ades serve` smoke result."""
+
+    serve = ReleaseCommandResult(
+        command=["ades", "serve", "--host", "127.0.0.1", "--port", "8734"],
+        exit_code=0,
+        passed=True,
+        stdout=f"Using storage root: {storage_root}\n",
+        stderr="",
+    )
+    healthz = ReleaseCommandResult(
+        command=["GET", "http://127.0.0.1:8734/healthz"],
+        exit_code=0,
+        passed=True,
+        stdout=json.dumps({"status": "ok", "version": version}),
+        stderr="",
+    )
+    status = ReleaseCommandResult(
+        command=["GET", "http://127.0.0.1:8734/v0/status"],
+        exit_code=0,
+        passed=True,
+        stdout=json.dumps(
+            {
+                "service": "ades",
+                "version": version,
+                "runtime_target": "local",
+                "metadata_backend": "sqlite",
+                "storage_root": str(storage_root),
+                "host": "127.0.0.1",
+                "port": 8734,
+                "installed_packs": ["general-en"],
+            }
+        ),
+        stderr="",
+    )
+    return serve, healthz, status, ["general-en"]
+
+
 def patch_release_runner(monkeypatch: Any, runner: Callable[..., subprocess.CompletedProcess[str]]) -> None:
     """Patch both release command helpers to the same fake runner."""
 
@@ -267,4 +310,11 @@ def patch_release_runner(monkeypatch: Any, runner: Callable[..., subprocess.Comp
     monkeypatch.setattr(
         "ades.release._run_command_with_env",
         lambda command, *, cwd, env: runner(command, cwd=cwd),
+    )
+    monkeypatch.setattr(
+        "ades.release._run_cli_service_smoke",
+        lambda *, executable, working_dir, storage_root, expected_version, extra_env=None: build_fake_service_smoke(
+            version=expected_version,
+            storage_root=storage_root,
+        ),
     )

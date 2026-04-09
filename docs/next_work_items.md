@@ -1,11 +1,11 @@
 # ades Next Work Items
 
-Updated after completing installed-pack list metadata repair on 2026-04-09.
+Updated after completing clean-environment serve smoke validation on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Finish the remaining production-like clean-environment lifecycle checks around bootstrap, serve, and recovery behavior against published registry artifacts now that installed pull/tag smoke behavior is covered.
+   - Finish the remaining production-like clean-environment lifecycle checks around bootstrap and recovery behavior against published registry artifacts now that installed pull/tag and serve smoke behavior is covered.
    - Keep the rollback-safe install path, same-version metadata-repair semantics, and new dependency-chain guardrails stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
@@ -79,6 +79,12 @@ Updated after completing installed-pack list metadata repair on 2026-04-09.
    - repairs missing installed-pack metadata rows from on-disk manifests even when other valid SQLite rows still exist, so `list_packs`, `ades packs list`, and `/v0/packs` can heal inconsistent local registry state
    - keeps the existing public list and lookup contracts unchanged while restoring alias, rule, label, and dependency metadata for repaired packs
    - includes categorized unit, component, integration, and API coverage for list-driven metadata repair against published registry artifacts
+
+- Clean-environment serve smoke validation:
+   - implemented in `src/ades/release.py` and `src/ades/service/models.py`, with fake serve-smoke support in `tests/release_helpers.py`
+   - extends release smoke verification so both the installed wheel and npm wrapper launch `ades serve`, answer `/healthz` and `/v0/status`, and report served pack ids from the running local service before shutdown
+   - keeps the existing release verify/validate contracts additive by exposing `serve`, `serve_healthz`, `serve_status`, and `served_pack_ids` inside each smoke-install artifact result
+   - includes categorized unit, component, integration, and API coverage for successful serve startup and explicit serve-failure warnings in clean environments
 
 ## Not Next
 

@@ -9,10 +9,14 @@ import os
 from pathlib import Path
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Sequence
+import urllib.error
+import urllib.request
 
 from .distribution import (
     NPM_COMMAND_NAME,
@@ -59,6 +63,9 @@ NPM_ACCESS_ALIAS_ENV = "ADES_RELEASE_NPM_ACCESS"
 SMOKE_PULL_PACK_ID = "general-en"
 SMOKE_TAG_TEXT = "Contact OpenAI via smoke@example.com"
 SMOKE_TAG_REQUIRED_LABELS = ("organization", "email_address")
+SMOKE_SERVE_HOST = "127.0.0.1"
+SMOKE_SERVE_STARTUP_TIMEOUT_SECONDS = 20.0
+SMOKE_SERVE_POLL_INTERVAL_SECONDS = 0.2
 
 
 def _run_command(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -330,12 +337,18 @@ def _parse_last_json_object(output: str) -> dict[str, object] | None:
     return payload
 
 
-def _parse_status_version(result: ReleaseCommandResult) -> str | None:
-    """Extract the reported ades version from a JSON `ades status` payload."""
+def _parse_command_payload(result: ReleaseCommandResult) -> dict[str, object] | None:
+    """Return the JSON payload emitted by one successful command when present."""
 
     if not result.passed:
         return None
-    payload = _parse_last_json_object(result.stdout or "")
+    return _parse_last_json_object(result.stdout or "")
+
+
+def _parse_status_version(result: ReleaseCommandResult) -> str | None:
+    """Extract the reported ades version from a JSON `ades status` payload."""
+
+    payload = _parse_command_payload(result)
     if payload is None:
         return None
     version = payload.get("version")
@@ -345,9 +358,7 @@ def _parse_status_version(result: ReleaseCommandResult) -> str | None:
 def _parse_pull_pack_ids(result: ReleaseCommandResult) -> list[str]:
     """Extract pack ids reported by one JSON `ades pull` payload."""
 
-    if not result.passed:
-        return []
-    payload = _parse_last_json_object(result.stdout or "")
+    payload = _parse_command_payload(result)
     if payload is None:
         return []
     pack_ids: list[str] = []
@@ -364,9 +375,7 @@ def _parse_pull_pack_ids(result: ReleaseCommandResult) -> list[str]:
 def _parse_tag_labels(result: ReleaseCommandResult) -> list[str]:
     """Extract entity labels reported by one JSON `ades tag` payload."""
 
-    if not result.passed:
-        return []
-    payload = _parse_last_json_object(result.stdout or "")
+    payload = _parse_command_payload(result)
     if payload is None:
         return []
     entities = payload.get("entities")
@@ -380,6 +389,73 @@ def _parse_tag_labels(result: ReleaseCommandResult) -> list[str]:
         if isinstance(label, str) and label:
             labels.append(label)
     return list(dict.fromkeys(labels))
+
+
+def _parse_status_installed_pack_ids(result: ReleaseCommandResult) -> list[str]:
+    """Extract installed pack ids reported by one JSON status payload."""
+
+    payload = _parse_command_payload(result)
+    if payload is None:
+        return []
+    installed_packs = payload.get("installed_packs")
+    if not isinstance(installed_packs, list):
+        return []
+    return [str(value) for value in installed_packs if isinstance(value, str) and value]
+
+
+def _healthz_matches_expected(
+    result: ReleaseCommandResult,
+    *,
+    expected_version: str,
+) -> bool:
+    """Return whether one healthz response reported the expected service state."""
+
+    payload = _parse_command_payload(result)
+    if payload is None:
+        return False
+    return payload.get("status") == "ok" and payload.get("version") == expected_version
+
+
+def _reserve_loopback_port(host: str) -> int:
+    """Return one currently-free loopback TCP port."""
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as handle:
+        handle.bind((host, 0))
+        return int(handle.getsockname()[1])
+
+
+def _probe_http_endpoint(url: str) -> ReleaseCommandResult:
+    """Fetch one localhost endpoint and capture the response as a command result."""
+
+    command = ["GET", url]
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=2.0) as response:
+            body = response.read().decode("utf-8", errors="replace")
+            return ReleaseCommandResult(
+                command=command,
+                exit_code=0 if 200 <= response.status < 300 else int(response.status),
+                passed=200 <= response.status < 300,
+                stdout=body,
+                stderr="",
+            )
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        return ReleaseCommandResult(
+            command=command,
+            exit_code=int(exc.code),
+            passed=False,
+            stdout=body,
+            stderr=str(exc),
+        )
+    except Exception as exc:
+        return ReleaseCommandResult(
+            command=command,
+            exit_code=1,
+            passed=False,
+            stdout="",
+            stderr=str(exc),
+        )
 
 
 def _sha256(path: Path) -> str:
@@ -458,6 +534,98 @@ def _run_cli_runtime_smoke(
         _parse_pull_pack_ids(pull),
         _parse_tag_labels(tag),
     )
+
+
+def _run_cli_service_smoke(
+    *,
+    executable: Path,
+    working_dir: Path,
+    storage_root: Path,
+    expected_version: str,
+    extra_env: dict[str, str] | None = None,
+) -> tuple[
+    ReleaseCommandResult,
+    ReleaseCommandResult,
+    ReleaseCommandResult,
+    list[str],
+]:
+    """Run one clean-environment `ades serve` smoke check and probe its endpoints."""
+
+    env_overrides = {"ADES_STORAGE_ROOT": str(storage_root)}
+    if extra_env:
+        env_overrides.update(extra_env)
+    smoke_env = _build_clean_runtime_env(overrides=env_overrides)
+
+    port = _reserve_loopback_port(SMOKE_SERVE_HOST)
+    serve_command = [
+        str(executable),
+        "serve",
+        "--host",
+        SMOKE_SERVE_HOST,
+        "--port",
+        str(port),
+    ]
+    healthz_url = f"http://{SMOKE_SERVE_HOST}:{port}/healthz"
+    status_url = f"http://{SMOKE_SERVE_HOST}:{port}/v0/status"
+    process = subprocess.Popen(
+        serve_command,
+        cwd=working_dir,
+        env=smoke_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    serve_healthz = ReleaseCommandResult(
+        command=["GET", healthz_url],
+        exit_code=1,
+        passed=False,
+        stdout="",
+        stderr="Service did not become ready before the health probe completed.",
+    )
+    serve_status = _skipped_command_result(
+        ["GET", status_url],
+        reason="Skipped because service startup did not pass the health probe.",
+    )
+    started = False
+    serve_stdout = ""
+    serve_stderr = ""
+    try:
+        deadline = time.monotonic() + SMOKE_SERVE_STARTUP_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            serve_healthz = _probe_http_endpoint(healthz_url)
+            if serve_healthz.passed:
+                started = True
+                break
+            if process.poll() is not None:
+                break
+            time.sleep(SMOKE_SERVE_POLL_INTERVAL_SECONDS)
+        if started:
+            serve_status = _probe_http_endpoint(status_url)
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=10.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=10.0)
+        try:
+            serve_stdout, serve_stderr = process.communicate(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            serve_stdout = ""
+            serve_stderr = ""
+    serve = ReleaseCommandResult(
+        command=serve_command,
+        exit_code=0 if started else (process.returncode if process.returncode is not None else 1),
+        passed=started,
+        stdout=serve_stdout,
+        stderr=serve_stderr,
+    )
+    served_pack_ids = _parse_status_installed_pack_ids(serve_status)
+    served_version = _parse_status_version(serve_status)
+    if started and served_version == expected_version and SMOKE_PULL_PACK_ID in served_pack_ids:
+        return serve, serve_healthz, serve_status, served_pack_ids
+    return serve, serve_healthz, serve_status, served_pack_ids
 
 
 def _resolve_single_artifact(
@@ -656,6 +824,19 @@ def _run_python_install_smoke(
                 tag_command,
                 reason="Skipped because virtual environment creation failed.",
             )
+            serve_command = [str(executable), "serve", "--host", SMOKE_SERVE_HOST, "--port", "0"]
+            serve = _skipped_command_result(
+                serve_command,
+                reason="Skipped because virtual environment creation failed.",
+            )
+            serve_healthz = _skipped_command_result(
+                ["GET", f"http://{SMOKE_SERVE_HOST}:0/healthz"],
+                reason="Skipped because virtual environment creation failed.",
+            )
+            serve_status = _skipped_command_result(
+                ["GET", f"http://{SMOKE_SERVE_HOST}:0/v0/status"],
+                reason="Skipped because virtual environment creation failed.",
+            )
             return ReleaseInstallSmokeResult(
                 artifact_kind="python_wheel",
                 working_dir=str(working_dir),
@@ -665,6 +846,9 @@ def _run_python_install_smoke(
                 invoke=invoke,
                 pull=pull,
                 tag=tag,
+                serve=serve,
+                serve_healthz=serve_healthz,
+                serve_status=serve_status,
                 passed=False,
                 reported_version=None,
             )
@@ -692,6 +876,35 @@ def _run_python_install_smoke(
                 working_dir=working_dir,
                 storage_root=storage_root,
             )
+            if tag.passed:
+                serve, serve_healthz, serve_status, served_pack_ids = _run_cli_service_smoke(
+                    executable=executable,
+                    working_dir=working_dir,
+                    storage_root=storage_root,
+                    expected_version=expected_version,
+                )
+            else:
+                serve_command = [
+                    str(executable),
+                    "serve",
+                    "--host",
+                    SMOKE_SERVE_HOST,
+                    "--port",
+                    "0",
+                ]
+                serve = _skipped_command_result(
+                    serve_command,
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                serve_healthz = _skipped_command_result(
+                    ["GET", f"http://{SMOKE_SERVE_HOST}:0/healthz"],
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                serve_status = _skipped_command_result(
+                    ["GET", f"http://{SMOKE_SERVE_HOST}:0/v0/status"],
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                served_pack_ids = []
         else:
             invoke_command = [str(executable), "status"]
             invoke = _skipped_command_result(
@@ -708,9 +921,23 @@ def _run_python_install_smoke(
                 tag_command,
                 reason="Skipped because wheel installation failed.",
             )
+            serve_command = [str(executable), "serve", "--host", SMOKE_SERVE_HOST, "--port", "0"]
+            serve = _skipped_command_result(
+                serve_command,
+                reason="Skipped because wheel installation failed.",
+            )
+            serve_healthz = _skipped_command_result(
+                ["GET", f"http://{SMOKE_SERVE_HOST}:0/healthz"],
+                reason="Skipped because wheel installation failed.",
+            )
+            serve_status = _skipped_command_result(
+                ["GET", f"http://{SMOKE_SERVE_HOST}:0/v0/status"],
+                reason="Skipped because wheel installation failed.",
+            )
             reported_version = None
             pulled_pack_ids = []
             tagged_labels = []
+            served_pack_ids = []
 
         required_labels = set(SMOKE_TAG_REQUIRED_LABELS)
         passed = (
@@ -721,6 +948,12 @@ def _run_python_install_smoke(
             and SMOKE_PULL_PACK_ID in pulled_pack_ids
             and tag.passed
             and required_labels.issubset(set(tagged_labels))
+            and serve.passed
+            and serve_healthz.passed
+            and _healthz_matches_expected(serve_healthz, expected_version=expected_version)
+            and serve_status.passed
+            and _parse_status_version(serve_status) == expected_version
+            and SMOKE_PULL_PACK_ID in served_pack_ids
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="python_wheel",
@@ -731,10 +964,14 @@ def _run_python_install_smoke(
             invoke=invoke,
             pull=pull,
             tag=tag,
+            serve=serve,
+            serve_healthz=serve_healthz,
+            serve_status=serve_status,
             passed=passed,
             reported_version=reported_version,
             pulled_pack_ids=pulled_pack_ids,
             tagged_labels=tagged_labels,
+            served_pack_ids=served_pack_ids,
         )
 
 
@@ -785,6 +1022,40 @@ def _run_npm_install_smoke(
                     NPM_RUNTIME_DIR_ENV: str(environment_dir),
                 },
             )
+            if tag.passed:
+                serve, serve_healthz, serve_status, served_pack_ids = _run_cli_service_smoke(
+                    executable=executable,
+                    working_dir=working_dir,
+                    storage_root=storage_root,
+                    expected_version=expected_version,
+                    extra_env={
+                        NPM_PYTHON_BIN_ENV: sys.executable,
+                        NPM_PYTHON_PACKAGE_SPEC_ENV: str(wheel_path),
+                        NPM_RUNTIME_DIR_ENV: str(environment_dir),
+                    },
+                )
+            else:
+                serve_command = [
+                    str(executable),
+                    "serve",
+                    "--host",
+                    SMOKE_SERVE_HOST,
+                    "--port",
+                    "0",
+                ]
+                serve = _skipped_command_result(
+                    serve_command,
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                serve_healthz = _skipped_command_result(
+                    ["GET", f"http://{SMOKE_SERVE_HOST}:0/healthz"],
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                serve_status = _skipped_command_result(
+                    ["GET", f"http://{SMOKE_SERVE_HOST}:0/v0/status"],
+                    reason="Skipped because post-pull tagging failed.",
+                )
+                served_pack_ids = []
         else:
             invoke_command = [str(executable), "status"]
             invoke = _skipped_command_result(
@@ -801,9 +1072,23 @@ def _run_npm_install_smoke(
                 tag_command,
                 reason="Skipped because npm tarball installation failed.",
             )
+            serve_command = [str(executable), "serve", "--host", SMOKE_SERVE_HOST, "--port", "0"]
+            serve = _skipped_command_result(
+                serve_command,
+                reason="Skipped because npm tarball installation failed.",
+            )
+            serve_healthz = _skipped_command_result(
+                ["GET", f"http://{SMOKE_SERVE_HOST}:0/healthz"],
+                reason="Skipped because npm tarball installation failed.",
+            )
+            serve_status = _skipped_command_result(
+                ["GET", f"http://{SMOKE_SERVE_HOST}:0/v0/status"],
+                reason="Skipped because npm tarball installation failed.",
+            )
             reported_version = None
             pulled_pack_ids = []
             tagged_labels = []
+            served_pack_ids = []
 
         required_labels = set(SMOKE_TAG_REQUIRED_LABELS)
         passed = (
@@ -814,6 +1099,12 @@ def _run_npm_install_smoke(
             and SMOKE_PULL_PACK_ID in pulled_pack_ids
             and tag.passed
             and required_labels.issubset(set(tagged_labels))
+            and serve.passed
+            and serve_healthz.passed
+            and _healthz_matches_expected(serve_healthz, expected_version=expected_version)
+            and serve_status.passed
+            and _parse_status_version(serve_status) == expected_version
+            and SMOKE_PULL_PACK_ID in served_pack_ids
         )
         return ReleaseInstallSmokeResult(
             artifact_kind="npm_tarball",
@@ -824,10 +1115,14 @@ def _run_npm_install_smoke(
             invoke=invoke,
             pull=pull,
             tag=tag,
+            serve=serve,
+            serve_healthz=serve_healthz,
+            serve_status=serve_status,
             passed=passed,
             reported_version=reported_version,
             pulled_pack_ids=pulled_pack_ids,
             tagged_labels=tagged_labels,
+            served_pack_ids=served_pack_ids,
         )
 
 
@@ -858,6 +1153,24 @@ def _smoke_install_warnings(
     missing_labels = sorted(set(SMOKE_TAG_REQUIRED_LABELS) - set(smoke_result.tagged_labels))
     if missing_labels:
         return [f"{prefix}_tag_missing_labels:{','.join(missing_labels)}"]
+    if smoke_result.serve is None or not smoke_result.serve.passed:
+        exit_code = None if smoke_result.serve is None else smoke_result.serve.exit_code
+        return [f"{prefix}_serve_failed:{exit_code}"]
+    if smoke_result.serve_healthz is None or not smoke_result.serve_healthz.passed:
+        exit_code = None if smoke_result.serve_healthz is None else smoke_result.serve_healthz.exit_code
+        return [f"{prefix}_serve_healthz_failed:{exit_code}"]
+    if not _healthz_matches_expected(smoke_result.serve_healthz, expected_version=expected_version):
+        return [f"{prefix}_serve_healthz_invalid"]
+    if smoke_result.serve_status is None or not smoke_result.serve_status.passed:
+        exit_code = None if smoke_result.serve_status is None else smoke_result.serve_status.exit_code
+        return [f"{prefix}_serve_status_failed:{exit_code}"]
+    served_version = _parse_status_version(smoke_result.serve_status)
+    if served_version is None:
+        return [f"{prefix}_serve_status_missing_reported_version"]
+    if served_version != expected_version:
+        return [f"{prefix}_serve_status_version_mismatch:{served_version}"]
+    if SMOKE_PULL_PACK_ID not in smoke_result.served_pack_ids:
+        return [f"{prefix}_serve_status_missing_pack:{SMOKE_PULL_PACK_ID}"]
     return []
 
 

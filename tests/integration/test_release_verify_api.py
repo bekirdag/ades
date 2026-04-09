@@ -44,16 +44,30 @@ def test_public_release_api_can_sync_versions_and_persist_manifest(
     assert verification.python_install_smoke.pull.passed is True
     assert verification.python_install_smoke.tag is not None
     assert verification.python_install_smoke.tag.passed is True
+    assert verification.python_install_smoke.serve is not None
+    assert verification.python_install_smoke.serve.passed is True
+    assert verification.python_install_smoke.serve_healthz is not None
+    assert verification.python_install_smoke.serve_healthz.passed is True
+    assert verification.python_install_smoke.serve_status is not None
+    assert verification.python_install_smoke.serve_status.passed is True
     assert "general-en" in verification.python_install_smoke.pulled_pack_ids
     assert {"organization", "email_address"} <= set(verification.python_install_smoke.tagged_labels)
+    assert "general-en" in verification.python_install_smoke.served_pack_ids
     assert verification.npm_install_smoke is not None
     assert verification.npm_install_smoke.passed is True
     assert verification.npm_install_smoke.pull is not None
     assert verification.npm_install_smoke.pull.passed is True
     assert verification.npm_install_smoke.tag is not None
     assert verification.npm_install_smoke.tag.passed is True
+    assert verification.npm_install_smoke.serve is not None
+    assert verification.npm_install_smoke.serve.passed is True
+    assert verification.npm_install_smoke.serve_healthz is not None
+    assert verification.npm_install_smoke.serve_healthz.passed is True
+    assert verification.npm_install_smoke.serve_status is not None
+    assert verification.npm_install_smoke.serve_status.passed is True
     assert "general-en" in verification.npm_install_smoke.pulled_pack_ids
     assert {"organization", "email_address"} <= set(verification.npm_install_smoke.tagged_labels)
+    assert "general-en" in verification.npm_install_smoke.served_pack_ids
     assert manifest.release_version == "0.3.0"
     assert manifest.verification.smoke_install is False
     assert manifest.verification.python_install_smoke is None

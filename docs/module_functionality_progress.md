@@ -30,7 +30,7 @@ Current goal: make the shipped local-tool modules operationally complete before 
 Focus: step 2, pack lifecycle hardening.
 
 Planned work:
-- add clean-environment serve, recovery, and bootstrap validation after the installed pull/tag smoke and list-repair slices
+- add clean-environment recovery and bootstrap validation after the installed pull/tag, list-repair, and serve-smoke slices
 - keep validating repeated idempotent pack operations and lifecycle recovery behavior against published registry artifacts
 - keep the new rollback-safe install semantics, list-driven metadata repair, and SQLite recovery behavior stable while finishing the remaining pack-lifecycle recovery work
 
@@ -58,3 +58,6 @@ Planned work:
 - 2026-04-09: hardened `src/ades/packs/registry.py` so installed-pack listing now repairs missing SQLite metadata rows from on-disk manifests even when other valid installed-pack rows still remain.
 - 2026-04-09: added categorized list-repair coverage in `tests/unit/test_pack_install_reactivation.py`, `tests/component/test_cli_pack_reactivation.py`, `tests/integration/test_pack_reactivation_api.py`, and `tests/api/test_pack_reactivation_endpoint.py`, with focused recovery validation passing at `21 passed`.
 - 2026-04-09: full repo release validation passed again after the list-repair slice through `docdexd run-tests --repo /home/wodo/apps/ades`, including `174 passed` under `pytest -q` plus successful Python/npm smoke-install checks.
+- 2026-04-09: extended `src/ades/release.py` so clean-environment release smoke verification now launches installed-artifact `ades serve` for both the wheel and npm wrapper, probes `/healthz` plus `/v0/status`, and records the running service results before shutdown.
+- 2026-04-09: extended `src/ades/service/models.py` plus `tests/release_helpers.py` and the categorized release verify tests so additive serve-smoke results and serve-failure warnings are covered across unit, component, integration, and API layers, with focused validation passing at `23 passed`.
+- 2026-04-09: full repo release validation passed again after the serve-smoke slice through `docdexd run-tests --repo /home/wodo/apps/ades`, including `175 passed` under `pytest -q` plus successful wheel/npm clean-environment serve probes.
