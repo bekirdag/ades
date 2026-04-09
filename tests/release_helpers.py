@@ -284,7 +284,14 @@ def build_fake_service_smoke(
     *,
     version: str,
     storage_root: Path,
-) -> tuple[ReleaseCommandResult, ReleaseCommandResult, ReleaseCommandResult, list[str]]:
+) -> tuple[
+    ReleaseCommandResult,
+    ReleaseCommandResult,
+    ReleaseCommandResult,
+    ReleaseCommandResult,
+    list[str],
+    list[str],
+]:
     """Return a deterministic fake `ades serve` smoke result."""
 
     serve = ReleaseCommandResult(
@@ -319,7 +326,43 @@ def build_fake_service_smoke(
         ),
         stderr="",
     )
-    return serve, healthz, status, ["general-en", "finance-en"]
+    serve_tag = ReleaseCommandResult(
+        command=["POST", "http://127.0.0.1:8734/v0/tag"],
+        exit_code=0,
+        passed=True,
+        stdout=json.dumps(
+            {
+                "version": version,
+                "pack": "finance-en",
+                "language": "en",
+                "content_type": "text/plain",
+                "entities": [
+                    {"text": "Apple", "label": "organization", "start": 0, "end": 5, "confidence": 1.0},
+                    {"text": "AAPL", "label": "ticker", "start": 11, "end": 15, "confidence": 1.0},
+                    {"text": "NASDAQ", "label": "exchange", "start": 26, "end": 32, "confidence": 1.0},
+                    {
+                        "text": "USD 12.5",
+                        "label": "currency_amount",
+                        "start": 39,
+                        "end": 47,
+                        "confidence": 0.9,
+                    },
+                ],
+                "topics": [],
+                "warnings": [],
+                "timing_ms": 1,
+            }
+        ),
+        stderr="",
+    )
+    return (
+        serve,
+        healthz,
+        status,
+        serve_tag,
+        ["general-en", "finance-en"],
+        ["organization", "ticker", "exchange", "currency_amount"],
+    )
 
 
 def build_fake_recovery_status(

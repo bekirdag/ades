@@ -191,12 +191,14 @@ class ReleaseInstallSmokeResult(BaseModel):
     serve: ReleaseCommandResult | None = None
     serve_healthz: ReleaseCommandResult | None = None
     serve_status: ReleaseCommandResult | None = None
+    serve_tag: ReleaseCommandResult | None = None
     passed: bool
     reported_version: str | None = None
     pulled_pack_ids: list[str] = Field(default_factory=list)
     tagged_labels: list[str] = Field(default_factory=list)
     recovered_pack_ids: list[str] = Field(default_factory=list)
     served_pack_ids: list[str] = Field(default_factory=list)
+    serve_tagged_labels: list[str] = Field(default_factory=list)
 
 
 class ReleaseValidationSummary(BaseModel):

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -85,12 +86,17 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert response.python_install_smoke.serve_healthz.passed is True
     assert response.python_install_smoke.serve_status is not None
     assert response.python_install_smoke.serve_status.passed is True
+    assert response.python_install_smoke.serve_tag is not None
+    assert response.python_install_smoke.serve_tag.passed is True
     assert {"general-en", "finance-en"} <= set(response.python_install_smoke.pulled_pack_ids)
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         response.python_install_smoke.tagged_labels
     )
     assert {"general-en", "finance-en"} <= set(response.python_install_smoke.recovered_pack_ids)
     assert {"general-en", "finance-en"} <= set(response.python_install_smoke.served_pack_ids)
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        response.python_install_smoke.serve_tagged_labels
+    )
     assert response.npm_install_smoke is not None
     assert response.npm_install_smoke.passed is True
     assert response.npm_install_smoke.reported_version == __version__
@@ -106,12 +112,17 @@ def test_verify_release_artifacts_builds_and_hashes_expected_outputs(
     assert response.npm_install_smoke.serve_healthz.passed is True
     assert response.npm_install_smoke.serve_status is not None
     assert response.npm_install_smoke.serve_status.passed is True
+    assert response.npm_install_smoke.serve_tag is not None
+    assert response.npm_install_smoke.serve_tag.passed is True
     assert {"general-en", "finance-en"} <= set(response.npm_install_smoke.pulled_pack_ids)
     assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
         response.npm_install_smoke.tagged_labels
     )
     assert {"general-en", "finance-en"} <= set(response.npm_install_smoke.recovered_pack_ids)
     assert {"general-en", "finance-en"} <= set(response.npm_install_smoke.served_pack_ids)
+    assert {"organization", "ticker", "exchange", "currency_amount"} <= set(
+        response.npm_install_smoke.serve_tagged_labels
+    )
     assert len(response.wheel.sha256) == 64
     assert len(response.sdist.sha256) == 64
     assert len(response.npm_tarball.sha256) == 64
@@ -277,7 +288,24 @@ def test_verify_release_artifacts_reports_serve_smoke_failures(
                     ),
                     stderr="",
                 ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(
+                        {
+                            "entities": [
+                                {"label": "organization"},
+                                {"label": "ticker"},
+                                {"label": "exchange"},
+                                {"label": "currency_amount"},
+                            ]
+                        }
+                    ),
+                    stderr="",
+                ),
                 ["general-en", "finance-en"],
+                ["organization", "ticker", "exchange", "currency_amount"],
             )
         return (
             ReleaseCommandResult(
@@ -301,6 +329,14 @@ def test_verify_release_artifacts_reports_serve_smoke_failures(
                 stdout="",
                 stderr="Skipped because service startup did not pass the health probe.",
             ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag"],
+                exit_code=-1,
+                passed=False,
+                stdout="",
+                stderr="Skipped because service startup did not pass the health probe.",
+            ),
+            [],
             [],
         )
 
@@ -315,6 +351,112 @@ def test_verify_release_artifacts_reports_serve_smoke_failures(
     assert response.npm_install_smoke.serve.exit_code == 9
     assert response.npm_install_smoke.serve.stderr == "serve failed"
     assert response.warnings == ["npm_tarball_serve_failed:9"]
+
+
+def test_verify_release_artifacts_reports_live_service_tag_failures(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project_root, npm_package_dir = create_release_project(tmp_path / "repo")
+    monkeypatch.setattr("ades.release.resolve_project_root", lambda: project_root)
+    monkeypatch.setattr("ades.release.resolve_npm_package_dir", lambda: npm_package_dir)
+    patch_release_runner(monkeypatch, build_fake_release_runner())
+
+    def fake_service_smoke(*, executable, working_dir, storage_root, expected_version, extra_env=None):
+        if "node_modules/.bin" not in str(executable):
+            return (
+                ReleaseCommandResult(
+                    command=[str(executable), "serve"],
+                    exit_code=0,
+                    passed=True,
+                    stdout="Using storage root\n",
+                    stderr="",
+                ),
+                ReleaseCommandResult(
+                    command=["GET", "http://127.0.0.1:8734/healthz"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=f'{{"status":"ok","version":"{expected_version}"}}',
+                    stderr="",
+                ),
+                ReleaseCommandResult(
+                    command=["GET", "http://127.0.0.1:8734/v0/status"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=(
+                        '{"service":"ades","version":"'
+                        + expected_version
+                        + '","installed_packs":["general-en","finance-en"]}'
+                    ),
+                    stderr="",
+                ),
+                ReleaseCommandResult(
+                    command=["POST", "http://127.0.0.1:8734/v0/tag"],
+                    exit_code=0,
+                    passed=True,
+                    stdout=json.dumps(
+                        {
+                            "entities": [
+                                {"label": "organization"},
+                                {"label": "ticker"},
+                                {"label": "exchange"},
+                                {"label": "currency_amount"},
+                            ]
+                        }
+                    ),
+                    stderr="",
+                ),
+                ["general-en", "finance-en"],
+                ["organization", "ticker", "exchange", "currency_amount"],
+            )
+        return (
+            ReleaseCommandResult(
+                command=[str(executable), "serve"],
+                exit_code=0,
+                passed=True,
+                stdout="Using storage root\n",
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["GET", "http://127.0.0.1:8734/healthz"],
+                exit_code=0,
+                passed=True,
+                stdout=f'{{"status":"ok","version":"{expected_version}"}}',
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["GET", "http://127.0.0.1:8734/v0/status"],
+                exit_code=0,
+                passed=True,
+                stdout=(
+                    '{"service":"ades","version":"'
+                    + expected_version
+                    + '","installed_packs":["general-en","finance-en"]}'
+                ),
+                stderr="",
+            ),
+            ReleaseCommandResult(
+                command=["POST", "http://127.0.0.1:8734/v0/tag"],
+                exit_code=12,
+                passed=False,
+                stdout="",
+                stderr="tag endpoint failed",
+            ),
+            ["general-en", "finance-en"],
+            [],
+        )
+
+    monkeypatch.setattr("ades.release._run_cli_service_smoke", fake_service_smoke)
+
+    response = verify_release_artifacts(output_dir=tmp_path / "dist")
+
+    assert response.overall_success is False
+    assert response.npm_install_smoke is not None
+    assert response.npm_install_smoke.serve_tag is not None
+    assert response.npm_install_smoke.serve_tag.passed is False
+    assert response.npm_install_smoke.serve_tag.exit_code == 12
+    assert response.npm_install_smoke.serve_tag.stderr == "tag endpoint failed"
+    assert response.warnings == ["npm_tarball_serve_tag_failed:12"]
 
 
 def test_verify_release_artifacts_reports_recovery_status_failures(

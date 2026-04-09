@@ -1,11 +1,11 @@
 # ades Next Work Items
 
-Updated after completing dependency-bearing release smoke validation for installed artifacts on 2026-04-09.
+Updated after completing live service-tag smoke validation for installed artifacts on 2026-04-09.
 
 ## Priority Queue
 
 1. Pack lifecycle hardening
-   - Extend the installed-artifact release smoke from health/status probes to a real live-service tagging request after `finance-en` pull and metadata recovery, so the packaged serve path proves end-to-end tagging instead of only startup visibility.
+   - Extend the installed-artifact release smoke from live `POST /v0/tag` to live `POST /v0/tag/file` requests after `finance-en` pull and metadata recovery, so the packaged serve path proves filesystem-backed HTTP tagging instead of only text-input service tagging.
    - Keep the rollback-safe install path, same-version metadata-repair semantics, direct lookup-repair semantics, dependency-chain guardrails, and dependency-bearing release smoke stable while closing the remaining pack-lifecycle gaps.
 
 2. Storage and metadata recovery
@@ -108,6 +108,12 @@ Updated after completing dependency-bearing release smoke validation for install
    - extends release smoke verification so both the installed wheel and npm wrapper pull `finance-en`, tag with `--pack finance-en`, and keep both `general-en` and `finance-en` visible through pull, recovery, and serve status checks
    - proves the packaged artifacts emit `organization`, `ticker`, `exchange`, and `currency_amount` labels from the finance-pack dependency chain instead of only validating a base-pack tagging path
    - includes categorized unit, component, integration, and API coverage for the stronger finance-pack smoke contract
+
+- Live service-tag smoke validation for installed artifacts:
+   - implemented in `src/ades/release.py` and `src/ades/service/models.py`, with fake-runner updates in `tests/release_helpers.py`
+   - extends release smoke verification so both the installed wheel and npm wrapper now send a real `POST /v0/tag` request after finance-pack pull, metadata bootstrap recovery, and `ades serve` startup
+   - keeps the release verify/validate contracts additive by exposing `serve_tag` and `serve_tagged_labels` inside each smoke-install artifact result
+   - includes categorized unit, component, integration, and API coverage for successful live service tagging and explicit `serve_tag` failure warnings
 
 ## Not Next
 
