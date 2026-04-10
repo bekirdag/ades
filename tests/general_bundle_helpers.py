@@ -48,6 +48,18 @@ def create_general_raw_snapshots(root: Path) -> dict[str, Path]:
                         "label": "Anthropic",
                         "aliases": [],
                     },
+                    {
+                        "id": "Q7",
+                        "entity_type": "person",
+                        "label": "Sam Altman",
+                        "aliases": [],
+                    },
+                    {
+                        "id": "Q8",
+                        "entity_type": "organization",
+                        "label": "Google DeepMind",
+                        "aliases": ["DeepMind Technologies"],
+                    },
                 ]
             },
             indent=2,
@@ -155,6 +167,30 @@ def create_general_remote_sources(root: Path) -> dict[str, str]:
                         "aliases": {
                             "en": [
                                 {"value": "Anthropic PBC"},
+                            ]
+                        },
+                    },
+                    "Q7407093": {
+                        "id": "Q7407093",
+                        "labels": {"en": {"value": "Sam Altman"}},
+                        "aliases": {
+                            "en": [
+                                {"value": "Samuel Altman"},
+                                {"value": "Samuel Harris Altman"},
+                                {"value": "Sam Harris Altman"},
+                            ]
+                        },
+                    },
+                    "Q15733006": {
+                        "id": "Q15733006",
+                        "labels": {"en": {"value": "Google DeepMind"}},
+                        "aliases": {
+                            "en": [
+                                {"value": "DeepMind Technologies Limited"},
+                                {"value": "DeepMind Technologies Limited (London)"},
+                                {"value": "DeepMind Technologies"},
+                                {"value": "deepmind.com"},
+                                {"value": "Google Deep Mind"},
                             ]
                         },
                     },

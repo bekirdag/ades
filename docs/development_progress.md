@@ -219,6 +219,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Kept exact-alias lookup unchanged for the tagger hot path and exposed the broader search through the existing public API, `ades packs lookup`, and `GET /v0/lookup` rather than introducing a second lookup surface.
 - Added categorized unit, component, integration, and API coverage for the broader candidate-search behavior and verified the repo through `docdexd run-tests --repo /home/wodo/apps/ades`, including full `pytest -q` with `142 passed`.
 
+### 31. Bounded real-source `general-en` follow-on expansion
+
+- Widened the bounded live `general-en` Wikidata seed set with `Sam Altman` and `Google DeepMind` while preserving the zero-ambiguity dependency contract required by `medical-en`.
+- Added a follow-on generated-pack quality case that proves the new organization through the low-noise alias `DeepMind Technologies`, which avoids the existing standalone `Google` entity from producing an unexpected extra hit in the quality gate.
+- Updated the raw snapshot fixtures plus the categorized unit, component, integration, and API coverage so the synthetic builder/source/quality surfaces stay aligned with the widened live seed set.
+- Revalidated the bounded live `general-en` slice on `2026-04-10`, which now passes cleanly at `wikidata_entity_count=11`, `entity_record_count=15`, `alias_count=226`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`.
+
 ### 31. Real finance-source ingestion and live bundle tuning
 
 - Added a reproducible finance-source fetcher in `src/ades/packs/finance_sources.py` plus public Python, CLI, and localhost service surfaces so dated SEC and Nasdaq source snapshots can be downloaded directly into `/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/<snapshot>/` instead of being staged by hand.

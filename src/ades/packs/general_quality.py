@@ -60,6 +60,14 @@ DEFAULT_GENERAL_QUALITY_CASES: tuple[PackQualityCase, ...] = (
         ),
     ),
     PackQualityCase(
+        name="bounded-wikidata-follow-on-expansion",
+        text="Sam Altman visited DeepMind Technologies after the launch.",
+        expected_entities=(
+            PackQualityEntity(text="Sam Altman", label="person"),
+            PackQualityEntity(text="DeepMind Technologies", label="organization"),
+        ),
+    ),
+    PackQualityCase(
         name="non-hit",
         text="Ordinary weather notes and lunch plans stay untagged here.",
         expected_entities=(),

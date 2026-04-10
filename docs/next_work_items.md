@@ -5,7 +5,8 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. Real upstream bundle ingestion and quality tuning
-   - Evaluate whether the next bounded `general-en` additions should come from more Wikidata entities or a carefully curated location slice, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
+   - Evaluate whether the next bounded `general-en` additions should come from another carefully chosen Wikidata entity pair or from a curated location slice, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
+   - If the next safe entities require short or noisy aliases, prefer adding a targeted alias-pruning rule before widening the seed set rather than weakening the zero-unexpected-hit quality gate.
 
 2. End-to-end production-readiness validation
    - Keep extending clean-environment release validation so installed artifacts prove the real shipped wheel/npm behavior together rather than only through narrower source-tree regressions.
@@ -20,6 +21,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Bounded real-source `general-en` follow-on Wikidata expansion:
+  - implemented in `src/ades/packs/general_sources.py` and `src/ades/packs/general_quality.py`, with fixture and surface coverage updates in the general bundle/source/quality tests
+  - expands the bounded Wikidata seed set with `Sam Altman` and `Google DeepMind`, then proves the follow-on additions through the generated-pack quality gate using the low-noise `DeepMind Technologies` alias instead of only through raw fetch counts
+  - revalidates the bounded live general slice at `wikidata_entity_count=11`, `entity_record_count=15`, `alias_count=226`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`, keeping the dependency pack zero-ambiguity compatible for `medical-en`
 
 - Bounded real-source `general-en` Wikidata organization expansion:
   - implemented in `src/ades/packs/general_sources.py` and `src/ades/packs/general_quality.py`, with fixture and surface coverage updates in the general bundle/source/quality tests
