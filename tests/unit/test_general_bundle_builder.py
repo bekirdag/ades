@@ -20,9 +20,9 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     assert result.version == "0.2.0"
     assert Path(result.sources_lock_path).exists()
     assert result.source_count == 3
-    assert result.entity_record_count == 5
+    assert result.entity_record_count == 7
     assert result.rule_record_count == 2
-    assert result.wikidata_entity_count == 2
+    assert result.wikidata_entity_count == 4
     assert result.geonames_location_count == 2
     assert result.curated_entity_count == 1
     assert result.warnings == []
@@ -72,6 +72,14 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     )
     assert any(
         item["entity_type"] == "location" and item["canonical_text"] == "London"
+        for item in entity_records
+    )
+    assert any(
+        item["entity_type"] == "person" and item["canonical_text"] == "Satya Nadella"
+        for item in entity_records
+    )
+    assert any(
+        item["entity_type"] == "person" and item["canonical_text"] == "Jensen Huang"
         for item in entity_records
     )
 

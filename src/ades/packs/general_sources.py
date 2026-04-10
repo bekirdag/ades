@@ -21,7 +21,7 @@ DEFAULT_GENERAL_SOURCE_OUTPUT_ROOT = Path(
 )
 DEFAULT_WIKIDATA_URL = (
     "https://www.wikidata.org/w/api.php?action=wbgetentities&"
-    "ids=Q265852|Q2283|Q95|Q3884|Q380&languages=en&props=labels|aliases&format=json"
+    "ids=Q265852|Q2283|Q95|Q3884|Q380|Q7426870|Q305177&languages=en&props=labels|aliases&format=json"
 )
 DEFAULT_GEONAMES_PLACES_URL = "https://download.geonames.org/export/dump/cities15000.zip"
 DEFAULT_SOURCE_FETCH_USER_AGENT = "ades/0.1.0 (ops@adestool.com)"
@@ -32,6 +32,8 @@ DEFAULT_WIKIDATA_ENTITY_TYPES: dict[str, str] = {
     "Q95": "organization",
     "Q3884": "organization",
     "Q380": "organization",
+    "Q7426870": "person",
+    "Q305177": "person",
 }
 DEFAULT_CURATED_GENERAL_ENTITIES: tuple[dict[str, object], ...] = (
     {

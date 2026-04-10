@@ -27,5 +27,5 @@ def test_general_quality_endpoint_validates_generated_pack(tmp_path) -> None:
     payload = response.json()
     assert payload["pack_id"] == "general-en"
     assert payload["passed"] is True
-    assert payload["expected_entity_count"] == 10
-    assert payload["alias_count"] == 10
+    assert payload["expected_entity_count"] == 13
+    assert payload["alias_count"] == 12

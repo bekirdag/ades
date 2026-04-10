@@ -23,4 +23,4 @@ def test_public_api_can_validate_generated_general_pack_quality(
     assert report.passed is True
     assert report.pack_id == "general-en"
     assert report.expected_recall == 1.0
-    assert report.expected_entity_count == 10
+    assert report.expected_entity_count == 13

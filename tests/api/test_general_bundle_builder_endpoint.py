@@ -25,7 +25,7 @@ def test_general_bundle_builder_endpoint_creates_bundle_directory(tmp_path: Path
     assert response.status_code == 200
     payload = response.json()
     assert payload["pack_id"] == "general-en"
-    assert payload["entity_record_count"] == 5
+    assert payload["entity_record_count"] == 7
     assert Path(payload["sources_lock_path"]).exists()
 
     generated = generate_pack_source(

@@ -576,7 +576,8 @@ The local service currently exposes:
 - Every completed task must end with a git commit and push to the remote repository.
 
 - 2026-04-10: expanded the bounded real-source `general-en` GeoNames seed set by enabling London alongside Istanbul, added a generated-pack quality case for the `Londres` alias, and revalidated the bounded live general slice at `entity_record_count=9`, `alias_count=206`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`.
+- 2026-04-10: widened the bounded real-source `general-en` Wikidata seed set with `Satya Nadella` and `Jensen Huang`, added a generated-pack quality case for both names, and revalidated the bounded live general slice at `entity_record_count=11`, `alias_count=213`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`.
 
 ## Current Next Step
 
-- Continue widening the bounded real-source `general-en` seed set from high-signal Wikidata additions while keeping the current zero-ambiguity quality contract intact for the dependency pack that `medical-en` relies on.
+- Continue widening the bounded real-source `general-en` seed set from carefully selected organization additions while keeping the current zero-ambiguity quality contract intact for the dependency pack that `medical-en` relies on.

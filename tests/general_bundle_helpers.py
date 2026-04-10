@@ -24,6 +24,18 @@ def create_general_raw_snapshots(root: Path) -> dict[str, Path]:
                         "label": "OpenAI",
                         "aliases": ["Open AI"],
                     },
+                    {
+                        "id": "Q3",
+                        "entity_type": "person",
+                        "label": "Satya Nadella",
+                        "aliases": [],
+                    },
+                    {
+                        "id": "Q4",
+                        "entity_type": "person",
+                        "label": "Jensen Huang",
+                        "aliases": [],
+                    },
                 ]
             },
             indent=2,
@@ -95,6 +107,24 @@ def create_general_remote_sources(root: Path) -> dict[str, str]:
                         "aliases": {
                             "en": [
                                 {"value": "Microsoft Corporation"},
+                            ]
+                        },
+                    },
+                    "Q7426870": {
+                        "id": "Q7426870",
+                        "labels": {"en": {"value": "Satya Nadella"}},
+                        "aliases": {
+                            "en": [
+                                {"value": "Satya Narayana Nadella"},
+                            ]
+                        },
+                    },
+                    "Q305177": {
+                        "id": "Q305177",
+                        "labels": {"en": {"value": "Jensen Huang"}},
+                        "aliases": {
+                            "en": [
+                                {"value": "Jen-Hsun Huang"},
                             ]
                         },
                     },

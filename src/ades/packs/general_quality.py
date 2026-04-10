@@ -43,6 +43,15 @@ DEFAULT_GENERAL_QUALITY_CASES: tuple[PackQualityCase, ...] = (
         ),
     ),
     PackQualityCase(
+        name="bounded-wikidata-person-expansion",
+        text="Satya Nadella met Jensen Huang in London after the keynote.",
+        expected_entities=(
+            PackQualityEntity(text="Satya Nadella", label="person"),
+            PackQualityEntity(text="Jensen Huang", label="person"),
+            PackQualityEntity(text="London", label="location"),
+        ),
+    ),
+    PackQualityCase(
         name="non-hit",
         text="Ordinary weather notes and lunch plans stay untagged here.",
         expected_entities=(),
