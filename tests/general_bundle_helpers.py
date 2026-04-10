@@ -38,6 +38,7 @@ def create_general_raw_snapshots(root: Path) -> dict[str, Path]:
             [
                 "geonameid|name|alternatenames|feature_class|feature_code|country_code",
                 "745044|Istanbul|Constantinople,Byzantium|P|PPLA|TR",
+                "2643743|London|Londres|P|PPLC|GB",
             ]
         )
         + "\n",

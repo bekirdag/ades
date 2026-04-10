@@ -16,4 +16,5 @@ def test_public_api_can_fetch_general_source_snapshot(tmp_path: Path) -> None:
 
     assert result.pack_id == "general-en"
     assert result.snapshot == "2026-04-10"
+    assert result.geonames_location_count == 2
     assert Path(result.source_manifest_path).exists()

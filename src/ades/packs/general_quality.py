@@ -35,6 +35,14 @@ DEFAULT_GENERAL_QUALITY_CASES: tuple[PackQualityCase, ...] = (
         ),
     ),
     PackQualityCase(
+        name="expanded-location-alias-match",
+        text="Apple opened a store in Londres before lunch.",
+        expected_entities=(
+            PackQualityEntity(text="Apple", label="organization"),
+            PackQualityEntity(text="Londres", label="location"),
+        ),
+    ),
+    PackQualityCase(
         name="non-hit",
         text="Ordinary weather notes and lunch plans stay untagged here.",
         expected_entities=(),

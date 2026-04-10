@@ -31,5 +31,6 @@ def test_cli_can_fetch_general_source_snapshot(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["pack_id"] == "general-en"
     assert payload["snapshot"] == "2026-04-10"
+    assert payload["geonames_location_count"] == 2
     assert Path(payload["source_manifest_path"]).exists()
     assert Path(payload["wikidata_entities_path"]).exists()

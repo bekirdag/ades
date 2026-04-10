@@ -25,7 +25,7 @@ DEFAULT_WIKIDATA_URL = (
 )
 DEFAULT_GEONAMES_PLACES_URL = "https://download.geonames.org/export/dump/cities15000.zip"
 DEFAULT_SOURCE_FETCH_USER_AGENT = "ades/0.1.0 (ops@adestool.com)"
-DEFAULT_GENERAL_GEONAMES_IDS: tuple[str, ...] = ("745044",)
+DEFAULT_GENERAL_GEONAMES_IDS: tuple[str, ...] = ("745044", "2643743")
 DEFAULT_WIKIDATA_ENTITY_TYPES: dict[str, str] = {
     "Q265852": "person",
     "Q2283": "organization",

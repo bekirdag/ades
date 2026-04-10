@@ -219,8 +219,8 @@ General quality-gate surfaces:
 
 General live-data note:
 
-- The first dated live `general-en` snapshot on `2026-04-10` validated cleanly at `expected_recall=1.0` and `precision=1.0` with `alias_count=96` and `ambiguous_alias_count=0`.
-- The initial live general slice intentionally uses a bounded real-source Wikidata seed set plus filtered GeoNames seed rows so the dependency pack stays zero-ambiguity compatible while the broader general-source expansion remains future work.
+- The bounded live `general-en` slice on `2026-04-10` currently validates cleanly at `expected_recall=1.0` and `precision=1.0` with `entity_record_count=9`, `alias_count=206`, and `ambiguous_alias_count=0`.
+- The current live general slice intentionally uses a bounded real-source Wikidata seed set plus two filtered GeoNames seed rows so the dependency pack stays zero-ambiguity compatible while the broader general-source expansion remains future work.
 
 Medical quality-gate surfaces:
 
