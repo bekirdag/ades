@@ -54,6 +54,7 @@ from .packs.reporting import report_generated_pack as run_report_generated_pack
 from .packs.publish import (
     build_static_registry,
     publish_registry_to_object_storage as run_publish_registry_to_object_storage,
+    smoke_test_published_registry as run_smoke_test_published_registry,
 )
 from .packs.registry import PackRegistry, load_registry_index
 from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load_tag_file
@@ -92,8 +93,10 @@ from .service.models import (
     RegistryPackQualityResponse,
     RegistryPublishedObject,
     RegistryPublishGeneratedReleaseResponse,
+    RegistryPublishedReleaseSmokeCaseResponse,
     RegistryRefreshGeneratedPacksResponse,
     RegistryRefreshPackResponse,
+    RegistrySmokePublishedReleaseResponse,
     RegistryValidateFinanceQualityResponse,
     RegistryGeneratePackResponse,
     RegistryReportPackResponse,
@@ -468,6 +471,50 @@ def publish_generated_registry_release(
                 size_bytes=item.size_bytes,
             )
             for item in result.objects
+        ],
+    )
+
+
+def smoke_test_published_generated_registry(
+    registry_url: str | Path,
+    *,
+    pack_ids: Iterable[str] = (),
+) -> RegistrySmokePublishedReleaseResponse:
+    """Validate clean consumer behavior for one published generated registry URL."""
+
+    result = run_smoke_test_published_registry(
+        registry_url,
+        pack_ids=list(pack_ids),
+    )
+    return RegistrySmokePublishedReleaseResponse(
+        registry_url=result.registry_url,
+        checked_at=result.checked_at,
+        fixture_profile=result.fixture_profile,
+        pack_count=result.pack_count,
+        passed_case_count=result.passed_case_count,
+        failed_case_count=result.failed_case_count,
+        passed=result.passed,
+        failures=result.failures,
+        cases=[
+            RegistryPublishedReleaseSmokeCaseResponse(
+                pack_id=case.pack_id,
+                text=case.text,
+                expected_installed_pack_ids=case.expected_installed_pack_ids,
+                pulled_pack_ids=case.pulled_pack_ids,
+                installed_pack_ids=case.installed_pack_ids,
+                missing_installed_pack_ids=case.missing_installed_pack_ids,
+                expected_entity_texts=case.expected_entity_texts,
+                matched_entity_texts=case.matched_entity_texts,
+                missing_entity_texts=case.missing_entity_texts,
+                tagged_entity_texts=case.tagged_entity_texts,
+                expected_labels=case.expected_labels,
+                matched_labels=case.matched_labels,
+                missing_labels=case.missing_labels,
+                tagged_labels=case.tagged_labels,
+                passed=case.passed,
+                failure=case.failure,
+            )
+            for case in result.cases
         ],
     )
 

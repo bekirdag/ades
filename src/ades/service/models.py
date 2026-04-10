@@ -617,6 +617,48 @@ class RegistryPublishGeneratedReleaseResponse(BaseModel):
     objects: list[RegistryPublishedObject] = Field(default_factory=list)
 
 
+class RegistrySmokePublishedReleaseRequest(BaseModel):
+    """Request body for smoking a published generated registry URL."""
+
+    registry_url: str
+    pack_ids: list[str] = Field(default_factory=list)
+
+
+class RegistryPublishedReleaseSmokeCaseResponse(BaseModel):
+    """One clean-consumer smoke case against a published registry URL."""
+
+    pack_id: str
+    text: str
+    expected_installed_pack_ids: list[str] = Field(default_factory=list)
+    pulled_pack_ids: list[str] = Field(default_factory=list)
+    installed_pack_ids: list[str] = Field(default_factory=list)
+    missing_installed_pack_ids: list[str] = Field(default_factory=list)
+    expected_entity_texts: list[str] = Field(default_factory=list)
+    matched_entity_texts: list[str] = Field(default_factory=list)
+    missing_entity_texts: list[str] = Field(default_factory=list)
+    tagged_entity_texts: list[str] = Field(default_factory=list)
+    expected_labels: list[str] = Field(default_factory=list)
+    matched_labels: list[str] = Field(default_factory=list)
+    missing_labels: list[str] = Field(default_factory=list)
+    tagged_labels: list[str] = Field(default_factory=list)
+    passed: bool
+    failure: str | None = None
+
+
+class RegistrySmokePublishedReleaseResponse(BaseModel):
+    """Response body for clean consumer smoke against a published registry URL."""
+
+    registry_url: str
+    checked_at: datetime
+    fixture_profile: str
+    pack_count: int
+    passed_case_count: int
+    failed_case_count: int
+    passed: bool
+    failures: list[str] = Field(default_factory=list)
+    cases: list[RegistryPublishedReleaseSmokeCaseResponse] = Field(default_factory=list)
+
+
 class NpmInstallerInfo(BaseModel):
     """Canonical npm-wrapper bootstrap metadata."""
 

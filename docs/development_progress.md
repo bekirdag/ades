@@ -504,6 +504,8 @@ This file records the implementation progress of `ades` as the project moves tow
 - `ades registry validate-general-quality <bundle-dir> --output-dir <dir>`
 - `ades registry validate-medical-quality <bundle-dir> --general-bundle-dir <dir> --output-dir <dir>`
 - `ades registry refresh-generated-packs <bundle-dir...> --output-dir <dir>`
+- `ades registry publish-generated-release <registry-dir> --prefix <object-storage-prefix>`
+- `ades registry smoke-published-release <registry-url>`
 - `ades packs list`
 - `ades packs list --available --registry-url <url>`
 - `ades packs activate`
@@ -528,6 +530,8 @@ The local service currently exposes:
 - `POST /v0/registry/validate-general-quality`
 - `POST /v0/registry/validate-medical-quality`
 - `POST /v0/registry/refresh-generated-packs`
+- `POST /v0/registry/publish-generated-release`
+- `POST /v0/registry/smoke-published-release`
 - `GET /v0/installers/npm`
 - `GET /v0/release/versions`
 - `POST /v0/release/sync-version`
@@ -563,4 +567,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Feed real upstream snapshots through the normalized bundle builders under `/mnt/githubActions/ades_big_data`, then tune ambiguity thresholds and quality fixtures against the resulting generated pack content so the current offline generation workflow moves from representative fixture data to real library-pack inputs.
+- Decide how reviewed generated releases graduate from object-storage prefixes into the hosted production registry path now that the published-registry consumer smoke gate is automated and the direct HTTPS release URL is already proven.

@@ -28,6 +28,7 @@ from ..api import (
     release_versions,
     refresh_generated_packs,
     remove_pack,
+    smoke_test_published_generated_registry,
     status,
     sync_release_version,
     tag,
@@ -78,6 +79,8 @@ from .models import (
     RegistryPackQualityResponse,
     RegistryPublishGeneratedReleaseRequest,
     RegistryPublishGeneratedReleaseResponse,
+    RegistrySmokePublishedReleaseRequest,
+    RegistrySmokePublishedReleaseResponse,
     RegistryRefreshGeneratedPacksRequest,
     RegistryRefreshGeneratedPacksResponse,
     RegistryValidateFinanceQualityRequest,
@@ -689,6 +692,25 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except NotADirectoryError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/smoke-published-release",
+        response_model=RegistrySmokePublishedReleaseResponse,
+    )
+    def runtime_smoke_published_release(
+        request: RegistrySmokePublishedReleaseRequest,
+    ) -> RegistrySmokePublishedReleaseResponse:
+        """Run clean pull/install/tag smoke against one published registry URL."""
+
+        try:
+            return smoke_test_published_generated_registry(
+                request.registry_url,
+                pack_ids=request.pack_ids,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

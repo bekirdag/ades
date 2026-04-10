@@ -28,6 +28,7 @@ from .api import report_generated_pack as api_report_generated_pack
 from .api import remove_pack as api_remove_pack
 from .api import release_versions as api_release_versions
 from .api import status as api_status
+from .api import smoke_test_published_generated_registry as api_smoke_test_published_generated_registry
 from .api import sync_release_version as api_sync_release_version
 from .api import tag as api_tag
 from .api import tag_file as api_tag_file
@@ -502,6 +503,35 @@ def registry_publish_generated_release(
     except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("smoke-published-release")
+def registry_smoke_published_release(
+    registry_url: str = typer.Argument(
+        ...,
+        help="Published registry index URL to smoke through clean pull/install/tag checks.",
+    ),
+    pack_ids: list[str] = typer.Option(
+        None,
+        "--pack-id",
+        help=(
+            "Optional pack id to smoke. Repeatable. "
+            "Defaults to the supported smoke packs present in the published registry."
+        ),
+    ),
+) -> None:
+    """Run clean consumer smoke against one published generated registry URL."""
+
+    try:
+        response = api_smoke_test_published_generated_registry(
+            registry_url,
+            pack_ids=pack_ids,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+    if not response.passed:
+        raise typer.Exit(code=1)
 
 
 @registry_app.command("validate-finance-quality")

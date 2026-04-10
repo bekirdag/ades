@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import hashlib
 import json
@@ -14,9 +14,14 @@ import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import httpx
 import zstandard
 
+from .fetch import normalize_source_url
+from .installer import PackInstaller
 from .manifest import PackArtifact, PackManifest, RegistryIndex, RegistryPack
+from .registry import PackRegistry, load_registry_index
+from ..pipeline.tagger import tag_text
 
 
 IGNORED_PACK_FILE_NAMES = {
@@ -81,6 +86,83 @@ class ObjectStoragePublishResult:
     delete: bool
     object_count: int
     objects: list[ObjectStoragePublishedObject]
+
+
+@dataclass(frozen=True)
+class PublishedRegistrySmokeCaseResult:
+    """Outcome for one clean-consumer smoke case against a published registry."""
+
+    pack_id: str
+    text: str
+    expected_installed_pack_ids: list[str] = field(default_factory=list)
+    pulled_pack_ids: list[str] = field(default_factory=list)
+    installed_pack_ids: list[str] = field(default_factory=list)
+    missing_installed_pack_ids: list[str] = field(default_factory=list)
+    expected_entity_texts: list[str] = field(default_factory=list)
+    matched_entity_texts: list[str] = field(default_factory=list)
+    missing_entity_texts: list[str] = field(default_factory=list)
+    tagged_entity_texts: list[str] = field(default_factory=list)
+    expected_labels: list[str] = field(default_factory=list)
+    matched_labels: list[str] = field(default_factory=list)
+    missing_labels: list[str] = field(default_factory=list)
+    tagged_labels: list[str] = field(default_factory=list)
+    passed: bool = True
+    failure: str | None = None
+
+
+@dataclass(frozen=True)
+class PublishedRegistrySmokeResult:
+    """Aggregate clean-consumer smoke result for one published registry URL."""
+
+    registry_url: str
+    checked_at: str
+    fixture_profile: str
+    pack_count: int
+    passed_case_count: int
+    failed_case_count: int
+    passed: bool
+    failures: list[str] = field(default_factory=list)
+    cases: list[PublishedRegistrySmokeCaseResult] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class _PublishedRegistrySmokeSpec:
+    """Deterministic smoke fixture for one published pack contract."""
+
+    pack_id: str
+    text: str
+    expected_installed_pack_ids: tuple[str, ...]
+    expected_entity_texts: tuple[str, ...]
+    expected_labels: tuple[str, ...]
+
+
+_PUBLISHED_REGISTRY_SMOKE_FIXTURE_PROFILE = "published_registry_consumer"
+_PUBLISHED_REGISTRY_SMOKE_SPECS: dict[str, _PublishedRegistrySmokeSpec] = {
+    "finance-en": _PublishedRegistrySmokeSpec(
+        pack_id="finance-en",
+        text="Apple said AAPL traded on NASDAQ after USD 12.5 guidance.",
+        expected_installed_pack_ids=("finance-en",),
+        expected_entity_texts=("Apple", "AAPL", "NASDAQ", "USD 12.5"),
+        expected_labels=("organization", "ticker", "exchange", "currency_amount"),
+    ),
+    "medical-en": _PublishedRegistrySmokeSpec(
+        pack_id="medical-en",
+        text=(
+            "BRCA1 and p53 protein were studied in NCT04280705 after "
+            "Aspirin 10 mg dosing for diabetes."
+        ),
+        expected_installed_pack_ids=("general-en", "medical-en"),
+        expected_entity_texts=(
+            "BRCA1",
+            "p53 protein",
+            "NCT04280705",
+            "Aspirin",
+            "10 mg",
+            "diabetes",
+        ),
+        expected_labels=("gene", "protein", "clinical_trial", "drug", "dosage", "disease"),
+    ),
+}
 
 
 def build_static_registry(
@@ -281,6 +363,38 @@ def publish_registry_to_object_storage(
     )
 
 
+def smoke_test_published_registry(
+    registry_url: str | Path,
+    *,
+    pack_ids: list[str] | tuple[str, ...] | None = None,
+) -> PublishedRegistrySmokeResult:
+    """Validate clean pull/install/tag behavior from a published registry URL."""
+
+    normalized_registry_url = normalize_source_url(registry_url)
+    index = _load_published_registry_index(normalized_registry_url)
+    requested_pack_ids = _resolve_smoke_pack_ids(index=index, pack_ids=pack_ids)
+    cases = [
+        _run_published_registry_smoke_case(
+            registry_url=normalized_registry_url,
+            spec=_PUBLISHED_REGISTRY_SMOKE_SPECS[pack_id],
+        )
+        for pack_id in requested_pack_ids
+    ]
+    failures = [case.failure for case in cases if case.failure]
+    passed_case_count = sum(1 for case in cases if case.passed)
+    return PublishedRegistrySmokeResult(
+        registry_url=normalized_registry_url,
+        checked_at=_utc_timestamp(),
+        fixture_profile=_PUBLISHED_REGISTRY_SMOKE_FIXTURE_PROFILE,
+        pack_count=len(cases),
+        passed_case_count=passed_case_count,
+        failed_case_count=len(cases) - passed_case_count,
+        passed=not failures and passed_case_count == len(cases),
+        failures=failures,
+        cases=cases,
+    )
+
+
 def _build_published_manifest(
     source_manifest: PackManifest,
     *,
@@ -445,6 +559,168 @@ def _parse_listed_objects(stdout: str) -> list[ObjectStoragePublishedObject]:
             )
         )
     return objects
+
+
+def _load_published_registry_index(registry_url: str) -> RegistryIndex:
+    """Load one published registry index with deterministic operator-facing errors."""
+
+    try:
+        return load_registry_index(registry_url)
+    except FileNotFoundError:
+        raise
+    except httpx.HTTPStatusError as exc:
+        if exc.response is not None and exc.response.status_code == 404:
+            raise FileNotFoundError(f"Published registry index not found: {registry_url}") from exc
+        raise ValueError(f"Unable to load published registry index: {registry_url}") from exc
+    except httpx.HTTPError as exc:
+        raise ValueError(f"Unable to load published registry index: {registry_url}") from exc
+
+
+def _resolve_smoke_pack_ids(
+    *,
+    index: RegistryIndex,
+    pack_ids: list[str] | tuple[str, ...] | None,
+) -> list[str]:
+    """Choose the published smoke cases to evaluate for one registry."""
+
+    if pack_ids:
+        requested_pack_ids = list(dict.fromkeys(pack_ids))
+        unsupported = [
+            pack_id
+            for pack_id in requested_pack_ids
+            if pack_id not in _PUBLISHED_REGISTRY_SMOKE_SPECS
+        ]
+        if unsupported:
+            raise ValueError(
+                "Unsupported published-registry smoke pack(s): "
+                + ", ".join(sorted(unsupported))
+            )
+        missing = [pack_id for pack_id in requested_pack_ids if pack_id not in index.packs]
+        if missing:
+            raise ValueError(
+                "Requested smoke pack(s) not present in published registry: "
+                + ", ".join(sorted(missing))
+            )
+        return requested_pack_ids
+
+    requested_pack_ids = [
+        pack_id for pack_id in _PUBLISHED_REGISTRY_SMOKE_SPECS if pack_id in index.packs
+    ]
+    if not requested_pack_ids:
+        raise ValueError(
+            "Published registry does not contain any supported smoke packs. "
+            f"Supported smoke packs: {', '.join(sorted(_PUBLISHED_REGISTRY_SMOKE_SPECS))}"
+        )
+    return requested_pack_ids
+
+
+def _run_published_registry_smoke_case(
+    *,
+    registry_url: str,
+    spec: _PublishedRegistrySmokeSpec,
+) -> PublishedRegistrySmokeCaseResult:
+    """Run one deterministic clean-consumer smoke case."""
+
+    pulled_pack_ids: list[str] = []
+    installed_pack_ids: list[str] = []
+    tagged_entity_texts: list[str] = []
+    tagged_labels: list[str] = []
+    matched_entity_texts: list[str] = []
+    missing_entity_texts = list(spec.expected_entity_texts)
+    matched_labels: list[str] = []
+    missing_labels = list(spec.expected_labels)
+    missing_installed_pack_ids = list(spec.expected_installed_pack_ids)
+    failure: str | None = None
+
+    try:
+        with tempfile.TemporaryDirectory(
+            prefix=f"ades-published-registry-smoke-{spec.pack_id}-"
+        ) as storage_root_str:
+            storage_root = Path(storage_root_str)
+            installer = PackInstaller(storage_root, registry_url=registry_url)
+            install_result = installer.install(spec.pack_id)
+            pulled_pack_ids = list(install_result.installed)
+            registry = PackRegistry(storage_root)
+            installed_pack_ids = sorted(
+                pack.pack_id for pack in registry.list_installed_packs()
+            )
+            tag_response = tag_text(
+                text=spec.text,
+                pack=spec.pack_id,
+                content_type="text/plain",
+                storage_root=storage_root,
+            )
+            tagged_entity_texts = sorted({entity.text for entity in tag_response.entities})
+            tagged_labels = sorted({entity.label for entity in tag_response.entities})
+            matched_entity_texts = [
+                value for value in spec.expected_entity_texts if value in tagged_entity_texts
+            ]
+            missing_entity_texts = [
+                value for value in spec.expected_entity_texts if value not in tagged_entity_texts
+            ]
+            matched_labels = [
+                value for value in spec.expected_labels if value in tagged_labels
+            ]
+            missing_labels = [
+                value for value in spec.expected_labels if value not in tagged_labels
+            ]
+            missing_installed_pack_ids = [
+                value
+                for value in spec.expected_installed_pack_ids
+                if value not in installed_pack_ids
+            ]
+            failure = _summarize_smoke_case_failure(
+                spec=spec,
+                missing_installed_pack_ids=missing_installed_pack_ids,
+                missing_entity_texts=missing_entity_texts,
+                missing_labels=missing_labels,
+            )
+    except FileNotFoundError as exc:
+        failure = str(exc)
+    except httpx.HTTPError as exc:
+        failure = f"Unable to consume published registry for {spec.pack_id}: {exc}"
+    except ValueError as exc:
+        failure = str(exc)
+
+    return PublishedRegistrySmokeCaseResult(
+        pack_id=spec.pack_id,
+        text=spec.text,
+        expected_installed_pack_ids=list(spec.expected_installed_pack_ids),
+        pulled_pack_ids=pulled_pack_ids,
+        installed_pack_ids=installed_pack_ids,
+        missing_installed_pack_ids=missing_installed_pack_ids,
+        expected_entity_texts=list(spec.expected_entity_texts),
+        matched_entity_texts=matched_entity_texts,
+        missing_entity_texts=missing_entity_texts,
+        tagged_entity_texts=tagged_entity_texts,
+        expected_labels=list(spec.expected_labels),
+        matched_labels=matched_labels,
+        missing_labels=missing_labels,
+        tagged_labels=tagged_labels,
+        passed=failure is None,
+        failure=failure,
+    )
+
+
+def _summarize_smoke_case_failure(
+    *,
+    spec: _PublishedRegistrySmokeSpec,
+    missing_installed_pack_ids: list[str],
+    missing_entity_texts: list[str],
+    missing_labels: list[str],
+) -> str | None:
+    """Return a stable failure summary for one smoke case."""
+
+    parts: list[str] = []
+    if missing_installed_pack_ids:
+        parts.append("missing installed packs: " + ", ".join(missing_installed_pack_ids))
+    if missing_entity_texts:
+        parts.append("missing entities: " + ", ".join(missing_entity_texts))
+    if missing_labels:
+        parts.append("missing labels: " + ", ".join(missing_labels))
+    if not parts:
+        return None
+    return f"{spec.pack_id} smoke mismatch: {'; '.join(parts)}"
 
 
 def _build_registry_url_candidates(

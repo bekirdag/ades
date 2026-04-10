@@ -5,7 +5,6 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. Real upstream bundle ingestion and quality tuning
-   - Codify the now-proven generated-release consumer smoke into a durable automated validation path so future real-source refreshes must prove clean pull/install/tag behavior from the published object-storage registry URL before promotion.
    - Decide how a reviewed generated release graduates from the object-storage prefix into the hosted production registry path now that direct HTTPS consumption is already working.
    - Expand the bounded real-source `general-en` seed set carefully once broader recall is needed, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
 
@@ -22,6 +21,12 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Published generated-registry consumer smoke automation:
+  - implemented in `src/ades/packs/publish.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
+  - adds `ades.smoke_test_published_generated_registry(...)`, `ades registry smoke-published-release`, and `POST /v0/registry/smoke-published-release` so a reviewed object-storage registry URL can be validated through clean pull/install/tag smoke before promotion
+  - uses clean temporary storage roots, proves dependency installation for `medical-en -> general-en`, and verifies deterministic finance and medical entity/label matches from the published registry URL itself instead of only checking object listings
+  - adds categorized unit, component, integration, and API coverage around a locally served reviewed registry so the promotion gate remains durable in repo validation
 
 - Three-pack real-source refresh rehearsal and object-storage publication helper:
   - implemented in `src/ades/packs/publish.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`

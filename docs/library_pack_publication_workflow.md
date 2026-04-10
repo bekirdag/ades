@@ -148,7 +148,13 @@ The published generated release is not review-only anymore. A clean local runtim
 - `ades pull finance-en --registry-url https://ades.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json`
 - `ades pull medical-en --registry-url https://ades.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json`
 
-The `medical-en` smoke also installs the generated `general-en` dependency and successfully tags the expected medical entities from the reviewed published release.
+That proof is now shipped as a durable validation surface:
+
+- Python: `ades.smoke_test_published_generated_registry(...)`
+- CLI: `ades registry smoke-published-release <registry-url>`
+- HTTP: `POST /v0/registry/smoke-published-release`
+
+The automated smoke uses clean temporary storage roots, pulls from the published registry URL itself, verifies dependency installation, and tags deterministic finance and medical smoke texts against the consumed packs. The `medical-en` smoke also installs the generated `general-en` dependency and successfully tags the expected medical entities from the reviewed published release.
 
 Important:
 
@@ -158,4 +164,4 @@ Important:
 
 ## Promotion Rule
 
-The current production deployment flow remains authoritative for the live root registry. Generated pack refreshes produce a reviewed static-registry payload; promotion to the live hosted registry should happen through the existing deploy/object-storage path, not through an ad hoc side channel.
+The current production deployment flow remains authoritative for the live root registry. Generated pack refreshes produce a reviewed static-registry payload; promotion to the live hosted registry should happen through the existing deploy/object-storage path, not through an ad hoc side channel. Before promotion, the published registry URL should pass the shipped clean-consumer smoke so the reviewed object-storage release proves real pull/install/tag behavior instead of only looking structurally correct.
