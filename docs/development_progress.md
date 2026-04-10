@@ -219,6 +219,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Kept exact-alias lookup unchanged for the tagger hot path and exposed the broader search through the existing public API, `ades packs lookup`, and `GET /v0/lookup` rather than introducing a second lookup surface.
 - Added categorized unit, component, integration, and API coverage for the broader candidate-search behavior and verified the repo through `docdexd run-tests --repo /home/wodo/apps/ades`, including full `pytest -q` with `142 passed`.
 
+### 31. Real finance-source ingestion and live bundle tuning
+
+- Added a reproducible finance-source fetcher in `src/ades/packs/finance_sources.py` plus public Python, CLI, and localhost service surfaces so dated SEC and Nasdaq source snapshots can be downloaded directly into `/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/<snapshot>/` instead of being staged by hand.
+- Added immutable snapshot metadata through `sources.fetch.json`, including exact upstream URLs, fetched paths, SHA-256 digests, byte sizes, and the fetch user agent, while keeping the raw-source layout outside the repo.
+- Extended generated-pack alias pruning with per-record `blocked_aliases` support and tuned the finance bundle inputs so the live `NASDAQ, INC.` issuer no longer suppresses the exchange alias and noisy real-world ticker aliases like `ON` and `USD` are dropped before they reach the runtime pack.
+- Validated the first live finance snapshot dated `2026-04-10`: the real bundle now emits `22881` normalized entity records, the quality gate passes at `expected_recall=1.0` and `precision=1.0`, and `refresh-generated-packs` produces a publishable finance-only registry release under `/mnt/githubActions/ades_big_data/pack_releases/finance-en-2026-04-10`.
+
 ### 31. Rollback-safe pack install recovery
 
 - Hardened `src/ades/packs/installer.py` so fresh installs extract into hidden staging directories and pack updates move the current installed pack into a hidden backup directory before replacement.

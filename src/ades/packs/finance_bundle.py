@@ -12,6 +12,11 @@ from typing import Any
 
 from .source_lock import build_bundle_source_entry, write_sources_lock
 
+_FINANCE_STOPLISTED_ALIASES = ["N/A", "ON", "USD"]
+_ISSUER_BLOCKED_ALIAS_MAP = {
+    "nasdaq, inc.": ["NASDAQ"],
+}
+
 
 @dataclass(frozen=True)
 class FinanceSourceBundleResult:
@@ -128,7 +133,7 @@ def build_finance_source_bundle(
                     "ticker": "ticker",
                     "exchange": "exchange",
                 },
-                "stoplisted_aliases": ["N/A"],
+                "stoplisted_aliases": _FINANCE_STOPLISTED_ALIASES,
                 "allowed_ambiguous_aliases": [],
                 "sources": sources,
             },
@@ -198,17 +203,19 @@ def _load_sec_company_issuers(path: Path) -> list[dict[str, Any]]:
         ticker = _clean_text(item.get("ticker"))
         if ticker:
             metadata["ticker"] = ticker
-        records.append(
-            {
-                "entity_id": f"sec-cik:{source_id}",
-                "entity_type": "issuer",
-                "canonical_text": canonical_text,
-                "aliases": [],
-                "source_name": "sec-company-tickers",
-                "source_id": source_id,
-                "metadata": metadata,
-            }
-        )
+        record = {
+            "entity_id": f"sec-cik:{source_id}",
+            "entity_type": "issuer",
+            "canonical_text": canonical_text,
+            "aliases": [],
+            "source_name": "sec-company-tickers",
+            "source_id": source_id,
+            "metadata": metadata,
+        }
+        blocked_aliases = _ISSUER_BLOCKED_ALIAS_MAP.get(canonical_text.casefold(), [])
+        if blocked_aliases:
+            record["blocked_aliases"] = list(blocked_aliases)
+        records.append(record)
     return records
 
 

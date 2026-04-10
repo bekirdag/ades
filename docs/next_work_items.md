@@ -5,8 +5,8 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. Real upstream bundle ingestion and quality tuning
-   - Feed real `general-en`, `finance-en`, and `medical-en` upstream snapshots through the implemented bundle builders under `/mnt/githubActions/ades_big_data` instead of only the current representative fixtures.
-   - Tune ambiguity thresholds, stoplists, and quality fixtures against the resulting generated content so the offline generation workflow produces publishable real pack inventories rather than only proving the scaffolding contract.
+   - Close the remaining real-source bundle slices for `general-en` and `medical-en` under `/mnt/githubActions/ades_big_data`; the `finance-en` slice is now live and producing a publishable refresh release from dated SEC/Nasdaq snapshots.
+   - Generalize pack-specific refresh thresholds once the real `general-en` and `medical-en` ambiguity baselines are known, instead of relying on the current finance-only explicit `--max-ambiguous-aliases 300` override for refresh runs.
 
 2. End-to-end production-readiness validation
    - Keep extending clean-environment release validation so installed artifacts prove the real shipped wheel/npm behavior together rather than only through narrower source-tree regressions.
@@ -26,6 +26,12 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
   - implemented in `src/ades/packs/source_lock.py`, with builder integration in `src/ades/packs/finance_bundle.py`, `src/ades/packs/general_bundle.py`, and `src/ades/packs/medical_bundle.py`
   - every built normalized bundle now emits `sources.lock.json` and returns `sources_lock_path` through the public Python API, CLI, and localhost service build-bundle responses
   - the lock file records exact snapshot URIs, SHA-256 digests, byte sizes, recorded snapshot timestamps, license metadata, adapter ids, and adapter versions so real upstream bundle rebuilds can be audited deterministically
+
+- Real finance-source ingestion and tuning:
+  - implemented in `src/ades/packs/finance_sources.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
+  - adds `ades.fetch_finance_source_snapshot(...)`, `ades registry fetch-finance-sources`, and `POST /v0/registry/fetch-finance-sources` so dated SEC and Nasdaq snapshots are fetched reproducibly into `/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/<snapshot>/`, accompanied by repo-owned curated exchange aliases and `sources.fetch.json`
+  - extends pack generation with per-record `blocked_aliases` support and tunes the finance bundle input contract so noisy live symbols like `ON` and `USD` are stoplisted while `NASDAQ` remains available as the exchange alias instead of colliding with the real issuer name
+  - validates the first real live snapshot dated `2026-04-10`, which currently yields `entity_record_count=22881`, `alias_count=39101`, `ambiguous_alias_count=256`, clean fixture recall/precision, and a publishable finance-only refresh release under `/mnt/githubActions/ades_big_data/pack_releases/finance-en-2026-04-10`
   - adds categorized unit, component, integration, and API coverage for the new builder contract and updates `docs/library_pack_source_bundle_spec.md` so the durable operator docs match the emitted sidecar
 
 - Offline generated-pack refresh and publication orchestration:

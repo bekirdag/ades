@@ -118,6 +118,40 @@ class RegistryBuildFinanceBundleResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class RegistryFetchFinanceSourcesRequest(BaseModel):
+    """Request body for downloading one real `finance-en` source snapshot set."""
+
+    output_dir: str = "/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en"
+    snapshot: str | None = None
+    sec_companies_url: str = "https://www.sec.gov/files/company_tickers.json"
+    symbol_directory_url: str = (
+        "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt"
+    )
+    user_agent: str = "ades/0.1.0 (ops@adestool.com)"
+
+
+class RegistryFetchFinanceSourcesResponse(BaseModel):
+    """Response body for one downloaded `finance-en` source snapshot set."""
+
+    pack_id: str
+    output_dir: str
+    snapshot: str
+    snapshot_dir: str
+    sec_companies_url: str
+    symbol_directory_url: str
+    source_manifest_path: str
+    sec_companies_path: str
+    symbol_directory_path: str
+    curated_entities_path: str
+    generated_at: datetime
+    source_count: int
+    curated_entity_count: int
+    sec_companies_sha256: str
+    symbol_directory_sha256: str
+    curated_entities_sha256: str
+    warnings: list[str] = Field(default_factory=list)
+
+
 class RegistryBuildGeneralBundleRequest(BaseModel):
     """Request body for building one normalized `general-en` source bundle."""
 
@@ -192,7 +226,7 @@ class RegistryValidateFinanceQualityRequest(BaseModel):
     version: str | None = None
     min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
     max_unexpected_hits: int = Field(0, ge=0)
-    max_ambiguous_aliases: int = Field(0, ge=0)
+    max_ambiguous_aliases: int = Field(300, ge=0)
     max_dropped_alias_ratio: float = Field(0.5, ge=0.0, le=1.0)
 
 

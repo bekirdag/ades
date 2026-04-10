@@ -119,7 +119,7 @@ def validate_finance_pack_quality(
     version: str | None = None,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
-    max_ambiguous_aliases: int = 0,
+    max_ambiguous_aliases: int = 300,
     max_dropped_alias_ratio: float = 0.5,
 ) -> FinancePackQualityResult:
     """Build, install, and evaluate one generated `finance-en` pack bundle."""

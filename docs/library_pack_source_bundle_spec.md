@@ -144,6 +144,14 @@ Public surfaces for the first generator slice:
 - HTTP: `POST /v0/registry/report-pack`
 - HTTP: `POST /v0/registry/refresh-generated-packs`
 
+Finance raw-source fetch surface:
+
+- Python: `ades.fetch_finance_source_snapshot(...)`
+- CLI: `ades registry fetch-finance-sources --output-dir <dir> [--snapshot YYYY-MM-DD]`
+- HTTP: `POST /v0/registry/fetch-finance-sources`
+
+The finance fetch surface downloads the real SEC and Nasdaq source snapshots into an immutable dated directory under `/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/<snapshot>/`, writes repo-owned curated exchange aliases alongside them, and records exact fetch metadata in `sources.fetch.json`.
+
 Finance-first raw snapshot builder surfaces:
 
 - Python: `ades.build_finance_source_bundle(...)`
@@ -195,6 +203,7 @@ Medical quality-gate surfaces:
 Release-oriented refresh flow:
 
 1. Build normalized bundles from raw snapshots with the `build-*-bundle` commands.
+   - For `finance-en`, the real-source path can start with `ades registry fetch-finance-sources`.
 2. Run `ades registry refresh-generated-packs <bundle-dir...> --output-dir <dir>`.
 3. Review the emitted `reports/` and `quality/` output under the chosen refresh directory.
 4. If `passed=true`, publish the generated `registry/` directory through the existing static-registry host path or an approved object-storage sync.

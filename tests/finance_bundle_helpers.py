@@ -61,3 +61,11 @@ def create_finance_raw_snapshots(root: Path) -> dict[str, Path]:
         "symbol_directory": symbol_path,
         "curated_entities": curated_path,
     }
+
+
+def create_finance_remote_sources(root: Path) -> dict[str, str]:
+    snapshots = create_finance_raw_snapshots(root)
+    return {
+        "sec_companies_url": snapshots["sec_companies"].resolve().as_uri(),
+        "symbol_directory_url": snapshots["symbol_directory"].resolve().as_uri(),
+    }

@@ -292,6 +292,16 @@ def generate_pack_source(
         if _coerce_bool(record.get("build_only")) and not include_build_only:
             dropped_record_count += 1
             continue
+        raw_blocked_aliases = record.get("blocked_aliases", [])
+        if raw_blocked_aliases is None:
+            raw_blocked_aliases = []
+        if not isinstance(raw_blocked_aliases, list):
+            raise ValueError("Normalized entity blocked_aliases must be a list.")
+        blocked_aliases = {
+            _normalized_key(item)
+            for item in raw_blocked_aliases
+            if _normalized_key(item)
+        }
         label = _resolve_record_label(
             record,
             label_mappings=label_mappings,
@@ -309,6 +319,9 @@ def generate_pack_source(
         for candidate in _iter_entity_alias_candidates(canonical_text, record, label):
             normalized_key = _normalized_key(candidate)
             if not normalized_key:
+                continue
+            if normalized_key in blocked_aliases:
+                dropped_alias_count += 1
                 continue
             if _should_drop_alias(normalized_key, candidate, stoplisted_aliases):
                 dropped_alias_count += 1

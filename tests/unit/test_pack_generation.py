@@ -90,6 +90,38 @@ def test_generate_pack_source_drops_ambiguous_aliases_by_default(tmp_path: Path)
     assert not any(item["text"].casefold() == "nasdaq" for item in aliases)
 
 
+def test_generate_pack_source_supports_record_level_blocked_aliases(tmp_path: Path) -> None:
+    bundle_dir = create_finance_generation_bundle(
+        tmp_path,
+        include_ambiguous_alias=True,
+    )
+    entities_path = bundle_dir / "normalized" / "entities.jsonl"
+    entity_rows = [
+        json.loads(line)
+        for line in entities_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    for row in entity_rows:
+        if row.get("entity_id") == "issuer:nasdaq-inc":
+            row["blocked_aliases"] = ["NASDAQ"]
+    entities_path.write_text(
+        "".join(json.dumps(item) + "\n" for item in entity_rows),
+        encoding="utf-8",
+    )
+
+    result = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+
+    aliases = json.loads(
+        (Path(result.pack_dir) / "aliases.json").read_text(encoding="utf-8")
+    )["aliases"]
+
+    assert result.ambiguous_alias_count == 0
+    assert {"text": "NASDAQ", "label": "exchange"} in aliases
+
+
 def test_generate_pack_source_rejects_invalid_regex_patterns(tmp_path: Path) -> None:
     bundle_dir = create_finance_generation_bundle(tmp_path)
     rules_path = bundle_dir / "normalized" / "rules.jsonl"

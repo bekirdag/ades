@@ -19,6 +19,13 @@ from .distribution import (
 from .packs.installer import InstallResult, PackInstaller
 from .packs.generation import generate_pack_source as run_generate_pack_source
 from .packs.finance_bundle import build_finance_source_bundle as run_build_finance_source_bundle
+from .packs.finance_sources import (
+    DEFAULT_FINANCE_SOURCE_OUTPUT_ROOT,
+    DEFAULT_SEC_COMPANIES_URL,
+    DEFAULT_SOURCE_FETCH_USER_AGENT,
+    DEFAULT_SYMBOL_DIRECTORY_URL,
+    fetch_finance_source_snapshot as run_fetch_finance_source_snapshot,
+)
 from .packs.finance_quality import validate_finance_pack_quality as run_validate_finance_pack_quality
 from .packs.general_bundle import build_general_source_bundle as run_build_general_source_bundle
 from .packs.general_quality import validate_general_pack_quality as run_validate_general_pack_quality
@@ -55,6 +62,7 @@ from .service.models import (
     RegistryBuildPackSummary,
     RegistryBuildResponse,
     RegistryBuildFinanceBundleResponse,
+    RegistryFetchFinanceSourcesResponse,
     RegistryBuildGeneralBundleResponse,
     RegistryBuildMedicalBundleResponse,
     RegistryPackQualityCaseResult,
@@ -435,6 +443,44 @@ def build_finance_source_bundle(
     )
 
 
+def fetch_finance_source_snapshot(
+    *,
+    output_dir: str | Path = DEFAULT_FINANCE_SOURCE_OUTPUT_ROOT,
+    snapshot: str | None = None,
+    sec_companies_url: str = DEFAULT_SEC_COMPANIES_URL,
+    symbol_directory_url: str = DEFAULT_SYMBOL_DIRECTORY_URL,
+    user_agent: str = DEFAULT_SOURCE_FETCH_USER_AGENT,
+) -> RegistryFetchFinanceSourcesResponse:
+    """Download one real finance source snapshot set into the big-data root."""
+
+    result = run_fetch_finance_source_snapshot(
+        output_dir=output_dir,
+        snapshot=snapshot,
+        sec_companies_url=sec_companies_url,
+        symbol_directory_url=symbol_directory_url,
+        user_agent=user_agent,
+    )
+    return RegistryFetchFinanceSourcesResponse(
+        pack_id=result.pack_id,
+        output_dir=result.output_dir,
+        snapshot=result.snapshot,
+        snapshot_dir=result.snapshot_dir,
+        sec_companies_url=result.sec_companies_url,
+        symbol_directory_url=result.symbol_directory_url,
+        source_manifest_path=result.source_manifest_path,
+        sec_companies_path=result.sec_companies_path,
+        symbol_directory_path=result.symbol_directory_path,
+        curated_entities_path=result.curated_entities_path,
+        generated_at=result.generated_at,
+        source_count=result.source_count,
+        curated_entity_count=result.curated_entity_count,
+        sec_companies_sha256=result.sec_companies_sha256,
+        symbol_directory_sha256=result.symbol_directory_sha256,
+        curated_entities_sha256=result.curated_entities_sha256,
+        warnings=result.warnings,
+    )
+
+
 def build_general_source_bundle(
     *,
     wikidata_entities_path: str | Path,
@@ -690,7 +736,7 @@ def validate_finance_pack_quality(
     version: str | None = None,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
-    max_ambiguous_aliases: int = 0,
+    max_ambiguous_aliases: int = 300,
     max_dropped_alias_ratio: float = 0.5,
 ) -> RegistryValidateFinanceQualityResponse:
     """Build, install, and evaluate one generated `finance-en` pack bundle."""

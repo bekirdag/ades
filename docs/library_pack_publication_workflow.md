@@ -70,6 +70,16 @@ The `reports/` directory is for human review and stable metrics. The `quality/` 
 ## Example Local Flow
 
 ```bash
+ades registry fetch-finance-sources \
+  --output-dir /mnt/githubActions/ades_big_data/pack_sources/raw/finance-en \
+  --snapshot 2026-04-10
+
+ades registry build-finance-bundle \
+  --sec-company-tickers /mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/2026-04-10/sec_company_tickers.json \
+  --symbol-directory /mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/2026-04-10/nasdaqtraded.txt \
+  --curated-entities /mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/2026-04-10/curated_finance_entities.json \
+  --output-dir /mnt/githubActions/ades_big_data/pack_sources/bundles
+
 ades registry build-general-bundle \
   --wikidata-entities /mnt/githubActions/ades_big_data/pack_sources/raw/general-en/2026-04-10/wikidata_general_entities.json \
   --geonames-places /mnt/githubActions/ades_big_data/pack_sources/raw/general-en/2026-04-10/geonames_places.txt \
@@ -85,12 +95,14 @@ ades registry build-medical-bundle \
   --output-dir /mnt/githubActions/ades_big_data/pack_sources/bundles
 
 ades registry refresh-generated-packs \
+  /mnt/githubActions/ades_big_data/pack_sources/bundles/finance-en-bundle \
   /mnt/githubActions/ades_big_data/pack_sources/bundles/general-en \
   /mnt/githubActions/ades_big_data/pack_sources/bundles/medical-en \
-  --output-dir /mnt/githubActions/ades_big_data/pack_releases/2026-04-10-general-medical
+  --output-dir /mnt/githubActions/ades_big_data/pack_releases/2026-04-10-generated-packs \
+  --max-ambiguous-aliases 300
 ```
 
-Finance-only refreshes can pass a single bundle directory. Medical-only refreshes must also pass the matching `general-en` bundle or `--general-bundle-dir`.
+Finance-only refreshes can pass a single bundle directory. The first real-data finance snapshot on `2026-04-10` validated cleanly on fixture recall/precision with `ambiguous_alias_count=256`, so finance refreshes currently need `--max-ambiguous-aliases 300` until the broader pack-specific refresh-threshold contract is generalized. Medical-only refreshes must also pass the matching `general-en` bundle or `--general-bundle-dir`.
 
 ## Object Storage Publication
 

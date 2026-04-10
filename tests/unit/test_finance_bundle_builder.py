@@ -30,6 +30,7 @@ def test_build_finance_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     bundle_manifest = json.loads(Path(result.bundle_manifest_path).read_text(encoding="utf-8"))
     assert bundle_manifest["pack_id"] == "finance-en"
     assert bundle_manifest["entities_path"] == "normalized/entities.jsonl"
+    assert bundle_manifest["stoplisted_aliases"] == ["N/A", "ON", "USD"]
     assert len(bundle_manifest["sources"]) == 3
     sources_lock = json.loads(Path(result.sources_lock_path).read_text(encoding="utf-8"))
     assert sources_lock["pack_id"] == "finance-en"

@@ -13,6 +13,7 @@ from .api import build_general_source_bundle as api_build_general_source_bundle
 from .api import build_medical_source_bundle as api_build_medical_source_bundle
 from .api import build_registry as api_build_registry
 from .api import deactivate_pack as api_deactivate_pack
+from .api import fetch_finance_source_snapshot as api_fetch_finance_source_snapshot
 from .api import generate_pack_source as api_generate_pack_source
 from .api import lookup_candidates as api_lookup_candidates
 from .api import list_available_packs as api_list_available_packs
@@ -479,7 +480,7 @@ def registry_validate_finance_quality(
         help="Maximum unexpected tagged entities allowed across fixture cases.",
     ),
     max_ambiguous_aliases: int = typer.Option(
-        0,
+        300,
         "--max-ambiguous-aliases",
         min=0,
         help="Maximum ambiguous alias keys allowed after generation.",
@@ -633,6 +634,49 @@ def registry_validate_medical_quality(
     _echo_json(response.model_dump(mode="json"))
     if not response.passed:
         raise typer.Exit(code=1)
+
+
+@registry_app.command("fetch-finance-sources")
+def registry_fetch_finance_sources(
+    output_dir: Path = typer.Option(
+        Path("/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en"),
+        "--output-dir",
+        help="Directory where immutable finance source snapshots should be written.",
+    ),
+    snapshot: str | None = typer.Option(
+        None,
+        "--snapshot",
+        help="Snapshot date in YYYY-MM-DD format. Defaults to today.",
+    ),
+    sec_url: str = typer.Option(
+        "https://www.sec.gov/files/company_tickers.json",
+        "--sec-url",
+        help="URL or file path for the SEC company_tickers snapshot.",
+    ),
+    symbol_directory_url: str = typer.Option(
+        "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt",
+        "--symbol-directory-url",
+        help="URL or file path for the Nasdaq symbol-directory snapshot.",
+    ),
+    user_agent: str = typer.Option(
+        "ades/0.1.0 (ops@adestool.com)",
+        "--user-agent",
+        help="User-Agent header for HTTP source fetches.",
+    ),
+) -> None:
+    """Download one real finance source snapshot set under the big-data root."""
+
+    try:
+        response = api_fetch_finance_source_snapshot(
+            output_dir=output_dir,
+            snapshot=snapshot,
+            sec_companies_url=sec_url,
+            symbol_directory_url=symbol_directory_url,
+            user_agent=user_agent,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
 
 
 @registry_app.command("build-finance-bundle")

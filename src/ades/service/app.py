@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Query
 from ..api import (
     activate_pack,
     build_finance_source_bundle,
+    fetch_finance_source_snapshot,
     build_general_source_bundle,
     build_medical_source_bundle,
     build_registry,
@@ -59,6 +60,8 @@ from .models import (
     ReleaseVerificationResponse,
     RegistryBuildFinanceBundleRequest,
     RegistryBuildFinanceBundleResponse,
+    RegistryFetchFinanceSourcesRequest,
+    RegistryFetchFinanceSourcesResponse,
     RegistryBuildGeneralBundleRequest,
     RegistryBuildGeneralBundleResponse,
     RegistryBuildMedicalBundleRequest,
@@ -303,6 +306,34 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/fetch-finance-sources",
+        response_model=RegistryFetchFinanceSourcesResponse,
+    )
+    def runtime_fetch_finance_sources(
+        request: RegistryFetchFinanceSourcesRequest,
+    ) -> RegistryFetchFinanceSourcesResponse:
+        """Download one real `finance-en` source snapshot set."""
+
+        try:
+            return fetch_finance_source_snapshot(
+                output_dir=request.output_dir,
+                snapshot=request.snapshot,
+                sec_companies_url=request.sec_companies_url,
+                symbol_directory_url=request.symbol_directory_url,
+                user_agent=request.user_agent,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except IsADirectoryError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except NotADirectoryError as exc:
