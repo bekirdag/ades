@@ -20,9 +20,9 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     assert result.version == "0.2.0"
     assert Path(result.sources_lock_path).exists()
     assert result.source_count == 3
-    assert result.entity_record_count == 11
+    assert result.entity_record_count == 13
     assert result.rule_record_count == 2
-    assert result.wikidata_entity_count == 8
+    assert result.wikidata_entity_count == 10
     assert result.geonames_location_count == 2
     assert result.curated_entity_count == 1
     assert result.warnings == []
@@ -99,6 +99,24 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
         and item["canonical_text"] == "Google DeepMind"
         for item in entity_records
     )
+    assert any(
+        item["entity_type"] == "person" and item["canonical_text"] == "Sundar Pichai"
+        for item in entity_records
+    )
+    assert any(
+        item["entity_type"] == "person" and item["canonical_text"] == "Demis Hassabis"
+        for item in entity_records
+    )
+    sundar_record = next(
+        item for item in entity_records if item["canonical_text"] == "Sundar Pichai"
+    )
+    assert "Pichai" not in sundar_record["aliases"]
+    assert "Sundara Pichai" in sundar_record["aliases"]
+    demis_record = next(
+        item for item in entity_records if item["canonical_text"] == "Demis Hassabis"
+    )
+    assert "Hassabis" not in demis_record["aliases"]
+    assert "Sir Demis Hassabis" in demis_record["aliases"]
 
     rule_records = [
         json.loads(line)

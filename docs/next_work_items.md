@@ -6,7 +6,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 
 1. Real upstream bundle ingestion and quality tuning
    - Evaluate whether the next bounded `general-en` additions should come from another carefully chosen Wikidata entity pair or from a curated location slice, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
-   - If the next safe entities require short or noisy aliases, prefer adding a targeted alias-pruning rule before widening the seed set rather than weakening the zero-unexpected-hit quality gate.
+   - The next likely pruning seam is organization/domain alias noise, not person surnames; only take it if a candidate pair actually needs that headroom.
 
 2. End-to-end production-readiness validation
    - Keep extending clean-environment release validation so installed artifacts prove the real shipped wheel/npm behavior together rather than only through narrower source-tree regressions.
@@ -21,6 +21,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Bounded real-source `general-en` person-alias pruning expansion:
+  - implemented in `src/ades/packs/general_bundle.py`, `src/ades/packs/general_sources.py`, and `src/ades/packs/general_quality.py`, with fixture and surface coverage updates in the general bundle/source/quality tests
+  - adds a conservative general-bundle pruning rule that drops plain single-token aliases for multi-token person entities before normalized bundle generation, which safely admits `Sundar Pichai` and `Demis Hassabis` into the bounded live Wikidata seed set
+  - proves the retained multi-token alias path through `Sundara Pichai` in the generated-pack quality gate while keeping the bounded live general slice clean at `wikidata_entity_count=13`, `entity_record_count=17`, `alias_count=232`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`
 
 - Bounded real-source `general-en` follow-on Wikidata expansion:
   - implemented in `src/ades/packs/general_sources.py` and `src/ades/packs/general_quality.py`, with fixture and surface coverage updates in the general bundle/source/quality tests

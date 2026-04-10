@@ -47,5 +47,5 @@ def test_cli_can_validate_generated_general_pack_quality(tmp_path) -> None:
     assert quality_payload["pack_id"] == "general-en"
     assert quality_payload["passed"] is True
     assert quality_payload["expected_recall"] == 1.0
-    assert quality_payload["expected_entity_count"] == 17
-    assert quality_payload["alias_count"] == 17
+    assert quality_payload["expected_entity_count"] == 19
+    assert quality_payload["alias_count"] == 23

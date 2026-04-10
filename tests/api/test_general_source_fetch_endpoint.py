@@ -24,6 +24,6 @@ def test_general_source_fetch_endpoint_downloads_snapshot(tmp_path: Path) -> Non
     payload = response.json()
     assert payload["pack_id"] == "general-en"
     assert payload["snapshot"] == "2026-04-10"
-    assert payload["wikidata_entity_count"] == 8
+    assert payload["wikidata_entity_count"] == 10
     assert payload["geonames_location_count"] == 2
     assert Path(payload["curated_entities_path"]).exists()

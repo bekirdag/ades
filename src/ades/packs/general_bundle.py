@@ -7,10 +7,13 @@ from datetime import UTC, datetime
 import csv
 import json
 from pathlib import Path
+import re
 import shutil
 from typing import Any
 
 from .source_lock import build_bundle_source_entry, write_sources_lock
+
+_PLAIN_SINGLE_TOKEN_PERSON_ALIAS_RE = re.compile(r"^[A-Za-z][A-Za-z'-]*$")
 
 
 @dataclass(frozen=True)
@@ -204,12 +207,17 @@ def _load_wikidata_general_entities(path: Path) -> list[dict[str, Any]]:
         if not isinstance(aliases, list):
             aliases = [aliases]
         source_id = _clean_text(item.get("entity_id") or item.get("id")) or canonical_text.casefold()
+        normalized_aliases = _prune_general_aliases(
+            entity_type=entity_type,
+            canonical_text=canonical_text,
+            aliases=aliases,
+        )
         normalized.append(
             {
                 "entity_id": f"wikidata:{source_id}",
                 "entity_type": entity_type,
                 "canonical_text": canonical_text,
-                "aliases": [_clean_text(alias) for alias in aliases if _clean_text(alias)],
+                "aliases": normalized_aliases,
                 "source_name": "wikidata-general-entities",
                 "source_id": source_id,
             }
@@ -323,6 +331,29 @@ def _clean_text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _prune_general_aliases(
+    *,
+    entity_type: str,
+    canonical_text: str,
+    aliases: list[object],
+) -> list[str]:
+    normalized_aliases: list[str] = []
+    canonical_token_count = len(canonical_text.split())
+    for alias in aliases:
+        cleaned = _clean_text(alias)
+        if not cleaned:
+            continue
+        if (
+            entity_type == "person"
+            and canonical_token_count > 1
+            and _PLAIN_SINGLE_TOKEN_PERSON_ALIAS_RE.fullmatch(cleaned) is not None
+        ):
+            continue
+        if cleaned not in normalized_aliases:
+            normalized_aliases.append(cleaned)
+    return normalized_aliases
 
 
 def _utc_timestamp() -> str:

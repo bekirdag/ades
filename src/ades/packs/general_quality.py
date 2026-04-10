@@ -68,6 +68,14 @@ DEFAULT_GENERAL_QUALITY_CASES: tuple[PackQualityCase, ...] = (
         ),
     ),
     PackQualityCase(
+        name="bounded-wikidata-person-alias-pruning-expansion",
+        text="Sundara Pichai met Demis Hassabis after lunch.",
+        expected_entities=(
+            PackQualityEntity(text="Sundara Pichai", label="person"),
+            PackQualityEntity(text="Demis Hassabis", label="person"),
+        ),
+    ),
+    PackQualityCase(
         name="non-hit",
         text="Ordinary weather notes and lunch plans stay untagged here.",
         expected_entities=(),

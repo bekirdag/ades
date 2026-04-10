@@ -60,6 +60,23 @@ def create_general_raw_snapshots(root: Path) -> dict[str, Path]:
                         "label": "Google DeepMind",
                         "aliases": ["DeepMind Technologies"],
                     },
+                    {
+                        "id": "Q9",
+                        "entity_type": "person",
+                        "label": "Sundar Pichai",
+                        "aliases": [
+                            "Pichai Sundarajan",
+                            "Pichai Sundararajan",
+                            "Pichai",
+                            "Sundara Pichai",
+                        ],
+                    },
+                    {
+                        "id": "Q10",
+                        "entity_type": "person",
+                        "label": "Demis Hassabis",
+                        "aliases": ["Hassabis", "Sir Demis Hassabis"],
+                    },
                 ]
             },
             indent=2,
@@ -191,6 +208,28 @@ def create_general_remote_sources(root: Path) -> dict[str, str]:
                                 {"value": "DeepMind Technologies"},
                                 {"value": "deepmind.com"},
                                 {"value": "Google Deep Mind"},
+                            ]
+                        },
+                    },
+                    "Q3503829": {
+                        "id": "Q3503829",
+                        "labels": {"en": {"value": "Sundar Pichai"}},
+                        "aliases": {
+                            "en": [
+                                {"value": "Pichai Sundarajan"},
+                                {"value": "Pichai Sundararajan"},
+                                {"value": "Pichai"},
+                                {"value": "Sundara Pichai"},
+                            ]
+                        },
+                    },
+                    "Q3022141": {
+                        "id": "Q3022141",
+                        "labels": {"en": {"value": "Demis Hassabis"}},
+                        "aliases": {
+                            "en": [
+                                {"value": "Hassabis"},
+                                {"value": "Sir Demis Hassabis"},
                             ]
                         },
                     },
