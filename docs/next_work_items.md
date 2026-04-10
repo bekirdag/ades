@@ -6,6 +6,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 
 1. Real upstream bundle ingestion and quality tuning
    - Evaluate whether the next bounded `general-en` additions should come from another carefully chosen Wikidata entity pair or from a curated location slice, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
+   - After the second retained-alias person expansion, the next likely additive seam is a curated location slice unless an organization pair can prove clean without introducing new domain-alias pruning.
    - The next likely pruning seam is organization/domain alias noise, not person surnames; only take it if a candidate pair actually needs that headroom.
 
 2. End-to-end production-readiness validation
@@ -21,6 +22,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Bounded real-source `general-en` retained-alias person expansion:
+  - implemented in `src/ades/packs/general_sources.py` and `src/ades/packs/general_quality.py`, with fixture and surface coverage updates in the general bundle/source/quality tests
+  - expands the bounded Wikidata person seed set with `Mira Murati` and `Ilya Sutskever`, then proves the live retained-alias path through `Ermira Murati` and `Ilya Efimovich Sutskever` instead of only through raw fetch counts
+  - revalidates the bounded live general slice at `wikidata_entity_count=15`, `entity_record_count=19`, `alias_count=236`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`, keeping the dependency pack zero-ambiguity compatible for `medical-en`
 
 - Bounded real-source `general-en` person-alias pruning expansion:
   - implemented in `src/ades/packs/general_bundle.py`, `src/ades/packs/general_sources.py`, and `src/ades/packs/general_quality.py`, with fixture and surface coverage updates in the general bundle/source/quality tests

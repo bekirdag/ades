@@ -219,8 +219,8 @@ General quality-gate surfaces:
 
 General live-data note:
 
-- The bounded live `general-en` slice on `2026-04-10` currently validates cleanly at `expected_recall=1.0` and `precision=1.0` with `wikidata_entity_count=13`, `entity_record_count=17`, `alias_count=232`, and `ambiguous_alias_count=0`.
-- The current general bundle now drops plain single-token aliases for multi-token person entities before bundle emission, which is how the bounded seed set safely absorbed `Sundar Pichai` and `Demis Hassabis` without weakening the quality gate.
+- The bounded live `general-en` slice on `2026-04-10` currently validates cleanly at `expected_recall=1.0` and `precision=1.0` with `wikidata_entity_count=15`, `entity_record_count=19`, `alias_count=236`, and `ambiguous_alias_count=0`.
+- The current general bundle now drops plain single-token aliases for multi-token person entities before bundle emission, which is how the bounded seed set safely absorbed `Sundar Pichai`, `Demis Hassabis`, `Mira Murati`, and `Ilya Sutskever` without weakening the quality gate.
 - The current live general slice intentionally uses a bounded real-source Wikidata seed set plus two filtered GeoNames seed rows so the dependency pack stays zero-ambiguity compatible while the broader general-source expansion remains future work.
 
 Medical quality-gate surfaces:

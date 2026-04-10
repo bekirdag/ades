@@ -77,6 +77,18 @@ def create_general_raw_snapshots(root: Path) -> dict[str, Path]:
                         "label": "Demis Hassabis",
                         "aliases": ["Hassabis", "Sir Demis Hassabis"],
                     },
+                    {
+                        "id": "Q11",
+                        "entity_type": "person",
+                        "label": "Mira Murati",
+                        "aliases": ["Ermira Murati"],
+                    },
+                    {
+                        "id": "Q12",
+                        "entity_type": "person",
+                        "label": "Ilya Sutskever",
+                        "aliases": ["Ilya Efimovich Sutskever"],
+                    },
                 ]
             },
             indent=2,
@@ -230,6 +242,24 @@ def create_general_remote_sources(root: Path) -> dict[str, str]:
                             "en": [
                                 {"value": "Hassabis"},
                                 {"value": "Sir Demis Hassabis"},
+                            ]
+                        },
+                    },
+                    "Q116706551": {
+                        "id": "Q116706551",
+                        "labels": {"en": {"value": "Mira Murati"}},
+                        "aliases": {
+                            "en": [
+                                {"value": "Ermira Murati"},
+                            ]
+                        },
+                    },
+                    "Q21712134": {
+                        "id": "Q21712134",
+                        "labels": {"en": {"value": "Ilya Sutskever"}},
+                        "aliases": {
+                            "en": [
+                                {"value": "Ilya Efimovich Sutskever"},
                             ]
                         },
                     },

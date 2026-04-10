@@ -76,6 +76,14 @@ DEFAULT_GENERAL_QUALITY_CASES: tuple[PackQualityCase, ...] = (
         ),
     ),
     PackQualityCase(
+        name="bounded-wikidata-retained-alias-expansion",
+        text="Ermira Murati met Ilya Efimovich Sutskever after the keynote.",
+        expected_entities=(
+            PackQualityEntity(text="Ermira Murati", label="person"),
+            PackQualityEntity(text="Ilya Efimovich Sutskever", label="person"),
+        ),
+    ),
+    PackQualityCase(
         name="non-hit",
         text="Ordinary weather notes and lunch plans stay untagged here.",
         expected_entities=(),

@@ -233,6 +233,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added a generated-pack quality case that proves the retained multi-token alias path through `Sundara Pichai`, while the builder tests now assert the noisy single-token aliases `Pichai` and `Hassabis` are absent from the normalized bundle.
 - Revalidated the bounded live `general-en` slice on `2026-04-10`, which now passes cleanly at `wikidata_entity_count=13`, `entity_record_count=17`, `alias_count=232`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`.
 
+### 33. Bounded real-source `general-en` retained-alias person expansion
+
+- Widened the bounded live `general-en` Wikidata seed set with `Mira Murati` and `Ilya Sutskever` in `src/ades/packs/general_sources.py`, choosing the next pair from the same low-noise AI/tech cluster so the bounded dependency pack could keep growing without opening a new organization-pruning seam.
+- Added a generated-pack quality case in `src/ades/packs/general_quality.py` that proves the live retained-alias path through `Ermira Murati` and `Ilya Efimovich Sutskever`, rather than only relying on fetch-count deltas.
+- Updated the raw snapshot fixtures plus the categorized unit, component, integration, and API coverage so the builder/source/quality surfaces stay aligned with the widened live seed set.
+- Revalidated the bounded live `general-en` slice on `2026-04-10`, which now passes cleanly at `wikidata_entity_count=15`, `entity_record_count=19`, `alias_count=236`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`.
+
 ### 31. Real finance-source ingestion and live bundle tuning
 
 - Added a reproducible finance-source fetcher in `src/ades/packs/finance_sources.py` plus public Python, CLI, and localhost service surfaces so dated SEC and Nasdaq source snapshots can be downloaded directly into `/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/<snapshot>/` instead of being staged by hand.
