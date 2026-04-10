@@ -8,13 +8,19 @@ from pathlib import Path
 import typer
 
 from .api import activate_pack as api_activate_pack
+from .api import build_finance_source_bundle as api_build_finance_source_bundle
+from .api import build_general_source_bundle as api_build_general_source_bundle
+from .api import build_medical_source_bundle as api_build_medical_source_bundle
 from .api import build_registry as api_build_registry
 from .api import deactivate_pack as api_deactivate_pack
+from .api import generate_pack_source as api_generate_pack_source
 from .api import lookup_candidates as api_lookup_candidates
 from .api import list_available_packs as api_list_available_packs
 from .api import list_packs as api_list_packs
 from .api import publish_release as api_publish_release
 from .api import pull_pack as api_pull_pack
+from .api import refresh_generated_packs as api_refresh_generated_packs
+from .api import report_generated_pack as api_report_generated_pack
 from .api import remove_pack as api_remove_pack
 from .api import release_versions as api_release_versions
 from .api import status as api_status
@@ -22,6 +28,9 @@ from .api import sync_release_version as api_sync_release_version
 from .api import tag as api_tag
 from .api import tag_file as api_tag_file
 from .api import tag_files as api_tag_files
+from .api import validate_general_pack_quality as api_validate_general_pack_quality
+from .api import validate_finance_pack_quality as api_validate_finance_pack_quality
+from .api import validate_medical_pack_quality as api_validate_medical_pack_quality
 from .api import validate_release as api_validate_release
 from .api import verify_release as api_verify_release
 from .api import write_release_manifest as api_write_release_manifest
@@ -299,6 +308,470 @@ def registry_build(
     try:
         response = api_build_registry(pack_dirs, output_dir=output_dir)
     except (FileNotFoundError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("generate-pack")
+def registry_generate_pack(
+    bundle_dir: Path = typer.Argument(..., help="Normalized bundle directory with bundle.json."),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the generated pack should be written.",
+    ),
+    version: str | None = typer.Option(
+        None,
+        "--version",
+        help="Override the generated pack version instead of using bundle.json.",
+    ),
+    include_build_metadata: bool = typer.Option(
+        True,
+        "--build-metadata/--no-build-metadata",
+        help="Write sources.json and build.json sidecars for generation provenance.",
+    ),
+    include_build_only: bool = typer.Option(
+        False,
+        "--include-build-only",
+        help="Include records marked build_only in the generated runtime pack.",
+    ),
+) -> None:
+    """Generate one runtime-compatible pack directory from a normalized source bundle."""
+
+    try:
+        response = api_generate_pack_source(
+            bundle_dir,
+            output_dir=output_dir,
+            version=version,
+            include_build_metadata=include_build_metadata,
+            include_build_only=include_build_only,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("report-pack")
+def registry_report_pack(
+    bundle_dir: Path = typer.Argument(..., help="Normalized bundle directory with bundle.json."),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the generated pack should be written for reporting.",
+    ),
+    version: str | None = typer.Option(
+        None,
+        "--version",
+        help="Override the generated pack version instead of using bundle.json.",
+    ),
+    include_build_metadata: bool = typer.Option(
+        True,
+        "--build-metadata/--no-build-metadata",
+        help="Write sources.json and build.json sidecars for generation provenance.",
+    ),
+    include_build_only: bool = typer.Option(
+        False,
+        "--include-build-only",
+        help="Include records marked build_only in the generated runtime pack.",
+    ),
+) -> None:
+    """Generate one pack directory and report stable output statistics."""
+
+    try:
+        response = api_report_generated_pack(
+            bundle_dir,
+            output_dir=output_dir,
+            version=version,
+            include_build_metadata=include_build_metadata,
+            include_build_only=include_build_only,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("refresh-generated-packs")
+def registry_refresh_generated_packs(
+    bundle_dirs: list[Path] = typer.Argument(
+        ...,
+        help="One or more normalized bundle directories with bundle.json.",
+    ),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where report, quality, and registry refresh output should be written.",
+    ),
+    general_bundle_dir: Path | None = typer.Option(
+        None,
+        "--general-bundle-dir",
+        help="Optional general-en bundle directory for medical pack refresh when it is not in the positional bundle list.",
+    ),
+    min_expected_recall: float = typer.Option(
+        1.0,
+        "--min-expected-recall",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable recall across expected fixture cases.",
+    ),
+    max_unexpected_hits: int = typer.Option(
+        0,
+        "--max-unexpected-hits",
+        min=0,
+        help="Maximum unexpected tagged entities allowed across fixture cases.",
+    ),
+    max_ambiguous_aliases: int = typer.Option(
+        0,
+        "--max-ambiguous-aliases",
+        min=0,
+        help="Maximum ambiguous alias keys allowed after generation.",
+    ),
+    max_dropped_alias_ratio: float = typer.Option(
+        0.5,
+        "--max-dropped-alias-ratio",
+        min=0.0,
+        max=1.0,
+        help="Maximum acceptable dropped-alias ratio after normalization and pruning.",
+    ),
+) -> None:
+    """Refresh one or more generated packs into a quality-gated registry release."""
+
+    try:
+        response = api_refresh_generated_packs(
+            bundle_dirs,
+            output_dir=output_dir,
+            general_bundle_dir=general_bundle_dir,
+            min_expected_recall=min_expected_recall,
+            max_unexpected_hits=max_unexpected_hits,
+            max_ambiguous_aliases=max_ambiguous_aliases,
+            max_dropped_alias_ratio=max_dropped_alias_ratio,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+    if not response.passed:
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("validate-finance-quality")
+def registry_validate_finance_quality(
+    bundle_dir: Path = typer.Argument(..., help="Normalized finance bundle directory with bundle.json."),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where generated pack, registry, and install validation output should be written.",
+    ),
+    version: str | None = typer.Option(
+        None,
+        "--version",
+        help="Override the generated pack version instead of using bundle.json.",
+    ),
+    min_expected_recall: float = typer.Option(
+        1.0,
+        "--min-expected-recall",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable recall across expected finance fixtures.",
+    ),
+    max_unexpected_hits: int = typer.Option(
+        0,
+        "--max-unexpected-hits",
+        min=0,
+        help="Maximum unexpected tagged entities allowed across fixture cases.",
+    ),
+    max_ambiguous_aliases: int = typer.Option(
+        0,
+        "--max-ambiguous-aliases",
+        min=0,
+        help="Maximum ambiguous alias keys allowed after generation.",
+    ),
+    max_dropped_alias_ratio: float = typer.Option(
+        0.5,
+        "--max-dropped-alias-ratio",
+        min=0.0,
+        max=1.0,
+        help="Maximum acceptable dropped-alias ratio after normalization and pruning.",
+    ),
+) -> None:
+    """Build, install, and evaluate one generated `finance-en` pack bundle."""
+
+    try:
+        response = api_validate_finance_pack_quality(
+            bundle_dir,
+            output_dir=output_dir,
+            version=version,
+            min_expected_recall=min_expected_recall,
+            max_unexpected_hits=max_unexpected_hits,
+            max_ambiguous_aliases=max_ambiguous_aliases,
+            max_dropped_alias_ratio=max_dropped_alias_ratio,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+    if not response.passed:
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("validate-general-quality")
+def registry_validate_general_quality(
+    bundle_dir: Path = typer.Argument(..., help="Normalized general bundle directory with bundle.json."),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where generated pack, registry, and install validation output should be written.",
+    ),
+    version: str | None = typer.Option(
+        None,
+        "--version",
+        help="Override the generated pack version instead of using bundle.json.",
+    ),
+    min_expected_recall: float = typer.Option(
+        1.0,
+        "--min-expected-recall",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable recall across expected general fixtures.",
+    ),
+    max_unexpected_hits: int = typer.Option(
+        0,
+        "--max-unexpected-hits",
+        min=0,
+        help="Maximum unexpected tagged entities allowed across fixture cases.",
+    ),
+    max_ambiguous_aliases: int = typer.Option(
+        0,
+        "--max-ambiguous-aliases",
+        min=0,
+        help="Maximum ambiguous alias keys allowed after generation.",
+    ),
+    max_dropped_alias_ratio: float = typer.Option(
+        0.5,
+        "--max-dropped-alias-ratio",
+        min=0.0,
+        max=1.0,
+        help="Maximum acceptable dropped-alias ratio after normalization and pruning.",
+    ),
+) -> None:
+    """Build, install, and evaluate one generated `general-en` pack bundle."""
+
+    try:
+        response = api_validate_general_pack_quality(
+            bundle_dir,
+            output_dir=output_dir,
+            version=version,
+            min_expected_recall=min_expected_recall,
+            max_unexpected_hits=max_unexpected_hits,
+            max_ambiguous_aliases=max_ambiguous_aliases,
+            max_dropped_alias_ratio=max_dropped_alias_ratio,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+    if not response.passed:
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("validate-medical-quality")
+def registry_validate_medical_quality(
+    bundle_dir: Path = typer.Argument(..., help="Normalized medical bundle directory with bundle.json."),
+    general_bundle_dir: Path = typer.Option(
+        ...,
+        "--general-bundle-dir",
+        help="Normalized general bundle directory used to satisfy the medical pack dependency.",
+    ),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where generated packs, registry, and install validation output should be written.",
+    ),
+    version: str | None = typer.Option(
+        None,
+        "--version",
+        help="Override the generated medical pack version instead of using bundle.json.",
+    ),
+    min_expected_recall: float = typer.Option(
+        1.0,
+        "--min-expected-recall",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable recall across expected medical fixtures.",
+    ),
+    max_unexpected_hits: int = typer.Option(
+        0,
+        "--max-unexpected-hits",
+        min=0,
+        help="Maximum unexpected tagged entities allowed across fixture cases.",
+    ),
+    max_ambiguous_aliases: int = typer.Option(
+        0,
+        "--max-ambiguous-aliases",
+        min=0,
+        help="Maximum ambiguous alias keys allowed after generation.",
+    ),
+    max_dropped_alias_ratio: float = typer.Option(
+        0.5,
+        "--max-dropped-alias-ratio",
+        min=0.0,
+        max=1.0,
+        help="Maximum acceptable dropped-alias ratio after normalization and pruning.",
+    ),
+) -> None:
+    """Build, install, and evaluate one generated `medical-en` pack bundle."""
+
+    try:
+        response = api_validate_medical_pack_quality(
+            bundle_dir,
+            general_bundle_dir=general_bundle_dir,
+            output_dir=output_dir,
+            version=version,
+            min_expected_recall=min_expected_recall,
+            max_unexpected_hits=max_unexpected_hits,
+            max_ambiguous_aliases=max_ambiguous_aliases,
+            max_dropped_alias_ratio=max_dropped_alias_ratio,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+    if not response.passed:
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("build-finance-bundle")
+def registry_build_finance_bundle(
+    sec_company_tickers: Path = typer.Option(
+        ...,
+        "--sec-company-tickers",
+        help="Path to the SEC company_tickers snapshot JSON file.",
+    ),
+    symbol_directory: Path = typer.Option(
+        ...,
+        "--symbol-directory",
+        help="Path to the symbol-directory delimited file.",
+    ),
+    curated_entities: Path = typer.Option(
+        ...,
+        "--curated-entities",
+        help="Path to the curated finance entities JSON or JSONL file.",
+    ),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the normalized finance bundle should be written.",
+    ),
+    version: str = typer.Option(
+        "0.2.0",
+        "--version",
+        help="Pack version to record in the generated bundle manifest.",
+    ),
+) -> None:
+    """Build one normalized finance source bundle from raw snapshot files."""
+
+    try:
+        response = api_build_finance_source_bundle(
+            sec_companies_path=sec_company_tickers,
+            symbol_directory_path=symbol_directory,
+            curated_entities_path=curated_entities,
+            output_dir=output_dir,
+            version=version,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("build-general-bundle")
+def registry_build_general_bundle(
+    wikidata_entities: Path = typer.Option(
+        ...,
+        "--wikidata-entities",
+        help="JSON or JSONL snapshot of operator-filtered Wikidata-style general entities.",
+    ),
+    geonames_places: Path = typer.Option(
+        ...,
+        "--geonames-places",
+        help="Delimited GeoNames-style place snapshot file.",
+    ),
+    curated_entities: Path = typer.Option(
+        ...,
+        "--curated-entities",
+        help="JSON or JSONL snapshot of curated general entities.",
+    ),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the normalized bundle should be written.",
+    ),
+    version: str = typer.Option(
+        "0.2.0",
+        "--version",
+        help="Version recorded in the generated bundle manifest.",
+    ),
+) -> None:
+    """Build one normalized `general-en` source bundle from raw snapshot files."""
+
+    try:
+        response = api_build_general_source_bundle(
+            wikidata_entities_path=wikidata_entities,
+            geonames_places_path=geonames_places,
+            curated_entities_path=curated_entities,
+            output_dir=output_dir,
+            version=version,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("build-medical-bundle")
+def registry_build_medical_bundle(
+    disease_ontology: Path = typer.Option(
+        ...,
+        "--disease-ontology",
+        help="JSON or JSONL snapshot of disease ontology terms.",
+    ),
+    hgnc_genes: Path = typer.Option(
+        ...,
+        "--hgnc-genes",
+        help="JSON or JSONL snapshot of HGNC gene symbols and aliases.",
+    ),
+    uniprot_proteins: Path = typer.Option(
+        ...,
+        "--uniprot-proteins",
+        help="JSON or JSONL snapshot of UniProt reviewed protein names.",
+    ),
+    clinical_trials: Path = typer.Option(
+        ...,
+        "--clinical-trials",
+        help="JSON or JSONL snapshot of ClinicalTrials.gov study records.",
+    ),
+    curated_entities: Path = typer.Option(
+        ...,
+        "--curated-entities",
+        help="JSON or JSONL snapshot of curated medical entities.",
+    ),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the normalized medical bundle should be written.",
+    ),
+    version: str = typer.Option(
+        "0.2.0",
+        "--version",
+        help="Version recorded in the generated bundle manifest.",
+    ),
+) -> None:
+    """Build one normalized `medical-en` source bundle from raw snapshot files."""
+
+    try:
+        response = api_build_medical_source_bundle(
+            disease_ontology_path=disease_ontology,
+            hgnc_genes_path=hgnc_genes,
+            uniprot_proteins_path=uniprot_proteins,
+            clinical_trials_path=clinical_trials,
+            curated_entities_path=curated_entities,
+            output_dir=output_dir,
+            version=version,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 

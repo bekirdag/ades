@@ -87,6 +87,360 @@ class RegistryBuildResponse(BaseModel):
     packs: list[RegistryBuildPackSummary] = Field(default_factory=list)
 
 
+class RegistryBuildFinanceBundleRequest(BaseModel):
+    """Request body for building one normalized `finance-en` source bundle."""
+
+    sec_companies_path: str
+    symbol_directory_path: str
+    curated_entities_path: str
+    output_dir: str
+    version: str = "0.2.0"
+
+
+class RegistryBuildFinanceBundleResponse(BaseModel):
+    """Response body for one built normalized `finance-en` source bundle."""
+
+    pack_id: str
+    version: str
+    output_dir: str
+    bundle_dir: str
+    bundle_manifest_path: str
+    entities_path: str
+    rules_path: str
+    generated_at: datetime
+    source_count: int
+    entity_record_count: int
+    rule_record_count: int
+    sec_issuer_count: int
+    symbol_count: int
+    curated_entity_count: int
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegistryBuildGeneralBundleRequest(BaseModel):
+    """Request body for building one normalized `general-en` source bundle."""
+
+    wikidata_entities_path: str
+    geonames_places_path: str
+    curated_entities_path: str
+    output_dir: str
+    version: str = "0.2.0"
+
+
+class RegistryBuildGeneralBundleResponse(BaseModel):
+    """Response body for one built normalized `general-en` source bundle."""
+
+    pack_id: str
+    version: str
+    output_dir: str
+    bundle_dir: str
+    bundle_manifest_path: str
+    entities_path: str
+    rules_path: str
+    generated_at: datetime
+    source_count: int
+    entity_record_count: int
+    rule_record_count: int
+    wikidata_entity_count: int
+    geonames_location_count: int
+    curated_entity_count: int
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegistryBuildMedicalBundleRequest(BaseModel):
+    """Request body for building one normalized `medical-en` source bundle."""
+
+    disease_ontology_path: str
+    hgnc_genes_path: str
+    uniprot_proteins_path: str
+    clinical_trials_path: str
+    curated_entities_path: str
+    output_dir: str
+    version: str = "0.2.0"
+
+
+class RegistryBuildMedicalBundleResponse(BaseModel):
+    """Response body for one built normalized `medical-en` source bundle."""
+
+    pack_id: str
+    version: str
+    output_dir: str
+    bundle_dir: str
+    bundle_manifest_path: str
+    entities_path: str
+    rules_path: str
+    generated_at: datetime
+    source_count: int
+    entity_record_count: int
+    rule_record_count: int
+    disease_count: int
+    gene_count: int
+    protein_count: int
+    clinical_trial_count: int
+    curated_entity_count: int
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegistryValidateFinanceQualityRequest(BaseModel):
+    """Request body for validating one generated `finance-en` pack bundle."""
+
+    bundle_dir: str
+    output_dir: str
+    version: str | None = None
+    min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
+    max_unexpected_hits: int = Field(0, ge=0)
+    max_ambiguous_aliases: int = Field(0, ge=0)
+    max_dropped_alias_ratio: float = Field(0.5, ge=0.0, le=1.0)
+
+
+class RegistryQualityEntity(BaseModel):
+    """Tagged or expected entity reported by offline pack-quality validation."""
+
+    text: str
+    label: str
+
+
+class RegistryPackQualityCaseResult(BaseModel):
+    """Outcome for one generated-pack quality fixture case."""
+
+    name: str
+    text: str
+    expected_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    actual_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    matched_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    missing_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    unexpected_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    passed: bool
+
+
+class RegistryFinanceQualityCaseResult(BaseModel):
+    """Outcome for one finance pack quality fixture case."""
+
+    name: str
+    text: str
+    expected_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    actual_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    matched_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    missing_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    unexpected_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    passed: bool
+
+
+class RegistryValidateFinanceQualityResponse(BaseModel):
+    """Response body for one validated generated `finance-en` pack bundle."""
+
+    pack_id: str
+    version: str
+    bundle_dir: str
+    output_dir: str
+    generated_pack_dir: str
+    registry_dir: str
+    registry_index_path: str
+    registry_index_url: str
+    storage_root: str
+    evaluated_at: datetime
+    fixture_profile: str
+    fixture_count: int
+    passed_case_count: int
+    failed_case_count: int
+    expected_entity_count: int
+    actual_entity_count: int
+    matched_expected_entity_count: int
+    missing_expected_entity_count: int
+    unexpected_entity_count: int
+    expected_recall: float
+    precision: float
+    alias_count: int
+    unique_canonical_count: int
+    rule_count: int
+    dropped_alias_count: int
+    ambiguous_alias_count: int
+    dropped_alias_ratio: float
+    passed: bool
+    failures: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    cases: list[RegistryFinanceQualityCaseResult] = Field(default_factory=list)
+
+
+class RegistryValidateGeneralQualityRequest(BaseModel):
+    """Request body for validating one generated `general-en` pack bundle."""
+
+    bundle_dir: str
+    output_dir: str
+    version: str | None = None
+    min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
+    max_unexpected_hits: int = Field(0, ge=0)
+    max_ambiguous_aliases: int = Field(0, ge=0)
+    max_dropped_alias_ratio: float = Field(0.5, ge=0.0, le=1.0)
+
+
+class RegistryValidateMedicalQualityRequest(BaseModel):
+    """Request body for validating one generated `medical-en` pack bundle."""
+
+    bundle_dir: str
+    general_bundle_dir: str
+    output_dir: str
+    version: str | None = None
+    min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
+    max_unexpected_hits: int = Field(0, ge=0)
+    max_ambiguous_aliases: int = Field(0, ge=0)
+    max_dropped_alias_ratio: float = Field(0.5, ge=0.0, le=1.0)
+
+
+class RegistryPackQualityResponse(BaseModel):
+    """Response body for one validated generated pack bundle."""
+
+    pack_id: str
+    version: str
+    bundle_dir: str
+    output_dir: str
+    generated_pack_dir: str
+    registry_dir: str
+    registry_index_path: str
+    registry_index_url: str
+    storage_root: str
+    evaluated_at: datetime
+    fixture_profile: str
+    fixture_count: int
+    passed_case_count: int
+    failed_case_count: int
+    expected_entity_count: int
+    actual_entity_count: int
+    matched_expected_entity_count: int
+    missing_expected_entity_count: int
+    unexpected_entity_count: int
+    expected_recall: float
+    precision: float
+    alias_count: int
+    unique_canonical_count: int
+    rule_count: int
+    dropped_alias_count: int
+    ambiguous_alias_count: int
+    dropped_alias_ratio: float
+    passed: bool
+    failures: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    cases: list[RegistryPackQualityCaseResult] = Field(default_factory=list)
+
+
+class RegistryGeneratePackRequest(BaseModel):
+    """Request body for generating one pack directory from a normalized bundle."""
+
+    bundle_dir: str
+    output_dir: str
+    version: str | None = None
+    include_build_metadata: bool = True
+    include_build_only: bool = False
+
+
+class RegistryGeneratePackResponse(BaseModel):
+    """Response body for one generated runtime-compatible pack directory."""
+
+    pack_id: str
+    version: str
+    bundle_dir: str
+    output_dir: str
+    pack_dir: str
+    manifest_path: str
+    labels_path: str
+    aliases_path: str
+    rules_path: str
+    sources_path: str | None = None
+    build_path: str | None = None
+    generated_at: datetime
+    label_count: int
+    alias_count: int
+    rule_count: int
+    source_count: int
+    included_entity_count: int
+    included_rule_count: int
+    dropped_record_count: int
+    dropped_alias_count: int
+    ambiguous_alias_count: int
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegistryReportPackRequest(BaseModel):
+    """Request body for generating one pack report from a normalized bundle."""
+
+    bundle_dir: str
+    output_dir: str
+    version: str | None = None
+    include_build_metadata: bool = True
+    include_build_only: bool = False
+
+
+class RegistryReportPackResponse(BaseModel):
+    """Response body for one generated runtime-compatible pack report."""
+
+    pack_id: str
+    version: str
+    bundle_dir: str
+    output_dir: str
+    pack_dir: str
+    manifest_path: str
+    labels_path: str
+    aliases_path: str
+    rules_path: str
+    sources_path: str | None = None
+    build_path: str | None = None
+    generated_at: datetime
+    source_count: int
+    label_count: int
+    alias_count: int
+    unique_canonical_count: int
+    rule_count: int
+    included_entity_count: int
+    included_rule_count: int
+    dropped_record_count: int
+    dropped_alias_count: int
+    ambiguous_alias_count: int
+    dropped_alias_ratio: float
+    label_distribution: dict[str, int] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegistryRefreshGeneratedPacksRequest(BaseModel):
+    """Request body for building a quality-gated registry release from bundle dirs."""
+
+    bundle_dirs: list[str] = Field(default_factory=list)
+    output_dir: str
+    general_bundle_dir: str | None = None
+    min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
+    max_unexpected_hits: int = Field(0, ge=0)
+    max_ambiguous_aliases: int = Field(0, ge=0)
+    max_dropped_alias_ratio: float = Field(0.5, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_bundle_dirs(self) -> "RegistryRefreshGeneratedPacksRequest":
+        if not self.bundle_dirs:
+            raise ValueError("At least one bundle directory is required.")
+        return self
+
+
+class RegistryRefreshPackResponse(BaseModel):
+    """Reported and validated output for one bundle in a refresh run."""
+
+    pack_id: str
+    bundle_dir: str
+    report: RegistryReportPackResponse
+    quality: RegistryPackQualityResponse
+
+
+class RegistryRefreshGeneratedPacksResponse(BaseModel):
+    """Response body for one generated-pack refresh run."""
+
+    output_dir: str
+    report_dir: str
+    quality_dir: str
+    generated_at: datetime
+    pack_count: int
+    passed: bool
+    registry: RegistryBuildResponse | None = None
+    warnings: list[str] = Field(default_factory=list)
+    packs: list[RegistryRefreshPackResponse] = Field(default_factory=list)
+
+
 class NpmInstallerInfo(BaseModel):
     """Canonical npm-wrapper bootstrap metadata."""
 

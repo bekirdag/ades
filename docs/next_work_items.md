@@ -18,6 +18,12 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 
 ## Recently Closed
 
+- Offline generated-pack refresh and publication orchestration:
+  - implemented in `src/ades/packs/refresh.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
+  - turns one or more normalized bundle directories into a quality-gated static registry release by chaining report generation, pack-specific validation, and final registry publication only when every requested pack passes
+  - adds categorized unit, component, integration, and API coverage for successful refresh runs plus the intentional registry-build skip path when quality fails
+  - adds durable operator docs in `docs/library_pack_source_bundle_spec.md`, `docs/library_pack_publication_workflow.md`, and `docs/production_deployment.md` so generated pack publication stays aligned with the existing object-storage and hosted-registry seam
+
 - Exact zero-state reuse-counter validation for installed-artifact `/v0/tag/files` smoke:
   - implemented in `src/ades/release.py`
   - tightens clean-environment wheel/npm release smoke so both the root batch payload and replay payload must keep the exact deterministic `summary.unchanged_skipped_count`, `summary.unchanged_reused_count`, `summary.reused_output_missing_count`, and `summary.repaired_reused_output_count` values for the clean two-file smoke corpus

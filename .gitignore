@@ -10,3 +10,6 @@ build/
 dist/
 /.docdex/
 /docs/planning/
+.env
+.env.*
+!.env.example

@@ -17,6 +17,15 @@ from .distribution import (
     resolve_npm_runtime_dir,
 )
 from .packs.installer import InstallResult, PackInstaller
+from .packs.generation import generate_pack_source as run_generate_pack_source
+from .packs.finance_bundle import build_finance_source_bundle as run_build_finance_source_bundle
+from .packs.finance_quality import validate_finance_pack_quality as run_validate_finance_pack_quality
+from .packs.general_bundle import build_general_source_bundle as run_build_general_source_bundle
+from .packs.general_quality import validate_general_pack_quality as run_validate_general_pack_quality
+from .packs.medical_bundle import build_medical_source_bundle as run_build_medical_source_bundle
+from .packs.medical_quality import validate_medical_pack_quality as run_validate_medical_pack_quality
+from .packs.refresh import refresh_generated_pack_registry as run_refresh_generated_pack_registry
+from .packs.reporting import report_generated_pack as run_report_generated_pack
 from .packs.publish import build_static_registry
 from .packs.registry import PackRegistry, load_registry_index
 from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load_tag_file
@@ -45,6 +54,16 @@ from .service.models import (
     ReleaseVerificationResponse,
     RegistryBuildPackSummary,
     RegistryBuildResponse,
+    RegistryBuildFinanceBundleResponse,
+    RegistryBuildGeneralBundleResponse,
+    RegistryBuildMedicalBundleResponse,
+    RegistryPackQualityCaseResult,
+    RegistryPackQualityResponse,
+    RegistryRefreshGeneratedPacksResponse,
+    RegistryRefreshPackResponse,
+    RegistryValidateFinanceQualityResponse,
+    RegistryGeneratePackResponse,
+    RegistryReportPackResponse,
     SourceFingerprint,
     StatusResponse,
     TagResponse,
@@ -213,6 +232,622 @@ def build_registry(
                 artifact_size_bytes=pack.artifact_size_bytes,
             )
             for pack in result.packs
+        ],
+    )
+
+
+def generate_pack_source(
+    bundle_dir: str | Path,
+    *,
+    output_dir: str | Path,
+    version: str | None = None,
+    include_build_metadata: bool = True,
+    include_build_only: bool = False,
+) -> RegistryGeneratePackResponse:
+    """Generate one runtime-compatible pack directory from a normalized source bundle."""
+
+    result = run_generate_pack_source(
+        bundle_dir,
+        output_dir=output_dir,
+        version=version,
+        include_build_metadata=include_build_metadata,
+        include_build_only=include_build_only,
+    )
+    return RegistryGeneratePackResponse(
+        pack_id=result.pack_id,
+        version=result.version,
+        bundle_dir=result.bundle_dir,
+        output_dir=result.output_dir,
+        pack_dir=result.pack_dir,
+        manifest_path=result.manifest_path,
+        labels_path=result.labels_path,
+        aliases_path=result.aliases_path,
+        rules_path=result.rules_path,
+        sources_path=result.sources_path,
+        build_path=result.build_path,
+        generated_at=result.generated_at,
+        label_count=result.label_count,
+        alias_count=result.alias_count,
+        rule_count=result.rule_count,
+        source_count=result.source_count,
+        included_entity_count=result.included_entity_count,
+        included_rule_count=result.included_rule_count,
+        dropped_record_count=result.dropped_record_count,
+        dropped_alias_count=result.dropped_alias_count,
+        ambiguous_alias_count=result.ambiguous_alias_count,
+        warnings=result.warnings,
+    )
+
+
+def report_generated_pack(
+    bundle_dir: str | Path,
+    *,
+    output_dir: str | Path,
+    version: str | None = None,
+    include_build_metadata: bool = True,
+    include_build_only: bool = False,
+) -> RegistryReportPackResponse:
+    """Generate one runtime-compatible pack directory and report stable statistics."""
+
+    result = run_report_generated_pack(
+        bundle_dir,
+        output_dir=output_dir,
+        version=version,
+        include_build_metadata=include_build_metadata,
+        include_build_only=include_build_only,
+    )
+    return RegistryReportPackResponse(
+        pack_id=result.pack_id,
+        version=result.version,
+        bundle_dir=result.bundle_dir,
+        output_dir=result.output_dir,
+        pack_dir=result.pack_dir,
+        manifest_path=result.manifest_path,
+        labels_path=result.labels_path,
+        aliases_path=result.aliases_path,
+        rules_path=result.rules_path,
+        sources_path=result.sources_path,
+        build_path=result.build_path,
+        generated_at=result.generated_at,
+        source_count=result.source_count,
+        label_count=result.label_count,
+        alias_count=result.alias_count,
+        unique_canonical_count=result.unique_canonical_count,
+        rule_count=result.rule_count,
+        included_entity_count=result.included_entity_count,
+        included_rule_count=result.included_rule_count,
+        dropped_record_count=result.dropped_record_count,
+        dropped_alias_count=result.dropped_alias_count,
+        ambiguous_alias_count=result.ambiguous_alias_count,
+        dropped_alias_ratio=result.dropped_alias_ratio,
+        label_distribution=result.label_distribution,
+        warnings=result.warnings,
+    )
+
+
+def refresh_generated_packs(
+    bundle_dirs: Iterable[str | Path],
+    *,
+    output_dir: str | Path,
+    general_bundle_dir: str | Path | None = None,
+    min_expected_recall: float = 1.0,
+    max_unexpected_hits: int = 0,
+    max_ambiguous_aliases: int = 0,
+    max_dropped_alias_ratio: float = 0.5,
+) -> RegistryRefreshGeneratedPacksResponse:
+    """Refresh one or more generated packs into a quality-gated registry release."""
+
+    result = run_refresh_generated_pack_registry(
+        list(bundle_dirs),
+        output_dir=output_dir,
+        general_bundle_dir=general_bundle_dir,
+        min_expected_recall=min_expected_recall,
+        max_unexpected_hits=max_unexpected_hits,
+        max_ambiguous_aliases=max_ambiguous_aliases,
+        max_dropped_alias_ratio=max_dropped_alias_ratio,
+    )
+    registry_response = (
+        RegistryBuildResponse(
+            output_dir=result.registry.output_dir,
+            index_path=result.registry.index_path,
+            index_url=result.registry.index_url,
+            generated_at=result.registry.generated_at,
+            pack_count=len(result.registry.packs),
+            packs=[
+                RegistryBuildPackSummary(
+                    pack_id=pack.pack_id,
+                    version=pack.version,
+                    source_path=pack.source_path,
+                    manifest_path=pack.manifest_path,
+                    artifact_path=pack.artifact_path,
+                    artifact_sha256=pack.artifact_sha256,
+                    artifact_size_bytes=pack.artifact_size_bytes,
+                )
+                for pack in result.registry.packs
+            ],
+        )
+        if result.registry is not None
+        else None
+    )
+    return RegistryRefreshGeneratedPacksResponse(
+        output_dir=result.output_dir,
+        report_dir=result.report_dir,
+        quality_dir=result.quality_dir,
+        generated_at=result.generated_at,
+        pack_count=result.pack_count,
+        passed=result.passed,
+        registry=registry_response,
+        warnings=result.warnings,
+        packs=[
+            RegistryRefreshPackResponse(
+                pack_id=item.pack_id,
+                bundle_dir=item.bundle_dir,
+                report=_report_response_from_result(item.report),
+                quality=_quality_response_from_result(item.quality),
+            )
+            for item in result.packs
+        ],
+    )
+
+
+def build_finance_source_bundle(
+    *,
+    sec_companies_path: str | Path,
+    symbol_directory_path: str | Path,
+    curated_entities_path: str | Path,
+    output_dir: str | Path,
+    version: str = "0.2.0",
+) -> RegistryBuildFinanceBundleResponse:
+    """Build one normalized `finance-en` source bundle from raw snapshot files."""
+
+    result = run_build_finance_source_bundle(
+        sec_companies_path=sec_companies_path,
+        symbol_directory_path=symbol_directory_path,
+        curated_entities_path=curated_entities_path,
+        output_dir=output_dir,
+        version=version,
+    )
+    return RegistryBuildFinanceBundleResponse(
+        pack_id=result.pack_id,
+        version=result.version,
+        output_dir=result.output_dir,
+        bundle_dir=result.bundle_dir,
+        bundle_manifest_path=result.bundle_manifest_path,
+        entities_path=result.entities_path,
+        rules_path=result.rules_path,
+        generated_at=result.generated_at,
+        source_count=result.source_count,
+        entity_record_count=result.entity_record_count,
+        rule_record_count=result.rule_record_count,
+        sec_issuer_count=result.sec_issuer_count,
+        symbol_count=result.symbol_count,
+        curated_entity_count=result.curated_entity_count,
+        warnings=result.warnings,
+    )
+
+
+def build_general_source_bundle(
+    *,
+    wikidata_entities_path: str | Path,
+    geonames_places_path: str | Path,
+    curated_entities_path: str | Path,
+    output_dir: str | Path,
+    version: str = "0.2.0",
+) -> RegistryBuildGeneralBundleResponse:
+    """Build one normalized `general-en` source bundle from raw snapshot files."""
+
+    result = run_build_general_source_bundle(
+        wikidata_entities_path=wikidata_entities_path,
+        geonames_places_path=geonames_places_path,
+        curated_entities_path=curated_entities_path,
+        output_dir=output_dir,
+        version=version,
+    )
+    return RegistryBuildGeneralBundleResponse(
+        pack_id=result.pack_id,
+        version=result.version,
+        output_dir=result.output_dir,
+        bundle_dir=result.bundle_dir,
+        bundle_manifest_path=result.bundle_manifest_path,
+        entities_path=result.entities_path,
+        rules_path=result.rules_path,
+        generated_at=result.generated_at,
+        source_count=result.source_count,
+        entity_record_count=result.entity_record_count,
+        rule_record_count=result.rule_record_count,
+        wikidata_entity_count=result.wikidata_entity_count,
+        geonames_location_count=result.geonames_location_count,
+        curated_entity_count=result.curated_entity_count,
+        warnings=result.warnings,
+    )
+
+
+def build_medical_source_bundle(
+    *,
+    disease_ontology_path: str | Path,
+    hgnc_genes_path: str | Path,
+    uniprot_proteins_path: str | Path,
+    clinical_trials_path: str | Path,
+    curated_entities_path: str | Path,
+    output_dir: str | Path,
+    version: str = "0.2.0",
+) -> RegistryBuildMedicalBundleResponse:
+    """Build one normalized `medical-en` source bundle from raw snapshot files."""
+
+    result = run_build_medical_source_bundle(
+        disease_ontology_path=disease_ontology_path,
+        hgnc_genes_path=hgnc_genes_path,
+        uniprot_proteins_path=uniprot_proteins_path,
+        clinical_trials_path=clinical_trials_path,
+        curated_entities_path=curated_entities_path,
+        output_dir=output_dir,
+        version=version,
+    )
+    return RegistryBuildMedicalBundleResponse(
+        pack_id=result.pack_id,
+        version=result.version,
+        output_dir=result.output_dir,
+        bundle_dir=result.bundle_dir,
+        bundle_manifest_path=result.bundle_manifest_path,
+        entities_path=result.entities_path,
+        rules_path=result.rules_path,
+        generated_at=result.generated_at,
+        source_count=result.source_count,
+        entity_record_count=result.entity_record_count,
+        rule_record_count=result.rule_record_count,
+        disease_count=result.disease_count,
+        gene_count=result.gene_count,
+        protein_count=result.protein_count,
+        clinical_trial_count=result.clinical_trial_count,
+        curated_entity_count=result.curated_entity_count,
+        warnings=result.warnings,
+    )
+
+
+def validate_general_pack_quality(
+    bundle_dir: str | Path,
+    *,
+    output_dir: str | Path,
+    version: str | None = None,
+    min_expected_recall: float = 1.0,
+    max_unexpected_hits: int = 0,
+    max_ambiguous_aliases: int = 0,
+    max_dropped_alias_ratio: float = 0.5,
+) -> RegistryPackQualityResponse:
+    """Build, install, and evaluate one generated `general-en` pack bundle."""
+
+    result = run_validate_general_pack_quality(
+        str(bundle_dir),
+        output_dir=str(output_dir),
+        version=version,
+        min_expected_recall=min_expected_recall,
+        max_unexpected_hits=max_unexpected_hits,
+        max_ambiguous_aliases=max_ambiguous_aliases,
+        max_dropped_alias_ratio=max_dropped_alias_ratio,
+    )
+    return RegistryPackQualityResponse(
+        pack_id=result.pack_id,
+        version=result.version,
+        bundle_dir=result.bundle_dir,
+        output_dir=result.output_dir,
+        generated_pack_dir=result.generated_pack_dir,
+        registry_dir=result.registry_dir,
+        registry_index_path=result.registry_index_path,
+        registry_index_url=result.registry_index_url,
+        storage_root=result.storage_root,
+        evaluated_at=result.evaluated_at,
+        fixture_profile=result.fixture_profile,
+        fixture_count=result.fixture_count,
+        passed_case_count=result.passed_case_count,
+        failed_case_count=result.failed_case_count,
+        expected_entity_count=result.expected_entity_count,
+        actual_entity_count=result.actual_entity_count,
+        matched_expected_entity_count=result.matched_expected_entity_count,
+        missing_expected_entity_count=result.missing_expected_entity_count,
+        unexpected_entity_count=result.unexpected_entity_count,
+        expected_recall=result.expected_recall,
+        precision=result.precision,
+        alias_count=result.alias_count,
+        unique_canonical_count=result.unique_canonical_count,
+        rule_count=result.rule_count,
+        dropped_alias_count=result.dropped_alias_count,
+        ambiguous_alias_count=result.ambiguous_alias_count,
+        dropped_alias_ratio=result.dropped_alias_ratio,
+        passed=result.passed,
+        failures=result.failures,
+        warnings=result.warnings,
+        cases=[
+            RegistryPackQualityCaseResult(
+                name=case.name,
+                text=case.text,
+                expected_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.expected_entities
+                ],
+                actual_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.actual_entities
+                ],
+                matched_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.matched_entities
+                ],
+                missing_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.missing_entities
+                ],
+                unexpected_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.unexpected_entities
+                ],
+                passed=case.passed,
+            )
+            for case in result.cases
+        ],
+    )
+
+
+def validate_medical_pack_quality(
+    bundle_dir: str | Path,
+    *,
+    general_bundle_dir: str | Path,
+    output_dir: str | Path,
+    version: str | None = None,
+    min_expected_recall: float = 1.0,
+    max_unexpected_hits: int = 0,
+    max_ambiguous_aliases: int = 0,
+    max_dropped_alias_ratio: float = 0.5,
+) -> RegistryPackQualityResponse:
+    """Build, install, and evaluate one generated `medical-en` pack bundle."""
+
+    result = run_validate_medical_pack_quality(
+        str(bundle_dir),
+        general_bundle_dir=str(general_bundle_dir),
+        output_dir=str(output_dir),
+        version=version,
+        min_expected_recall=min_expected_recall,
+        max_unexpected_hits=max_unexpected_hits,
+        max_ambiguous_aliases=max_ambiguous_aliases,
+        max_dropped_alias_ratio=max_dropped_alias_ratio,
+    )
+    return RegistryPackQualityResponse(
+        pack_id=result.pack_id,
+        version=result.version,
+        bundle_dir=result.bundle_dir,
+        output_dir=result.output_dir,
+        generated_pack_dir=result.generated_pack_dir,
+        registry_dir=result.registry_dir,
+        registry_index_path=result.registry_index_path,
+        registry_index_url=result.registry_index_url,
+        storage_root=result.storage_root,
+        evaluated_at=result.evaluated_at,
+        fixture_profile=result.fixture_profile,
+        fixture_count=result.fixture_count,
+        passed_case_count=result.passed_case_count,
+        failed_case_count=result.failed_case_count,
+        expected_entity_count=result.expected_entity_count,
+        actual_entity_count=result.actual_entity_count,
+        matched_expected_entity_count=result.matched_expected_entity_count,
+        missing_expected_entity_count=result.missing_expected_entity_count,
+        unexpected_entity_count=result.unexpected_entity_count,
+        expected_recall=result.expected_recall,
+        precision=result.precision,
+        alias_count=result.alias_count,
+        unique_canonical_count=result.unique_canonical_count,
+        rule_count=result.rule_count,
+        dropped_alias_count=result.dropped_alias_count,
+        ambiguous_alias_count=result.ambiguous_alias_count,
+        dropped_alias_ratio=result.dropped_alias_ratio,
+        passed=result.passed,
+        failures=result.failures,
+        warnings=result.warnings,
+        cases=[
+            RegistryPackQualityCaseResult(
+                name=case.name,
+                text=case.text,
+                expected_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.expected_entities
+                ],
+                actual_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.actual_entities
+                ],
+                matched_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.matched_entities
+                ],
+                missing_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.missing_entities
+                ],
+                unexpected_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.unexpected_entities
+                ],
+                passed=case.passed,
+            )
+            for case in result.cases
+        ],
+    )
+
+
+def validate_finance_pack_quality(
+    bundle_dir: str | Path,
+    *,
+    output_dir: str | Path,
+    version: str | None = None,
+    min_expected_recall: float = 1.0,
+    max_unexpected_hits: int = 0,
+    max_ambiguous_aliases: int = 0,
+    max_dropped_alias_ratio: float = 0.5,
+) -> RegistryValidateFinanceQualityResponse:
+    """Build, install, and evaluate one generated `finance-en` pack bundle."""
+
+    result = run_validate_finance_pack_quality(
+        bundle_dir,
+        output_dir=output_dir,
+        version=version,
+        min_expected_recall=min_expected_recall,
+        max_unexpected_hits=max_unexpected_hits,
+        max_ambiguous_aliases=max_ambiguous_aliases,
+        max_dropped_alias_ratio=max_dropped_alias_ratio,
+    )
+    return RegistryValidateFinanceQualityResponse(
+        pack_id=result.pack_id,
+        version=result.version,
+        bundle_dir=result.bundle_dir,
+        output_dir=result.output_dir,
+        generated_pack_dir=result.generated_pack_dir,
+        registry_dir=result.registry_dir,
+        registry_index_path=result.registry_index_path,
+        registry_index_url=result.registry_index_url,
+        storage_root=result.storage_root,
+        evaluated_at=result.evaluated_at,
+        fixture_profile=result.fixture_profile,
+        fixture_count=result.fixture_count,
+        passed_case_count=result.passed_case_count,
+        failed_case_count=result.failed_case_count,
+        expected_entity_count=result.expected_entity_count,
+        actual_entity_count=result.actual_entity_count,
+        matched_expected_entity_count=result.matched_expected_entity_count,
+        missing_expected_entity_count=result.missing_expected_entity_count,
+        unexpected_entity_count=result.unexpected_entity_count,
+        expected_recall=result.expected_recall,
+        precision=result.precision,
+        alias_count=result.alias_count,
+        unique_canonical_count=result.unique_canonical_count,
+        rule_count=result.rule_count,
+        dropped_alias_count=result.dropped_alias_count,
+        ambiguous_alias_count=result.ambiguous_alias_count,
+        dropped_alias_ratio=result.dropped_alias_ratio,
+        passed=result.passed,
+        failures=result.failures,
+        warnings=result.warnings,
+        cases=[
+            {
+                "name": case.name,
+                "text": case.text,
+                "expected_entities": [
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.expected_entities
+                ],
+                "actual_entities": [
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.actual_entities
+                ],
+                "matched_entities": [
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.matched_entities
+                ],
+                "missing_entities": [
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.missing_entities
+                ],
+                "unexpected_entities": [
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.unexpected_entities
+                ],
+                "passed": case.passed,
+            }
+            for case in result.cases
+        ],
+    )
+
+
+def _report_response_from_result(
+    result: "GeneratedPackReport",
+) -> RegistryReportPackResponse:
+    return RegistryReportPackResponse(
+        pack_id=result.pack_id,
+        version=result.version,
+        bundle_dir=result.bundle_dir,
+        output_dir=result.output_dir,
+        pack_dir=result.pack_dir,
+        manifest_path=result.manifest_path,
+        labels_path=result.labels_path,
+        aliases_path=result.aliases_path,
+        rules_path=result.rules_path,
+        sources_path=result.sources_path,
+        build_path=result.build_path,
+        generated_at=result.generated_at,
+        source_count=result.source_count,
+        label_count=result.label_count,
+        alias_count=result.alias_count,
+        unique_canonical_count=result.unique_canonical_count,
+        rule_count=result.rule_count,
+        included_entity_count=result.included_entity_count,
+        included_rule_count=result.included_rule_count,
+        dropped_record_count=result.dropped_record_count,
+        dropped_alias_count=result.dropped_alias_count,
+        ambiguous_alias_count=result.ambiguous_alias_count,
+        dropped_alias_ratio=result.dropped_alias_ratio,
+        label_distribution=result.label_distribution,
+        warnings=result.warnings,
+    )
+
+
+def _quality_response_from_result(
+    result: "PackQualityResult",
+) -> RegistryPackQualityResponse:
+    return RegistryPackQualityResponse(
+        pack_id=result.pack_id,
+        version=result.version,
+        bundle_dir=result.bundle_dir,
+        output_dir=result.output_dir,
+        generated_pack_dir=result.generated_pack_dir,
+        registry_dir=result.registry_dir,
+        registry_index_path=result.registry_index_path,
+        registry_index_url=result.registry_index_url,
+        storage_root=result.storage_root,
+        evaluated_at=result.evaluated_at,
+        fixture_profile=result.fixture_profile,
+        fixture_count=result.fixture_count,
+        passed_case_count=result.passed_case_count,
+        failed_case_count=result.failed_case_count,
+        expected_entity_count=result.expected_entity_count,
+        actual_entity_count=result.actual_entity_count,
+        matched_expected_entity_count=result.matched_expected_entity_count,
+        missing_expected_entity_count=result.missing_expected_entity_count,
+        unexpected_entity_count=result.unexpected_entity_count,
+        expected_recall=result.expected_recall,
+        precision=result.precision,
+        alias_count=result.alias_count,
+        unique_canonical_count=result.unique_canonical_count,
+        rule_count=result.rule_count,
+        dropped_alias_count=result.dropped_alias_count,
+        ambiguous_alias_count=result.ambiguous_alias_count,
+        dropped_alias_ratio=result.dropped_alias_ratio,
+        passed=result.passed,
+        failures=result.failures,
+        warnings=result.warnings,
+        cases=[
+            RegistryPackQualityCaseResult(
+                name=case.name,
+                text=case.text,
+                expected_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.expected_entities
+                ],
+                actual_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.actual_entities
+                ],
+                matched_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.matched_entities
+                ],
+                missing_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.missing_entities
+                ],
+                unexpected_entities=[
+                    {"text": entity.text, "label": entity.label}
+                    for entity in case.unexpected_entities
+                ],
+                passed=case.passed,
+            )
+            for case in result.cases
         ],
     )
 

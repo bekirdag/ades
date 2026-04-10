@@ -10,6 +10,10 @@ env:
   ADES_DEPLOY_HOST: 178.105.13.134
   ADES_DEPLOY_PORT: "34251"
   ADES_DEPLOY_USER: deploy
+  ADES_PACK_OBJECT_STORAGE_BUCKET: ${{ secrets.ADES_PACK_OBJECT_STORAGE_BUCKET }}
+  ADES_PACK_OBJECT_STORAGE_ENDPOINT: ${{ secrets.ADES_PACK_OBJECT_STORAGE_ENDPOINT }}
+  ADES_PACK_OBJECT_STORAGE_ACCESS_KEY_ID: ${{ secrets.ADES_PACK_OBJECT_STORAGE_ACCESS_KEY_ID }}
+  ADES_PACK_OBJECT_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.ADES_PACK_OBJECT_STORAGE_SECRET_ACCESS_KEY }}
 
 jobs:
   deploy:
@@ -96,6 +100,21 @@ jobs:
           "${ssh_cmd[@]}" "mkdir -p /mnt/ades/app/releases/$release_id /mnt/ades/repo/releases/$release_id"
           "${scp_cmd[@]}" "$wheel_path" "$ADES_DEPLOY_USER@$ADES_DEPLOY_HOST:/mnt/ades/app/releases/$release_id/$wheel_name"
           tar -C dist/registry -cf - . | "${ssh_cmd[@]}" "tar -C /mnt/ades/repo/releases/$release_id -xf -"
+
+      - name: Sync registry to object storage
+        if: ${{ env.ADES_PACK_OBJECT_STORAGE_BUCKET != '' && env.ADES_PACK_OBJECT_STORAGE_ENDPOINT != '' && env.ADES_PACK_OBJECT_STORAGE_ACCESS_KEY_ID != '' && env.ADES_PACK_OBJECT_STORAGE_SECRET_ACCESS_KEY != '' }}
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.ADES_PACK_OBJECT_STORAGE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.ADES_PACK_OBJECT_STORAGE_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_EC2_METADATA_DISABLED: "true"
+        run: |
+          set -euo pipefail
+          aws s3 sync dist/registry "s3://$ADES_PACK_OBJECT_STORAGE_BUCKET/" \
+            --delete \
+            --endpoint-url "https://$ADES_PACK_OBJECT_STORAGE_ENDPOINT" \
+            --only-show-errors
 
       - name: Install release and restart service
         shell: bash

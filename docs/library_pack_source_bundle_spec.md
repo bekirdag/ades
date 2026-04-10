@@ -1,0 +1,176 @@
+# Library Pack Source Bundle Spec
+
+This document defines the first executable offline input contract for turning downloaded library data into `ades` pack directories without changing the current runtime or registry format.
+
+## Goal
+
+One normalized source bundle should deterministically produce one runtime-compatible pack directory containing:
+
+- `manifest.json`
+- `labels.json`
+- `aliases.json`
+- `rules.json`
+- optional sidecar provenance files such as `sources.json` and `build.json`
+
+The generated pack must work with the existing `ades` registry builder, installer, CLI, API, and localhost service with no runtime schema changes.
+
+## Bundle Layout
+
+```text
+bundle-root/
+  bundle.json
+  normalized/
+    entities.jsonl
+    rules.jsonl
+```
+
+Rules:
+
+- `bundle.json` is required.
+- `normalized/entities.jsonl` is required.
+- `normalized/rules.jsonl` is optional.
+- Large raw downloads stay outside the repo, normally under `/mnt/githubActions/ades_big_data/`.
+- The bundle is the normalized handoff boundary between raw source adapters and the pack generator.
+
+## `bundle.json`
+
+Required fields:
+
+- `schema_version`: integer, currently `1`
+- `pack_id`: target pack id such as `finance-en`
+- `language`: target language code such as `en`
+- `domain`: target domain such as `finance`
+- `tier`: pack tier such as `base` or `domain`
+
+Optional fields:
+
+- `version`: default generated pack version when the caller does not override it
+- `description`: manifest description
+- `tags`: manifest tags
+- `dependencies`: pack dependencies
+- `min_ades_version`: minimum supported runtime version, default `0.1.0`
+- `entities_path`: relative path to the normalized entity JSONL file, default `normalized/entities.jsonl`
+- `rules_path`: relative path to the normalized rule JSONL file, default `normalized/rules.jsonl`
+- `label_mappings`: map raw source types to runtime labels
+- `stoplisted_aliases`: aliases to drop after normalization
+- `allowed_ambiguous_aliases`: aliases allowed to survive across multiple labels
+- `sources`: upstream snapshot descriptors used to populate `sources.json`
+
+Example:
+
+```json
+{
+  "schema_version": 1,
+  "pack_id": "finance-en",
+  "version": "0.2.0",
+  "language": "en",
+  "domain": "finance",
+  "tier": "domain",
+  "description": "Generated English finance entities and deterministic rules.",
+  "tags": ["finance", "generated", "english"],
+  "dependencies": [],
+  "min_ades_version": "0.1.0",
+  "label_mappings": {
+    "issuer": "organization",
+    "ticker": "ticker",
+    "exchange": "exchange"
+  },
+  "stoplisted_aliases": ["N/A"],
+  "allowed_ambiguous_aliases": [],
+  "sources": [
+    {
+      "name": "sec-companyfacts",
+      "snapshot_uri": "s3://ades-bundles/finance/sec/companyfacts-2026-04-10.jsonl",
+      "license": "build-only",
+      "retrieved_at": "2026-04-10T09:00:00Z",
+      "record_count": 123456
+    }
+  ]
+}
+```
+
+## Generator Behavior
+
+The generator reads the bundle and writes one pack directory under the requested output root:
+
+```text
+generated-root/
+  finance-en/
+    manifest.json
+    labels.json
+    aliases.json
+    rules.json
+    sources.json
+    build.json
+```
+
+Normalization performed during generation:
+
+- Unicode NFKC normalization
+- whitespace collapse and trimming
+- quote and dash normalization
+- alias deduplication by case-insensitive key
+- optional organization-suffix stripping for organization-like labels
+- stoplist filtering
+- ambiguous-alias dropping unless explicitly allowed
+- optional exclusion of records marked `build_only`
+
+## CLI / API / Service
+
+Public surfaces for the first generator slice:
+
+- Python: `ades.generate_pack_source(...)`
+- Python: `ades.report_generated_pack(...)`
+- Python: `ades.refresh_generated_packs(...)`
+- CLI: `ades registry generate-pack <bundle-dir> --output-dir <dir>`
+- CLI: `ades registry report-pack <bundle-dir> --output-dir <dir>`
+- CLI: `ades registry refresh-generated-packs <bundle-dir...> --output-dir <dir>`
+- HTTP: `POST /v0/registry/generate-pack`
+- HTTP: `POST /v0/registry/report-pack`
+- HTTP: `POST /v0/registry/refresh-generated-packs`
+
+Finance-first raw snapshot builder surfaces:
+
+- Python: `ades.build_finance_source_bundle(...)`
+- CLI: `ades registry build-finance-bundle --sec-company-tickers <path> --symbol-directory <path> --curated-entities <path> --output-dir <dir>`
+- HTTP: `POST /v0/registry/build-finance-bundle`
+
+General-first raw snapshot builder surfaces:
+
+- Python: `ades.build_general_source_bundle(...)`
+- CLI: `ades registry build-general-bundle --wikidata-entities <path> --geonames-places <path> --curated-entities <path> --output-dir <dir>`
+- HTTP: `POST /v0/registry/build-general-bundle`
+
+Medical-first raw snapshot builder surfaces:
+
+- Python: `ades.build_medical_source_bundle(...)`
+- CLI: `ades registry build-medical-bundle --disease-ontology <path> --hgnc-genes <path> --uniprot-proteins <path> --clinical-trials <path> --curated-entities <path> --output-dir <dir>`
+- HTTP: `POST /v0/registry/build-medical-bundle`
+
+Finance quality-gate surfaces:
+
+- Python: `ades.validate_finance_pack_quality(...)`
+- CLI: `ades registry validate-finance-quality <bundle-dir> --output-dir <dir>`
+- HTTP: `POST /v0/registry/validate-finance-quality`
+
+General quality-gate surfaces:
+
+- Python: `ades.validate_general_pack_quality(...)`
+- CLI: `ades registry validate-general-quality <bundle-dir> --output-dir <dir>`
+- HTTP: `POST /v0/registry/validate-general-quality`
+
+Medical quality-gate surfaces:
+
+- Python: `ades.validate_medical_pack_quality(...)`
+- CLI: `ades registry validate-medical-quality <bundle-dir> --general-bundle-dir <dir> --output-dir <dir>`
+- HTTP: `POST /v0/registry/validate-medical-quality`
+
+Release-oriented refresh flow:
+
+1. Build normalized bundles from raw snapshots with the `build-*-bundle` commands.
+2. Run `ades registry refresh-generated-packs <bundle-dir...> --output-dir <dir>`.
+3. Review the emitted `reports/` and `quality/` output under the chosen refresh directory.
+4. If `passed=true`, publish the generated `registry/` directory through the existing static-registry host path or an approved object-storage sync.
+5. Pull and tag with the resulting registry as usual.
+
+`refresh-generated-packs` is the orchestration surface for the publish/refresh phase. It reuses the existing report and quality gates, then only builds `registry/` when every requested pack passes validation. Medical refreshes auto-resolve `general-en` when that bundle is included in the same request, or they accept `--general-bundle-dir` / `general_bundle_dir` when it is external to the bundle list.

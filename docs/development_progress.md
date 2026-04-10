@@ -424,6 +424,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated `tests/release_helpers.py`, `tests/unit/test_release_verification.py`, `tests/component/test_cli_release_verify.py`, `tests/integration/test_release_verify_api.py`, and `tests/api/test_release_verify_endpoint.py` so successful root/replay zero-state reuse-counter parity plus explicit invalid reuse-counter warnings are covered across unit, component, integration, and API layers.
 - Verified the item through focused release verification tests with `106 passed`, `python -m compileall src/ades tests`, `docdexd hook pre-commit --repo /home/wodo/apps/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `354 passed` under `pytest -q` plus successful clean-environment wheel/npm zero-state reuse-counter smoke checks.
 
+### 54. Offline generated-pack refresh and publication orchestration
+
+- Added an orchestration layer in `src/ades/packs/refresh.py` that turns one or more normalized bundle directories into a quality-gated static registry release by chaining report generation, pack-specific quality validation, and final registry publication only when all requested packs pass.
+- Exposed the refresh workflow consistently through the public Python API `ades.refresh_generated_packs(...)`, the CLI command `ades registry refresh-generated-packs`, and the localhost service endpoint `POST /v0/registry/refresh-generated-packs`.
+- Added categorized unit, component, integration, and API coverage for successful generated-pack refresh runs plus the failure path where quality review preserves report/quality output and intentionally skips the final registry build.
+- Added durable operator docs in `docs/library_pack_source_bundle_spec.md` and `docs/library_pack_publication_workflow.md`, and linked the refresh output to the existing object-storage publication seam in `docs/production_deployment.md`.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -447,6 +454,15 @@ This file records the implementation progress of `ades` as the project moves tow
 - `ades tag-files --write-manifest`
 - `ades tag-files --reuse-unchanged-outputs`
 - `ades registry build <pack-dir...> --output-dir <dir>`
+- `ades registry build-finance-bundle --sec-company-tickers <path> --symbol-directory <path> --curated-entities <path> --output-dir <dir>`
+- `ades registry build-general-bundle --wikidata-entities <path> --geonames-places <path> --curated-entities <path> --output-dir <dir>`
+- `ades registry build-medical-bundle --disease-ontology <path> --hgnc-genes <path> --uniprot-proteins <path> --clinical-trials <path> --curated-entities <path> --output-dir <dir>`
+- `ades registry report-pack <bundle-dir> --output-dir <dir>`
+- `ades registry generate-pack <bundle-dir> --output-dir <dir>`
+- `ades registry validate-finance-quality <bundle-dir> --output-dir <dir>`
+- `ades registry validate-general-quality <bundle-dir> --output-dir <dir>`
+- `ades registry validate-medical-quality <bundle-dir> --general-bundle-dir <dir> --output-dir <dir>`
+- `ades registry refresh-generated-packs <bundle-dir...> --output-dir <dir>`
 - `ades packs list`
 - `ades packs list --available --registry-url <url>`
 - `ades packs activate`
@@ -462,6 +478,15 @@ The local service currently exposes:
 - `POST /v0/packs/{pack}/activate`
 - `POST /v0/packs/{pack}/deactivate`
 - `POST /v0/registry/build`
+- `POST /v0/registry/build-finance-bundle`
+- `POST /v0/registry/build-general-bundle`
+- `POST /v0/registry/build-medical-bundle`
+- `POST /v0/registry/report-pack`
+- `POST /v0/registry/generate-pack`
+- `POST /v0/registry/validate-finance-quality`
+- `POST /v0/registry/validate-general-quality`
+- `POST /v0/registry/validate-medical-quality`
+- `POST /v0/registry/refresh-generated-packs`
 - `GET /v0/installers/npm`
 - `GET /v0/release/versions`
 - `POST /v0/release/sync-version`

@@ -8,21 +8,30 @@ from fastapi import FastAPI, HTTPException, Query
 
 from ..api import (
     activate_pack,
+    build_finance_source_bundle,
+    build_general_source_bundle,
+    build_medical_source_bundle,
     build_registry,
     deactivate_pack,
+    generate_pack_source,
     get_pack,
     list_available_packs,
     list_packs,
     lookup_candidates,
     npm_installer_info,
     publish_release,
+    report_generated_pack,
     release_versions,
+    refresh_generated_packs,
     remove_pack,
     status,
     sync_release_version,
     tag,
     tag_file,
     tag_files,
+    validate_general_pack_quality,
+    validate_finance_pack_quality,
+    validate_medical_pack_quality,
     validate_release,
     verify_release,
     write_release_manifest,
@@ -48,8 +57,25 @@ from .models import (
     ReleaseVersionSyncResponse,
     ReleaseVerificationRequest,
     ReleaseVerificationResponse,
+    RegistryBuildFinanceBundleRequest,
+    RegistryBuildFinanceBundleResponse,
+    RegistryBuildGeneralBundleRequest,
+    RegistryBuildGeneralBundleResponse,
+    RegistryBuildMedicalBundleRequest,
+    RegistryBuildMedicalBundleResponse,
     RegistryBuildRequest,
     RegistryBuildResponse,
+    RegistryPackQualityResponse,
+    RegistryRefreshGeneratedPacksRequest,
+    RegistryRefreshGeneratedPacksResponse,
+    RegistryValidateFinanceQualityRequest,
+    RegistryValidateFinanceQualityResponse,
+    RegistryValidateGeneralQualityRequest,
+    RegistryValidateMedicalQualityRequest,
+    RegistryGeneratePackRequest,
+    RegistryGeneratePackResponse,
+    RegistryReportPackRequest,
+    RegistryReportPackResponse,
     StatusResponse,
     TagRequest,
     TagResponse,
@@ -277,6 +303,263 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/build-finance-bundle",
+        response_model=RegistryBuildFinanceBundleResponse,
+    )
+    def runtime_build_finance_bundle(
+        request: RegistryBuildFinanceBundleRequest,
+    ) -> RegistryBuildFinanceBundleResponse:
+        """Build one normalized `finance-en` source bundle from raw snapshot files."""
+
+        try:
+            return build_finance_source_bundle(
+                sec_companies_path=request.sec_companies_path,
+                symbol_directory_path=request.symbol_directory_path,
+                curated_entities_path=request.curated_entities_path,
+                output_dir=request.output_dir,
+                version=request.version,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/build-general-bundle",
+        response_model=RegistryBuildGeneralBundleResponse,
+    )
+    def runtime_build_general_bundle(
+        request: RegistryBuildGeneralBundleRequest,
+    ) -> RegistryBuildGeneralBundleResponse:
+        """Build one normalized `general-en` source bundle from raw snapshot files."""
+
+        try:
+            return build_general_source_bundle(
+                wikidata_entities_path=request.wikidata_entities_path,
+                geonames_places_path=request.geonames_places_path,
+                curated_entities_path=request.curated_entities_path,
+                output_dir=request.output_dir,
+                version=request.version,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/build-medical-bundle",
+        response_model=RegistryBuildMedicalBundleResponse,
+    )
+    def runtime_build_medical_bundle(
+        request: RegistryBuildMedicalBundleRequest,
+    ) -> RegistryBuildMedicalBundleResponse:
+        """Build one normalized `medical-en` source bundle from raw snapshot files."""
+
+        try:
+            return build_medical_source_bundle(
+                disease_ontology_path=request.disease_ontology_path,
+                hgnc_genes_path=request.hgnc_genes_path,
+                uniprot_proteins_path=request.uniprot_proteins_path,
+                clinical_trials_path=request.clinical_trials_path,
+                curated_entities_path=request.curated_entities_path,
+                output_dir=request.output_dir,
+                version=request.version,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/validate-finance-quality",
+        response_model=RegistryValidateFinanceQualityResponse,
+    )
+    def runtime_validate_finance_quality(
+        request: RegistryValidateFinanceQualityRequest,
+    ) -> RegistryValidateFinanceQualityResponse:
+        """Build, install, and evaluate one generated `finance-en` pack bundle."""
+
+        try:
+            return validate_finance_pack_quality(
+                request.bundle_dir,
+                output_dir=request.output_dir,
+                version=request.version,
+                min_expected_recall=request.min_expected_recall,
+                max_unexpected_hits=request.max_unexpected_hits,
+                max_ambiguous_aliases=request.max_ambiguous_aliases,
+                max_dropped_alias_ratio=request.max_dropped_alias_ratio,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/validate-general-quality",
+        response_model=RegistryPackQualityResponse,
+    )
+    def runtime_validate_general_quality(
+        request: RegistryValidateGeneralQualityRequest,
+    ) -> RegistryPackQualityResponse:
+        """Build, install, and evaluate one generated `general-en` pack bundle."""
+
+        try:
+            return validate_general_pack_quality(
+                request.bundle_dir,
+                output_dir=request.output_dir,
+                version=request.version,
+                min_expected_recall=request.min_expected_recall,
+                max_unexpected_hits=request.max_unexpected_hits,
+                max_ambiguous_aliases=request.max_ambiguous_aliases,
+                max_dropped_alias_ratio=request.max_dropped_alias_ratio,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/validate-medical-quality",
+        response_model=RegistryPackQualityResponse,
+    )
+    def runtime_validate_medical_quality(
+        request: RegistryValidateMedicalQualityRequest,
+    ) -> RegistryPackQualityResponse:
+        """Build, install, and evaluate one generated `medical-en` pack bundle."""
+
+        try:
+            return validate_medical_pack_quality(
+                request.bundle_dir,
+                general_bundle_dir=request.general_bundle_dir,
+                output_dir=request.output_dir,
+                version=request.version,
+                min_expected_recall=request.min_expected_recall,
+                max_unexpected_hits=request.max_unexpected_hits,
+                max_ambiguous_aliases=request.max_ambiguous_aliases,
+                max_dropped_alias_ratio=request.max_dropped_alias_ratio,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/v0/registry/generate-pack", response_model=RegistryGeneratePackResponse)
+    def runtime_generate_pack(
+        request: RegistryGeneratePackRequest,
+    ) -> RegistryGeneratePackResponse:
+        """Generate one runtime-compatible pack directory from a normalized bundle."""
+
+        try:
+            return generate_pack_source(
+                request.bundle_dir,
+                output_dir=request.output_dir,
+                version=request.version,
+                include_build_metadata=request.include_build_metadata,
+                include_build_only=request.include_build_only,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/v0/registry/report-pack", response_model=RegistryReportPackResponse)
+    def runtime_report_pack(
+        request: RegistryReportPackRequest,
+    ) -> RegistryReportPackResponse:
+        """Generate one runtime-compatible pack directory and report stable statistics."""
+
+        try:
+            return report_generated_pack(
+                request.bundle_dir,
+                output_dir=request.output_dir,
+                version=request.version,
+                include_build_metadata=request.include_build_metadata,
+                include_build_only=request.include_build_only,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/refresh-generated-packs",
+        response_model=RegistryRefreshGeneratedPacksResponse,
+    )
+    def runtime_refresh_generated_packs(
+        request: RegistryRefreshGeneratedPacksRequest,
+    ) -> RegistryRefreshGeneratedPacksResponse:
+        """Refresh one or more generated bundles into a quality-gated registry release."""
+
+        try:
+            return refresh_generated_packs(
+                request.bundle_dirs,
+                output_dir=request.output_dir,
+                general_bundle_dir=request.general_bundle_dir,
+                min_expected_recall=request.min_expected_recall,
+                max_unexpected_hits=request.max_unexpected_hits,
+                max_ambiguous_aliases=request.max_ambiguous_aliases,
+                max_dropped_alias_ratio=request.max_dropped_alias_ratio,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except IsADirectoryError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except NotADirectoryError as exc:

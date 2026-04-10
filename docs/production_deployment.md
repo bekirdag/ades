@@ -38,6 +38,17 @@ Required GitHub secrets:
 - `ADES_PROD_SSH_KEY`
 - `ADES_PROD_KNOWN_HOSTS`
 
+Optional GitHub secrets for S3-compatible static registry publication:
+
+- `ADES_PACK_OBJECT_STORAGE_BUCKET`
+- `ADES_PACK_OBJECT_STORAGE_ENDPOINT`
+- `ADES_PACK_OBJECT_STORAGE_ACCESS_KEY_ID`
+- `ADES_PACK_OBJECT_STORAGE_SECRET_ACCESS_KEY`
+
+When those optional secrets are present, the production workflow keeps the existing SSH-based deploy flow and also syncs `dist/registry` to the configured object-storage bucket with `aws s3 sync --endpoint-url ...`. This is additive and does not replace the current server-owned registry release path.
+
+Generated real-content pack refreshes use the same object-storage seam. The offline bundle/report/quality/refresh workflow is documented in `docs/library_pack_publication_workflow.md`; its `registry/` output can be synced to a reviewed object-storage prefix first and then promoted through the existing hosted registry path when approved.
+
 ## Local Client Config
 
 To make the local CLI use the public registry by default, create `~/.config/ades/config.toml`:
@@ -61,4 +72,3 @@ ades tag "Apple shares rose after strong quarterly guidance."
 ```
 
 `ades packs list --available` remains available for the explicit legacy path, while `ades list packs` is the shorter default for registry pack discovery.
-

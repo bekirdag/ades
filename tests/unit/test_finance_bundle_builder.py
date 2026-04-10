@@ -1,0 +1,57 @@
+import json
+from pathlib import Path
+
+from ades.packs.finance_bundle import build_finance_source_bundle
+from tests.finance_bundle_helpers import create_finance_raw_snapshots
+
+
+def test_build_finance_source_bundle_writes_normalized_bundle(tmp_path: Path) -> None:
+    snapshots = create_finance_raw_snapshots(tmp_path)
+
+    result = build_finance_source_bundle(
+        sec_companies_path=snapshots["sec_companies"],
+        symbol_directory_path=snapshots["symbol_directory"],
+        curated_entities_path=snapshots["curated_entities"],
+        output_dir=tmp_path / "bundles",
+    )
+
+    assert result.pack_id == "finance-en"
+    assert result.version == "0.2.0"
+    assert result.source_count == 3
+    assert result.entity_record_count == 6
+    assert result.rule_record_count == 2
+    assert result.sec_issuer_count == 2
+    assert result.symbol_count == 2
+    assert result.curated_entity_count == 2
+    assert result.warnings == []
+
+    bundle_manifest = json.loads(Path(result.bundle_manifest_path).read_text(encoding="utf-8"))
+    assert bundle_manifest["pack_id"] == "finance-en"
+    assert bundle_manifest["entities_path"] == "normalized/entities.jsonl"
+    assert len(bundle_manifest["sources"]) == 3
+
+    entity_records = [
+        json.loads(line)
+        for line in Path(result.entities_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert any(
+        item["entity_type"] == "issuer" and item["canonical_text"] == "Apple Inc."
+        for item in entity_records
+    )
+    assert any(
+        item["entity_type"] == "ticker" and item["canonical_text"] == "AAPL"
+        for item in entity_records
+    )
+    assert any(
+        item["entity_type"] == "exchange" and item["canonical_text"] == "NASDAQ"
+        for item in entity_records
+    )
+
+    rule_records = [
+        json.loads(line)
+        for line in Path(result.rules_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert {"name": "currency_amount", "label": "currency_amount", "kind": "regex", "pattern": r"(USD|EUR|GBP|TRY)\s?[0-9]+(?:\.[0-9]+)?"} in rule_records
+    assert {"name": "ticker_symbol", "label": "ticker", "kind": "regex", "pattern": r"\$[A-Z]{1,5}"} in rule_records
