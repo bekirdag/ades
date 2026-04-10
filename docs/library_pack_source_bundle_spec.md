@@ -152,6 +152,14 @@ Finance raw-source fetch surface:
 
 The finance fetch surface downloads the real SEC and Nasdaq source snapshots into an immutable dated directory under `/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/<snapshot>/`, writes repo-owned curated exchange aliases alongside them, and records exact fetch metadata in `sources.fetch.json`.
 
+General raw-source fetch surface:
+
+- Python: `ades.fetch_general_source_snapshot(...)`
+- CLI: `ades registry fetch-general-sources --output-dir <dir> [--snapshot YYYY-MM-DD]`
+- HTTP: `POST /v0/registry/fetch-general-sources`
+
+The general fetch surface downloads a bounded live Wikidata entity seed set plus filtered GeoNames place data into an immutable dated directory under `/mnt/githubActions/ades_big_data/pack_sources/raw/general-en/<snapshot>/`, writes repo-owned curated aliases alongside them, and records exact fetch metadata in `sources.fetch.json`.
+
 Finance-first raw snapshot builder surfaces:
 
 - Python: `ades.build_finance_source_bundle(...)`
@@ -194,6 +202,11 @@ General quality-gate surfaces:
 - CLI: `ades registry validate-general-quality <bundle-dir> --output-dir <dir>`
 - HTTP: `POST /v0/registry/validate-general-quality`
 
+General live-data note:
+
+- The first dated live `general-en` snapshot on `2026-04-10` validated cleanly at `expected_recall=1.0` and `precision=1.0` with `alias_count=96` and `ambiguous_alias_count=0`.
+- The initial live general slice intentionally uses a bounded real-source Wikidata seed set plus filtered GeoNames seed rows so the dependency pack stays zero-ambiguity compatible while the broader general-source expansion remains future work.
+
 Medical quality-gate surfaces:
 
 - Python: `ades.validate_medical_pack_quality(...)`
@@ -209,9 +222,10 @@ Release-oriented refresh flow:
 
 1. Build normalized bundles from raw snapshots with the `build-*-bundle` commands.
    - For `finance-en`, the real-source path can start with `ades registry fetch-finance-sources`.
+   - For `general-en`, the real-source path can start with `ades registry fetch-general-sources`.
 2. Run `ades registry refresh-generated-packs <bundle-dir...> --output-dir <dir>`.
 3. Review the emitted `reports/` and `quality/` output under the chosen refresh directory.
 4. If `passed=true`, publish the generated `registry/` directory through the existing static-registry host path or an approved object-storage sync.
 5. Pull and tag with the resulting registry as usual.
 
-`refresh-generated-packs` is the orchestration surface for the publish/refresh phase. It reuses the existing report and quality gates, then only builds `registry/` when every requested pack passes validation. When `max_ambiguous_aliases` is omitted, refresh uses pack-specific defaults instead of one global override: `general-en=0`, `medical-en=25`, and `finance-en=300`. Medical refreshes auto-resolve `general-en` when that bundle is included in the same request, or they accept `--general-bundle-dir` / `general_bundle_dir` when it is external to the bundle list.
+`refresh-generated-packs` is the orchestration surface for the publish/refresh phase. It reuses the existing report and quality gates, then only builds `registry/` when every requested pack passes validation. When `max_ambiguous_aliases` is omitted, refresh uses pack-specific defaults instead of one global override: `general-en=0`, `medical-en=25`, and `finance-en=300`. Medical refreshes auto-resolve `general-en` when that bundle is included in the same request, or they accept `--general-bundle-dir` / `general_bundle_dir` when it is external to the bundle list. The first fully real-source combined `general-en` + `medical-en` refresh release now lives under `/mnt/githubActions/ades_big_data/pack_releases/general-medical-2026-04-10`.

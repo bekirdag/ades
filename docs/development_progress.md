@@ -226,12 +226,15 @@ This file records the implementation progress of `ades` as the project moves tow
 - Extended generated-pack alias pruning with per-record `blocked_aliases` support and tuned the finance bundle inputs so the live `NASDAQ, INC.` issuer no longer suppresses the exchange alias and noisy real-world ticker aliases like `ON` and `USD` are dropped before they reach the runtime pack.
 - Validated the first live finance snapshot dated `2026-04-10`: the real bundle now emits `22881` normalized entity records, the quality gate passes at `expected_recall=1.0` and `precision=1.0`, and `refresh-generated-packs` produces a publishable finance-only registry release under `/mnt/githubActions/ades_big_data/pack_releases/finance-en-2026-04-10`.
 
-### 31. Real medical-source ingestion and live bundle tuning
+### 31. Real medical-source and general-source live bundle tuning
 
 - Added a reproducible medical-source fetcher in `src/ades/packs/medical_sources.py` plus public Python, CLI, and localhost service surfaces so dated Disease Ontology, HGNC, UniProt, and ClinicalTrials.gov snapshots can be downloaded directly into `/mnt/githubActions/ades_big_data/pack_sources/raw/medical-en/<snapshot>/` with immutable `sources.fetch.json` metadata.
+- Added a reproducible general-source fetcher in `src/ades/packs/general_sources.py` plus public Python, CLI, and localhost service surfaces so bounded live Wikidata and GeoNames inputs can be downloaded directly into `/mnt/githubActions/ades_big_data/pack_sources/raw/general-en/<snapshot>/` with matching immutable `sources.fetch.json` metadata.
 - Tightened `src/ades/packs/medical_bundle.py` so compact symbolic disease aliases and compact symbolic protein aliases are pruned before generation, while the earlier HGNC lowercase-alias guard keeps obvious gene noise out of the normalized bundle.
 - Generalized refresh-time ambiguity handling in `src/ades/packs/refresh.py` so omitted `max_ambiguous_aliases` now resolves per-pack defaults instead of forcing one global budget: `general-en=0`, `medical-en=25`, and `finance-en=300`.
+- Validated the first live general snapshot dated `2026-04-10`: the rebuilt bundle now emits `8` normalized entity records, the quality gate passes at `expected_recall=1.0` and `precision=1.0`, and the bounded real-source general dependency stays at `alias_count=96` with `ambiguous_alias_count=0`.
 - Validated the first live medical snapshot dated `2026-04-10`: the rebuilt bundle now emits `57765` normalized entity records, the quality gate passes at `expected_recall=1.0` and `precision=1.0`, and the live ambiguity baseline fell from `2020` to `22` with `dropped_alias_ratio=0.0003`.
+- Replaced the helper general dependency in the publication rehearsal: `refresh-generated-packs` now produces a fully real-source combined `general-en` + `medical-en` registry release under `/mnt/githubActions/ades_big_data/pack_releases/general-medical-2026-04-10`.
 
 ### 31. Rollback-safe pack install recovery
 

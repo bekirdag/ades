@@ -14,6 +14,7 @@ from .api import build_medical_source_bundle as api_build_medical_source_bundle
 from .api import build_registry as api_build_registry
 from .api import deactivate_pack as api_deactivate_pack
 from .api import fetch_finance_source_snapshot as api_fetch_finance_source_snapshot
+from .api import fetch_general_source_snapshot as api_fetch_general_source_snapshot
 from .api import fetch_medical_source_snapshot as api_fetch_medical_source_snapshot
 from .api import generate_pack_source as api_generate_pack_source
 from .api import lookup_candidates as api_lookup_candidates
@@ -760,6 +761,49 @@ def registry_build_general_bundle(
             curated_entities_path=curated_entities,
             output_dir=output_dir,
             version=version,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("fetch-general-sources")
+def registry_fetch_general_sources(
+    output_dir: Path = typer.Option(
+        Path("/mnt/githubActions/ades_big_data/pack_sources/raw/general-en"),
+        "--output-dir",
+        help="Directory where immutable general source snapshots should be written.",
+    ),
+    snapshot: str | None = typer.Option(
+        None,
+        "--snapshot",
+        help="Snapshot date in YYYY-MM-DD format. Defaults to today.",
+    ),
+    wikidata_url: str = typer.Option(
+        "https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q265852|Q2283|Q95|Q3884|Q380&languages=en&props=labels|aliases&format=json",
+        "--wikidata-url",
+        help="URL or file path for the bounded Wikidata general-entity snapshot.",
+    ),
+    geonames_url: str = typer.Option(
+        "https://download.geonames.org/export/dump/cities15000.zip",
+        "--geonames-url",
+        help="URL or file path for the GeoNames cities15000 snapshot zip.",
+    ),
+    user_agent: str = typer.Option(
+        "ades/0.1.0 (ops@adestool.com)",
+        "--user-agent",
+        help="User-Agent header for HTTP source fetches.",
+    ),
+) -> None:
+    """Download one real general source snapshot set under the big-data root."""
+
+    try:
+        response = api_fetch_general_source_snapshot(
+            output_dir=output_dir,
+            snapshot=snapshot,
+            wikidata_url=wikidata_url,
+            geonames_places_url=geonames_url,
+            user_agent=user_agent,
         )
     except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
         _exit_with_cli_error(exc)

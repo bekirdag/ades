@@ -5,8 +5,8 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. Real upstream bundle ingestion and quality tuning
-   - Close the remaining real-source `general-en` slice under `/mnt/githubActions/ades_big_data`; `finance-en` and `medical-en` now both build and validate from dated live snapshots.
-   - Replace the helper `general-en` dependency bundle in the medical publication rehearsal with a real dated `general-en` bundle so the first combined general/medical refresh release is fully real-source end to end.
+   - Turn the now-live `finance-en`, `general-en`, and `medical-en` bundles into the first fully real-source three-pack refresh rehearsal under `/mnt/githubActions/ades_big_data`, then review the resulting registry for object-storage promotion.
+   - Expand the bounded real-source `general-en` seed set carefully once broader recall is needed, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
 
 2. End-to-end production-readiness validation
    - Keep extending clean-environment release validation so installed artifacts prove the real shipped wheel/npm behavior together rather than only through narrower source-tree regressions.
@@ -21,6 +21,12 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Real general-source ingestion and first combined general/medical refresh rehearsal:
+  - implemented in `src/ades/packs/general_sources.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
+  - adds `ades.fetch_general_source_snapshot(...)`, `ades registry fetch-general-sources`, and `POST /v0/registry/fetch-general-sources` so bounded live Wikidata and GeoNames inputs are fetched reproducibly into `/mnt/githubActions/ades_big_data/pack_sources/raw/general-en/<snapshot>/`, accompanied by repo-owned curated aliases and `sources.fetch.json`
+  - validates the first real live snapshot dated `2026-04-10`, which currently yields `entity_record_count=8`, `alias_count=96`, `ambiguous_alias_count=0`, clean fixture recall/precision, and a publishable combined general/medical refresh release under `/mnt/githubActions/ades_big_data/pack_releases/general-medical-2026-04-10`
+  - adds categorized unit, component, integration, and API coverage for the new fetch surface and keeps the bounded general dependency contract aligned with the real-source publication workflow
 
 - Deterministic source-lock emission for normalized bundle builders:
   - implemented in `src/ades/packs/source_lock.py`, with builder integration in `src/ades/packs/finance_bundle.py`, `src/ades/packs/general_bundle.py`, and `src/ades/packs/medical_bundle.py`
@@ -38,7 +44,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
   - implemented in `src/ades/packs/medical_sources.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
   - adds `ades.fetch_medical_source_snapshot(...)`, `ades registry fetch-medical-sources`, and `POST /v0/registry/fetch-medical-sources` so dated Disease Ontology, HGNC, UniProt, and ClinicalTrials.gov snapshots are fetched reproducibly into `/mnt/githubActions/ades_big_data/pack_sources/raw/medical-en/<snapshot>/`, accompanied by `sources.fetch.json`
   - tunes the medical bundle input contract so compact symbolic disease aliases and compact symbolic protein aliases are dropped before generation, while refresh now resolves pack-specific ambiguity budgets automatically when `--max-ambiguous-aliases` is omitted
-  - validates the first real live snapshot dated `2026-04-10`, which currently yields `entity_record_count=57765`, `alias_count=127335`, `ambiguous_alias_count=22`, `dropped_alias_ratio=0.0003`, and clean fixture recall/precision with the helper `general-en` dependency bundle
+  - validates the first real live snapshot dated `2026-04-10`, which currently yields `entity_record_count=57765`, `alias_count=127335`, `ambiguous_alias_count=22`, `dropped_alias_ratio=0.0003`, and clean fixture recall/precision with the dated live `general-en` dependency bundle in the combined refresh rehearsal
   - adds categorized unit, component, integration, and API coverage for the new fetch surface plus the bundle-filtering/quality-default contract
 
 - Offline generated-pack refresh and publication orchestration:

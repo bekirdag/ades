@@ -28,6 +28,13 @@ from .packs.finance_sources import (
 )
 from .packs.finance_quality import validate_finance_pack_quality as run_validate_finance_pack_quality
 from .packs.general_bundle import build_general_source_bundle as run_build_general_source_bundle
+from .packs.general_sources import (
+    DEFAULT_GENERAL_SOURCE_OUTPUT_ROOT,
+    DEFAULT_GEONAMES_PLACES_URL,
+    DEFAULT_SOURCE_FETCH_USER_AGENT as DEFAULT_GENERAL_SOURCE_FETCH_USER_AGENT,
+    DEFAULT_WIKIDATA_URL,
+    fetch_general_source_snapshot as run_fetch_general_source_snapshot,
+)
 from .packs.general_quality import validate_general_pack_quality as run_validate_general_pack_quality
 from .packs.medical_bundle import build_medical_source_bundle as run_build_medical_source_bundle
 from .packs.medical_quality import validate_medical_pack_quality as run_validate_medical_pack_quality
@@ -73,6 +80,7 @@ from .service.models import (
     RegistryBuildPackSummary,
     RegistryBuildResponse,
     RegistryBuildFinanceBundleResponse,
+    RegistryFetchGeneralSourcesResponse,
     RegistryFetchMedicalSourcesResponse,
     RegistryFetchFinanceSourcesResponse,
     RegistryBuildGeneralBundleResponse,
@@ -488,6 +496,46 @@ def fetch_finance_source_snapshot(
         curated_entity_count=result.curated_entity_count,
         sec_companies_sha256=result.sec_companies_sha256,
         symbol_directory_sha256=result.symbol_directory_sha256,
+        curated_entities_sha256=result.curated_entities_sha256,
+        warnings=result.warnings,
+    )
+
+
+def fetch_general_source_snapshot(
+    *,
+    output_dir: str | Path = DEFAULT_GENERAL_SOURCE_OUTPUT_ROOT,
+    snapshot: str | None = None,
+    wikidata_url: str = DEFAULT_WIKIDATA_URL,
+    geonames_places_url: str = DEFAULT_GEONAMES_PLACES_URL,
+    user_agent: str = DEFAULT_GENERAL_SOURCE_FETCH_USER_AGENT,
+) -> RegistryFetchGeneralSourcesResponse:
+    """Download one real general source snapshot set into the big-data root."""
+
+    result = run_fetch_general_source_snapshot(
+        output_dir=output_dir,
+        snapshot=snapshot,
+        wikidata_url=wikidata_url,
+        geonames_places_url=geonames_places_url,
+        user_agent=user_agent,
+    )
+    return RegistryFetchGeneralSourcesResponse(
+        pack_id=result.pack_id,
+        output_dir=result.output_dir,
+        snapshot=result.snapshot,
+        snapshot_dir=result.snapshot_dir,
+        wikidata_url=result.wikidata_url,
+        geonames_places_url=result.geonames_places_url,
+        source_manifest_path=result.source_manifest_path,
+        wikidata_entities_path=result.wikidata_entities_path,
+        geonames_places_path=result.geonames_places_path,
+        curated_entities_path=result.curated_entities_path,
+        generated_at=result.generated_at,
+        source_count=result.source_count,
+        wikidata_entity_count=result.wikidata_entity_count,
+        geonames_location_count=result.geonames_location_count,
+        curated_entity_count=result.curated_entity_count,
+        wikidata_entities_sha256=result.wikidata_entities_sha256,
+        geonames_places_sha256=result.geonames_places_sha256,
         curated_entities_sha256=result.curated_entities_sha256,
         warnings=result.warnings,
     )

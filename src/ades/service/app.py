@@ -11,6 +11,7 @@ from ..api import (
     build_finance_source_bundle,
     fetch_finance_source_snapshot,
     build_general_source_bundle,
+    fetch_general_source_snapshot,
     build_medical_source_bundle,
     fetch_medical_source_snapshot,
     build_registry,
@@ -63,6 +64,8 @@ from .models import (
     RegistryBuildFinanceBundleResponse,
     RegistryFetchFinanceSourcesRequest,
     RegistryFetchFinanceSourcesResponse,
+    RegistryFetchGeneralSourcesRequest,
+    RegistryFetchGeneralSourcesResponse,
     RegistryFetchMedicalSourcesRequest,
     RegistryFetchMedicalSourcesResponse,
     RegistryBuildGeneralBundleRequest,
@@ -388,6 +391,34 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 curated_entities_path=request.curated_entities_path,
                 output_dir=request.output_dir,
                 version=request.version,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/fetch-general-sources",
+        response_model=RegistryFetchGeneralSourcesResponse,
+    )
+    def runtime_fetch_general_sources(
+        request: RegistryFetchGeneralSourcesRequest,
+    ) -> RegistryFetchGeneralSourcesResponse:
+        """Download one real `general-en` source snapshot set."""
+
+        try:
+            return fetch_general_source_snapshot(
+                output_dir=request.output_dir,
+                snapshot=request.snapshot,
+                wikidata_url=request.wikidata_url,
+                geonames_places_url=request.geonames_places_url,
+                user_agent=request.user_agent,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

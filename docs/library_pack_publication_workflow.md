@@ -80,6 +80,10 @@ ades registry build-finance-bundle \
   --curated-entities /mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/2026-04-10/curated_finance_entities.json \
   --output-dir /mnt/githubActions/ades_big_data/pack_sources/bundles
 
+ades registry fetch-general-sources \
+  --output-dir /mnt/githubActions/ades_big_data/pack_sources/raw/general-en \
+  --snapshot 2026-04-10
+
 ades registry build-general-bundle \
   --wikidata-entities /mnt/githubActions/ades_big_data/pack_sources/raw/general-en/2026-04-10/wikidata_general_entities.json \
   --geonames-places /mnt/githubActions/ades_big_data/pack_sources/raw/general-en/2026-04-10/geonames_places.txt \
@@ -101,7 +105,7 @@ ades registry refresh-generated-packs \
   --output-dir /mnt/githubActions/ades_big_data/pack_releases/2026-04-10-generated-packs
 ```
 
-Finance-only refreshes can pass a single bundle directory. When `--max-ambiguous-aliases` is omitted, refresh now applies pack-specific defaults automatically: `finance-en=300`, `medical-en=25`, and `general-en=0`. The first real-data finance snapshot on `2026-04-10` validated cleanly on fixture recall/precision with `ambiguous_alias_count=256`, and the first real-data medical snapshot on `2026-04-10` now validates cleanly with `ambiguous_alias_count=22` after pruning compact symbolic disease/protein aliases. Medical-only refreshes must still pass the matching `general-en` bundle or `--general-bundle-dir`.
+Finance-only refreshes can pass a single bundle directory. When `--max-ambiguous-aliases` is omitted, refresh now applies pack-specific defaults automatically: `finance-en=300`, `medical-en=25`, and `general-en=0`. The first real-data finance snapshot on `2026-04-10` validated cleanly on fixture recall/precision with `ambiguous_alias_count=256`, the first bounded real-data general snapshot on `2026-04-10` validated cleanly with `alias_count=96` and `ambiguous_alias_count=0`, and the first real-data medical snapshot on `2026-04-10` now validates cleanly with `ambiguous_alias_count=22` after pruning compact symbolic disease/protein aliases. Medical-only refreshes must still pass the matching `general-en` bundle or `--general-bundle-dir`, and the first fully real-source combined general/medical release now lives at `/mnt/githubActions/ades_big_data/pack_releases/general-medical-2026-04-10`.
 
 ## Object Storage Publication
 

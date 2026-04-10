@@ -152,6 +152,43 @@ class RegistryFetchFinanceSourcesResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class RegistryFetchGeneralSourcesRequest(BaseModel):
+    """Request body for downloading one real `general-en` source snapshot set."""
+
+    output_dir: str = "/mnt/githubActions/ades_big_data/pack_sources/raw/general-en"
+    snapshot: str | None = None
+    wikidata_url: str = (
+        "https://www.wikidata.org/w/api.php?action=wbgetentities&"
+        "ids=Q265852|Q2283|Q95|Q3884|Q380&languages=en&props=labels|aliases&format=json"
+    )
+    geonames_places_url: str = "https://download.geonames.org/export/dump/cities15000.zip"
+    user_agent: str = "ades/0.1.0 (ops@adestool.com)"
+
+
+class RegistryFetchGeneralSourcesResponse(BaseModel):
+    """Response body for one downloaded `general-en` source snapshot set."""
+
+    pack_id: str
+    output_dir: str
+    snapshot: str
+    snapshot_dir: str
+    wikidata_url: str
+    geonames_places_url: str
+    source_manifest_path: str
+    wikidata_entities_path: str
+    geonames_places_path: str
+    curated_entities_path: str
+    generated_at: datetime
+    source_count: int
+    wikidata_entity_count: int
+    geonames_location_count: int
+    curated_entity_count: int
+    wikidata_entities_sha256: str
+    geonames_places_sha256: str
+    curated_entities_sha256: str
+    warnings: list[str] = Field(default_factory=list)
+
+
 class RegistryFetchMedicalSourcesRequest(BaseModel):
     """Request body for downloading one real `medical-en` source snapshot set."""
 
