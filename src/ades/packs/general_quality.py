@@ -52,6 +52,14 @@ DEFAULT_GENERAL_QUALITY_CASES: tuple[PackQualityCase, ...] = (
         ),
     ),
     PackQualityCase(
+        name="bounded-wikidata-organization-expansion",
+        text="Nvidia partnered with Anthropic on a new release.",
+        expected_entities=(
+            PackQualityEntity(text="Nvidia", label="organization"),
+            PackQualityEntity(text="Anthropic", label="organization"),
+        ),
+    ),
+    PackQualityCase(
         name="non-hit",
         text="Ordinary weather notes and lunch plans stay untagged here.",
         expected_entities=(),

@@ -21,18 +21,18 @@ def test_validate_general_pack_quality_reports_passing_fixture_metrics(tmp_path:
 
     assert report.pack_id == "general-en"
     assert report.fixture_profile == "default"
-    assert report.fixture_count == 5
-    assert report.passed_case_count == 5
+    assert report.fixture_count == 6
+    assert report.passed_case_count == 6
     assert report.failed_case_count == 0
-    assert report.expected_entity_count == 13
-    assert report.actual_entity_count == 13
-    assert report.matched_expected_entity_count == 13
+    assert report.expected_entity_count == 15
+    assert report.actual_entity_count == 15
+    assert report.matched_expected_entity_count == 15
     assert report.missing_expected_entity_count == 0
     assert report.unexpected_entity_count == 0
     assert report.expected_recall == 1.0
     assert report.precision == 1.0
-    assert report.alias_count == 12
-    assert report.unique_canonical_count == 7
+    assert report.alias_count == 14
+    assert report.unique_canonical_count == 9
     assert report.rule_count == 2
     assert report.dropped_alias_count == 0
     assert report.ambiguous_alias_count == 0

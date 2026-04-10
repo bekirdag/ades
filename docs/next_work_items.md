@@ -5,7 +5,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. Real upstream bundle ingestion and quality tuning
-   - Continue widening the bounded real-source `general-en` seed set from carefully selected organization additions, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
+   - Evaluate whether the next bounded `general-en` additions should come from more Wikidata entities or a carefully curated location slice, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
 
 2. End-to-end production-readiness validation
    - Keep extending clean-environment release validation so installed artifacts prove the real shipped wheel/npm behavior together rather than only through narrower source-tree regressions.
@@ -20,6 +20,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Bounded real-source `general-en` Wikidata organization expansion:
+  - implemented in `src/ades/packs/general_sources.py` and `src/ades/packs/general_quality.py`, with fixture and surface coverage updates in the general bundle/source/quality tests
+  - expands the bounded Wikidata organization seed set with `Nvidia` and `Anthropic`, then proves both additions through the generated-pack quality gate instead of only through raw fetch counts
+  - revalidates the bounded live general slice at `entity_record_count=13`, `alias_count=216`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`, keeping the dependency pack zero-ambiguity compatible for `medical-en`
 
 - Bounded real-source `general-en` Wikidata person expansion:
   - implemented in `src/ades/packs/general_sources.py` and `src/ades/packs/general_quality.py`, with fixture and surface coverage updates in the general bundle/source/quality tests
@@ -52,7 +57,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 - Real general-source ingestion and first combined general/medical refresh rehearsal:
   - implemented in `src/ades/packs/general_sources.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
   - adds `ades.fetch_general_source_snapshot(...)`, `ades registry fetch-general-sources`, and `POST /v0/registry/fetch-general-sources` so bounded live Wikidata and GeoNames inputs are fetched reproducibly into `/mnt/githubActions/ades_big_data/pack_sources/raw/general-en/<snapshot>/`, accompanied by repo-owned curated aliases and `sources.fetch.json`
-  - validates the bounded live general slice on `2026-04-10`, which currently yields `entity_record_count=11`, `alias_count=213`, `ambiguous_alias_count=0`, clean fixture recall/precision, and a publishable combined general/medical refresh release under `/mnt/githubActions/ades_big_data/pack_releases/general-medical-2026-04-10`
+  - validates the bounded live general slice on `2026-04-10`, which currently yields `entity_record_count=13`, `alias_count=216`, `ambiguous_alias_count=0`, clean fixture recall/precision, and a publishable combined general/medical refresh release under `/mnt/githubActions/ades_big_data/pack_releases/general-medical-2026-04-10`
   - adds categorized unit, component, integration, and API coverage for the new fetch surface and keeps the bounded general dependency contract aligned with the real-source publication workflow
 
 - Deterministic source-lock emission for normalized bundle builders:

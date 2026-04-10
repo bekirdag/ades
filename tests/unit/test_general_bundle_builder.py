@@ -20,9 +20,9 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     assert result.version == "0.2.0"
     assert Path(result.sources_lock_path).exists()
     assert result.source_count == 3
-    assert result.entity_record_count == 7
+    assert result.entity_record_count == 9
     assert result.rule_record_count == 2
-    assert result.wikidata_entity_count == 4
+    assert result.wikidata_entity_count == 6
     assert result.geonames_location_count == 2
     assert result.curated_entity_count == 1
     assert result.warnings == []
@@ -80,6 +80,14 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     )
     assert any(
         item["entity_type"] == "person" and item["canonical_text"] == "Jensen Huang"
+        for item in entity_records
+    )
+    assert any(
+        item["entity_type"] == "organization" and item["canonical_text"] == "Nvidia"
+        for item in entity_records
+    )
+    assert any(
+        item["entity_type"] == "organization" and item["canonical_text"] == "Anthropic"
         for item in entity_records
     )
 

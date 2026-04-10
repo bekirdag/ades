@@ -36,6 +36,18 @@ def create_general_raw_snapshots(root: Path) -> dict[str, Path]:
                         "label": "Jensen Huang",
                         "aliases": [],
                     },
+                    {
+                        "id": "Q5",
+                        "entity_type": "organization",
+                        "label": "Nvidia",
+                        "aliases": [],
+                    },
+                    {
+                        "id": "Q6",
+                        "entity_type": "organization",
+                        "label": "Anthropic",
+                        "aliases": [],
+                    },
                 ]
             },
             indent=2,
@@ -125,6 +137,24 @@ def create_general_remote_sources(root: Path) -> dict[str, str]:
                         "aliases": {
                             "en": [
                                 {"value": "Jen-Hsun Huang"},
+                            ]
+                        },
+                    },
+                    "Q182477": {
+                        "id": "Q182477",
+                        "labels": {"en": {"value": "Nvidia"}},
+                        "aliases": {
+                            "en": [
+                                {"value": "NVIDIA"},
+                            ]
+                        },
+                    },
+                    "Q116758847": {
+                        "id": "Q116758847",
+                        "labels": {"en": {"value": "Anthropic"}},
+                        "aliases": {
+                            "en": [
+                                {"value": "Anthropic PBC"},
                             ]
                         },
                     },

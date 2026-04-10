@@ -19,7 +19,7 @@ def test_fetch_general_source_snapshot_writes_immutable_snapshot_dir(tmp_path: P
     assert result.pack_id == "general-en"
     assert result.snapshot == "2026-04-10"
     assert result.source_count == 3
-    assert result.wikidata_entity_count == 4
+    assert result.wikidata_entity_count == 6
     assert result.geonames_location_count == 2
     assert result.curated_entity_count >= 2
     assert Path(result.snapshot_dir).exists()
@@ -43,7 +43,7 @@ def test_fetch_general_source_snapshot_writes_immutable_snapshot_dir(tmp_path: P
         curated_entities_path=result.curated_entities_path,
         output_dir=tmp_path / "bundles",
     )
-    assert bundle.wikidata_entity_count == 4
+    assert bundle.wikidata_entity_count == 6
     assert bundle.geonames_location_count == 2
     assert bundle.curated_entity_count >= 2
 
