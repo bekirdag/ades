@@ -24,6 +24,10 @@ def test_report_generated_pack_returns_stable_medical_bundle_statistics(tmp_path
     assert report.pack_id == "medical-en"
     assert report.version == "0.2.0"
     assert report.source_count == 5
+    assert report.publishable_source_count == 5
+    assert report.restricted_source_count == 0
+    assert report.publishable_sources_only is True
+    assert report.source_license_classes == {"ship-now": 5}
     assert report.label_count == 6
     assert report.alias_count == 12
     assert report.unique_canonical_count == 6

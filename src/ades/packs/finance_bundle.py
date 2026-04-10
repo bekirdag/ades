@@ -89,6 +89,7 @@ def build_finance_source_bundle(
         {
             "name": "sec-company-tickers",
             "snapshot_uri": sec_path.as_uri(),
+            "license_class": "ship-now",
             "license": "operator-supplied",
             "retrieved_at": _path_timestamp(sec_path),
             "record_count": len(sec_issuers),
@@ -97,6 +98,7 @@ def build_finance_source_bundle(
         {
             "name": "symbol-directory",
             "snapshot_uri": symbol_path.as_uri(),
+            "license_class": "ship-now",
             "license": "operator-supplied",
             "retrieved_at": _path_timestamp(symbol_path),
             "record_count": len(symbol_entities),
@@ -105,6 +107,7 @@ def build_finance_source_bundle(
         {
             "name": "curated-finance-entities",
             "snapshot_uri": curated_path.as_uri(),
+            "license_class": "ship-now",
             "license": "operator-supplied",
             "retrieved_at": _path_timestamp(curated_path),
             "record_count": len(curated_entities),

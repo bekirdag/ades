@@ -1,9 +1,11 @@
 import json
 from pathlib import Path
 
+from ades.packs.finance_bundle import build_finance_source_bundle
 from ades.packs.general_bundle import build_general_source_bundle
 from ades.packs.medical_bundle import build_medical_source_bundle
 from ades.packs.refresh import refresh_generated_pack_registry
+from tests.finance_bundle_helpers import create_finance_raw_snapshots
 from tests.general_bundle_helpers import create_general_raw_snapshots
 from tests.medical_bundle_helpers import create_medical_raw_snapshots
 
@@ -81,3 +83,41 @@ def test_refresh_generated_pack_registry_skips_registry_on_quality_failure(
     assert response.packs[0].pack_id == "general-en"
     assert response.packs[0].quality.passed is False
     assert response.packs[0].quality.failures
+
+
+def test_refresh_generated_pack_registry_skips_registry_on_source_governance_failure(
+    tmp_path: Path,
+) -> None:
+    finance_snapshots = create_finance_raw_snapshots(tmp_path / "finance-snapshots")
+    finance_bundle = build_finance_source_bundle(
+        sec_companies_path=finance_snapshots["sec_companies"],
+        symbol_directory_path=finance_snapshots["symbol_directory"],
+        curated_entities_path=finance_snapshots["curated_entities"],
+        output_dir=tmp_path / "finance-bundles",
+    )
+
+    bundle_manifest_path = Path(finance_bundle.bundle_dir) / "bundle.json"
+    bundle_manifest = json.loads(bundle_manifest_path.read_text(encoding="utf-8"))
+    bundle_manifest["sources"][0]["license_class"] = "build-only"
+    bundle_manifest_path.write_text(
+        json.dumps(bundle_manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    response = refresh_generated_pack_registry(
+        [finance_bundle.bundle_dir],
+        output_dir=tmp_path / "refresh-output",
+    )
+
+    assert response.passed is False
+    assert response.registry is None
+    assert "registry_build_skipped:source_governance_failed" in response.warnings
+    assert response.packs[0].pack_id == "finance-en"
+    assert response.packs[0].quality.passed is True
+    assert response.packs[0].report.publishable_sources_only is False
+    assert response.packs[0].report.restricted_source_count == 1
+    assert response.packs[0].report.source_license_classes == {"build-only": 1, "ship-now": 2}
+    assert any(
+        "blocks registry publication" in warning
+        for warning in response.packs[0].report.warnings
+    )

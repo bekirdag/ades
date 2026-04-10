@@ -352,6 +352,10 @@ class RegistryGeneratePackResponse(BaseModel):
     alias_count: int
     rule_count: int
     source_count: int
+    publishable_source_count: int
+    restricted_source_count: int
+    publishable_sources_only: bool
+    source_license_classes: dict[str, int] = Field(default_factory=dict)
     included_entity_count: int
     included_rule_count: int
     dropped_record_count: int
@@ -386,6 +390,10 @@ class RegistryReportPackResponse(BaseModel):
     build_path: str | None = None
     generated_at: datetime
     source_count: int
+    publishable_source_count: int
+    restricted_source_count: int
+    publishable_sources_only: bool
+    source_license_classes: dict[str, int] = Field(default_factory=dict)
     label_count: int
     alias_count: int
     unique_canonical_count: int

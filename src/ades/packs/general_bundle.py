@@ -89,6 +89,7 @@ def build_general_source_bundle(
         {
             "name": "wikidata-general-entities",
             "snapshot_uri": wikidata_path.as_uri(),
+            "license_class": "ship-now",
             "license": "operator-supplied",
             "retrieved_at": _path_timestamp(wikidata_path),
             "record_count": len(wikidata_entities),
@@ -97,6 +98,7 @@ def build_general_source_bundle(
         {
             "name": "geonames-places",
             "snapshot_uri": geonames_path.as_uri(),
+            "license_class": "ship-now",
             "license": "operator-supplied",
             "retrieved_at": _path_timestamp(geonames_path),
             "record_count": len(geonames_locations),
@@ -105,6 +107,7 @@ def build_general_source_bundle(
         {
             "name": "curated-general-entities",
             "snapshot_uri": curated_path.as_uri(),
+            "license_class": "ship-now",
             "license": "operator-supplied",
             "retrieved_at": _path_timestamp(curated_path),
             "record_count": len(curated_entities),

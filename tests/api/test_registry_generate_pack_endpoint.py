@@ -26,6 +26,8 @@ def test_registry_generate_pack_endpoint_creates_pack_directory(tmp_path: Path) 
     assert payload["pack_id"] == "finance-en"
     assert payload["alias_count"] >= 3
     assert payload["rule_count"] == 1
+    assert payload["publishable_sources_only"] is False
+    assert payload["source_license_classes"] == {"build-only": 1, "ship-now": 1}
 
     registry = build_registry([payload["pack_dir"]], output_dir=tmp_path / "registry")
     installer = PackInstaller(tmp_path / "install", registry_url=registry.index_url)

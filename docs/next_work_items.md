@@ -24,6 +24,12 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
   - adds categorized unit, component, integration, and API coverage for successful refresh runs plus the intentional registry-build skip path when quality fails
   - adds durable operator docs in `docs/library_pack_source_bundle_spec.md`, `docs/library_pack_publication_workflow.md`, and `docs/production_deployment.md` so generated pack publication stays aligned with the existing object-storage and hosted-registry seam
 
+- Source-governance enforcement for generated-pack publication:
+  - implemented in `src/ades/packs/generation.py`, `src/ades/packs/reporting.py`, and `src/ades/packs/refresh.py`, with additive response fields surfaced through `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/models.py`
+  - requires explicit source `license_class` metadata, summarizes publishable versus restricted sources in `sources.json` / `build.json` and the public generate/report responses, and keeps local generation/reporting usable for inspection even when a bundle is not publishable
+  - blocks the final registry build during `refresh-generated-packs` whenever a bundle uses `build-only`, `blocked-pending-license-review`, or missing source provenance, while preserving report and quality evidence and emitting `registry_build_skipped:source_governance_failed`
+  - adds categorized unit, component, integration, and API coverage for both the new summary fields and the refresh publication-skip path, and updates the durable source-bundle/publication docs so the operator contract is explicit
+
 - Exact zero-state reuse-counter validation for installed-artifact `/v0/tag/files` smoke:
   - implemented in `src/ades/release.py`
   - tightens clean-environment wheel/npm release smoke so both the root batch payload and replay payload must keep the exact deterministic `summary.unchanged_skipped_count`, `summary.unchanged_reused_count`, `summary.reused_output_missing_count`, and `summary.repaired_reused_output_count` values for the clean two-file smoke corpus

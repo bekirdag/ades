@@ -48,3 +48,42 @@ def test_cli_can_refresh_generated_pack_registry_release(tmp_path: Path) -> None
     assert payload["pack_count"] == 2
     assert payload["registry"]["pack_count"] == 2
     assert [item["pack_id"] for item in payload["packs"]] == ["general-en", "medical-en"]
+    assert payload["packs"][0]["report"]["publishable_sources_only"] is True
+
+
+def test_cli_reports_source_governance_failure_during_generated_pack_refresh(
+    tmp_path: Path,
+) -> None:
+    general_snapshots = create_general_raw_snapshots(tmp_path / "general-snapshots")
+    general_bundle = build_general_source_bundle(
+        wikidata_entities_path=general_snapshots["wikidata_entities"],
+        geonames_places_path=general_snapshots["geonames_places"],
+        curated_entities_path=general_snapshots["curated_entities"],
+        output_dir=tmp_path / "general-bundles",
+    )
+
+    bundle_manifest_path = Path(general_bundle.bundle_dir) / "bundle.json"
+    bundle_manifest = json.loads(bundle_manifest_path.read_text(encoding="utf-8"))
+    bundle_manifest["sources"][0]["license_class"] = "build-only"
+    bundle_manifest_path.write_text(
+        json.dumps(bundle_manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "registry",
+            "refresh-generated-packs",
+            general_bundle.bundle_dir,
+            "--output-dir",
+            str(tmp_path / "refresh-output"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["passed"] is False
+    assert payload["registry"] is None
+    assert "registry_build_skipped:source_governance_failed" in payload["warnings"]
+    assert payload["packs"][0]["report"]["publishable_sources_only"] is False

@@ -29,13 +29,23 @@ For each bundle directory:
    - `finance-en` uses the finance fixture profile
    - `general-en` uses the general fixture profile
    - `medical-en` uses the medical fixture profile and requires `general-en`
-3. Only if every requested pack passes quality, build a static registry release from the generated pack directories.
+3. Review source governance from each bundle report:
+   - every source snapshot must declare `license_class`
+   - only `ship-now` sources are eligible for publication
+   - bundles with `build-only`, `blocked-pending-license-review`, or missing source metadata remain local-review only
+4. Only if every requested pack passes quality and every bundle is publication-eligible, build a static registry release from the generated pack directories.
 
 If any pack fails quality:
 
 - the refresh response returns `passed=false`
 - the report and quality output are still preserved
 - the final `registry/` build is skipped
+
+If any pack fails source governance:
+
+- the refresh response still returns the report and quality evidence
+- the final `registry/` build is skipped with `registry_build_skipped:source_governance_failed`
+- the per-pack report warnings identify which source snapshots blocked publication
 
 ## Output Layout
 

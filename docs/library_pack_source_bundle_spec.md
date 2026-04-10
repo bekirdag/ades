@@ -81,7 +81,8 @@ Example:
     {
       "name": "sec-companyfacts",
       "snapshot_uri": "s3://ades-bundles/finance/sec/companyfacts-2026-04-10.jsonl",
-      "license": "build-only",
+      "license_class": "ship-now",
+      "license": "SEC public company_tickers.json",
       "retrieved_at": "2026-04-10T09:00:00Z",
       "record_count": 123456
     }
@@ -114,6 +115,14 @@ Normalization performed during generation:
 - stoplist filtering
 - ambiguous-alias dropping unless explicitly allowed
 - optional exclusion of records marked `build_only`
+
+Source-governance rules:
+
+- Every `sources[]` entry must declare `license_class`.
+- Supported classes are `ship-now`, `build-only`, and `blocked-pending-license-review`.
+- `generate-pack` and `report-pack` remain usable for local inspection even when restricted sources are present.
+- `refresh-generated-packs` treats the refresh as publication-oriented and will skip the final `registry/` build unless every source is `ship-now`.
+- Bundles with no declared `sources[]` entries are treated as non-publishable.
 
 ## CLI / API / Service
 

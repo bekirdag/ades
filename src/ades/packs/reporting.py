@@ -7,7 +7,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .generation import SourceBundleManifest, generate_pack_source
+from .generation import (
+    SourceBundleManifest,
+    generate_pack_source,
+    summarize_source_governance,
+)
 
 
 @dataclass(frozen=True)
@@ -27,6 +31,9 @@ class GeneratedPackReport:
     build_path: str | None
     generated_at: str
     source_count: int
+    publishable_source_count: int
+    restricted_source_count: int
+    publishable_sources_only: bool
     label_count: int
     alias_count: int
     unique_canonical_count: int
@@ -37,6 +44,7 @@ class GeneratedPackReport:
     dropped_alias_count: int
     ambiguous_alias_count: int
     dropped_alias_ratio: float
+    source_license_classes: dict[str, int] = field(default_factory=dict)
     label_distribution: dict[str, int] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
@@ -69,6 +77,7 @@ def report_generated_pack(
         include_build_metadata=include_build_metadata,
         include_build_only=include_build_only,
     )
+    source_governance = summarize_source_governance(bundle.sources)
 
     unique_canonical_count = _count_unique_canonicals(
         resolved_bundle_dir / bundle.entities_path,
@@ -103,6 +112,10 @@ def report_generated_pack(
         build_path=generated.build_path,
         generated_at=generated.generated_at,
         source_count=generated.source_count,
+        publishable_source_count=source_governance.publishable_source_count,
+        restricted_source_count=source_governance.restricted_source_count,
+        publishable_sources_only=source_governance.publishable_sources_only,
+        source_license_classes=source_governance.source_license_classes,
         label_count=generated.label_count,
         alias_count=generated.alias_count,
         unique_canonical_count=unique_canonical_count,

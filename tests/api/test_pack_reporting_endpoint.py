@@ -32,4 +32,6 @@ def test_registry_report_pack_endpoint_returns_generated_pack_statistics(tmp_pat
     assert payload["pack_id"] == "medical-en"
     assert payload["alias_count"] == 12
     assert payload["unique_canonical_count"] == 6
+    assert payload["publishable_sources_only"] is True
+    assert payload["source_license_classes"] == {"ship-now": 5}
     assert payload["label_distribution"]["gene"] == 2

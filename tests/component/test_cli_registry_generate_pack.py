@@ -29,6 +29,8 @@ def test_cli_can_generate_pack_then_build_and_pull_from_it(tmp_path: Path) -> No
     generate_payload = json.loads(generate_result.stdout)
     assert generate_payload["pack_id"] == "finance-en"
     assert Path(generate_payload["pack_dir"]).exists()
+    assert generate_payload["publishable_sources_only"] is False
+    assert generate_payload["source_license_classes"] == {"build-only": 1, "ship-now": 1}
 
     build_result = runner.invoke(
         app,

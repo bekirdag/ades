@@ -52,5 +52,7 @@ def test_cli_can_report_generated_medical_pack_statistics(tmp_path: Path) -> Non
     assert report_payload["pack_id"] == "medical-en"
     assert report_payload["alias_count"] == 12
     assert report_payload["unique_canonical_count"] == 6
+    assert report_payload["publishable_sources_only"] is True
+    assert report_payload["source_license_classes"] == {"ship-now": 5}
     assert report_payload["label_distribution"]["dosage"] == 1
     assert Path(report_payload["pack_dir"]).exists()

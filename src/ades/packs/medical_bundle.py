@@ -102,6 +102,7 @@ def build_medical_source_bundle(
         {
             "name": "disease-ontology",
             "snapshot_uri": disease_path.as_uri(),
+            "license_class": "ship-now",
             "license": "operator-supplied",
             "retrieved_at": _path_timestamp(disease_path),
             "record_count": len(diseases),
@@ -110,6 +111,7 @@ def build_medical_source_bundle(
         {
             "name": "hgnc-genes",
             "snapshot_uri": hgnc_path.as_uri(),
+            "license_class": "ship-now",
             "license": "operator-supplied",
             "retrieved_at": _path_timestamp(hgnc_path),
             "record_count": len(genes),
@@ -118,6 +120,7 @@ def build_medical_source_bundle(
         {
             "name": "uniprot-proteins",
             "snapshot_uri": uniprot_path.as_uri(),
+            "license_class": "ship-now",
             "license": "operator-supplied",
             "retrieved_at": _path_timestamp(uniprot_path),
             "record_count": len(proteins),
@@ -126,6 +129,7 @@ def build_medical_source_bundle(
         {
             "name": "clinical-trials",
             "snapshot_uri": trials_path.as_uri(),
+            "license_class": "ship-now",
             "license": "operator-supplied",
             "retrieved_at": _path_timestamp(trials_path),
             "record_count": len(clinical_trials),
@@ -134,6 +138,7 @@ def build_medical_source_bundle(
         {
             "name": "curated-medical-entities",
             "snapshot_uri": curated_path.as_uri(),
+            "license_class": "ship-now",
             "license": "operator-supplied",
             "retrieved_at": _path_timestamp(curated_path),
             "record_count": len(curated_entities),

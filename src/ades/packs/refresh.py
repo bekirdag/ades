@@ -114,7 +114,11 @@ def refresh_generated_pack_registry(
             )
         )
 
-    passed = all(item.quality.passed for item in pack_results)
+    quality_passed = all(item.quality.passed for item in pack_results)
+    source_governance_passed = all(
+        item.report.publishable_sources_only for item in pack_results
+    )
+    passed = quality_passed and source_governance_passed
     registry_result: RegistryBuildResult | None = None
     if passed:
         registry_result = build_static_registry(
@@ -122,7 +126,10 @@ def refresh_generated_pack_registry(
             output_dir=resolved_output_dir / "registry",
         )
     else:
-        warnings.append("registry_build_skipped:quality_failed")
+        if not quality_passed:
+            warnings.append("registry_build_skipped:quality_failed")
+        if not source_governance_passed:
+            warnings.append("registry_build_skipped:source_governance_failed")
 
     return GeneratedPackRefreshResult(
         output_dir=str(resolved_output_dir),

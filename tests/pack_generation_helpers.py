@@ -32,6 +32,7 @@ def create_finance_generation_bundle(
             {
                 "name": "sec-companyfacts",
                 "snapshot_uri": "s3://ades-bundles/finance/sec/companyfacts-2026-04-10.jsonl",
+                "license_class": "build-only",
                 "license": "build-only",
                 "retrieved_at": "2026-04-10T09:00:00Z",
                 "record_count": 4,
@@ -39,6 +40,7 @@ def create_finance_generation_bundle(
             {
                 "name": "nasdaq-symbols",
                 "snapshot_uri": "s3://ades-bundles/finance/nasdaq/symbols-2026-04-10.csv",
+                "license_class": "ship-now",
                 "license": "ship-now",
                 "retrieved_at": "2026-04-10T09:00:00Z",
                 "record_count": 2,

@@ -431,6 +431,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Added categorized unit, component, integration, and API coverage for successful generated-pack refresh runs plus the failure path where quality review preserves report/quality output and intentionally skips the final registry build.
 - Added durable operator docs in `docs/library_pack_source_bundle_spec.md` and `docs/library_pack_publication_workflow.md`, and linked the refresh output to the existing object-storage publication seam in `docs/production_deployment.md`.
 
+### 55. Source-governance enforcement for generated-pack publication
+
+- Extended `src/ades/packs/generation.py` so bundle source snapshots now carry explicit `license_class` metadata, generated `sources.json` / `build.json` sidecars summarize publishable versus restricted sources, and local generate/report output surfaces warn when a bundle is not eligible for registry publication.
+- Updated the bundle builders in `src/ades/packs/finance_bundle.py`, `src/ades/packs/general_bundle.py`, and `src/ades/packs/medical_bundle.py` so generated bundles emit explicit source-governance metadata instead of overloading the freeform `license` field as a policy class.
+- Tightened `src/ades/packs/refresh.py` so quality-passing bundles still fail the publication step when any source is tagged `build-only`, `blocked-pending-license-review`, or missing provenance, while preserving all report and quality evidence and emitting the deterministic warning `registry_build_skipped:source_governance_failed`.
+- Added categorized unit, component, integration, and API coverage for the new source-governance summary fields on generate/report surfaces plus the publication-skip path for refresh orchestration, and updated the durable bundle/publication docs so the operator contract matches the implementation.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`

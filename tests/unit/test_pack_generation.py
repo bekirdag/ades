@@ -21,11 +21,16 @@ def test_generate_pack_source_writes_runtime_compatible_pack(tmp_path: Path) -> 
     assert result.alias_count >= 3
     assert result.rule_count == 1
     assert result.source_count == 2
+    assert result.publishable_source_count == 1
+    assert result.restricted_source_count == 1
+    assert result.publishable_sources_only is False
+    assert result.source_license_classes == {"build-only": 1, "ship-now": 1}
     assert result.included_entity_count == 3
     assert result.included_rule_count == 1
     assert result.dropped_record_count == 2
     assert result.dropped_alias_count >= 1
     assert result.ambiguous_alias_count == 0
+    assert any("sec-companyfacts" in warning for warning in result.warnings)
 
     pack_dir = Path(result.pack_dir)
     manifest = json.loads((pack_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -56,6 +61,14 @@ def test_generate_pack_source_writes_runtime_compatible_pack(tmp_path: Path) -> 
     build_metadata = json.loads((pack_dir / "build.json").read_text(encoding="utf-8"))
     assert build_metadata["input_entity_count"] == 4
     assert build_metadata["input_rule_count"] == 2
+    assert build_metadata["publishable_source_count"] == 1
+    assert build_metadata["restricted_source_count"] == 1
+    assert build_metadata["publishable_sources_only"] is False
+    assert build_metadata["source_license_classes"] == {"build-only": 1, "ship-now": 1}
+
+    sources_metadata = json.loads((pack_dir / "sources.json").read_text(encoding="utf-8"))
+    assert sources_metadata["publishable_sources_only"] is False
+    assert sources_metadata["source_license_classes"] == {"build-only": 1, "ship-now": 1}
 
 
 def test_generate_pack_source_drops_ambiguous_aliases_by_default(tmp_path: Path) -> None:
@@ -94,6 +107,24 @@ def test_generate_pack_source_rejects_invalid_regex_patterns(tmp_path: Path) -> 
     )
 
     with pytest.raises(ValueError, match="invalid regex pattern"):
+        generate_pack_source(
+            bundle_dir,
+            output_dir=tmp_path / "generated-packs",
+        )
+
+
+def test_generate_pack_source_requires_explicit_source_license_class(tmp_path: Path) -> None:
+    bundle_dir = create_finance_generation_bundle(tmp_path)
+    bundle_manifest_path = bundle_dir / "bundle.json"
+    bundle_manifest = json.loads(bundle_manifest_path.read_text(encoding="utf-8"))
+    bundle_manifest["sources"][0]["license"] = "operator-supplied"
+    bundle_manifest["sources"][0].pop("license_class", None)
+    bundle_manifest_path.write_text(
+        json.dumps(bundle_manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="must include license_class"):
         generate_pack_source(
             bundle_dir,
             output_dir=tmp_path / "generated-packs",

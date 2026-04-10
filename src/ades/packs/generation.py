@@ -46,6 +46,11 @@ _DASH_TRANSLATION = str.maketrans(
         "\u2212": "-",
     }
 )
+_ALLOWED_SOURCE_LICENSE_CLASSES = {
+    "ship-now",
+    "build-only",
+    "blocked-pending-license-review",
+}
 
 
 @dataclass(frozen=True)
@@ -55,6 +60,7 @@ class SourceSnapshot:
     name: str
     snapshot_uri: str | None = None
     version: str | None = None
+    license_class: str | None = None
     license: str | None = None
     retrieved_at: str | None = None
     record_count: int | None = None
@@ -64,12 +70,33 @@ class SourceSnapshot:
     def from_dict(cls, data: dict[str, Any]) -> "SourceSnapshot":
         if not data.get("name"):
             raise ValueError("Bundle source entries must include name.")
+        license_class = (
+            str(data["license_class"]).strip()
+            if data.get("license_class") is not None
+            else None
+        )
+        license_name = (
+            str(data["license"]).strip() if data.get("license") is not None else None
+        )
+        if license_class is None and license_name in _ALLOWED_SOURCE_LICENSE_CLASSES:
+            license_class = license_name
+        if license_class is None:
+            raise ValueError(
+                f"Bundle source entry '{data['name']}' must include license_class."
+            )
+        if license_class not in _ALLOWED_SOURCE_LICENSE_CLASSES:
+            allowed = ", ".join(sorted(_ALLOWED_SOURCE_LICENSE_CLASSES))
+            raise ValueError(
+                f"Bundle source entry '{data['name']}' uses unsupported license_class "
+                f"'{license_class}'. Expected one of: {allowed}"
+            )
         record_count = data.get("record_count")
         return cls(
             name=str(data["name"]),
             snapshot_uri=str(data["snapshot_uri"]) if data.get("snapshot_uri") is not None else None,
             version=str(data["version"]) if data.get("version") is not None else None,
-            license=str(data["license"]) if data.get("license") is not None else None,
+            license_class=license_class,
+            license=license_name,
             retrieved_at=str(data["retrieved_at"]) if data.get("retrieved_at") is not None else None,
             record_count=int(record_count) if record_count is not None else None,
             notes=str(data["notes"]) if data.get("notes") is not None else None,
@@ -81,6 +108,8 @@ class SourceSnapshot:
             payload["snapshot_uri"] = self.snapshot_uri
         if self.version is not None:
             payload["version"] = self.version
+        if self.license_class is not None:
+            payload["license_class"] = self.license_class
         if self.license is not None:
             payload["license"] = self.license
         if self.retrieved_at is not None:
@@ -153,6 +182,17 @@ class SourceBundleManifest:
 
 
 @dataclass(frozen=True)
+class SourceGovernanceSummary:
+    """Publication-oriented governance state for bundle sources."""
+
+    source_license_classes: dict[str, int] = field(default_factory=dict)
+    publishable_source_count: int = 0
+    restricted_source_count: int = 0
+    publishable_sources_only: bool = False
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class GeneratedPackSourceResult:
     """Summary of one generated pack directory."""
 
@@ -172,11 +212,15 @@ class GeneratedPackSourceResult:
     alias_count: int
     rule_count: int
     source_count: int
+    publishable_source_count: int
+    restricted_source_count: int
+    publishable_sources_only: bool
     included_entity_count: int
     included_rule_count: int
     dropped_record_count: int
     dropped_alias_count: int
     ambiguous_alias_count: int
+    source_license_classes: dict[str, int] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -219,6 +263,7 @@ def generate_pack_source(
         resolved_bundle_dir / bundle.rules_path,
         required=False,
     )
+    source_governance = summarize_source_governance(bundle.sources)
 
     label_mappings = {
         key.casefold(): value
@@ -416,6 +461,10 @@ def generate_pack_source(
                         else None
                     ),
                     "sources": [source.to_dict() for source in bundle.sources],
+                    "source_license_classes": source_governance.source_license_classes,
+                    "publishable_source_count": source_governance.publishable_source_count,
+                    "restricted_source_count": source_governance.restricted_source_count,
+                    "publishable_sources_only": source_governance.publishable_sources_only,
                 },
                 indent=2,
             )
@@ -442,6 +491,10 @@ def generate_pack_source(
                     "alias_count": len(aliases_payload),
                     "rule_count": len(patterns_payload),
                     "source_count": len(bundle.sources),
+                    "source_license_classes": source_governance.source_license_classes,
+                    "publishable_source_count": source_governance.publishable_source_count,
+                    "restricted_source_count": source_governance.restricted_source_count,
+                    "publishable_sources_only": source_governance.publishable_sources_only,
                 },
                 indent=2,
             )
@@ -449,7 +502,7 @@ def generate_pack_source(
             encoding="utf-8",
         )
 
-    warnings: list[str] = []
+    warnings = list(source_governance.warnings)
     if not aliases_payload:
         warnings.append("Generated pack does not include any aliases.")
     if not patterns_payload:
@@ -472,11 +525,15 @@ def generate_pack_source(
         alias_count=len(aliases_payload),
         rule_count=len(patterns_payload),
         source_count=len(bundle.sources),
+        publishable_source_count=source_governance.publishable_source_count,
+        restricted_source_count=source_governance.restricted_source_count,
+        publishable_sources_only=source_governance.publishable_sources_only,
         included_entity_count=included_entity_count,
         included_rule_count=included_rule_count,
         dropped_record_count=dropped_record_count,
         dropped_alias_count=dropped_alias_count,
         ambiguous_alias_count=ambiguous_alias_count,
+        source_license_classes=source_governance.source_license_classes,
         warnings=warnings,
     )
 
@@ -522,6 +579,46 @@ def _resolve_record_label(
         if value:
             return label_mappings.get(value.casefold(), value)
     raise ValueError(f"{kind.title()} record {record_index} is missing label or entity_type.")
+
+
+def summarize_source_governance(
+    sources: list[SourceSnapshot],
+) -> SourceGovernanceSummary:
+    """Summarize whether bundle sources are publishable through the hosted registry."""
+
+    if not sources:
+        return SourceGovernanceSummary(
+            publishable_sources_only=False,
+            warnings=[
+                "Bundle does not declare any source snapshots and blocks registry publication."
+            ],
+        )
+
+    license_class_counts: dict[str, int] = {}
+    publishable_source_count = 0
+    restricted_source_count = 0
+    warnings: list[str] = []
+    for source in sorted(sources, key=lambda item: _stable_sort_key(item.name)):
+        license_class = source.license_class or "blocked-pending-license-review"
+        license_class_counts[license_class] = license_class_counts.get(license_class, 0) + 1
+        if license_class == "ship-now":
+            publishable_source_count += 1
+            continue
+        restricted_source_count += 1
+        warnings.append(
+            f"Source '{source.name}' uses license_class '{license_class}' and blocks registry publication."
+        )
+    ordered_counts = {
+        key: license_class_counts[key]
+        for key in sorted(license_class_counts, key=_stable_sort_key)
+    }
+    return SourceGovernanceSummary(
+        source_license_classes=ordered_counts,
+        publishable_source_count=publishable_source_count,
+        restricted_source_count=restricted_source_count,
+        publishable_sources_only=restricted_source_count == 0,
+        warnings=warnings,
+    )
 
 
 def _iter_entity_alias_candidates(
