@@ -246,6 +246,14 @@ This file records the implementation progress of `ades` as the project moves tow
 - Proved clean consumer behavior against the published generated release: a fresh local runtime can pull `finance-en` directly from the object-storage registry URL, and a separate clean smoke can pull `medical-en` plus its `general-en` dependency and tag the expected medical entities without relying on repo-local bundle directories.
 - Added categorized unit, component, integration, and API coverage for the new publication surface while keeping the existing deploy-owned hosted-registry promotion path authoritative.
 
+### 33. Hosted-registry promotion spec and deploy preparation
+
+- Added deploy-preparation logic in `src/ades/packs/publish.py` so `ades` can now prepare the production registry payload in two modes: rebuild the bundled starter registry as before, or materialize an approved reviewed registry URL from `src/ades/resources/registry/promoted-release.json`.
+- The promoted path runs the shipped clean-consumer smoke against the reviewed registry URL before materialization, then rewrites the reviewed manifests and checksum-verified artifacts back into the deploy-owned `dist/registry` shape so the existing CI/CD workflow remains authoritative.
+- Exposed the new surface through `ades.prepare_registry_deploy_release(...)`, `ades registry prepare-deploy-release`, and `POST /v0/registry/prepare-deploy-release`.
+- Updated `.github/workflows/deploy-prod.yml` so the production deployment now calls `ades registry prepare-deploy-release --output-dir dist/registry`, preserving the old bundled-registry fallback whenever no promotion spec is committed.
+- Added categorized unit, component, integration, and API coverage for promoted deploy preparation and the bundled fallback path.
+
 ### 31. Rollback-safe pack install recovery
 
 - Hardened `src/ades/packs/installer.py` so fresh installs extract into hidden staging directories and pack updates move the current installed pack into a hidden backup directory before replacement.
@@ -504,6 +512,7 @@ This file records the implementation progress of `ades` as the project moves tow
 - `ades registry validate-general-quality <bundle-dir> --output-dir <dir>`
 - `ades registry validate-medical-quality <bundle-dir> --general-bundle-dir <dir> --output-dir <dir>`
 - `ades registry refresh-generated-packs <bundle-dir...> --output-dir <dir>`
+- `ades registry prepare-deploy-release --output-dir <dir>`
 - `ades registry publish-generated-release <registry-dir> --prefix <object-storage-prefix>`
 - `ades registry smoke-published-release <registry-url>`
 - `ades packs list`
@@ -530,6 +539,7 @@ The local service currently exposes:
 - `POST /v0/registry/validate-general-quality`
 - `POST /v0/registry/validate-medical-quality`
 - `POST /v0/registry/refresh-generated-packs`
+- `POST /v0/registry/prepare-deploy-release`
 - `POST /v0/registry/publish-generated-release`
 - `POST /v0/registry/smoke-published-release`
 - `GET /v0/installers/npm`
@@ -567,4 +577,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Decide how reviewed generated releases graduate from object-storage prefixes into the hosted production registry path now that the published-registry consumer smoke gate is automated and the direct HTTPS release URL is already proven.
+- Expand the bounded real-source `general-en` seed set carefully while keeping the current zero-ambiguity quality contract intact for the dependency pack that `medical-en` relies on.

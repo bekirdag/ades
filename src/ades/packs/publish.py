@@ -36,6 +36,12 @@ IGNORED_PACK_PATTERNS = (
     "*.ades.json",
     "*.ades-manifest.json",
 )
+DEFAULT_REGISTRY_PACKS_DIR = (
+    Path(__file__).resolve().parent.parent / "resources" / "registry" / "packs"
+)
+DEFAULT_REGISTRY_PROMOTION_SPEC_PATH = (
+    Path(__file__).resolve().parent.parent / "resources" / "registry" / "promoted-release.json"
+)
 
 
 @dataclass(frozen=True)
@@ -89,6 +95,15 @@ class ObjectStoragePublishResult:
 
 
 @dataclass(frozen=True)
+class RegistryPromotionSpec:
+    """Approved reviewed-registry promotion input for the deploy workflow."""
+
+    schema_version: int
+    registry_url: str
+    smoke_pack_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class PublishedRegistrySmokeCaseResult:
     """Outcome for one clean-consumer smoke case against a published registry."""
 
@@ -123,6 +138,22 @@ class PublishedRegistrySmokeResult:
     passed: bool
     failures: list[str] = field(default_factory=list)
     cases: list[PublishedRegistrySmokeCaseResult] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class RegistryDeployPreparationResult:
+    """Prepared registry payload for the existing production deploy workflow."""
+
+    mode: str
+    output_dir: str
+    index_path: str
+    index_url: str
+    generated_at: str
+    pack_count: int
+    packs: list[RegistryBuildPackResult] = field(default_factory=list)
+    promotion_spec_path: str | None = None
+    promoted_registry_url: str | None = None
+    consumer_smoke: PublishedRegistrySmokeResult | None = None
 
 
 @dataclass(frozen=True)
@@ -395,6 +426,63 @@ def smoke_test_published_registry(
     )
 
 
+def prepare_registry_deploy_payload(
+    pack_dirs: list[str | Path] | tuple[str | Path, ...] | None,
+    *,
+    output_dir: str | Path,
+    promotion_spec_path: str | Path | None = None,
+) -> RegistryDeployPreparationResult:
+    """Prepare the deploy-owned registry payload from bundled packs or a promoted release."""
+
+    resolved_promotion_spec_path = (
+        Path(promotion_spec_path).expanduser().resolve()
+        if promotion_spec_path is not None
+        else DEFAULT_REGISTRY_PROMOTION_SPEC_PATH
+    )
+    promotion_spec = _load_registry_promotion_spec(
+        resolved_promotion_spec_path,
+        required=promotion_spec_path is not None,
+    )
+    if promotion_spec is not None:
+        consumer_smoke = smoke_test_published_registry(
+            promotion_spec.registry_url,
+            pack_ids=promotion_spec.smoke_pack_ids,
+        )
+        if not consumer_smoke.passed:
+            raise ValueError(
+                "Published registry consumer smoke failed: "
+                + "; ".join(consumer_smoke.failures)
+            )
+        build_result = _materialize_published_registry(
+            promotion_spec.registry_url,
+            output_dir=output_dir,
+        )
+        return RegistryDeployPreparationResult(
+            mode="promoted",
+            output_dir=build_result.output_dir,
+            index_path=build_result.index_path,
+            index_url=build_result.index_url,
+            generated_at=build_result.generated_at,
+            pack_count=len(build_result.packs),
+            packs=build_result.packs,
+            promotion_spec_path=str(resolved_promotion_spec_path),
+            promoted_registry_url=promotion_spec.registry_url,
+            consumer_smoke=consumer_smoke,
+        )
+
+    selected_pack_dirs = _resolve_prepare_pack_dirs(pack_dirs)
+    build_result = build_static_registry(selected_pack_dirs, output_dir=output_dir)
+    return RegistryDeployPreparationResult(
+        mode="bundled",
+        output_dir=build_result.output_dir,
+        index_path=build_result.index_path,
+        index_url=build_result.index_url,
+        generated_at=build_result.generated_at,
+        pack_count=len(build_result.packs),
+        packs=build_result.packs,
+    )
+
+
 def _build_published_manifest(
     source_manifest: PackManifest,
     *,
@@ -561,6 +649,64 @@ def _parse_listed_objects(stdout: str) -> list[ObjectStoragePublishedObject]:
     return objects
 
 
+def _resolve_prepare_pack_dirs(
+    pack_dirs: list[str | Path] | tuple[str | Path, ...] | None,
+) -> list[Path]:
+    if pack_dirs:
+        return [Path(pack_dir).expanduser().resolve() for pack_dir in pack_dirs]
+
+    if not DEFAULT_REGISTRY_PACKS_DIR.exists():
+        raise FileNotFoundError(
+            f"Default registry packs directory not found: {DEFAULT_REGISTRY_PACKS_DIR}"
+        )
+    return sorted(
+        [
+            path.resolve()
+            for path in DEFAULT_REGISTRY_PACKS_DIR.iterdir()
+            if path.is_dir()
+        ],
+        key=lambda item: item.name,
+    )
+
+
+def _load_registry_promotion_spec(
+    path: Path,
+    *,
+    required: bool,
+) -> RegistryPromotionSpec | None:
+    if not path.exists():
+        if required:
+            raise FileNotFoundError(f"Registry promotion spec not found: {path}")
+        return None
+    if not path.is_file():
+        raise ValueError(f"Registry promotion spec is not a file: {path}")
+
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Registry promotion spec is not valid JSON: {path}") from exc
+
+    schema_version = int(raw.get("schema_version", 1))
+    if schema_version != 1:
+        raise ValueError(
+            f"Unsupported registry promotion spec schema_version {schema_version}: {path}"
+        )
+    raw_registry_url = str(raw.get("registry_url", "")).strip()
+    if not raw_registry_url:
+        raise ValueError(f"Registry promotion spec is missing registry_url: {path}")
+    registry_url = normalize_source_url(raw_registry_url)
+    smoke_pack_ids = [
+        str(pack_id)
+        for pack_id in raw.get("smoke_pack_ids", [])
+        if str(pack_id).strip()
+    ]
+    return RegistryPromotionSpec(
+        schema_version=schema_version,
+        registry_url=registry_url,
+        smoke_pack_ids=smoke_pack_ids,
+    )
+
+
 def _load_published_registry_index(registry_url: str) -> RegistryIndex:
     """Load one published registry index with deterministic operator-facing errors."""
 
@@ -574,6 +720,135 @@ def _load_published_registry_index(registry_url: str) -> RegistryIndex:
         raise ValueError(f"Unable to load published registry index: {registry_url}") from exc
     except httpx.HTTPError as exc:
         raise ValueError(f"Unable to load published registry index: {registry_url}") from exc
+
+
+def _materialize_published_registry(
+    registry_url: str,
+    *,
+    output_dir: str | Path,
+) -> RegistryBuildResult:
+    """Materialize a reviewed published registry into the deploy-owned local registry shape."""
+
+    index = _load_published_registry_index(registry_url)
+    resolved_output_dir = Path(output_dir).expanduser().resolve()
+    if resolved_output_dir.exists() and not resolved_output_dir.is_dir():
+        raise NotADirectoryError(
+            f"Deploy registry output path is not a directory: {resolved_output_dir}"
+        )
+    packs_output_dir = resolved_output_dir / "packs"
+    artifacts_output_dir = resolved_output_dir / "artifacts"
+    if packs_output_dir.exists():
+        shutil.rmtree(packs_output_dir)
+    if artifacts_output_dir.exists():
+        shutil.rmtree(artifacts_output_dir)
+    resolved_output_dir.mkdir(parents=True, exist_ok=True)
+    packs_output_dir.mkdir(parents=True, exist_ok=True)
+    artifacts_output_dir.mkdir(parents=True, exist_ok=True)
+
+    registry_entries: dict[str, RegistryPack] = {}
+    built_packs: list[RegistryBuildPackResult] = []
+    for pack in index.list_packs():
+        manifest_payload = json.loads(
+            _read_source_bytes(pack.manifest_url).decode("utf-8")
+        )
+        source_manifest = PackManifest.from_dict(
+            manifest_payload,
+            base_url=pack.manifest_url,
+        )
+        if not source_manifest.artifacts:
+            raise ValueError(
+                f"Published manifest does not list an artifact: {pack.manifest_url}"
+            )
+        source_artifact = source_manifest.artifacts[0]
+        if not source_artifact.sha256:
+            raise ValueError(
+                f"Published manifest artifact is missing sha256: {pack.manifest_url}"
+            )
+        artifact_name = Path(urlsplit(source_artifact.url).path).name
+        if not artifact_name:
+            raise ValueError(
+                f"Published manifest artifact URL does not end in a filename: {source_artifact.url}"
+            )
+        artifact_path = artifacts_output_dir / artifact_name
+        artifact_bytes = _read_source_bytes(source_artifact.url)
+        artifact_path.write_bytes(artifact_bytes)
+        artifact_sha256 = hashlib.sha256(artifact_bytes).hexdigest()
+        if artifact_sha256 != source_artifact.sha256:
+            raise ValueError(
+                f"Published artifact checksum mismatch for {source_manifest.pack_id}: "
+                f"expected {source_artifact.sha256}, got {artifact_sha256}"
+            )
+        published_manifest = _build_published_manifest(
+            source_manifest,
+            artifact_relative_url=f"../../artifacts/{artifact_name}",
+            artifact_sha256=artifact_sha256,
+        )
+        published_pack_dir = packs_output_dir / source_manifest.pack_id
+        published_pack_dir.mkdir(parents=True, exist_ok=True)
+        published_manifest_path = published_pack_dir / "manifest.json"
+        published_manifest_path.write_text(
+            json.dumps(published_manifest.to_dict(), indent=2) + "\n",
+            encoding="utf-8",
+        )
+        registry_entries[source_manifest.pack_id] = RegistryPack(
+            pack_id=source_manifest.pack_id,
+            version=source_manifest.version,
+            manifest_url=f"packs/{source_manifest.pack_id}/manifest.json",
+            language=source_manifest.language,
+            domain=source_manifest.domain,
+            tier=source_manifest.tier,
+            description=source_manifest.description,
+            tags=list(source_manifest.tags),
+            dependencies=list(source_manifest.dependencies),
+            min_ades_version=source_manifest.min_ades_version,
+        )
+        built_packs.append(
+            RegistryBuildPackResult(
+                pack_id=source_manifest.pack_id,
+                version=source_manifest.version,
+                source_path=pack.manifest_url,
+                manifest_path=str(published_manifest_path.resolve()),
+                artifact_path=str(artifact_path.resolve()),
+                artifact_sha256=artifact_sha256,
+                artifact_size_bytes=artifact_path.stat().st_size,
+            )
+        )
+
+    index_path = resolved_output_dir / "index.json"
+    materialized_index = RegistryIndex(
+        schema_version=index.schema_version,
+        generated_at=index.generated_at,
+        packs=registry_entries,
+    )
+    index_path.write_text(
+        json.dumps(materialized_index.to_dict(), indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return RegistryBuildResult(
+        output_dir=str(resolved_output_dir),
+        index_path=str(index_path.resolve()),
+        index_url=index_path.resolve().as_uri(),
+        generated_at=index.generated_at,
+        packs=sorted(built_packs, key=lambda item: item.pack_id),
+    )
+
+
+def _read_source_bytes(source_url: str) -> bytes:
+    parsed = urlsplit(source_url)
+    if parsed.scheme in {"http", "https"}:
+        try:
+            response = httpx.get(source_url, follow_redirects=True, timeout=30.0)
+            response.raise_for_status()
+            return response.content
+        except httpx.HTTPStatusError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                raise FileNotFoundError(f"Published registry object not found: {source_url}") from exc
+            raise ValueError(f"Unable to load published registry object: {source_url}") from exc
+        except httpx.HTTPError as exc:
+            raise ValueError(f"Unable to load published registry object: {source_url}") from exc
+    if parsed.scheme == "file":
+        return Path(parsed.path).read_bytes()
+    return Path(source_url).expanduser().resolve().read_bytes()
 
 
 def _resolve_smoke_pack_ids(

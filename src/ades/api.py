@@ -53,6 +53,7 @@ from .packs.refresh import refresh_generated_pack_registry as run_refresh_genera
 from .packs.reporting import report_generated_pack as run_report_generated_pack
 from .packs.publish import (
     build_static_registry,
+    prepare_registry_deploy_payload as run_prepare_registry_deploy_payload,
     publish_registry_to_object_storage as run_publish_registry_to_object_storage,
     smoke_test_published_registry as run_smoke_test_published_registry,
 )
@@ -84,6 +85,7 @@ from .service.models import (
     RegistryBuildPackSummary,
     RegistryBuildResponse,
     RegistryBuildFinanceBundleResponse,
+    RegistryPrepareDeployReleaseResponse,
     RegistryFetchGeneralSourcesResponse,
     RegistryFetchMedicalSourcesResponse,
     RegistryFetchFinanceSourcesResponse,
@@ -472,6 +474,77 @@ def publish_generated_registry_release(
             )
             for item in result.objects
         ],
+    )
+
+
+def prepare_registry_deploy_release(
+    *,
+    output_dir: str | Path,
+    pack_dirs: Iterable[str | Path] = (),
+    promotion_spec_path: str | Path | None = None,
+) -> RegistryPrepareDeployReleaseResponse:
+    """Prepare the deploy-owned registry payload from bundled packs or a promoted release."""
+
+    result = run_prepare_registry_deploy_payload(
+        list(pack_dirs),
+        output_dir=output_dir,
+        promotion_spec_path=promotion_spec_path,
+    )
+    consumer_smoke = None
+    if result.consumer_smoke is not None:
+        consumer_smoke = RegistrySmokePublishedReleaseResponse(
+            registry_url=result.consumer_smoke.registry_url,
+            checked_at=result.consumer_smoke.checked_at,
+            fixture_profile=result.consumer_smoke.fixture_profile,
+            pack_count=result.consumer_smoke.pack_count,
+            passed_case_count=result.consumer_smoke.passed_case_count,
+            failed_case_count=result.consumer_smoke.failed_case_count,
+            passed=result.consumer_smoke.passed,
+            failures=result.consumer_smoke.failures,
+            cases=[
+                RegistryPublishedReleaseSmokeCaseResponse(
+                    pack_id=case.pack_id,
+                    text=case.text,
+                    expected_installed_pack_ids=case.expected_installed_pack_ids,
+                    pulled_pack_ids=case.pulled_pack_ids,
+                    installed_pack_ids=case.installed_pack_ids,
+                    missing_installed_pack_ids=case.missing_installed_pack_ids,
+                    expected_entity_texts=case.expected_entity_texts,
+                    matched_entity_texts=case.matched_entity_texts,
+                    missing_entity_texts=case.missing_entity_texts,
+                    tagged_entity_texts=case.tagged_entity_texts,
+                    expected_labels=case.expected_labels,
+                    matched_labels=case.matched_labels,
+                    missing_labels=case.missing_labels,
+                    tagged_labels=case.tagged_labels,
+                    passed=case.passed,
+                    failure=case.failure,
+                )
+                for case in result.consumer_smoke.cases
+            ],
+        )
+    return RegistryPrepareDeployReleaseResponse(
+        mode=result.mode,
+        output_dir=result.output_dir,
+        index_path=result.index_path,
+        index_url=result.index_url,
+        generated_at=result.generated_at,
+        pack_count=result.pack_count,
+        packs=[
+            RegistryBuildPackSummary(
+                pack_id=pack.pack_id,
+                version=pack.version,
+                source_path=pack.source_path,
+                manifest_path=pack.manifest_path,
+                artifact_path=pack.artifact_path,
+                artifact_sha256=pack.artifact_sha256,
+                artifact_size_bytes=pack.artifact_size_bytes,
+            )
+            for pack in result.packs
+        ],
+        promotion_spec_path=result.promotion_spec_path,
+        promoted_registry_url=result.promoted_registry_url,
+        consumer_smoke=consumer_smoke,
     )
 
 

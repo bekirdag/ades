@@ -137,14 +137,17 @@ Public surfaces for the first generator slice:
 - Python: `ades.generate_pack_source(...)`
 - Python: `ades.report_generated_pack(...)`
 - Python: `ades.refresh_generated_packs(...)`
+- Python: `ades.prepare_registry_deploy_release(...)`
 - Python: `ades.publish_generated_registry_release(...)`
 - CLI: `ades registry generate-pack <bundle-dir> --output-dir <dir>`
 - CLI: `ades registry report-pack <bundle-dir> --output-dir <dir>`
 - CLI: `ades registry refresh-generated-packs <bundle-dir...> --output-dir <dir>`
+- CLI: `ades registry prepare-deploy-release --output-dir <dir>`
 - CLI: `ades registry publish-generated-release <registry-dir> --prefix <object-storage-prefix>`
 - HTTP: `POST /v0/registry/generate-pack`
 - HTTP: `POST /v0/registry/report-pack`
 - HTTP: `POST /v0/registry/refresh-generated-packs`
+- HTTP: `POST /v0/registry/prepare-deploy-release`
 - HTTP: `POST /v0/registry/publish-generated-release`
 
 Finance raw-source fetch surface:
@@ -239,7 +242,9 @@ Release-oriented refresh flow:
 3. Review the emitted `reports/` and `quality/` output under the chosen refresh directory.
 4. If `passed=true`, publish the generated `registry/` directory through the existing static-registry host path or an approved object-storage sync.
 5. Run clean consumer smoke against the published registry URL before promotion.
-6. Pull and tag with the resulting registry as usual.
+6. If the reviewed release is approved, write `src/ades/resources/registry/promoted-release.json` with the reviewed registry URL and desired smoke pack ids.
+7. Let `ades registry prepare-deploy-release --output-dir <dir>` materialize the reviewed release into the deploy-owned local registry layout through the existing CI/CD flow.
+8. Pull and tag with the resulting hosted registry as usual.
 
 `refresh-generated-packs` is the orchestration surface for the publish/refresh phase. It reuses the existing report and quality gates, then only builds `registry/` when every requested pack passes validation. When `max_ambiguous_aliases` is omitted, refresh uses pack-specific defaults instead of one global override: `general-en=0`, `medical-en=25`, and `finance-en=300`. Medical refreshes auto-resolve `general-en` when that bundle is included in the same request, or they accept `--general-bundle-dir` / `general_bundle_dir` when it is external to the bundle list. The first fully real-source combined `general-en` + `medical-en` refresh release now lives under `/mnt/githubActions/ades_big_data/pack_releases/general-medical-2026-04-10`.
 
@@ -248,3 +253,9 @@ Published-registry consumer-smoke surfaces:
 - Python: `ades.smoke_test_published_generated_registry(...)`
 - CLI: `ades registry smoke-published-release <registry-url>`
 - HTTP: `POST /v0/registry/smoke-published-release`
+
+Deploy-preparation promotion surfaces:
+
+- Python: `ades.prepare_registry_deploy_release(...)`
+- CLI: `ades registry prepare-deploy-release --output-dir <dir>`
+- HTTP: `POST /v0/registry/prepare-deploy-release`

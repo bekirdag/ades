@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+import json
 from pathlib import Path
 import threading
 
@@ -54,6 +55,28 @@ def create_working_published_registry_dir(root: Path) -> Path:
     if not refresh.passed or refresh.registry is None:
         raise AssertionError("Expected generated registry refresh fixture to pass.")
     return Path(refresh.registry.output_dir)
+
+
+def write_registry_promotion_spec(
+    root: Path,
+    *,
+    registry_url: str,
+    smoke_pack_ids: tuple[str, ...] = ("finance-en", "medical-en"),
+) -> Path:
+    spec_path = root / "promoted-release.json"
+    spec_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "registry_url": registry_url,
+                "smoke_pack_ids": list(smoke_pack_ids),
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return spec_path
 
 
 @contextmanager

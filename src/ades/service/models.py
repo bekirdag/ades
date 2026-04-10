@@ -600,6 +600,14 @@ class RegistryPublishGeneratedReleaseRequest(BaseModel):
     delete: bool = True
 
 
+class RegistryPrepareDeployReleaseRequest(BaseModel):
+    """Request body for preparing the deploy-owned registry payload."""
+
+    output_dir: str
+    pack_dirs: list[str] = Field(default_factory=list)
+    promotion_spec_path: str | None = None
+
+
 class RegistryPublishGeneratedReleaseResponse(BaseModel):
     """Response body for publishing a reviewed generated registry to object storage."""
 
@@ -657,6 +665,21 @@ class RegistrySmokePublishedReleaseResponse(BaseModel):
     passed: bool
     failures: list[str] = Field(default_factory=list)
     cases: list[RegistryPublishedReleaseSmokeCaseResponse] = Field(default_factory=list)
+
+
+class RegistryPrepareDeployReleaseResponse(BaseModel):
+    """Response body for preparing the deploy-owned registry payload."""
+
+    mode: Literal["bundled", "promoted"]
+    output_dir: str
+    index_path: str
+    index_url: str
+    generated_at: datetime
+    pack_count: int
+    packs: list[RegistryBuildPackSummary] = Field(default_factory=list)
+    promotion_spec_path: str | None = None
+    promoted_registry_url: str | None = None
+    consumer_smoke: RegistrySmokePublishedReleaseResponse | None = None
 
 
 class NpmInstallerInfo(BaseModel):

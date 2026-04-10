@@ -22,6 +22,7 @@ from ..api import (
     list_packs,
     lookup_candidates,
     npm_installer_info,
+    prepare_registry_deploy_release,
     publish_generated_registry_release,
     publish_release,
     report_generated_pack,
@@ -79,6 +80,8 @@ from .models import (
     RegistryPackQualityResponse,
     RegistryPublishGeneratedReleaseRequest,
     RegistryPublishGeneratedReleaseResponse,
+    RegistryPrepareDeployReleaseRequest,
+    RegistryPrepareDeployReleaseResponse,
     RegistrySmokePublishedReleaseRequest,
     RegistrySmokePublishedReleaseResponse,
     RegistryRefreshGeneratedPacksRequest,
@@ -687,6 +690,28 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 endpoint=request.endpoint,
                 region=request.region,
                 delete=request.delete,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/prepare-deploy-release",
+        response_model=RegistryPrepareDeployReleaseResponse,
+    )
+    def runtime_prepare_deploy_release(
+        request: RegistryPrepareDeployReleaseRequest,
+    ) -> RegistryPrepareDeployReleaseResponse:
+        """Prepare the deploy-owned registry payload from bundled packs or a promoted release."""
+
+        try:
+            return prepare_registry_deploy_release(
+                output_dir=request.output_dir,
+                pack_dirs=request.pack_dirs,
+                promotion_spec_path=request.promotion_spec_path,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

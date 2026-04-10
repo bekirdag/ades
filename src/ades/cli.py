@@ -20,6 +20,7 @@ from .api import generate_pack_source as api_generate_pack_source
 from .api import lookup_candidates as api_lookup_candidates
 from .api import list_available_packs as api_list_available_packs
 from .api import list_packs as api_list_packs
+from .api import prepare_registry_deploy_release as api_prepare_registry_deploy_release
 from .api import publish_generated_registry_release as api_publish_generated_registry_release
 from .api import publish_release as api_publish_release
 from .api import pull_pack as api_pull_pack
@@ -499,6 +500,43 @@ def registry_publish_generated_release(
             endpoint=endpoint,
             region=region,
             delete=delete,
+        )
+    except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("prepare-deploy-release")
+def registry_prepare_deploy_release(
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the deploy-owned registry payload should be written.",
+    ),
+    pack_dirs: list[Path] | None = typer.Option(
+        None,
+        "--pack-dir",
+        help=(
+            "Optional local pack directory override. Repeatable. "
+            "Defaults to the bundled starter packs when no promotion spec is active."
+        ),
+    ),
+    promotion_spec: Path | None = typer.Option(
+        None,
+        "--promotion-spec",
+        help=(
+            "Optional approved promotion spec JSON. Defaults to "
+            "src/ades/resources/registry/promoted-release.json when present."
+        ),
+    ),
+) -> None:
+    """Prepare the deploy-owned registry payload from bundled packs or a promoted release."""
+
+    try:
+        response = api_prepare_registry_deploy_release(
+            output_dir=output_dir,
+            pack_dirs=pack_dirs or (),
+            promotion_spec_path=promotion_spec,
         )
     except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
         _exit_with_cli_error(exc)

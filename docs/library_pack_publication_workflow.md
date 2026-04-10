@@ -11,10 +11,13 @@ Take one or more normalized bundle directories, run the deterministic report and
 The publication orchestration surface is:
 
 - Python: `ades.refresh_generated_packs(...)`
+- Python: `ades.prepare_registry_deploy_release(...)`
 - Python: `ades.publish_generated_registry_release(...)`
 - CLI: `ades registry refresh-generated-packs <bundle-dir...> --output-dir <dir>`
+- CLI: `ades registry prepare-deploy-release --output-dir <dir>`
 - CLI: `ades registry publish-generated-release <registry-dir> --prefix <object-storage-prefix>`
 - HTTP: `POST /v0/registry/refresh-generated-packs`
+- HTTP: `POST /v0/registry/prepare-deploy-release`
 - HTTP: `POST /v0/registry/publish-generated-release`
 
 This surface is intentionally downstream of the bundle builders:
@@ -118,7 +121,26 @@ Preferred pattern:
 
 1. Sync the approved release to an immutable object-storage prefix.
 2. Review the uploaded `index.json`, manifests, and artifacts.
-3. Promote the approved registry through the existing hosted path.
+3. Write an approved promotion spec at `src/ades/resources/registry/promoted-release.json`.
+4. Let the existing push-to-`main` deployment workflow materialize that reviewed release into `dist/registry` and publish it through the normal hosted-registry path.
+
+Promotion spec shape:
+
+```json
+{
+  "schema_version": 1,
+  "registry_url": "https://ades.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json",
+  "smoke_pack_ids": ["finance-en", "medical-en"]
+}
+```
+
+The deploy-preparation surface is:
+
+- Python: `ades.prepare_registry_deploy_release(...)`
+- CLI: `ades registry prepare-deploy-release --output-dir <dir>`
+- HTTP: `POST /v0/registry/prepare-deploy-release`
+
+When `src/ades/resources/registry/promoted-release.json` is absent, deploy preparation falls back to rebuilding the bundled starter registry exactly as before. When the file is present, deploy preparation runs the shipped clean-consumer smoke against the reviewed registry URL, then materializes the reviewed `index.json`, manifests, and checksum-verified artifacts back into the deploy-owned local registry layout for the existing CI/CD workflow.
 
 Preferred shipped helper:
 
@@ -164,4 +186,4 @@ Important:
 
 ## Promotion Rule
 
-The current production deployment flow remains authoritative for the live root registry. Generated pack refreshes produce a reviewed static-registry payload; promotion to the live hosted registry should happen through the existing deploy/object-storage path, not through an ad hoc side channel. Before promotion, the published registry URL should pass the shipped clean-consumer smoke so the reviewed object-storage release proves real pull/install/tag behavior instead of only looking structurally correct.
+The current production deployment flow remains authoritative for the live root registry. Generated pack refreshes produce a reviewed static-registry payload; promotion to the live hosted registry now happens by committing the small promotion spec and letting the existing deploy workflow materialize that reviewed release into `dist/registry`. Before promotion, the published registry URL must pass the shipped clean-consumer smoke so the reviewed object-storage release proves real pull/install/tag behavior instead of only looking structurally correct.

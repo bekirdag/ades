@@ -42,13 +42,12 @@ jobs:
       - name: Build wheel
         run: python -m build --wheel
 
-      - name: Build static registry
+      - name: Prepare deploy registry
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist/registry
-          pack_dirs=(src/ades/resources/registry/packs/*)
-          ades registry build "${pack_dirs[@]}" --output-dir dist/registry
+          ades registry prepare-deploy-release --output-dir dist/registry
 
       - name: Resolve release metadata
         id: release

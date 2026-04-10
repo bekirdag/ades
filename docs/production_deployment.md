@@ -25,7 +25,7 @@ Deployments are pipeline-owned.
 - Trigger: push to `main`
 - Build outputs:
   - Python wheel
-  - static registry built from `src/ades/resources/registry/packs/*`
+  - deploy-owned static registry prepared by `ades registry prepare-deploy-release --output-dir dist/registry`
 - Remote deploy flow:
   - upload wheel and registry release
   - install wheel into `/mnt/ades/app/shared/.venv`
@@ -47,7 +47,7 @@ Optional GitHub secrets for S3-compatible static registry publication:
 
 When those optional secrets are present, the production workflow keeps the existing SSH-based deploy flow and also syncs `dist/registry` to the configured object-storage bucket with `aws s3 sync --endpoint-url ...`. This is additive and does not replace the current server-owned registry release path.
 
-Generated real-content pack refreshes use the same object-storage seam. The offline bundle/report/quality/refresh workflow is documented in `docs/library_pack_publication_workflow.md`; its `registry/` output can be published through `ades registry publish-generated-release` or the equivalent raw `aws s3 sync`, then promoted through the existing hosted registry path when approved. The first reviewed three-pack release is already directly consumer-readable at `https://ades.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json`.
+Generated real-content pack refreshes use the same object-storage seam. The offline bundle/report/quality/refresh workflow is documented in `docs/library_pack_publication_workflow.md`; its `registry/` output can be published through `ades registry publish-generated-release` or the equivalent raw `aws s3 sync`, then promoted through the existing hosted registry path by committing `src/ades/resources/registry/promoted-release.json`. The deploy workflow now uses `ades registry prepare-deploy-release --output-dir dist/registry`, which falls back to the bundled starter packs when no promotion spec exists and otherwise smoke-checks plus materializes the approved reviewed registry URL into the normal deploy-owned registry layout. The first reviewed three-pack release is already directly consumer-readable at `https://ades.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json`.
 
 ## Local Client Config
 

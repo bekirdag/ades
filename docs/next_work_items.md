@@ -5,7 +5,6 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. Real upstream bundle ingestion and quality tuning
-   - Decide how a reviewed generated release graduates from the object-storage prefix into the hosted production registry path now that direct HTTPS consumption is already working.
    - Expand the bounded real-source `general-en` seed set carefully once broader recall is needed, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
 
 2. End-to-end production-readiness validation
@@ -21,6 +20,12 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Deploy-owned hosted-registry promotion preparation:
+  - implemented in `src/ades/packs/publish.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
+  - adds `ades.prepare_registry_deploy_release(...)`, `ades registry prepare-deploy-release`, and `POST /v0/registry/prepare-deploy-release` so the existing CI/CD flow can either rebuild the bundled starter registry or materialize an approved reviewed registry URL from `src/ades/resources/registry/promoted-release.json`
+  - keeps the current push-to-`main` deployment model authoritative by running the shipped clean-consumer smoke before materialization and then rewriting the reviewed registry back into the deploy-owned `dist/registry` layout instead of promoting through a side channel
+  - updates `.github/workflows/deploy-prod.yml` to use the new preparation surface while preserving the old starter-pack fallback whenever no promotion spec is committed
 
 - Published generated-registry consumer smoke automation:
   - implemented in `src/ades/packs/publish.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
