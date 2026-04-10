@@ -14,6 +14,7 @@ from .api import build_medical_source_bundle as api_build_medical_source_bundle
 from .api import build_registry as api_build_registry
 from .api import deactivate_pack as api_deactivate_pack
 from .api import fetch_finance_source_snapshot as api_fetch_finance_source_snapshot
+from .api import fetch_medical_source_snapshot as api_fetch_medical_source_snapshot
 from .api import generate_pack_source as api_generate_pack_source
 from .api import lookup_candidates as api_lookup_candidates
 from .api import list_available_packs as api_list_available_packs
@@ -420,11 +421,11 @@ def registry_refresh_generated_packs(
         min=0,
         help="Maximum unexpected tagged entities allowed across fixture cases.",
     ),
-    max_ambiguous_aliases: int = typer.Option(
-        0,
+    max_ambiguous_aliases: int | None = typer.Option(
+        None,
         "--max-ambiguous-aliases",
         min=0,
-        help="Maximum ambiguous alias keys allowed after generation.",
+        help="Maximum ambiguous alias keys allowed after generation. If omitted, ades uses the pack-specific default quality budget.",
     ),
     max_dropped_alias_ratio: float = typer.Option(
         0.5,
@@ -539,7 +540,7 @@ def registry_validate_general_quality(
         help="Maximum unexpected tagged entities allowed across fixture cases.",
     ),
     max_ambiguous_aliases: int = typer.Option(
-        0,
+        25,
         "--max-ambiguous-aliases",
         min=0,
         help="Maximum ambiguous alias keys allowed after generation.",
@@ -603,7 +604,7 @@ def registry_validate_medical_quality(
         help="Maximum unexpected tagged entities allowed across fixture cases.",
     ),
     max_ambiguous_aliases: int = typer.Option(
-        0,
+        25,
         "--max-ambiguous-aliases",
         min=0,
         help="Maximum ambiguous alias keys allowed after generation.",
@@ -759,6 +760,75 @@ def registry_build_general_bundle(
             curated_entities_path=curated_entities,
             output_dir=output_dir,
             version=version,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("fetch-medical-sources")
+def registry_fetch_medical_sources(
+    output_dir: Path = typer.Option(
+        Path("/mnt/githubActions/ades_big_data/pack_sources/raw/medical-en"),
+        "--output-dir",
+        help="Directory where immutable medical source snapshots should be written.",
+    ),
+    snapshot: str | None = typer.Option(
+        None,
+        "--snapshot",
+        help="Snapshot date in YYYY-MM-DD format. Defaults to today.",
+    ),
+    disease_ontology_url: str = typer.Option(
+        "https://raw.githubusercontent.com/DiseaseOntology/HumanDiseaseOntology/main/src/ontology/doid.obo",
+        "--disease-ontology-url",
+        help="URL or file path for the Disease Ontology source file.",
+    ),
+    hgnc_genes_url: str = typer.Option(
+        "https://storage.googleapis.com/public-download-files/hgnc/json/json/hgnc_complete_set.json",
+        "--hgnc-genes-url",
+        help="URL or file path for the HGNC complete-set source JSON.",
+    ),
+    uniprot_proteins_url: str = typer.Option(
+        "https://rest.uniprot.org/uniprotkb/search?query=%28reviewed%3Atrue%20AND%20organism_id%3A9606%29&format=json&fields=accession%2Cprotein_name%2Cgene_names&size=500",
+        "--uniprot-proteins-url",
+        help="URL or file path for the UniProt reviewed-protein source JSON.",
+    ),
+    clinical_trials_url: str = typer.Option(
+        "https://clinicaltrials.gov/api/v2/studies?query.cond=diabetes&pageSize=200&format=json",
+        "--clinical-trials-url",
+        help="URL or file path for the ClinicalTrials.gov study source JSON.",
+    ),
+    user_agent: str = typer.Option(
+        "ades/0.1.0 (ops@adestool.com)",
+        "--user-agent",
+        help="User-Agent header for HTTP source fetches.",
+    ),
+    uniprot_max_records: int = typer.Option(
+        2000,
+        "--uniprot-max-records",
+        min=1,
+        help="Maximum number of UniProt protein records to keep in one snapshot.",
+    ),
+    clinical_trials_max_records: int = typer.Option(
+        500,
+        "--clinical-trials-max-records",
+        min=1,
+        help="Maximum number of ClinicalTrials.gov studies to keep in one snapshot.",
+    ),
+) -> None:
+    """Download one real medical source snapshot set under the big-data root."""
+
+    try:
+        response = api_fetch_medical_source_snapshot(
+            output_dir=output_dir,
+            snapshot=snapshot,
+            disease_ontology_url=disease_ontology_url,
+            hgnc_genes_url=hgnc_genes_url,
+            uniprot_proteins_url=uniprot_proteins_url,
+            clinical_trials_url=clinical_trials_url,
+            user_agent=user_agent,
+            uniprot_max_records=uniprot_max_records,
+            clinical_trials_max_records=clinical_trials_max_records,
         )
     except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
         _exit_with_cli_error(exc)

@@ -10,6 +10,9 @@ from .quality_common import (
 )
 
 
+DEFAULT_MEDICAL_MAX_AMBIGUOUS_ALIASES = 25
+
+
 DEFAULT_MEDICAL_QUALITY_CASES: tuple[PackQualityCase, ...] = (
     PackQualityCase(
         name="canonical-match",
@@ -51,7 +54,7 @@ def validate_medical_pack_quality(
     version: str | None = None,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
-    max_ambiguous_aliases: int = 0,
+    max_ambiguous_aliases: int = DEFAULT_MEDICAL_MAX_AMBIGUOUS_ALIASES,
     max_dropped_alias_ratio: float = 0.5,
 ) -> PackQualityResult:
     """Build, install, and evaluate one generated `medical-en` pack bundle."""

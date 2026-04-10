@@ -12,6 +12,7 @@ from ..api import (
     fetch_finance_source_snapshot,
     build_general_source_bundle,
     build_medical_source_bundle,
+    fetch_medical_source_snapshot,
     build_registry,
     deactivate_pack,
     generate_pack_source,
@@ -62,6 +63,8 @@ from .models import (
     RegistryBuildFinanceBundleResponse,
     RegistryFetchFinanceSourcesRequest,
     RegistryFetchFinanceSourcesResponse,
+    RegistryFetchMedicalSourcesRequest,
+    RegistryFetchMedicalSourcesResponse,
     RegistryBuildGeneralBundleRequest,
     RegistryBuildGeneralBundleResponse,
     RegistryBuildMedicalBundleRequest,
@@ -385,6 +388,38 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 curated_entities_path=request.curated_entities_path,
                 output_dir=request.output_dir,
                 version=request.version,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/fetch-medical-sources",
+        response_model=RegistryFetchMedicalSourcesResponse,
+    )
+    def runtime_fetch_medical_sources(
+        request: RegistryFetchMedicalSourcesRequest,
+    ) -> RegistryFetchMedicalSourcesResponse:
+        """Download one real `medical-en` source snapshot set."""
+
+        try:
+            return fetch_medical_source_snapshot(
+                output_dir=request.output_dir,
+                snapshot=request.snapshot,
+                disease_ontology_url=request.disease_ontology_url,
+                hgnc_genes_url=request.hgnc_genes_url,
+                uniprot_proteins_url=request.uniprot_proteins_url,
+                clinical_trials_url=request.clinical_trials_url,
+                user_agent=request.user_agent,
+                uniprot_max_records=request.uniprot_max_records,
+                clinical_trials_max_records=request.clinical_trials_max_records,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

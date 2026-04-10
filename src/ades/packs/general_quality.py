@@ -10,6 +10,9 @@ from .quality_common import (
 )
 
 
+DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES = 0
+
+
 DEFAULT_GENERAL_QUALITY_CASES: tuple[PackQualityCase, ...] = (
     PackQualityCase(
         name="entity-and-pattern-match",
@@ -46,7 +49,7 @@ def validate_general_pack_quality(
     version: str | None = None,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
-    max_ambiguous_aliases: int = 0,
+    max_ambiguous_aliases: int = DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES,
     max_dropped_alias_ratio: float = 0.5,
 ) -> PackQualityResult:
     """Build, install, and evaluate one generated `general-en` pack bundle."""

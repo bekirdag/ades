@@ -6,10 +6,14 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import json
 from pathlib import Path
+import re
 import shutil
 from typing import Any
 
 from .source_lock import build_bundle_source_entry, write_sources_lock
+
+
+_COMPACT_MEDICAL_SYMBOL_RE = re.compile(r"^[A-Za-z0-9./()+-]+$")
 
 
 @dataclass(frozen=True)
@@ -219,7 +223,11 @@ def _load_disease_ontology_entities(path: Path) -> list[dict[str, Any]]:
         )
         if not canonical_text:
             continue
-        aliases = _coerce_alias_list(item.get("aliases") or item.get("synonyms"))
+        aliases = [
+            alias
+            for alias in _coerce_alias_list(item.get("aliases") or item.get("synonyms"))
+            if not _is_compact_medical_symbol(alias)
+        ]
         source_id = (
             _clean_text(item.get("entity_id") or item.get("id") or item.get("doid"))
             or canonical_text.casefold()
@@ -248,7 +256,11 @@ def _load_hgnc_gene_entities(path: Path) -> list[dict[str, Any]]:
         )
         if not canonical_text:
             continue
-        aliases = _coerce_alias_list(item.get("aliases") or item.get("alias_symbol"))
+        aliases = [
+            alias
+            for alias in _coerce_alias_list(item.get("aliases") or item.get("alias_symbol"))
+            if _is_safe_gene_alias(alias)
+        ]
         source_id = (
             _clean_text(item.get("entity_id") or item.get("hgnc_id") or item.get("id"))
             or canonical_text
@@ -279,7 +291,11 @@ def _load_uniprot_protein_entities(path: Path) -> list[dict[str, Any]]:
         )
         if not canonical_text:
             continue
-        aliases = _coerce_alias_list(item.get("aliases") or item.get("synonyms"))
+        aliases = [
+            alias
+            for alias in _coerce_alias_list(item.get("aliases") or item.get("synonyms"))
+            if not _is_compact_medical_symbol(alias)
+        ]
         source_id = (
             _clean_text(item.get("entity_id") or item.get("accession") or item.get("id"))
             or canonical_text.casefold()
@@ -425,6 +441,25 @@ def _clean_text(value: Any) -> str:
 
 def _slugify(value: str) -> str:
     return "".join(character.lower() if character.isalnum() else "-" for character in value).strip("-")
+
+
+def _is_safe_gene_alias(alias: str) -> bool:
+    if len(alias) < 3:
+        return False
+    if not any(character.isupper() for character in alias):
+        return False
+    return len(alias) >= 4 or any(character.isdigit() for character in alias)
+
+
+def _is_compact_medical_symbol(alias: str) -> bool:
+    cleaned = _clean_text(alias)
+    if len(cleaned) < 2 or len(cleaned) > 12 or " " in cleaned:
+        return False
+    if not _COMPACT_MEDICAL_SYMBOL_RE.fullmatch(cleaned):
+        return False
+    if not any(character.isalpha() for character in cleaned):
+        return False
+    return cleaned.isupper() or any(character.isdigit() for character in cleaned)
 
 
 def _utc_timestamp() -> str:

@@ -14,6 +14,9 @@ from .publish import build_static_registry
 from ..pipeline.tagger import tag_text
 
 
+DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES = 300
+
+
 @dataclass(frozen=True)
 class FinanceQualityEntity:
     """One tagged or expected entity inside a finance quality case."""
@@ -119,7 +122,7 @@ def validate_finance_pack_quality(
     version: str | None = None,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
-    max_ambiguous_aliases: int = 300,
+    max_ambiguous_aliases: int = DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES,
     max_dropped_alias_ratio: float = 0.5,
 ) -> FinancePackQualityResult:
     """Build, install, and evaluate one generated `finance-en` pack bundle."""

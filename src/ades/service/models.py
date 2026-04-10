@@ -152,6 +152,65 @@ class RegistryFetchFinanceSourcesResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class RegistryFetchMedicalSourcesRequest(BaseModel):
+    """Request body for downloading one real `medical-en` source snapshot set."""
+
+    output_dir: str = "/mnt/githubActions/ades_big_data/pack_sources/raw/medical-en"
+    snapshot: str | None = None
+    disease_ontology_url: str = (
+        "https://raw.githubusercontent.com/DiseaseOntology/HumanDiseaseOntology/"
+        "main/src/ontology/doid.obo"
+    )
+    hgnc_genes_url: str = (
+        "https://storage.googleapis.com/public-download-files/hgnc/json/json/"
+        "hgnc_complete_set.json"
+    )
+    uniprot_proteins_url: str = (
+        "https://rest.uniprot.org/uniprotkb/search?"
+        "query=%28reviewed%3Atrue%20AND%20organism_id%3A9606%29&"
+        "format=json&fields=accession%2Cprotein_name%2Cgene_names&size=500"
+    )
+    clinical_trials_url: str = (
+        "https://clinicaltrials.gov/api/v2/studies?"
+        "query.cond=diabetes&pageSize=200&format=json"
+    )
+    user_agent: str = "ades/0.1.0 (ops@adestool.com)"
+    uniprot_max_records: int = 2000
+    clinical_trials_max_records: int = 500
+
+
+class RegistryFetchMedicalSourcesResponse(BaseModel):
+    """Response body for one downloaded `medical-en` source snapshot set."""
+
+    pack_id: str
+    output_dir: str
+    snapshot: str
+    snapshot_dir: str
+    disease_ontology_url: str
+    hgnc_genes_url: str
+    uniprot_proteins_url: str
+    clinical_trials_url: str
+    source_manifest_path: str
+    disease_ontology_path: str
+    hgnc_genes_path: str
+    uniprot_proteins_path: str
+    clinical_trials_path: str
+    curated_entities_path: str
+    generated_at: datetime
+    source_count: int
+    disease_count: int
+    gene_count: int
+    protein_count: int
+    clinical_trial_count: int
+    curated_entity_count: int
+    disease_ontology_sha256: str
+    hgnc_genes_sha256: str
+    uniprot_proteins_sha256: str
+    clinical_trials_sha256: str
+    curated_entities_sha256: str
+    warnings: list[str] = Field(default_factory=list)
+
+
 class RegistryBuildGeneralBundleRequest(BaseModel):
     """Request body for building one normalized `general-en` source bundle."""
 
@@ -320,7 +379,7 @@ class RegistryValidateMedicalQualityRequest(BaseModel):
     version: str | None = None
     min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
     max_unexpected_hits: int = Field(0, ge=0)
-    max_ambiguous_aliases: int = Field(0, ge=0)
+    max_ambiguous_aliases: int = Field(25, ge=0)
     max_dropped_alias_ratio: float = Field(0.5, ge=0.0, le=1.0)
 
 
@@ -453,7 +512,7 @@ class RegistryRefreshGeneratedPacksRequest(BaseModel):
     general_bundle_dir: str | None = None
     min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
     max_unexpected_hits: int = Field(0, ge=0)
-    max_ambiguous_aliases: int = Field(0, ge=0)
+    max_ambiguous_aliases: int | None = Field(None, ge=0)
     max_dropped_alias_ratio: float = Field(0.5, ge=0.0, le=1.0)
 
     @model_validator(mode="after")

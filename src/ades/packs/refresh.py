@@ -7,10 +7,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 import shutil
 
-from .finance_quality import validate_finance_pack_quality
-from .general_quality import validate_general_pack_quality
+from .finance_quality import (
+    DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES,
+    validate_finance_pack_quality,
+)
+from .general_quality import (
+    DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES,
+    validate_general_pack_quality,
+)
 from .generation import SourceBundleManifest
-from .medical_quality import validate_medical_pack_quality
+from .medical_quality import (
+    DEFAULT_MEDICAL_MAX_AMBIGUOUS_ALIASES,
+    validate_medical_pack_quality,
+)
 from .publish import RegistryBuildResult, build_static_registry
 from .quality_common import PackQualityResult
 from .reporting import GeneratedPackReport, report_generated_pack
@@ -48,7 +57,7 @@ def refresh_generated_pack_registry(
     general_bundle_dir: str | Path | None = None,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
-    max_ambiguous_aliases: int = 0,
+    max_ambiguous_aliases: int | None = None,
     max_dropped_alias_ratio: float = 0.5,
 ) -> GeneratedPackRefreshResult:
     """Refresh one or more generated packs into a quality-gated registry release."""
@@ -183,16 +192,20 @@ def _validate_quality_for_pack(
     output_dir: Path,
     min_expected_recall: float,
     max_unexpected_hits: int,
-    max_ambiguous_aliases: int,
+    max_ambiguous_aliases: int | None,
     max_dropped_alias_ratio: float,
 ) -> PackQualityResult:
+    resolved_max_ambiguous_aliases = _resolve_max_ambiguous_aliases(
+        manifest.pack_id,
+        max_ambiguous_aliases=max_ambiguous_aliases,
+    )
     if manifest.pack_id == "finance-en":
         return validate_finance_pack_quality(
             str(bundle_dir),
             output_dir=str(output_dir),
             min_expected_recall=min_expected_recall,
             max_unexpected_hits=max_unexpected_hits,
-            max_ambiguous_aliases=max_ambiguous_aliases,
+            max_ambiguous_aliases=resolved_max_ambiguous_aliases,
             max_dropped_alias_ratio=max_dropped_alias_ratio,
         )
     if manifest.pack_id == "general-en":
@@ -201,7 +214,7 @@ def _validate_quality_for_pack(
             output_dir=str(output_dir),
             min_expected_recall=min_expected_recall,
             max_unexpected_hits=max_unexpected_hits,
-            max_ambiguous_aliases=max_ambiguous_aliases,
+            max_ambiguous_aliases=resolved_max_ambiguous_aliases,
             max_dropped_alias_ratio=max_dropped_alias_ratio,
         )
     if manifest.pack_id == "medical-en":
@@ -215,7 +228,7 @@ def _validate_quality_for_pack(
             output_dir=str(output_dir),
             min_expected_recall=min_expected_recall,
             max_unexpected_hits=max_unexpected_hits,
-            max_ambiguous_aliases=max_ambiguous_aliases,
+            max_ambiguous_aliases=resolved_max_ambiguous_aliases,
             max_dropped_alias_ratio=max_dropped_alias_ratio,
         )
     raise ValueError(
@@ -235,17 +248,31 @@ def _validate_thresholds(
     *,
     min_expected_recall: float,
     max_unexpected_hits: int,
-    max_ambiguous_aliases: int,
+    max_ambiguous_aliases: int | None,
     max_dropped_alias_ratio: float,
 ) -> None:
     if not 0.0 <= min_expected_recall <= 1.0:
         raise ValueError("min_expected_recall must be between 0.0 and 1.0.")
     if max_unexpected_hits < 0:
         raise ValueError("max_unexpected_hits must be >= 0.")
-    if max_ambiguous_aliases < 0:
+    if max_ambiguous_aliases is not None and max_ambiguous_aliases < 0:
         raise ValueError("max_ambiguous_aliases must be >= 0.")
     if not 0.0 <= max_dropped_alias_ratio <= 1.0:
         raise ValueError("max_dropped_alias_ratio must be between 0.0 and 1.0.")
+
+
+def _resolve_max_ambiguous_aliases(
+    pack_id: str,
+    *,
+    max_ambiguous_aliases: int | None,
+) -> int:
+    if max_ambiguous_aliases is not None:
+        return max_ambiguous_aliases
+    if pack_id == "finance-en":
+        return DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES
+    if pack_id == "medical-en":
+        return DEFAULT_MEDICAL_MAX_AMBIGUOUS_ALIASES
+    return DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES
 
 
 def _utc_timestamp() -> str:

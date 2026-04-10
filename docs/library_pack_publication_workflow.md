@@ -96,13 +96,12 @@ ades registry build-medical-bundle \
 
 ades registry refresh-generated-packs \
   /mnt/githubActions/ades_big_data/pack_sources/bundles/finance-en-bundle \
-  /mnt/githubActions/ades_big_data/pack_sources/bundles/general-en \
-  /mnt/githubActions/ades_big_data/pack_sources/bundles/medical-en \
-  --output-dir /mnt/githubActions/ades_big_data/pack_releases/2026-04-10-generated-packs \
-  --max-ambiguous-aliases 300
+  /mnt/githubActions/ades_big_data/pack_sources/bundles/general-en-bundle \
+  /mnt/githubActions/ades_big_data/pack_sources/bundles/medical-en-bundle \
+  --output-dir /mnt/githubActions/ades_big_data/pack_releases/2026-04-10-generated-packs
 ```
 
-Finance-only refreshes can pass a single bundle directory. The first real-data finance snapshot on `2026-04-10` validated cleanly on fixture recall/precision with `ambiguous_alias_count=256`, so finance refreshes currently need `--max-ambiguous-aliases 300` until the broader pack-specific refresh-threshold contract is generalized. Medical-only refreshes must also pass the matching `general-en` bundle or `--general-bundle-dir`.
+Finance-only refreshes can pass a single bundle directory. When `--max-ambiguous-aliases` is omitted, refresh now applies pack-specific defaults automatically: `finance-en=300`, `medical-en=25`, and `general-en=0`. The first real-data finance snapshot on `2026-04-10` validated cleanly on fixture recall/precision with `ambiguous_alias_count=256`, and the first real-data medical snapshot on `2026-04-10` now validates cleanly with `ambiguous_alias_count=22` after pruning compact symbolic disease/protein aliases. Medical-only refreshes must still pass the matching `general-en` bundle or `--general-bundle-dir`.
 
 ## Object Storage Publication
 

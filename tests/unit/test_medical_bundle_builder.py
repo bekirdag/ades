@@ -114,3 +114,146 @@ def test_build_medical_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
 
 def _sha256(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
+
+
+def test_build_medical_source_bundle_drops_unsafe_lowercase_gene_aliases(
+    tmp_path: Path,
+) -> None:
+    snapshots = create_medical_raw_snapshots(tmp_path / "snapshots")
+    snapshots["hgnc_genes"].write_text(
+        json.dumps(
+            {
+                "genes": [
+                    {
+                        "hgnc_id": "HGNC:1100",
+                        "symbol": "BRCA1",
+                        "aliases": ["RNF53", "for", "in", "p53"],
+                    }
+                ]
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = build_medical_source_bundle(
+        disease_ontology_path=snapshots["disease_ontology"],
+        hgnc_genes_path=snapshots["hgnc_genes"],
+        uniprot_proteins_path=snapshots["uniprot_proteins"],
+        clinical_trials_path=snapshots["clinical_trials"],
+        curated_entities_path=snapshots["curated_entities"],
+        output_dir=tmp_path / "bundles",
+    )
+
+    entity_records = [
+        json.loads(line)
+        for line in Path(result.entities_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    brca1 = next(
+        item for item in entity_records if item["entity_type"] == "gene" and item["canonical_text"] == "BRCA1"
+    )
+    assert brca1["aliases"] == ["RNF53"]
+
+
+def test_build_medical_source_bundle_drops_symbolic_disease_aliases(
+    tmp_path: Path,
+) -> None:
+    snapshots = create_medical_raw_snapshots(tmp_path / "snapshots")
+    snapshots["disease_ontology"].write_text(
+        json.dumps(
+            {
+                "terms": [
+                    {
+                        "id": "DOID:8469",
+                        "name": "influenza",
+                        "synonyms": ["flu", "ALS1"],
+                    }
+                ]
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    snapshots["hgnc_genes"].write_text(
+        json.dumps(
+            {
+                "genes": [
+                    {
+                        "hgnc_id": "HGNC:1100",
+                        "symbol": "ALS1",
+                        "aliases": [],
+                    }
+                ]
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = build_medical_source_bundle(
+        disease_ontology_path=snapshots["disease_ontology"],
+        hgnc_genes_path=snapshots["hgnc_genes"],
+        uniprot_proteins_path=snapshots["uniprot_proteins"],
+        clinical_trials_path=snapshots["clinical_trials"],
+        curated_entities_path=snapshots["curated_entities"],
+        output_dir=tmp_path / "bundles",
+    )
+
+    entity_records = [
+        json.loads(line)
+        for line in Path(result.entities_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    influenza = next(
+        item
+        for item in entity_records
+        if item["entity_type"] == "disease" and item["canonical_text"] == "influenza"
+    )
+    assert influenza["aliases"] == ["flu"]
+
+
+def test_build_medical_source_bundle_drops_symbolic_protein_aliases(
+    tmp_path: Path,
+) -> None:
+    snapshots = create_medical_raw_snapshots(tmp_path / "snapshots")
+    snapshots["uniprot_proteins"].write_text(
+        json.dumps(
+            {
+                "proteins": [
+                    {
+                        "accession": "P04637",
+                        "recommended_name": "p53 protein",
+                        "aliases": ["cellular tumor antigen p53", "BRCA1", "P150"],
+                    }
+                ]
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = build_medical_source_bundle(
+        disease_ontology_path=snapshots["disease_ontology"],
+        hgnc_genes_path=snapshots["hgnc_genes"],
+        uniprot_proteins_path=snapshots["uniprot_proteins"],
+        clinical_trials_path=snapshots["clinical_trials"],
+        curated_entities_path=snapshots["curated_entities"],
+        output_dir=tmp_path / "bundles",
+    )
+
+    entity_records = [
+        json.loads(line)
+        for line in Path(result.entities_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    p53_protein = next(
+        item
+        for item in entity_records
+        if item["entity_type"] == "protein" and item["canonical_text"] == "p53 protein"
+    )
+    assert p53_protein["aliases"] == ["cellular tumor antigen p53"]

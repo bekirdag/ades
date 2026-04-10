@@ -200,6 +200,11 @@ Medical quality-gate surfaces:
 - CLI: `ades registry validate-medical-quality <bundle-dir> --general-bundle-dir <dir> --output-dir <dir>`
 - HTTP: `POST /v0/registry/validate-medical-quality`
 
+Medical live-data note:
+
+- The first dated live `medical-en` snapshot on `2026-04-10` validated cleanly at `expected_recall=1.0` and `precision=1.0` with `ambiguous_alias_count=22`.
+- `medical-en` now prunes compact symbolic disease/protein aliases such as terse uppercase or digit-bearing abbreviations before generation, and the default medical ambiguity budget is `25`.
+
 Release-oriented refresh flow:
 
 1. Build normalized bundles from raw snapshots with the `build-*-bundle` commands.
@@ -209,4 +214,4 @@ Release-oriented refresh flow:
 4. If `passed=true`, publish the generated `registry/` directory through the existing static-registry host path or an approved object-storage sync.
 5. Pull and tag with the resulting registry as usual.
 
-`refresh-generated-packs` is the orchestration surface for the publish/refresh phase. It reuses the existing report and quality gates, then only builds `registry/` when every requested pack passes validation. Medical refreshes auto-resolve `general-en` when that bundle is included in the same request, or they accept `--general-bundle-dir` / `general_bundle_dir` when it is external to the bundle list.
+`refresh-generated-packs` is the orchestration surface for the publish/refresh phase. It reuses the existing report and quality gates, then only builds `registry/` when every requested pack passes validation. When `max_ambiguous_aliases` is omitted, refresh uses pack-specific defaults instead of one global override: `general-en=0`, `medical-en=25`, and `finance-en=300`. Medical refreshes auto-resolve `general-en` when that bundle is included in the same request, or they accept `--general-bundle-dir` / `general_bundle_dir` when it is external to the bundle list.

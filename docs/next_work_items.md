@@ -5,8 +5,8 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. Real upstream bundle ingestion and quality tuning
-   - Close the remaining real-source bundle slices for `general-en` and `medical-en` under `/mnt/githubActions/ades_big_data`; the `finance-en` slice is now live and producing a publishable refresh release from dated SEC/Nasdaq snapshots.
-   - Generalize pack-specific refresh thresholds once the real `general-en` and `medical-en` ambiguity baselines are known, instead of relying on the current finance-only explicit `--max-ambiguous-aliases 300` override for refresh runs.
+   - Close the remaining real-source `general-en` slice under `/mnt/githubActions/ades_big_data`; `finance-en` and `medical-en` now both build and validate from dated live snapshots.
+   - Replace the helper `general-en` dependency bundle in the medical publication rehearsal with a real dated `general-en` bundle so the first combined general/medical refresh release is fully real-source end to end.
 
 2. End-to-end production-readiness validation
    - Keep extending clean-environment release validation so installed artifacts prove the real shipped wheel/npm behavior together rather than only through narrower source-tree regressions.
@@ -33,6 +33,13 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
   - extends pack generation with per-record `blocked_aliases` support and tunes the finance bundle input contract so noisy live symbols like `ON` and `USD` are stoplisted while `NASDAQ` remains available as the exchange alias instead of colliding with the real issuer name
   - validates the first real live snapshot dated `2026-04-10`, which currently yields `entity_record_count=22881`, `alias_count=39101`, `ambiguous_alias_count=256`, clean fixture recall/precision, and a publishable finance-only refresh release under `/mnt/githubActions/ades_big_data/pack_releases/finance-en-2026-04-10`
   - adds categorized unit, component, integration, and API coverage for the new builder contract and updates `docs/library_pack_source_bundle_spec.md` so the durable operator docs match the emitted sidecar
+
+- Real medical-source ingestion and tuning:
+  - implemented in `src/ades/packs/medical_sources.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
+  - adds `ades.fetch_medical_source_snapshot(...)`, `ades registry fetch-medical-sources`, and `POST /v0/registry/fetch-medical-sources` so dated Disease Ontology, HGNC, UniProt, and ClinicalTrials.gov snapshots are fetched reproducibly into `/mnt/githubActions/ades_big_data/pack_sources/raw/medical-en/<snapshot>/`, accompanied by `sources.fetch.json`
+  - tunes the medical bundle input contract so compact symbolic disease aliases and compact symbolic protein aliases are dropped before generation, while refresh now resolves pack-specific ambiguity budgets automatically when `--max-ambiguous-aliases` is omitted
+  - validates the first real live snapshot dated `2026-04-10`, which currently yields `entity_record_count=57765`, `alias_count=127335`, `ambiguous_alias_count=22`, `dropped_alias_ratio=0.0003`, and clean fixture recall/precision with the helper `general-en` dependency bundle
+  - adds categorized unit, component, integration, and API coverage for the new fetch surface plus the bundle-filtering/quality-default contract
 
 - Offline generated-pack refresh and publication orchestration:
   - implemented in `src/ades/packs/refresh.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`

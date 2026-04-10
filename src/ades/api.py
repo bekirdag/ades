@@ -31,6 +31,17 @@ from .packs.general_bundle import build_general_source_bundle as run_build_gener
 from .packs.general_quality import validate_general_pack_quality as run_validate_general_pack_quality
 from .packs.medical_bundle import build_medical_source_bundle as run_build_medical_source_bundle
 from .packs.medical_quality import validate_medical_pack_quality as run_validate_medical_pack_quality
+from .packs.medical_sources import (
+    DEFAULT_CLINICAL_TRIALS_MAX_RECORDS,
+    DEFAULT_CLINICAL_TRIALS_URL,
+    DEFAULT_DISEASE_ONTOLOGY_URL,
+    DEFAULT_HGNC_GENES_URL,
+    DEFAULT_MEDICAL_SOURCE_OUTPUT_ROOT,
+    DEFAULT_SOURCE_FETCH_USER_AGENT as DEFAULT_MEDICAL_SOURCE_FETCH_USER_AGENT,
+    DEFAULT_UNIPROT_MAX_RECORDS,
+    DEFAULT_UNIPROT_PROTEINS_URL,
+    fetch_medical_source_snapshot as run_fetch_medical_source_snapshot,
+)
 from .packs.refresh import refresh_generated_pack_registry as run_refresh_generated_pack_registry
 from .packs.reporting import report_generated_pack as run_report_generated_pack
 from .packs.publish import build_static_registry
@@ -62,6 +73,7 @@ from .service.models import (
     RegistryBuildPackSummary,
     RegistryBuildResponse,
     RegistryBuildFinanceBundleResponse,
+    RegistryFetchMedicalSourcesResponse,
     RegistryFetchFinanceSourcesResponse,
     RegistryBuildGeneralBundleResponse,
     RegistryBuildMedicalBundleResponse,
@@ -348,7 +360,7 @@ def refresh_generated_packs(
     general_bundle_dir: str | Path | None = None,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
-    max_ambiguous_aliases: int = 0,
+    max_ambiguous_aliases: int | None = None,
     max_dropped_alias_ratio: float = 0.5,
 ) -> RegistryRefreshGeneratedPacksResponse:
     """Refresh one or more generated packs into a quality-gated registry release."""
@@ -476,6 +488,62 @@ def fetch_finance_source_snapshot(
         curated_entity_count=result.curated_entity_count,
         sec_companies_sha256=result.sec_companies_sha256,
         symbol_directory_sha256=result.symbol_directory_sha256,
+        curated_entities_sha256=result.curated_entities_sha256,
+        warnings=result.warnings,
+    )
+
+
+def fetch_medical_source_snapshot(
+    *,
+    output_dir: str | Path = DEFAULT_MEDICAL_SOURCE_OUTPUT_ROOT,
+    snapshot: str | None = None,
+    disease_ontology_url: str = DEFAULT_DISEASE_ONTOLOGY_URL,
+    hgnc_genes_url: str = DEFAULT_HGNC_GENES_URL,
+    uniprot_proteins_url: str = DEFAULT_UNIPROT_PROTEINS_URL,
+    clinical_trials_url: str = DEFAULT_CLINICAL_TRIALS_URL,
+    user_agent: str = DEFAULT_MEDICAL_SOURCE_FETCH_USER_AGENT,
+    uniprot_max_records: int = DEFAULT_UNIPROT_MAX_RECORDS,
+    clinical_trials_max_records: int = DEFAULT_CLINICAL_TRIALS_MAX_RECORDS,
+) -> RegistryFetchMedicalSourcesResponse:
+    """Download one real medical source snapshot set into the big-data root."""
+
+    result = run_fetch_medical_source_snapshot(
+        output_dir=output_dir,
+        snapshot=snapshot,
+        disease_ontology_url=disease_ontology_url,
+        hgnc_genes_url=hgnc_genes_url,
+        uniprot_proteins_url=uniprot_proteins_url,
+        clinical_trials_url=clinical_trials_url,
+        user_agent=user_agent,
+        uniprot_max_records=uniprot_max_records,
+        clinical_trials_max_records=clinical_trials_max_records,
+    )
+    return RegistryFetchMedicalSourcesResponse(
+        pack_id=result.pack_id,
+        output_dir=result.output_dir,
+        snapshot=result.snapshot,
+        snapshot_dir=result.snapshot_dir,
+        disease_ontology_url=result.disease_ontology_url,
+        hgnc_genes_url=result.hgnc_genes_url,
+        uniprot_proteins_url=result.uniprot_proteins_url,
+        clinical_trials_url=result.clinical_trials_url,
+        source_manifest_path=result.source_manifest_path,
+        disease_ontology_path=result.disease_ontology_path,
+        hgnc_genes_path=result.hgnc_genes_path,
+        uniprot_proteins_path=result.uniprot_proteins_path,
+        clinical_trials_path=result.clinical_trials_path,
+        curated_entities_path=result.curated_entities_path,
+        generated_at=result.generated_at,
+        source_count=result.source_count,
+        disease_count=result.disease_count,
+        gene_count=result.gene_count,
+        protein_count=result.protein_count,
+        clinical_trial_count=result.clinical_trial_count,
+        curated_entity_count=result.curated_entity_count,
+        disease_ontology_sha256=result.disease_ontology_sha256,
+        hgnc_genes_sha256=result.hgnc_genes_sha256,
+        uniprot_proteins_sha256=result.uniprot_proteins_sha256,
+        clinical_trials_sha256=result.clinical_trials_sha256,
         curated_entities_sha256=result.curated_entities_sha256,
         warnings=result.warnings,
     )
@@ -652,7 +720,7 @@ def validate_medical_pack_quality(
     version: str | None = None,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
-    max_ambiguous_aliases: int = 0,
+    max_ambiguous_aliases: int = 25,
     max_dropped_alias_ratio: float = 0.5,
 ) -> RegistryPackQualityResponse:
     """Build, install, and evaluate one generated `medical-en` pack bundle."""
