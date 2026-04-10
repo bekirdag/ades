@@ -51,7 +51,10 @@ from .packs.medical_sources import (
 )
 from .packs.refresh import refresh_generated_pack_registry as run_refresh_generated_pack_registry
 from .packs.reporting import report_generated_pack as run_report_generated_pack
-from .packs.publish import build_static_registry
+from .packs.publish import (
+    build_static_registry,
+    publish_registry_to_object_storage as run_publish_registry_to_object_storage,
+)
 from .packs.registry import PackRegistry, load_registry_index
 from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load_tag_file
 from .pipeline.tagger import tag_text
@@ -87,6 +90,8 @@ from .service.models import (
     RegistryBuildMedicalBundleResponse,
     RegistryPackQualityCaseResult,
     RegistryPackQualityResponse,
+    RegistryPublishedObject,
+    RegistryPublishGeneratedReleaseResponse,
     RegistryRefreshGeneratedPacksResponse,
     RegistryRefreshPackResponse,
     RegistryValidateFinanceQualityResponse,
@@ -422,6 +427,46 @@ def refresh_generated_packs(
                 quality=_quality_response_from_result(item.quality),
             )
             for item in result.packs
+        ],
+    )
+
+
+def publish_generated_registry_release(
+    registry_dir: str | Path,
+    *,
+    prefix: str,
+    bucket: str | None = None,
+    endpoint: str | None = None,
+    region: str = "us-east-1",
+    delete: bool = True,
+) -> RegistryPublishGeneratedReleaseResponse:
+    """Publish one reviewed generated registry directory to object storage."""
+
+    result = run_publish_registry_to_object_storage(
+        registry_dir,
+        prefix=prefix,
+        bucket=bucket,
+        endpoint=endpoint,
+        region=region,
+        delete=delete,
+    )
+    return RegistryPublishGeneratedReleaseResponse(
+        registry_dir=result.registry_dir,
+        bucket=result.bucket,
+        endpoint=result.endpoint,
+        endpoint_url=result.endpoint_url,
+        prefix=result.prefix,
+        storage_uri=result.storage_uri,
+        index_storage_uri=result.index_storage_uri,
+        published_at=result.published_at,
+        delete=result.delete,
+        object_count=result.object_count,
+        objects=[
+            RegistryPublishedObject(
+                key=item.key,
+                size_bytes=item.size_bytes,
+            )
+            for item in result.objects
         ],
     )
 

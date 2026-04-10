@@ -22,6 +22,7 @@ from ..api import (
     list_packs,
     lookup_candidates,
     npm_installer_info,
+    publish_generated_registry_release,
     publish_release,
     report_generated_pack,
     release_versions,
@@ -75,6 +76,8 @@ from .models import (
     RegistryBuildRequest,
     RegistryBuildResponse,
     RegistryPackQualityResponse,
+    RegistryPublishGeneratedReleaseRequest,
+    RegistryPublishGeneratedReleaseResponse,
     RegistryRefreshGeneratedPacksRequest,
     RegistryRefreshGeneratedPacksResponse,
     RegistryValidateFinanceQualityRequest,
@@ -659,6 +662,31 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except IsADirectoryError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/publish-generated-release",
+        response_model=RegistryPublishGeneratedReleaseResponse,
+    )
+    def runtime_publish_generated_release(
+        request: RegistryPublishGeneratedReleaseRequest,
+    ) -> RegistryPublishGeneratedReleaseResponse:
+        """Publish one reviewed generated registry directory to object storage."""
+
+        try:
+            return publish_generated_registry_release(
+                request.registry_dir,
+                prefix=request.prefix,
+                bucket=request.bucket,
+                endpoint=request.endpoint,
+                region=request.region,
+                delete=request.delete,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         except NotADirectoryError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except ValueError as exc:

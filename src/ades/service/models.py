@@ -582,6 +582,40 @@ class RegistryRefreshGeneratedPacksResponse(BaseModel):
     packs: list[RegistryRefreshPackResponse] = Field(default_factory=list)
 
 
+class RegistryPublishedObject(BaseModel):
+    """One object written under a published object-storage prefix."""
+
+    key: str
+    size_bytes: int
+
+
+class RegistryPublishGeneratedReleaseRequest(BaseModel):
+    """Request body for publishing a reviewed generated registry to object storage."""
+
+    registry_dir: str
+    prefix: str
+    bucket: str | None = None
+    endpoint: str | None = None
+    region: str = "us-east-1"
+    delete: bool = True
+
+
+class RegistryPublishGeneratedReleaseResponse(BaseModel):
+    """Response body for publishing a reviewed generated registry to object storage."""
+
+    registry_dir: str
+    bucket: str
+    endpoint: str
+    endpoint_url: str
+    prefix: str
+    storage_uri: str
+    index_storage_uri: str
+    published_at: datetime
+    delete: bool
+    object_count: int
+    objects: list[RegistryPublishedObject] = Field(default_factory=list)
+
+
 class NpmInstallerInfo(BaseModel):
     """Canonical npm-wrapper bootstrap metadata."""
 

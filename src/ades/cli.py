@@ -20,6 +20,7 @@ from .api import generate_pack_source as api_generate_pack_source
 from .api import lookup_candidates as api_lookup_candidates
 from .api import list_available_packs as api_list_available_packs
 from .api import list_packs as api_list_packs
+from .api import publish_generated_registry_release as api_publish_generated_registry_release
 from .api import publish_release as api_publish_release
 from .api import pull_pack as api_pull_pack
 from .api import refresh_generated_packs as api_refresh_generated_packs
@@ -453,6 +454,54 @@ def registry_refresh_generated_packs(
     _echo_json(response.model_dump(mode="json"))
     if not response.passed:
         raise typer.Exit(code=1)
+
+
+@registry_app.command("publish-generated-release")
+def registry_publish_generated_release(
+    registry_dir: Path = typer.Argument(
+        ...,
+        help="Reviewed registry directory containing index.json, packs/, and artifacts/.",
+    ),
+    prefix: str = typer.Option(
+        ...,
+        "--prefix",
+        help="Immutable object-storage prefix where the registry should be uploaded.",
+    ),
+    bucket: str | None = typer.Option(
+        None,
+        "--bucket",
+        help="Optional object-storage bucket override. Defaults to ADES_PACK_OBJECT_STORAGE_BUCKET.",
+    ),
+    endpoint: str | None = typer.Option(
+        None,
+        "--endpoint",
+        help="Optional object-storage endpoint override. Defaults to ADES_PACK_OBJECT_STORAGE_ENDPOINT.",
+    ),
+    region: str = typer.Option(
+        "us-east-1",
+        "--region",
+        help="AWS-compatible region passed to the underlying CLI environment.",
+    ),
+    delete: bool = typer.Option(
+        True,
+        "--delete/--no-delete",
+        help="Delete objects missing from the local registry during sync.",
+    ),
+) -> None:
+    """Publish one reviewed generated registry release to object storage."""
+
+    try:
+        response = api_publish_generated_registry_release(
+            registry_dir,
+            prefix=prefix,
+            bucket=bucket,
+            endpoint=endpoint,
+            region=region,
+            delete=delete,
+        )
+    except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
 
 
 @registry_app.command("validate-finance-quality")

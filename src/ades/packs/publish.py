@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 import hashlib
 import json
+import os
 import shutil
+import subprocess
 import tarfile
 import tempfile
 from pathlib import Path
@@ -52,6 +54,31 @@ class RegistryBuildResult:
     index_url: str
     generated_at: str
     packs: list[RegistryBuildPackResult]
+
+
+@dataclass(frozen=True)
+class ObjectStoragePublishedObject:
+    """One published object discovered under an object-storage prefix."""
+
+    key: str
+    size_bytes: int
+
+
+@dataclass(frozen=True)
+class ObjectStoragePublishResult:
+    """Summary of one registry publication to S3-compatible object storage."""
+
+    registry_dir: str
+    bucket: str
+    endpoint: str
+    endpoint_url: str
+    prefix: str
+    storage_uri: str
+    index_storage_uri: str
+    published_at: str
+    delete: bool
+    object_count: int
+    objects: list[ObjectStoragePublishedObject]
 
 
 def build_static_registry(
@@ -162,6 +189,90 @@ def build_static_registry(
     )
 
 
+def publish_registry_to_object_storage(
+    registry_dir: str | Path,
+    *,
+    prefix: str,
+    bucket: str | None = None,
+    endpoint: str | None = None,
+    region: str = "us-east-1",
+    delete: bool = True,
+) -> ObjectStoragePublishResult:
+    """Publish one reviewed static registry directory to S3-compatible storage."""
+
+    resolved_registry_dir = Path(registry_dir).expanduser().resolve()
+    if not resolved_registry_dir.exists():
+        raise FileNotFoundError(f"Registry directory not found: {resolved_registry_dir}")
+    if not resolved_registry_dir.is_dir():
+        raise NotADirectoryError(
+            f"Registry directory is not a directory: {resolved_registry_dir}"
+        )
+    index_path = resolved_registry_dir / "index.json"
+    if not index_path.exists():
+        raise FileNotFoundError(f"Registry index not found: {index_path}")
+
+    resolved_bucket = bucket or os.environ.get("ADES_PACK_OBJECT_STORAGE_BUCKET")
+    if not resolved_bucket:
+        raise ValueError(
+            "Object storage bucket is required. Set ADES_PACK_OBJECT_STORAGE_BUCKET or pass bucket."
+        )
+    resolved_endpoint = endpoint or os.environ.get("ADES_PACK_OBJECT_STORAGE_ENDPOINT")
+    if not resolved_endpoint:
+        raise ValueError(
+            "Object storage endpoint is required. Set ADES_PACK_OBJECT_STORAGE_ENDPOINT or pass endpoint."
+        )
+
+    normalized_prefix = prefix.strip("/")
+    if not normalized_prefix:
+        raise ValueError("Object storage prefix is required.")
+
+    resolved_endpoint_url = (
+        resolved_endpoint
+        if resolved_endpoint.startswith(("http://", "https://"))
+        else f"https://{resolved_endpoint}"
+    )
+    storage_uri = f"s3://{resolved_bucket}/{normalized_prefix}/"
+    command_env = _build_object_storage_env(region=region)
+    sync_command = [
+        "aws",
+        "s3",
+        "sync",
+        str(resolved_registry_dir),
+        storage_uri,
+        "--endpoint-url",
+        resolved_endpoint_url,
+        "--only-show-errors",
+    ]
+    if delete:
+        sync_command.append("--delete")
+    _run_object_storage_command(sync_command, env=command_env)
+
+    list_command = [
+        "aws",
+        "s3",
+        "ls",
+        storage_uri,
+        "--recursive",
+        "--endpoint-url",
+        resolved_endpoint_url,
+    ]
+    listed = _run_object_storage_command(list_command, env=command_env)
+    objects = _parse_listed_objects(listed.stdout)
+    return ObjectStoragePublishResult(
+        registry_dir=str(resolved_registry_dir),
+        bucket=resolved_bucket,
+        endpoint=resolved_endpoint,
+        endpoint_url=resolved_endpoint_url,
+        prefix=normalized_prefix,
+        storage_uri=storage_uri,
+        index_storage_uri=f"{storage_uri}index.json",
+        published_at=_utc_timestamp(),
+        delete=delete,
+        object_count=len(objects),
+        objects=objects,
+    )
+
+
 def _build_published_manifest(
     source_manifest: PackManifest,
     *,
@@ -264,3 +375,65 @@ def _sha256_file(path: Path) -> str:
 
 def _utc_timestamp() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _build_object_storage_env(*, region: str) -> dict[str, str]:
+    env = os.environ.copy()
+    access_key = env.get("AWS_ACCESS_KEY_ID") or env.get(
+        "ADES_PACK_OBJECT_STORAGE_ACCESS_KEY_ID"
+    )
+    secret_key = env.get("AWS_SECRET_ACCESS_KEY") or env.get(
+        "ADES_PACK_OBJECT_STORAGE_SECRET_ACCESS_KEY"
+    )
+    if not access_key or not secret_key:
+        raise ValueError(
+            "Object storage credentials are required. Set AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY "
+            "or ADES_PACK_OBJECT_STORAGE_ACCESS_KEY_ID/ADES_PACK_OBJECT_STORAGE_SECRET_ACCESS_KEY."
+        )
+    env["AWS_ACCESS_KEY_ID"] = access_key
+    env["AWS_SECRET_ACCESS_KEY"] = secret_key
+    env.setdefault("AWS_DEFAULT_REGION", region)
+    env["AWS_EC2_METADATA_DISABLED"] = "true"
+    return env
+
+
+def _run_object_storage_command(
+    command: list[str],
+    *,
+    env: dict[str, str],
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+    except FileNotFoundError as exc:
+        raise FileNotFoundError("AWS CLI not found on PATH.") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip()
+        if not detail:
+            detail = f"Object storage command failed: {' '.join(command)}"
+        raise ValueError(detail) from exc
+
+
+def _parse_listed_objects(stdout: str) -> list[ObjectStoragePublishedObject]:
+    objects: list[ObjectStoragePublishedObject] = []
+    for line in stdout.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        parts = stripped.split(maxsplit=3)
+        if len(parts) != 4:
+            continue
+        size_text = parts[2]
+        key = parts[3]
+        objects.append(
+            ObjectStoragePublishedObject(
+                key=key,
+                size_bytes=int(size_text),
+            )
+        )
+    return objects

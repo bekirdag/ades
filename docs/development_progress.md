@@ -236,6 +236,14 @@ This file records the implementation progress of `ades` as the project moves tow
 - Validated the first live medical snapshot dated `2026-04-10`: the rebuilt bundle now emits `57765` normalized entity records, the quality gate passes at `expected_recall=1.0` and `precision=1.0`, and the live ambiguity baseline fell from `2020` to `22` with `dropped_alias_ratio=0.0003`.
 - Replaced the helper general dependency in the publication rehearsal: `refresh-generated-packs` now produces a fully real-source combined `general-en` + `medical-en` registry release under `/mnt/githubActions/ades_big_data/pack_releases/general-medical-2026-04-10`.
 
+### 32. Three-pack generated release rehearsal and object-storage publication helper
+
+- Ran the first fully real-source three-pack refresh rehearsal with the dated live `finance-en`, `general-en`, and `medical-en` bundles, producing a publishable reviewed release under `/mnt/githubActions/ades_big_data/pack_releases/finance-general-medical-2026-04-10`.
+- The combined release passes all three quality gates with the current live baselines: `finance-en alias_count=39101 ambiguous_alias_count=256`, `general-en alias_count=96 ambiguous_alias_count=0`, and `medical-en alias_count=127335 ambiguous_alias_count=22`.
+- Added a reusable object-storage publication helper in `src/ades/packs/publish.py`, then exposed it through `ades.publish_generated_registry_release(...)`, `ades registry publish-generated-release`, and `POST /v0/registry/publish-generated-release` so reviewed generated registries can be synced reproducibly without ad hoc shell commands.
+- Validated the new helper against the live Hetzner object store: the reviewed three-pack registry is now published at `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/` with `22` uploaded objects and the reviewed index at `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/index.json`.
+- Added categorized unit, component, integration, and API coverage for the new publication surface while keeping the existing deploy-owned hosted-registry promotion path authoritative.
+
 ### 31. Rollback-safe pack install recovery
 
 - Hardened `src/ades/packs/installer.py` so fresh installs extract into hidden staging directories and pack updates move the current installed pack into a hidden backup directory before replacement.

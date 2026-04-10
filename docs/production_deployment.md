@@ -47,7 +47,7 @@ Optional GitHub secrets for S3-compatible static registry publication:
 
 When those optional secrets are present, the production workflow keeps the existing SSH-based deploy flow and also syncs `dist/registry` to the configured object-storage bucket with `aws s3 sync --endpoint-url ...`. This is additive and does not replace the current server-owned registry release path.
 
-Generated real-content pack refreshes use the same object-storage seam. The offline bundle/report/quality/refresh workflow is documented in `docs/library_pack_publication_workflow.md`; its `registry/` output can be synced to a reviewed object-storage prefix first and then promoted through the existing hosted registry path when approved.
+Generated real-content pack refreshes use the same object-storage seam. The offline bundle/report/quality/refresh workflow is documented in `docs/library_pack_publication_workflow.md`; its `registry/` output can be published through `ades registry publish-generated-release` or the equivalent raw `aws s3 sync`, then promoted through the existing hosted registry path when approved.
 
 ## Local Client Config
 

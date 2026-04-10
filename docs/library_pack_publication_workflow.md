@@ -11,8 +11,11 @@ Take one or more normalized bundle directories, run the deterministic report and
 The publication orchestration surface is:
 
 - Python: `ades.refresh_generated_packs(...)`
+- Python: `ades.publish_generated_registry_release(...)`
 - CLI: `ades registry refresh-generated-packs <bundle-dir...> --output-dir <dir>`
+- CLI: `ades registry publish-generated-release <registry-dir> --prefix <object-storage-prefix>`
 - HTTP: `POST /v0/registry/refresh-generated-packs`
+- HTTP: `POST /v0/registry/publish-generated-release`
 
 This surface is intentionally downstream of the bundle builders:
 
@@ -105,7 +108,7 @@ ades registry refresh-generated-packs \
   --output-dir /mnt/githubActions/ades_big_data/pack_releases/2026-04-10-generated-packs
 ```
 
-Finance-only refreshes can pass a single bundle directory. When `--max-ambiguous-aliases` is omitted, refresh now applies pack-specific defaults automatically: `finance-en=300`, `medical-en=25`, and `general-en=0`. The first real-data finance snapshot on `2026-04-10` validated cleanly on fixture recall/precision with `ambiguous_alias_count=256`, the first bounded real-data general snapshot on `2026-04-10` validated cleanly with `alias_count=96` and `ambiguous_alias_count=0`, and the first real-data medical snapshot on `2026-04-10` now validates cleanly with `ambiguous_alias_count=22` after pruning compact symbolic disease/protein aliases. Medical-only refreshes must still pass the matching `general-en` bundle or `--general-bundle-dir`, and the first fully real-source combined general/medical release now lives at `/mnt/githubActions/ades_big_data/pack_releases/general-medical-2026-04-10`.
+Finance-only refreshes can pass a single bundle directory. When `--max-ambiguous-aliases` is omitted, refresh now applies pack-specific defaults automatically: `finance-en=300`, `medical-en=25`, and `general-en=0`. The first real-data finance snapshot on `2026-04-10` validated cleanly on fixture recall/precision with `ambiguous_alias_count=256`, the first bounded real-data general snapshot on `2026-04-10` validated cleanly with `alias_count=96` and `ambiguous_alias_count=0`, and the first real-data medical snapshot on `2026-04-10` now validates cleanly with `ambiguous_alias_count=22` after pruning compact symbolic disease/protein aliases. Medical-only refreshes must still pass the matching `general-en` bundle or `--general-bundle-dir`, the first fully real-source combined general/medical release now lives at `/mnt/githubActions/ades_big_data/pack_releases/general-medical-2026-04-10`, and the first fully real-source three-pack release now lives at `/mnt/githubActions/ades_big_data/pack_releases/finance-general-medical-2026-04-10`.
 
 ## Object Storage Publication
 
@@ -117,15 +120,25 @@ Preferred pattern:
 2. Review the uploaded `index.json`, manifests, and artifacts.
 3. Promote the approved registry through the existing hosted path.
 
-Example sync to the configured S3-compatible bucket:
+Preferred shipped helper:
+
+```bash
+ades registry publish-generated-release \
+  /mnt/githubActions/ades_big_data/pack_releases/finance-general-medical-2026-04-10/registry \
+  --prefix generated-pack-releases/finance-general-medical-2026-04-10
+```
+
+Equivalent raw sync:
 
 ```bash
 aws s3 sync \
-  /mnt/githubActions/ades_big_data/pack_releases/2026-04-10-general-medical/registry \
-  s3://$ADES_PACK_OBJECT_STORAGE_BUCKET/generated-pack-releases/2026-04-10-general-medical/ \
+  /mnt/githubActions/ades_big_data/pack_releases/finance-general-medical-2026-04-10/registry \
+  s3://$ADES_PACK_OBJECT_STORAGE_BUCKET/generated-pack-releases/finance-general-medical-2026-04-10/ \
   --delete \
   --endpoint-url "https://$ADES_PACK_OBJECT_STORAGE_ENDPOINT"
 ```
+
+The first live publication rehearsal used the shipped helper and wrote `22` reviewed objects under `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/`.
 
 Important:
 

@@ -5,7 +5,8 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. Real upstream bundle ingestion and quality tuning
-   - Turn the now-live `finance-en`, `general-en`, and `medical-en` bundles into the first fully real-source three-pack refresh rehearsal under `/mnt/githubActions/ades_big_data`, then review the resulting registry for object-storage promotion.
+   - Use the reviewed object-storage-published three-pack release under `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/` as a consumer registry source and prove clean pull/install/tag behavior against it without relying on repo-local bundle directories.
+   - Review whether the generated-release object-storage prefix also needs an explicit public HTTP retrieval path before it can participate in broader production registry promotion.
    - Expand the bounded real-source `general-en` seed set carefully once broader recall is needed, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
 
 2. End-to-end production-readiness validation
@@ -21,6 +22,12 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Three-pack real-source refresh rehearsal and object-storage publication helper:
+  - implemented in `src/ades/packs/publish.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
+  - adds `ades.publish_generated_registry_release(...)`, `ades registry publish-generated-release`, and `POST /v0/registry/publish-generated-release` so reviewed generated registries can be synced to the configured S3-compatible bucket without an ad hoc shell-only workflow
+  - validates the first fully real-source `finance-en` + `general-en` + `medical-en` refresh release under `/mnt/githubActions/ades_big_data/pack_releases/finance-general-medical-2026-04-10`, which currently passes with `finance ambiguous_alias_count=256`, `general ambiguous_alias_count=0`, and `medical ambiguous_alias_count=22`
+  - validates the live Hetzner publication seam through the shipped CLI path, publishing `22` reviewed objects under `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/` and keeping hosted-registry promotion as a separate explicit decision
 
 - Real general-source ingestion and first combined general/medical refresh rehearsal:
   - implemented in `src/ades/packs/general_sources.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`

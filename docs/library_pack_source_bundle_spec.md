@@ -137,12 +137,15 @@ Public surfaces for the first generator slice:
 - Python: `ades.generate_pack_source(...)`
 - Python: `ades.report_generated_pack(...)`
 - Python: `ades.refresh_generated_packs(...)`
+- Python: `ades.publish_generated_registry_release(...)`
 - CLI: `ades registry generate-pack <bundle-dir> --output-dir <dir>`
 - CLI: `ades registry report-pack <bundle-dir> --output-dir <dir>`
 - CLI: `ades registry refresh-generated-packs <bundle-dir...> --output-dir <dir>`
+- CLI: `ades registry publish-generated-release <registry-dir> --prefix <object-storage-prefix>`
 - HTTP: `POST /v0/registry/generate-pack`
 - HTTP: `POST /v0/registry/report-pack`
 - HTTP: `POST /v0/registry/refresh-generated-packs`
+- HTTP: `POST /v0/registry/publish-generated-release`
 
 Finance raw-source fetch surface:
 
@@ -159,6 +162,14 @@ General raw-source fetch surface:
 - HTTP: `POST /v0/registry/fetch-general-sources`
 
 The general fetch surface downloads a bounded live Wikidata entity seed set plus filtered GeoNames place data into an immutable dated directory under `/mnt/githubActions/ades_big_data/pack_sources/raw/general-en/<snapshot>/`, writes repo-owned curated aliases alongside them, and records exact fetch metadata in `sources.fetch.json`.
+
+Generated registry publication surface:
+
+- Python: `ades.publish_generated_registry_release(...)`
+- CLI: `ades registry publish-generated-release <registry-dir> --prefix <object-storage-prefix>`
+- HTTP: `POST /v0/registry/publish-generated-release`
+
+The publication surface syncs a reviewed `registry/` directory to the configured S3-compatible bucket using the existing `ADES_PACK_OBJECT_STORAGE_*` environment variables, then returns the published `s3://...` prefix plus a stable object listing for auditability. The first fully real-source three-pack rehearsal is now published at `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/` with `22` reviewed objects.
 
 Finance-first raw snapshot builder surfaces:
 
