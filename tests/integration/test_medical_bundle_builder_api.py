@@ -32,6 +32,8 @@ def test_public_api_can_build_medical_bundle_then_generate_install_and_tag(
         curated_entities_path=medical_snapshots["curated_entities"],
         output_dir=tmp_path / "medical-bundles",
     )
+    assert Path(general_bundle.sources_lock_path).exists()
+    assert Path(medical_bundle.sources_lock_path).exists()
     general_generated = generate_pack_source(
         general_bundle.bundle_dir,
         output_dir=tmp_path / "generated-packs",

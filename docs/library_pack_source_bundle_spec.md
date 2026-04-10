@@ -19,6 +19,7 @@ The generated pack must work with the existing `ades` registry builder, installe
 ```text
 bundle-root/
   bundle.json
+  sources.lock.json
   normalized/
     entities.jsonl
     rules.jsonl
@@ -27,6 +28,7 @@ bundle-root/
 Rules:
 
 - `bundle.json` is required.
+- `sources.lock.json` is emitted by the bundle builders and is required for deterministic rebuild/audit output once a bundle has been built.
 - `normalized/entities.jsonl` is required.
 - `normalized/rules.jsonl` is optional.
 - Large raw downloads stay outside the repo, normally under `/mnt/githubActions/ades_big_data/`.
@@ -55,6 +57,10 @@ Optional fields:
 - `stoplisted_aliases`: aliases to drop after normalization
 - `allowed_ambiguous_aliases`: aliases allowed to survive across multiple labels
 - `sources`: upstream snapshot descriptors used to populate `sources.json`
+
+Builder-emitted sidecar after bundle creation:
+
+- `sources.lock.json`: deterministic raw-snapshot lock metadata with exact snapshot URIs, SHA-256 digests, byte sizes, adapter identifiers, adapter versions, and recorded snapshot timestamps
 
 Example:
 
@@ -155,6 +161,18 @@ Medical-first raw snapshot builder surfaces:
 - Python: `ades.build_medical_source_bundle(...)`
 - CLI: `ades registry build-medical-bundle --disease-ontology <path> --hgnc-genes <path> --uniprot-proteins <path> --clinical-trials <path> --curated-entities <path> --output-dir <dir>`
 - HTTP: `POST /v0/registry/build-medical-bundle`
+
+Builder response contract additions:
+
+- every `build-*-bundle` surface now returns `sources_lock_path`
+- the emitted `sources.lock.json` always includes:
+  - `pack_id`
+  - `version`
+  - `bundle_manifest_path`
+  - `entities_path`
+  - `rules_path`
+  - `source_count`
+  - per-source `snapshot_uri`, `snapshot_sha256`, `snapshot_size_bytes`, `license_class`, `license`, `retrieved_at`, `record_count`, `adapter`, `adapter_version`, and original `notes`
 
 Finance quality-gate surfaces:
 

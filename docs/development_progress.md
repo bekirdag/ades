@@ -438,6 +438,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Tightened `src/ades/packs/refresh.py` so quality-passing bundles still fail the publication step when any source is tagged `build-only`, `blocked-pending-license-review`, or missing provenance, while preserving all report and quality evidence and emitting the deterministic warning `registry_build_skipped:source_governance_failed`.
 - Added categorized unit, component, integration, and API coverage for the new source-governance summary fields on generate/report surfaces plus the publication-skip path for refresh orchestration, and updated the durable bundle/publication docs so the operator contract matches the implementation.
 
+### 56. Deterministic source-lock emission for normalized bundle builders
+
+- Added shared deterministic lock helpers in `src/ades/packs/source_lock.py` so normalized bundle builders can emit reproducible raw-snapshot lock metadata without changing the runtime pack contract.
+- Extended `src/ades/packs/finance_bundle.py`, `src/ades/packs/general_bundle.py`, and `src/ades/packs/medical_bundle.py` so every built bundle now writes `sources.lock.json` alongside `bundle.json` and returns `sources_lock_path` through the public Python API, CLI, and localhost service response models.
+- Recorded exact snapshot URIs, SHA-256 digests, byte sizes, recorded snapshot timestamps, license metadata, adapter ids, and adapter versions inside the lock file so real upstream bundle rebuilds can be audited against the raw inputs instead of only the normalized JSONL handoff.
+- Added categorized unit, component, integration, and API coverage for the new lock-file contract and updated `docs/library_pack_source_bundle_spec.md` so the builder/output contract explicitly documents `sources.lock.json`.
+
 ## Current Local Tool Capabilities
 
 - `ades pull <pack>`
@@ -529,4 +536,4 @@ The local service currently exposes:
 
 ## Current Next Step
 
-- Extend installed-artifact release validation with the next additive clean-environment assertions, starting with exact root/replay zero-state duplicate and generated-output counters such as `duplicate_count` and `generated_output_skipped_count`, so the shipped wheel and npm wrapper keep proving the remaining broad production-readiness goals together instead of relying on narrower source-tree regressions.
+- Feed real upstream snapshots through the normalized bundle builders under `/mnt/githubActions/ades_big_data`, then tune ambiguity thresholds and quality fixtures against the resulting generated pack content so the current offline generation workflow moves from representative fixture data to real library-pack inputs.

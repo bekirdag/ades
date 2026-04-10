@@ -1,4 +1,5 @@
 import json
+from hashlib import sha256
 from pathlib import Path
 
 from ades.packs.general_bundle import build_general_source_bundle
@@ -17,6 +18,7 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
 
     assert result.pack_id == "general-en"
     assert result.version == "0.2.0"
+    assert Path(result.sources_lock_path).exists()
     assert result.source_count == 3
     assert result.entity_record_count == 4
     assert result.rule_record_count == 2
@@ -29,6 +31,27 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     assert bundle_manifest["pack_id"] == "general-en"
     assert bundle_manifest["entities_path"] == "normalized/entities.jsonl"
     assert len(bundle_manifest["sources"]) == 3
+    sources_lock = json.loads(Path(result.sources_lock_path).read_text(encoding="utf-8"))
+    assert sources_lock["pack_id"] == "general-en"
+    assert sources_lock["version"] == "0.2.0"
+    assert sources_lock["bundle_manifest_path"] == "bundle.json"
+    assert sources_lock["entities_path"] == "normalized/entities.jsonl"
+    assert sources_lock["rules_path"] == "normalized/rules.jsonl"
+    assert sources_lock["source_count"] == 3
+    lock_sources = {item["name"]: item for item in sources_lock["sources"]}
+    assert lock_sources["wikidata-general-entities"]["snapshot_sha256"] == _sha256(
+        snapshots["wikidata_entities"]
+    )
+    assert lock_sources["geonames-places"]["snapshot_sha256"] == _sha256(
+        snapshots["geonames_places"]
+    )
+    assert lock_sources["curated-general-entities"]["snapshot_sha256"] == _sha256(
+        snapshots["curated_entities"]
+    )
+    assert lock_sources["wikidata-general-entities"]["adapter"] == "wikidata_general_entities"
+    assert lock_sources["geonames-places"]["adapter"] == "geonames_places_delimited"
+    assert lock_sources["curated-general-entities"]["adapter"] == "curated_general_entities"
+    assert all(item["adapter_version"] == "1" for item in lock_sources.values())
 
     entity_records = [
         json.loads(line)
@@ -65,3 +88,7 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
         "kind": "regex",
         "pattern": r"https?://[^\s]+",
     } in rule_records
+
+
+def _sha256(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()

@@ -57,6 +57,8 @@ def test_cli_can_build_medical_bundle_then_generate_pack(tmp_path: Path) -> None
     medical_bundle_payload = json.loads(medical_bundle_result.stdout)
     assert general_bundle_payload["pack_id"] == "general-en"
     assert medical_bundle_payload["pack_id"] == "medical-en"
+    assert Path(general_bundle_payload["sources_lock_path"]).exists()
+    assert Path(medical_bundle_payload["sources_lock_path"]).exists()
     assert Path(medical_bundle_payload["bundle_dir"]).exists()
 
     general_generate_result = runner.invoke(

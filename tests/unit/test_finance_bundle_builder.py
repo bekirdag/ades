@@ -1,4 +1,5 @@
 import json
+from hashlib import sha256
 from pathlib import Path
 
 from ades.packs.finance_bundle import build_finance_source_bundle
@@ -17,6 +18,7 @@ def test_build_finance_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
 
     assert result.pack_id == "finance-en"
     assert result.version == "0.2.0"
+    assert Path(result.sources_lock_path).exists()
     assert result.source_count == 3
     assert result.entity_record_count == 6
     assert result.rule_record_count == 2
@@ -29,6 +31,27 @@ def test_build_finance_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     assert bundle_manifest["pack_id"] == "finance-en"
     assert bundle_manifest["entities_path"] == "normalized/entities.jsonl"
     assert len(bundle_manifest["sources"]) == 3
+    sources_lock = json.loads(Path(result.sources_lock_path).read_text(encoding="utf-8"))
+    assert sources_lock["pack_id"] == "finance-en"
+    assert sources_lock["version"] == "0.2.0"
+    assert sources_lock["bundle_manifest_path"] == "bundle.json"
+    assert sources_lock["entities_path"] == "normalized/entities.jsonl"
+    assert sources_lock["rules_path"] == "normalized/rules.jsonl"
+    assert sources_lock["source_count"] == 3
+    lock_sources = {item["name"]: item for item in sources_lock["sources"]}
+    assert lock_sources["sec-company-tickers"]["snapshot_sha256"] == _sha256(
+        snapshots["sec_companies"]
+    )
+    assert lock_sources["symbol-directory"]["snapshot_sha256"] == _sha256(
+        snapshots["symbol_directory"]
+    )
+    assert lock_sources["curated-finance-entities"]["snapshot_sha256"] == _sha256(
+        snapshots["curated_entities"]
+    )
+    assert lock_sources["sec-company-tickers"]["adapter"] == "sec_company_tickers_json"
+    assert lock_sources["symbol-directory"]["adapter"] == "delimited_symbol_directory"
+    assert lock_sources["curated-finance-entities"]["adapter"] == "curated_finance_entities"
+    assert all(item["adapter_version"] == "1" for item in lock_sources.values())
 
     entity_records = [
         json.loads(line)
@@ -53,5 +76,19 @@ def test_build_finance_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
         for line in Path(result.rules_path).read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert {"name": "currency_amount", "label": "currency_amount", "kind": "regex", "pattern": r"(USD|EUR|GBP|TRY)\s?[0-9]+(?:\.[0-9]+)?"} in rule_records
-    assert {"name": "ticker_symbol", "label": "ticker", "kind": "regex", "pattern": r"\$[A-Z]{1,5}"} in rule_records
+    assert {
+        "name": "currency_amount",
+        "label": "currency_amount",
+        "kind": "regex",
+        "pattern": r"(USD|EUR|GBP|TRY)\s?[0-9]+(?:\.[0-9]+)?",
+    } in rule_records
+    assert {
+        "name": "ticker_symbol",
+        "label": "ticker",
+        "kind": "regex",
+        "pattern": r"\$[A-Z]{1,5}",
+    } in rule_records
+
+
+def _sha256(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()

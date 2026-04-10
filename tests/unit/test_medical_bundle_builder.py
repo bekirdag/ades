@@ -1,4 +1,5 @@
 import json
+from hashlib import sha256
 from pathlib import Path
 
 from ades.packs.medical_bundle import build_medical_source_bundle
@@ -19,6 +20,7 @@ def test_build_medical_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
 
     assert result.pack_id == "medical-en"
     assert result.version == "0.2.0"
+    assert Path(result.sources_lock_path).exists()
     assert result.source_count == 5
     assert result.entity_record_count == 6
     assert result.rule_record_count == 2
@@ -34,6 +36,35 @@ def test_build_medical_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     assert bundle_manifest["dependencies"] == ["general-en"]
     assert bundle_manifest["entities_path"] == "normalized/entities.jsonl"
     assert len(bundle_manifest["sources"]) == 5
+    sources_lock = json.loads(Path(result.sources_lock_path).read_text(encoding="utf-8"))
+    assert sources_lock["pack_id"] == "medical-en"
+    assert sources_lock["version"] == "0.2.0"
+    assert sources_lock["bundle_manifest_path"] == "bundle.json"
+    assert sources_lock["entities_path"] == "normalized/entities.jsonl"
+    assert sources_lock["rules_path"] == "normalized/rules.jsonl"
+    assert sources_lock["source_count"] == 5
+    lock_sources = {item["name"]: item for item in sources_lock["sources"]}
+    assert lock_sources["disease-ontology"]["snapshot_sha256"] == _sha256(
+        snapshots["disease_ontology"]
+    )
+    assert lock_sources["hgnc-genes"]["snapshot_sha256"] == _sha256(
+        snapshots["hgnc_genes"]
+    )
+    assert lock_sources["uniprot-proteins"]["snapshot_sha256"] == _sha256(
+        snapshots["uniprot_proteins"]
+    )
+    assert lock_sources["clinical-trials"]["snapshot_sha256"] == _sha256(
+        snapshots["clinical_trials"]
+    )
+    assert lock_sources["curated-medical-entities"]["snapshot_sha256"] == _sha256(
+        snapshots["curated_entities"]
+    )
+    assert lock_sources["disease-ontology"]["adapter"] == "disease_ontology_terms"
+    assert lock_sources["hgnc-genes"]["adapter"] == "hgnc_complete_set"
+    assert lock_sources["uniprot-proteins"]["adapter"] == "uniprot_reviewed_proteins"
+    assert lock_sources["clinical-trials"]["adapter"] == "clinical_trials_json"
+    assert lock_sources["curated-medical-entities"]["adapter"] == "curated_medical_entities"
+    assert all(item["adapter_version"] == "1" for item in lock_sources.values())
 
     entity_records = [
         json.loads(line)
@@ -79,3 +110,7 @@ def test_build_medical_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
         "kind": "regex",
         "pattern": r"[0-9]+\s?(mg|ml|mcg)",
     } in rule_records
+
+
+def _sha256(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()

@@ -33,6 +33,7 @@ def test_cli_can_build_finance_bundle_then_generate_pack(tmp_path: Path) -> None
     bundle_payload = json.loads(bundle_result.stdout)
     assert bundle_payload["pack_id"] == "finance-en"
     assert Path(bundle_payload["bundle_dir"]).exists()
+    assert Path(bundle_payload["sources_lock_path"]).exists()
 
     generate_result = runner.invoke(
         app,

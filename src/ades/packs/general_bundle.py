@@ -10,6 +10,8 @@ from pathlib import Path
 import shutil
 from typing import Any
 
+from .source_lock import build_bundle_source_entry, write_sources_lock
+
 
 @dataclass(frozen=True)
 class GeneralSourceBundleResult:
@@ -20,6 +22,7 @@ class GeneralSourceBundleResult:
     output_dir: str
     bundle_dir: str
     bundle_manifest_path: str
+    sources_lock_path: str
     entities_path: str
     rules_path: str
     generated_at: str
@@ -80,39 +83,31 @@ def build_general_source_bundle(
     entities_path = normalized_dir / "entities.jsonl"
     rules_path = normalized_dir / "rules.jsonl"
     bundle_manifest_path = bundle_dir / "bundle.json"
+    sources_lock_path = bundle_dir / "sources.lock.json"
     generated_at = _utc_timestamp()
 
     _write_jsonl(entities_path, entities)
     _write_jsonl(rules_path, rules)
 
     sources = [
-        {
-            "name": "wikidata-general-entities",
-            "snapshot_uri": wikidata_path.as_uri(),
-            "license_class": "ship-now",
-            "license": "operator-supplied",
-            "retrieved_at": _path_timestamp(wikidata_path),
-            "record_count": len(wikidata_entities),
-            "notes": "adapter=wikidata_general_entities",
-        },
-        {
-            "name": "geonames-places",
-            "snapshot_uri": geonames_path.as_uri(),
-            "license_class": "ship-now",
-            "license": "operator-supplied",
-            "retrieved_at": _path_timestamp(geonames_path),
-            "record_count": len(geonames_locations),
-            "notes": "adapter=geonames_places_delimited",
-        },
-        {
-            "name": "curated-general-entities",
-            "snapshot_uri": curated_path.as_uri(),
-            "license_class": "ship-now",
-            "license": "operator-supplied",
-            "retrieved_at": _path_timestamp(curated_path),
-            "record_count": len(curated_entities),
-            "notes": "adapter=curated_general_entities",
-        },
+        build_bundle_source_entry(
+            name="wikidata-general-entities",
+            snapshot_path=wikidata_path,
+            record_count=len(wikidata_entities),
+            adapter="wikidata_general_entities",
+        ),
+        build_bundle_source_entry(
+            name="geonames-places",
+            snapshot_path=geonames_path,
+            record_count=len(geonames_locations),
+            adapter="geonames_places_delimited",
+        ),
+        build_bundle_source_entry(
+            name="curated-general-entities",
+            snapshot_path=curated_path,
+            record_count=len(curated_entities),
+            adapter="curated_general_entities",
+        ),
     ]
     bundle_manifest_path.write_text(
         json.dumps(
@@ -142,6 +137,14 @@ def build_general_source_bundle(
         + "\n",
         encoding="utf-8",
     )
+    write_sources_lock(
+        bundle_dir=bundle_dir,
+        pack_id="general-en",
+        version=version,
+        entities_path="normalized/entities.jsonl",
+        rules_path="normalized/rules.jsonl",
+        sources=sources,
+    )
 
     warnings: list[str] = []
     if not wikidata_entities:
@@ -157,6 +160,7 @@ def build_general_source_bundle(
         output_dir=str(resolved_output_dir),
         bundle_dir=str(bundle_dir),
         bundle_manifest_path=str(bundle_manifest_path),
+        sources_lock_path=str(sources_lock_path),
         entities_path=str(entities_path),
         rules_path=str(rules_path),
         generated_at=generated_at,
@@ -323,7 +327,3 @@ def _clean_text(value: Any) -> str | None:
 
 def _utc_timestamp() -> str:
     return datetime.now(tz=UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def _path_timestamp(path: Path) -> str:
-    return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")

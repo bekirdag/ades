@@ -9,6 +9,8 @@ from pathlib import Path
 import shutil
 from typing import Any
 
+from .source_lock import build_bundle_source_entry, write_sources_lock
+
 
 @dataclass(frozen=True)
 class MedicalSourceBundleResult:
@@ -19,6 +21,7 @@ class MedicalSourceBundleResult:
     output_dir: str
     bundle_dir: str
     bundle_manifest_path: str
+    sources_lock_path: str
     entities_path: str
     rules_path: str
     generated_at: str
@@ -93,57 +96,43 @@ def build_medical_source_bundle(
     entities_path = normalized_dir / "entities.jsonl"
     rules_path = normalized_dir / "rules.jsonl"
     bundle_manifest_path = bundle_dir / "bundle.json"
+    sources_lock_path = bundle_dir / "sources.lock.json"
     generated_at = _utc_timestamp()
 
     _write_jsonl(entities_path, entities)
     _write_jsonl(rules_path, rules)
 
     sources = [
-        {
-            "name": "disease-ontology",
-            "snapshot_uri": disease_path.as_uri(),
-            "license_class": "ship-now",
-            "license": "operator-supplied",
-            "retrieved_at": _path_timestamp(disease_path),
-            "record_count": len(diseases),
-            "notes": "adapter=disease_ontology_terms",
-        },
-        {
-            "name": "hgnc-genes",
-            "snapshot_uri": hgnc_path.as_uri(),
-            "license_class": "ship-now",
-            "license": "operator-supplied",
-            "retrieved_at": _path_timestamp(hgnc_path),
-            "record_count": len(genes),
-            "notes": "adapter=hgnc_complete_set",
-        },
-        {
-            "name": "uniprot-proteins",
-            "snapshot_uri": uniprot_path.as_uri(),
-            "license_class": "ship-now",
-            "license": "operator-supplied",
-            "retrieved_at": _path_timestamp(uniprot_path),
-            "record_count": len(proteins),
-            "notes": "adapter=uniprot_reviewed_proteins",
-        },
-        {
-            "name": "clinical-trials",
-            "snapshot_uri": trials_path.as_uri(),
-            "license_class": "ship-now",
-            "license": "operator-supplied",
-            "retrieved_at": _path_timestamp(trials_path),
-            "record_count": len(clinical_trials),
-            "notes": "adapter=clinical_trials_json",
-        },
-        {
-            "name": "curated-medical-entities",
-            "snapshot_uri": curated_path.as_uri(),
-            "license_class": "ship-now",
-            "license": "operator-supplied",
-            "retrieved_at": _path_timestamp(curated_path),
-            "record_count": len(curated_entities),
-            "notes": "adapter=curated_medical_entities",
-        },
+        build_bundle_source_entry(
+            name="disease-ontology",
+            snapshot_path=disease_path,
+            record_count=len(diseases),
+            adapter="disease_ontology_terms",
+        ),
+        build_bundle_source_entry(
+            name="hgnc-genes",
+            snapshot_path=hgnc_path,
+            record_count=len(genes),
+            adapter="hgnc_complete_set",
+        ),
+        build_bundle_source_entry(
+            name="uniprot-proteins",
+            snapshot_path=uniprot_path,
+            record_count=len(proteins),
+            adapter="uniprot_reviewed_proteins",
+        ),
+        build_bundle_source_entry(
+            name="clinical-trials",
+            snapshot_path=trials_path,
+            record_count=len(clinical_trials),
+            adapter="clinical_trials_json",
+        ),
+        build_bundle_source_entry(
+            name="curated-medical-entities",
+            snapshot_path=curated_path,
+            record_count=len(curated_entities),
+            adapter="curated_medical_entities",
+        ),
     ]
     bundle_manifest_path.write_text(
         json.dumps(
@@ -176,6 +165,14 @@ def build_medical_source_bundle(
         + "\n",
         encoding="utf-8",
     )
+    write_sources_lock(
+        bundle_dir=bundle_dir,
+        pack_id="medical-en",
+        version=version,
+        entities_path="normalized/entities.jsonl",
+        rules_path="normalized/rules.jsonl",
+        sources=sources,
+    )
 
     warnings: list[str] = []
     if not diseases:
@@ -195,6 +192,7 @@ def build_medical_source_bundle(
         output_dir=str(resolved_output_dir),
         bundle_dir=str(bundle_dir),
         bundle_manifest_path=str(bundle_manifest_path),
+        sources_lock_path=str(sources_lock_path),
         entities_path=str(entities_path),
         rules_path=str(rules_path),
         generated_at=generated_at,
@@ -431,7 +429,3 @@ def _slugify(value: str) -> str:
 
 def _utc_timestamp() -> str:
     return datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
-
-
-def _path_timestamp(path: Path) -> str:
-    return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).isoformat().replace("+00:00", "Z")

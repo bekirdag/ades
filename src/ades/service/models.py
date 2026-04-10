@@ -105,6 +105,7 @@ class RegistryBuildFinanceBundleResponse(BaseModel):
     output_dir: str
     bundle_dir: str
     bundle_manifest_path: str
+    sources_lock_path: str
     entities_path: str
     rules_path: str
     generated_at: datetime
@@ -135,6 +136,7 @@ class RegistryBuildGeneralBundleResponse(BaseModel):
     output_dir: str
     bundle_dir: str
     bundle_manifest_path: str
+    sources_lock_path: str
     entities_path: str
     rules_path: str
     generated_at: datetime
@@ -167,6 +169,7 @@ class RegistryBuildMedicalBundleResponse(BaseModel):
     output_dir: str
     bundle_dir: str
     bundle_manifest_path: str
+    sources_lock_path: str
     entities_path: str
     rules_path: str
     generated_at: datetime

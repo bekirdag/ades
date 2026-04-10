@@ -26,6 +26,7 @@ def test_finance_bundle_builder_endpoint_creates_bundle_directory(tmp_path: Path
     payload = response.json()
     assert payload["pack_id"] == "finance-en"
     assert payload["entity_record_count"] == 6
+    assert Path(payload["sources_lock_path"]).exists()
 
     generated = generate_pack_source(
         payload["bundle_dir"],
