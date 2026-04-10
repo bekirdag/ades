@@ -20,11 +20,11 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     assert result.version == "0.2.0"
     assert Path(result.sources_lock_path).exists()
     assert result.source_count == 3
-    assert result.entity_record_count == 15
+    assert result.entity_record_count == 16
     assert result.rule_record_count == 2
     assert result.wikidata_entity_count == 12
     assert result.geonames_location_count == 2
-    assert result.curated_entity_count == 1
+    assert result.curated_entity_count == 2
     assert result.warnings == []
 
     bundle_manifest = json.loads(Path(result.bundle_manifest_path).read_text(encoding="utf-8"))
@@ -115,6 +115,10 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
         item["entity_type"] == "person" and item["canonical_text"] == "Ilya Sutskever"
         for item in entity_records
     )
+    assert any(
+        item["entity_type"] == "location" and item["canonical_text"] == "Tokyo"
+        for item in entity_records
+    )
     sundar_record = next(
         item for item in entity_records if item["canonical_text"] == "Sundar Pichai"
     )
@@ -133,6 +137,10 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
         item for item in entity_records if item["canonical_text"] == "Ilya Sutskever"
     )
     assert ilya_record["aliases"] == ["Ilya Efimovich Sutskever"]
+    tokyo_record = next(
+        item for item in entity_records if item["canonical_text"] == "Tokyo"
+    )
+    assert tokyo_record["aliases"] == ["Tokio"]
 
     rule_records = [
         json.loads(line)

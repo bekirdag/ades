@@ -54,6 +54,11 @@ DEFAULT_CURATED_GENERAL_ENTITIES: tuple[dict[str, object], ...] = (
         "canonical_text": "Apple",
         "aliases": [],
     },
+    {
+        "entity_type": "location",
+        "canonical_text": "Tokyo",
+        "aliases": ["Tokio"],
+    },
 )
 _GEONAMES_OUTPUT_HEADER = (
     "geonameid|name|alternatenames|feature_class|feature_code|country_code"

@@ -5,8 +5,8 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. Real upstream bundle ingestion and quality tuning
-   - Evaluate whether the next bounded `general-en` additions should come from another carefully chosen Wikidata entity pair or from a curated location slice, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
-   - After the second retained-alias person expansion, the next likely additive seam is a curated location slice unless an organization pair can prove clean without introducing new domain-alias pruning.
+   - Evaluate whether the next bounded `general-en` additions should come from another carefully chosen Wikidata entity pair or another curated location slice, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
+   - After the first curated location slice, the next likely additive seam is either another curated location alias or a carefully chosen organization pair that proves clean without introducing new domain-alias pruning.
    - The next likely pruning seam is organization/domain alias noise, not person surnames; only take it if a candidate pair actually needs that headroom.
 
 2. End-to-end production-readiness validation
@@ -22,6 +22,11 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
    - If richer extraction is revisited later, evaluate it as a post-release track with explicit cost, packaging, and test-surface impact rather than as an implied baseline.
 
 ## Recently Closed
+
+- Bounded real-source `general-en` curated location expansion:
+  - implemented in `src/ades/packs/general_sources.py` and `src/ades/packs/general_quality.py`, with fixture and surface coverage updates in the general bundle/source/quality tests
+  - extends the curated source slice with `Tokyo`, then proves the live alias path through `Tokio` instead of widening the raw GeoNames row set and inheriting additional short-code alias noise
+  - revalidates the bounded live general slice at `wikidata_entity_count=15`, `curated_entity_count=3`, `entity_record_count=20`, `alias_count=238`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`, keeping the dependency pack zero-ambiguity compatible for `medical-en`
 
 - Bounded real-source `general-en` retained-alias person expansion:
   - implemented in `src/ades/packs/general_sources.py` and `src/ades/packs/general_quality.py`, with fixture and surface coverage updates in the general bundle/source/quality tests

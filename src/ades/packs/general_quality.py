@@ -84,6 +84,13 @@ DEFAULT_GENERAL_QUALITY_CASES: tuple[PackQualityCase, ...] = (
         ),
     ),
     PackQualityCase(
+        name="curated-location-alias-expansion",
+        text="Tokio hosted the summit overnight.",
+        expected_entities=(
+            PackQualityEntity(text="Tokio", label="location"),
+        ),
+    ),
+    PackQualityCase(
         name="non-hit",
         text="Ordinary weather notes and lunch plans stay untagged here.",
         expected_entities=(),

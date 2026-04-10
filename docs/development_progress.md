@@ -240,6 +240,13 @@ This file records the implementation progress of `ades` as the project moves tow
 - Updated the raw snapshot fixtures plus the categorized unit, component, integration, and API coverage so the builder/source/quality surfaces stay aligned with the widened live seed set.
 - Revalidated the bounded live `general-en` slice on `2026-04-10`, which now passes cleanly at `wikidata_entity_count=15`, `entity_record_count=19`, `alias_count=236`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`.
 
+### 34. Bounded real-source `general-en` curated location expansion
+
+- Extended the curated source slice in `src/ades/packs/general_sources.py` with `Tokyo`, using the low-noise retained alias `Tokio` instead of widening the raw GeoNames row set and inheriting additional short-code alias noise.
+- Added a generated-pack quality case in `src/ades/packs/general_quality.py` that proves the curated location alias path through `Tokio`.
+- Updated the raw snapshot fixtures plus the categorized unit, component, integration, and API coverage so the bundle/source/quality surfaces stay aligned with the expanded curated slice.
+- Revalidated the bounded live `general-en` slice on `2026-04-10`, which now passes cleanly at `wikidata_entity_count=15`, `curated_entity_count=3`, `entity_record_count=20`, `alias_count=238`, `ambiguous_alias_count=0`, `expected_recall=1.0`, and `precision=1.0`.
+
 ### 31. Real finance-source ingestion and live bundle tuning
 
 - Added a reproducible finance-source fetcher in `src/ades/packs/finance_sources.py` plus public Python, CLI, and localhost service surfaces so dated SEC and Nasdaq source snapshots can be downloaded directly into `/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/<snapshot>/` instead of being staged by hand.

@@ -119,6 +119,11 @@ def create_general_raw_snapshots(root: Path) -> dict[str, Path]:
                         "entity_type": "organization",
                         "canonical_text": "Apple",
                         "aliases": [],
+                    },
+                    {
+                        "entity_type": "location",
+                        "canonical_text": "Tokyo",
+                        "aliases": ["Tokio"],
                     }
                 ]
             },
