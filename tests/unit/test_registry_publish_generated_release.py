@@ -32,6 +32,10 @@ def test_publish_registry_to_object_storage_uploads_reviewed_release(
     assert result.index_storage_uri.endswith(
         "/generated-pack-releases/finance-general-medical-2026-04-10/index.json"
     )
+    assert result.registry_url_candidates == [
+        "https://ades-test.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json",
+        "https://fsn1.your-objectstorage.com/ades-test/generated-pack-releases/finance-general-medical-2026-04-10/index.json",
+    ]
     assert result.object_count == 3
     assert [item.key for item in result.objects] == [
         "generated-pack-releases/finance-general-medical-2026-04-10/index.json",

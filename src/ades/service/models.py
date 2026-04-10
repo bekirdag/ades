@@ -610,6 +610,7 @@ class RegistryPublishGeneratedReleaseResponse(BaseModel):
     prefix: str
     storage_uri: str
     index_storage_uri: str
+    registry_url_candidates: list[str] = Field(default_factory=list)
     published_at: datetime
     delete: bool
     object_count: int

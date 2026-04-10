@@ -37,6 +37,9 @@ def test_cli_can_publish_generated_registry_release(
     payload = json.loads(result.stdout)
     assert payload["bucket"] == "ades-test"
     assert payload["object_count"] == 3
+    assert payload["registry_url_candidates"][0].startswith(
+        "https://ades-test.fsn1.your-objectstorage.com/"
+    )
     assert payload["index_storage_uri"].endswith(
         "/generated-pack-releases/finance-general-medical-2026-04-10/index.json"
     )

@@ -5,8 +5,8 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 ## Priority Queue
 
 1. Real upstream bundle ingestion and quality tuning
-   - Use the reviewed object-storage-published three-pack release under `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/` as a consumer registry source and prove clean pull/install/tag behavior against it without relying on repo-local bundle directories.
-   - Review whether the generated-release object-storage prefix also needs an explicit public HTTP retrieval path before it can participate in broader production registry promotion.
+   - Codify the now-proven generated-release consumer smoke into a durable automated validation path so future real-source refreshes must prove clean pull/install/tag behavior from the published object-storage registry URL before promotion.
+   - Decide how a reviewed generated release graduates from the object-storage prefix into the hosted production registry path now that direct HTTPS consumption is already working.
    - Expand the bounded real-source `general-en` seed set carefully once broader recall is needed, but keep the current zero-ambiguity quality contract intact while the general pack remains a dependency for `medical-en`.
 
 2. End-to-end production-readiness validation
@@ -25,9 +25,9 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 
 - Three-pack real-source refresh rehearsal and object-storage publication helper:
   - implemented in `src/ades/packs/publish.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
-  - adds `ades.publish_generated_registry_release(...)`, `ades registry publish-generated-release`, and `POST /v0/registry/publish-generated-release` so reviewed generated registries can be synced to the configured S3-compatible bucket without an ad hoc shell-only workflow
+  - adds `ades.publish_generated_registry_release(...)`, `ades registry publish-generated-release`, and `POST /v0/registry/publish-generated-release` so reviewed generated registries can be synced to the configured S3-compatible bucket without an ad hoc shell-only workflow, and now returns direct HTTPS registry URL candidates alongside the underlying `s3://` prefix
   - validates the first fully real-source `finance-en` + `general-en` + `medical-en` refresh release under `/mnt/githubActions/ades_big_data/pack_releases/finance-general-medical-2026-04-10`, which currently passes with `finance ambiguous_alias_count=256`, `general ambiguous_alias_count=0`, and `medical ambiguous_alias_count=22`
-  - validates the live Hetzner publication seam through the shipped CLI path, publishing `22` reviewed objects under `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/` and keeping hosted-registry promotion as a separate explicit decision
+  - validates the live Hetzner publication seam through the shipped CLI path, publishing `22` reviewed objects under `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/`, surfacing the working direct HTTPS registry URL `https://ades.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json`, and proving clean `finance-en` plus dependency-bearing `medical-en` consumer pulls against that published registry
 
 - Real general-source ingestion and first combined general/medical refresh rehearsal:
   - implemented in `src/ades/packs/general_sources.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`

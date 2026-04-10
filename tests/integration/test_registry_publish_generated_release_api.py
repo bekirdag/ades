@@ -25,4 +25,7 @@ def test_public_api_can_publish_generated_registry_release(
 
     assert result.bucket == "ades-test"
     assert result.object_count == 3
+    assert result.registry_url_candidates[0].startswith(
+        "https://ades-test.fsn1.your-objectstorage.com/"
+    )
     assert result.objects[0].key.endswith("index.json")

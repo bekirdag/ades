@@ -458,6 +458,7 @@ def publish_generated_registry_release(
         prefix=result.prefix,
         storage_uri=result.storage_uri,
         index_storage_uri=result.index_storage_uri,
+        registry_url_candidates=result.registry_url_candidates,
         published_at=result.published_at,
         delete=result.delete,
         object_count=result.object_count,

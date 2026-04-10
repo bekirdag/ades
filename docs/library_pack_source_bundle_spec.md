@@ -170,6 +170,7 @@ Generated registry publication surface:
 - HTTP: `POST /v0/registry/publish-generated-release`
 
 The publication surface syncs a reviewed `registry/` directory to the configured S3-compatible bucket using the existing `ADES_PACK_OBJECT_STORAGE_*` environment variables, then returns the published `s3://...` prefix plus a stable object listing for auditability. The first fully real-source three-pack rehearsal is now published at `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/` with `22` reviewed objects.
+The publication response now also returns direct HTTPS registry candidates for immediate consumers; the preferred live URL is `https://ades.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json`.
 
 Finance-first raw snapshot builder surfaces:
 

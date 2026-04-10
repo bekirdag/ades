@@ -12,6 +12,7 @@ import subprocess
 import tarfile
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import zstandard
 
@@ -75,6 +76,7 @@ class ObjectStoragePublishResult:
     prefix: str
     storage_uri: str
     index_storage_uri: str
+    registry_url_candidates: list[str]
     published_at: str
     delete: bool
     object_count: int
@@ -232,6 +234,11 @@ def publish_registry_to_object_storage(
         else f"https://{resolved_endpoint}"
     )
     storage_uri = f"s3://{resolved_bucket}/{normalized_prefix}/"
+    registry_url_candidates = _build_registry_url_candidates(
+        bucket=resolved_bucket,
+        endpoint_url=resolved_endpoint_url,
+        prefix=normalized_prefix,
+    )
     command_env = _build_object_storage_env(region=region)
     sync_command = [
         "aws",
@@ -266,6 +273,7 @@ def publish_registry_to_object_storage(
         prefix=normalized_prefix,
         storage_uri=storage_uri,
         index_storage_uri=f"{storage_uri}index.json",
+        registry_url_candidates=registry_url_candidates,
         published_at=_utc_timestamp(),
         delete=delete,
         object_count=len(objects),
@@ -437,3 +445,27 @@ def _parse_listed_objects(stdout: str) -> list[ObjectStoragePublishedObject]:
             )
         )
     return objects
+
+
+def _build_registry_url_candidates(
+    *,
+    bucket: str,
+    endpoint_url: str,
+    prefix: str,
+) -> list[str]:
+    parsed = urlsplit(endpoint_url)
+    scheme = parsed.scheme or "https"
+    endpoint_host = parsed.netloc or parsed.path
+    endpoint_path = parsed.path.rstrip("/")
+    candidates: list[str] = []
+    if endpoint_host:
+        if endpoint_path:
+            candidates.append(
+                f"{scheme}://{bucket}.{endpoint_host}{endpoint_path}/{prefix}/index.json"
+            )
+        else:
+            candidates.append(f"{scheme}://{bucket}.{endpoint_host}/{prefix}/index.json")
+    path_style = f"{endpoint_url.rstrip('/')}/{bucket}/{prefix}/index.json"
+    if path_style not in candidates:
+        candidates.append(path_style)
+    return candidates

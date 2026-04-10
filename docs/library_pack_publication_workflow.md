@@ -139,6 +139,16 @@ aws s3 sync \
 ```
 
 The first live publication rehearsal used the shipped helper and wrote `22` reviewed objects under `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/`.
+The shipped helper also returns direct HTTPS registry candidates, and the preferred live consumer URL is already working: `https://ades.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json`.
+
+## Consumer Smoke
+
+The published generated release is not review-only anymore. A clean local runtime can already consume it directly:
+
+- `ades pull finance-en --registry-url https://ades.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json`
+- `ades pull medical-en --registry-url https://ades.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json`
+
+The `medical-en` smoke also installs the generated `general-en` dependency and successfully tags the expected medical entities from the reviewed published release.
 
 Important:
 

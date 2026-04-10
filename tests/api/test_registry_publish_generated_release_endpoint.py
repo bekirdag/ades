@@ -33,4 +33,7 @@ def test_registry_publish_generated_release_endpoint(
     payload = response.json()
     assert payload["bucket"] == "ades-test"
     assert payload["object_count"] == 3
+    assert payload["registry_url_candidates"][1].startswith(
+        "https://fsn1.your-objectstorage.com/ades-test/"
+    )
     assert payload["objects"][1]["key"].endswith("packs/general-en/manifest.json")
