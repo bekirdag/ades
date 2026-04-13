@@ -13,7 +13,7 @@ def test_tag_endpoint_returns_provenance_and_link_metadata(tmp_path: Path) -> No
     response = client.post(
         "/v0/tag",
         json={
-            "text": "Apple said AAPL traded on NASDAQ after USD 12.5 guidance.",
+            "text": "Org Beta said TICKA traded on EXCHX after USD 12.5 guidance.",
             "pack": "finance-en",
             "content_type": "text/plain",
         },
@@ -23,25 +23,31 @@ def test_tag_endpoint_returns_provenance_and_link_metadata(tmp_path: Path) -> No
     payload = response.json()
     entities = {(entity["text"], entity["label"]): entity for entity in payload["entities"]}
 
-    apple = entities[("Apple", "organization")]
-    assert apple["provenance"] == {
+    organization_entity = entities[("Org Beta", "organization")]
+    assert organization_entity["provenance"] == {
+        "lane": "deterministic_alias",
         "match_kind": "alias",
         "match_path": "lookup.alias.exact",
-        "match_source": "Apple",
+        "match_source": "Org Beta",
+        "model_name": None,
+        "model_version": None,
         "source_pack": "general-en",
         "source_domain": "general",
     }
-    assert apple["link"] == {
-        "entity_id": "ades:lookup_alias_exact:general-en:organization:apple",
-        "canonical_text": "Apple",
+    assert organization_entity["link"] == {
+        "entity_id": "ades:lookup_alias_exact:general-en:organization:org-beta",
+        "canonical_text": "Org Beta",
         "provider": "lookup.alias.exact",
     }
 
     currency = entities[("USD 12.5", "currency_amount")]
     assert currency["provenance"] == {
+        "lane": "deterministic_rule",
         "match_kind": "rule",
         "match_path": "rule.regex",
         "match_source": "currency_amount",
+        "model_name": "python-re-reviewed",
+        "model_version": None,
         "source_pack": "finance-en",
         "source_domain": "finance",
     }

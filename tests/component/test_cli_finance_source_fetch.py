@@ -22,8 +22,14 @@ def test_cli_can_fetch_finance_source_snapshot(tmp_path: Path) -> None:
             "2026-04-10",
             "--sec-url",
             remote_sources["sec_companies_url"],
+            "--sec-submissions-url",
+            remote_sources["sec_submissions_url"],
+            "--sec-companyfacts-url",
+            remote_sources["sec_companyfacts_url"],
             "--symbol-directory-url",
             remote_sources["symbol_directory_url"],
+            "--other-listed-url",
+            remote_sources["other_listed_url"],
         ],
     )
 
@@ -33,3 +39,6 @@ def test_cli_can_fetch_finance_source_snapshot(tmp_path: Path) -> None:
     assert payload["snapshot"] == "2026-04-10"
     assert Path(payload["source_manifest_path"]).exists()
     assert Path(payload["sec_companies_path"]).exists()
+    assert Path(payload["sec_submissions_path"]).exists()
+    assert Path(payload["sec_companyfacts_path"]).exists()
+    assert Path(payload["other_listed_path"]).exists()

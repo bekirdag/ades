@@ -19,6 +19,7 @@ def test_medical_bundle_builder_endpoint_creates_bundle_directory(tmp_path: Path
             "hgnc_genes_path": str(snapshots["hgnc_genes"]),
             "uniprot_proteins_path": str(snapshots["uniprot_proteins"]),
             "clinical_trials_path": str(snapshots["clinical_trials"]),
+            "orange_book_products_path": str(snapshots["orange_book_products"]),
             "curated_entities_path": str(snapshots["curated_entities"]),
             "output_dir": str(output_dir),
         },
@@ -27,7 +28,8 @@ def test_medical_bundle_builder_endpoint_creates_bundle_directory(tmp_path: Path
     assert response.status_code == 200
     payload = response.json()
     assert payload["pack_id"] == "medical-en"
-    assert payload["entity_record_count"] == 6
+    assert payload["entity_record_count"] == 7
+    assert payload["drug_count"] == 1
     assert Path(payload["sources_lock_path"]).exists()
 
     generated = generate_pack_source(

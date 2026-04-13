@@ -39,7 +39,7 @@ def test_public_api_status_and_tag(tmp_path: Path, monkeypatch) -> None:
     assert runtime_status.registry_url == "https://example.invalid/index.json"
 
     response = tag(
-        "AAPL rallied on NASDAQ after USD 12.5 guidance from Apple.",
+        "TICKA rallied on EXCHX after USD 12.5 guidance from Org Beta.",
         pack="finance-en",
         storage_root=tmp_path,
     )
@@ -63,17 +63,17 @@ def test_public_api_activation_and_lookup(tmp_path: Path) -> None:
     active_after = list_packs(storage_root=tmp_path, active_only=True)
     assert {pack.pack_id for pack in active_after} == {"general-en"}
 
-    inactive_lookup = lookup_candidates("AAPL", storage_root=tmp_path, exact_alias=True)
+    inactive_lookup = lookup_candidates("TICKA", storage_root=tmp_path, exact_alias=True)
     assert inactive_lookup.candidates == []
 
     reactivated = activate_pack("finance-en", storage_root=tmp_path)
     assert reactivated is not None
     assert reactivated.active is True
 
-    lookup = lookup_candidates("AAPL", storage_root=tmp_path, exact_alias=True)
+    lookup = lookup_candidates("TICKA", storage_root=tmp_path, exact_alias=True)
     assert lookup.candidates
     assert lookup.candidates[0].kind == "alias"
-    assert lookup.candidates[0].value == "AAPL"
+    assert lookup.candidates[0].value == "TICKA"
 
 
 def test_public_api_lists_available_pack_metadata() -> None:

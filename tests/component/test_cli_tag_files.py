@@ -15,8 +15,8 @@ def test_cli_tag_files_supports_multiple_local_documents(tmp_path: Path) -> None
     beta_dir.mkdir()
     first_input = alpha_dir / "report.html"
     second_input = beta_dir / "report.html"
-    first_input.write_text("<p>Apple said AAPL traded on NASDAQ.</p>", encoding="utf-8")
-    second_input.write_text("<p>NASDAQ said Apple moved AAPL guidance.</p>", encoding="utf-8")
+    first_input.write_text("<p>Org Beta said TICKA traded on EXCHX.</p>", encoding="utf-8")
+    second_input.write_text("<p>EXCHX said Org Beta moved TICKA guidance.</p>", encoding="utf-8")
     output_dir = tmp_path / "outputs"
 
     runner = CliRunner()

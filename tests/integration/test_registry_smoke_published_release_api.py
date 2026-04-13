@@ -20,4 +20,4 @@ def test_public_api_can_smoke_published_generated_registry(tmp_path: Path) -> No
     assert result.pack_count == 1
     assert result.cases[0].pack_id == "medical-en"
     assert result.cases[0].installed_pack_ids == ["general-en", "medical-en"]
-    assert "BRCA1" in result.cases[0].matched_entity_texts
+    assert "GENEA1" in result.cases[0].matched_entity_texts

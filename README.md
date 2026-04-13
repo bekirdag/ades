@@ -38,7 +38,7 @@ ades release manifest --output-dir ./dist/release
 ades release validate --output-dir ./.docdex/artifacts/release-validation
 ades release publish --manifest-path ./dist/release/release-manifest.0.1.0.json --dry-run
 ades registry build ./src/ades/resources/registry/packs/general-en ./src/ades/resources/registry/packs/finance-en --output-dir /tmp/ades-registry
-ades tag "Apple CEO Tim Cook announced quarterly earnings."
+ades tag "Org Beta leader Person Alpha announced quarterly earnings."
 ades tag --file ./notes/report.html --pack finance-en
 ades tag --file ./notes/report.html --pack finance-en --output-dir ./outputs
 ades tag-files ./notes/report-a.html ./notes/report-b.html --pack finance-en --output-dir ./outputs
@@ -87,7 +87,7 @@ registry = build_registry(
 )
 pull_pack("finance-en", registry_url=registry.index_url)
 response = tag(
-    "AAPL rallied on NASDAQ after USD 12.5 guidance from Apple.",
+    "TICKA rallied on EXCHX after USD 12.5 guidance from Org Beta.",
     pack="finance-en",
 )
 print(response.model_dump())
@@ -112,7 +112,7 @@ print(discovered_response.model_dump())
 print(discovered_response.summary.model_dump())
 
 saved_response = tag(
-    "Apple said AAPL traded on NASDAQ.",
+    "Org Beta said TICKA traded on EXCHX.",
     pack="finance-en",
     output_dir="./outputs",
 )

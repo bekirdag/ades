@@ -11,8 +11,8 @@ def test_cli_tag_files_can_resume_from_saved_manifest(tmp_path: Path) -> None:
     PackInstaller(tmp_path).install("finance-en")
     first_input = tmp_path / "alpha.html"
     second_input = tmp_path / "beta.html"
-    first_input.write_text("<p>Apple said AAPL rallied.</p>", encoding="utf-8")
-    second_input.write_text("<p>NASDAQ guidance moved.</p>", encoding="utf-8")
+    first_input.write_text("<p>Org Beta said TICKA rallied.</p>", encoding="utf-8")
+    second_input.write_text("<p>EXCHX guidance moved.</p>", encoding="utf-8")
     output_dir = tmp_path / "outputs"
 
     runner = CliRunner()

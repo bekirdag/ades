@@ -5,12 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from hashlib import sha256
+import io
 import json
 from pathlib import Path
 import re
 import shutil
 import urllib.request
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+import zipfile
 
 from .fetch import normalize_source_url
 
@@ -32,44 +34,18 @@ DEFAULT_UNIPROT_PROTEINS_URL = (
     "format=json&fields=accession%2Cprotein_name%2Cgene_names&size=500"
 )
 DEFAULT_CLINICAL_TRIALS_URL = (
-    "https://clinicaltrials.gov/api/v2/studies?"
-    "query.cond=diabetes&pageSize=200&format=json"
+    "https://clinicaltrials.gov/api/v2/studies?format=json"
 )
+DEFAULT_ORANGE_BOOK_URL = "https://www.fda.gov/media/76860/download?attachment"
 DEFAULT_SOURCE_FETCH_USER_AGENT = "ades/0.1.0 (ops@adestool.com)"
-DEFAULT_UNIPROT_MAX_RECORDS = 2000
-DEFAULT_CLINICAL_TRIALS_MAX_RECORDS = 500
-DEFAULT_CURATED_MEDICAL_ENTITIES: tuple[dict[str, object], ...] = (
-    {
-        "entity_type": "disease",
-        "canonical_text": "diabetes",
-        "aliases": ["diabetes mellitus"],
-    },
-    {
-        "entity_type": "disease",
-        "canonical_text": "influenza",
-        "aliases": ["flu"],
-    },
-    {
-        "entity_type": "gene",
-        "canonical_text": "BRCA1",
-        "aliases": ["RNF53"],
-    },
-    {
-        "entity_type": "protein",
-        "canonical_text": "p53 protein",
-        "aliases": ["cellular tumor antigen p53"],
-    },
-    {
-        "entity_type": "drug",
-        "canonical_text": "Aspirin",
-        "aliases": ["acetylsalicylic acid"],
-    },
-    {
-        "entity_type": "clinical_trial",
-        "canonical_text": "Diabetes Aspirin Trial",
-        "aliases": ["NCT04280705"],
-    },
+DEFAULT_CLINICAL_TRIALS_FIELDS: tuple[str, ...] = (
+    "protocolSection.identificationModule",
+    "protocolSection.conditionsModule",
+    "protocolSection.armsInterventionsModule",
 )
+DEFAULT_UNIPROT_MAX_RECORDS = 0
+DEFAULT_CLINICAL_TRIALS_MAX_RECORDS = 0
+DEFAULT_CURATED_MEDICAL_ENTITIES: tuple[dict[str, object], ...] = ()
 _DO_TERM_START_RE = re.compile(r"^\[Term\]\s*$")
 _DO_KEY_VALUE_RE = re.compile(r"^([^:]+):\s*(.*)$")
 _DO_SYNONYM_RE = re.compile(r'^"([^"]+)"')
@@ -88,11 +64,13 @@ class MedicalSourceFetchResult:
     hgnc_genes_url: str
     uniprot_proteins_url: str
     clinical_trials_url: str
+    orange_book_url: str
     source_manifest_path: str
     disease_ontology_path: str
     hgnc_genes_path: str
     uniprot_proteins_path: str
     clinical_trials_path: str
+    orange_book_path: str
     curated_entities_path: str
     generated_at: str
     source_count: int
@@ -100,11 +78,13 @@ class MedicalSourceFetchResult:
     gene_count: int
     protein_count: int
     clinical_trial_count: int
+    orange_book_product_count: int
     curated_entity_count: int
     disease_ontology_sha256: str
     hgnc_genes_sha256: str
     uniprot_proteins_sha256: str
     clinical_trials_sha256: str
+    orange_book_sha256: str
     curated_entities_sha256: str
     warnings: list[str] = field(default_factory=list)
 
@@ -117,16 +97,19 @@ def fetch_medical_source_snapshot(
     hgnc_genes_url: str = DEFAULT_HGNC_GENES_URL,
     uniprot_proteins_url: str = DEFAULT_UNIPROT_PROTEINS_URL,
     clinical_trials_url: str = DEFAULT_CLINICAL_TRIALS_URL,
+    orange_book_url: str = DEFAULT_ORANGE_BOOK_URL,
     user_agent: str = DEFAULT_SOURCE_FETCH_USER_AGENT,
     uniprot_max_records: int = DEFAULT_UNIPROT_MAX_RECORDS,
     clinical_trials_max_records: int = DEFAULT_CLINICAL_TRIALS_MAX_RECORDS,
 ) -> MedicalSourceFetchResult:
     """Download one immutable medical source snapshot set into the big-data root."""
 
-    if uniprot_max_records <= 0:
-        raise ValueError("uniprot_max_records must be greater than zero.")
-    if clinical_trials_max_records <= 0:
-        raise ValueError("clinical_trials_max_records must be greater than zero.")
+    if uniprot_max_records < 0:
+        raise ValueError("uniprot_max_records must be greater than or equal to zero.")
+    if clinical_trials_max_records < 0:
+        raise ValueError(
+            "clinical_trials_max_records must be greater than or equal to zero."
+        )
 
     resolved_output_dir = Path(output_dir).expanduser().resolve()
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
@@ -174,6 +157,16 @@ def fetch_medical_source_snapshot(
             user_agent=user_agent,
             max_records=clinical_trials_max_records,
         )
+        (
+            resolved_orange_book_url,
+            orange_book_raw_path,
+            orange_book_products_path,
+            orange_book_product_count,
+        ) = _download_orange_book_snapshot(
+            orange_book_url,
+            snapshot_dir=snapshot_dir,
+            user_agent=user_agent,
+        )
         curated_entities_path = snapshot_dir / "curated_medical_entities.json"
         _write_curated_entities(curated_entities_path)
         _write_source_manifest(
@@ -185,19 +178,23 @@ def fetch_medical_source_snapshot(
             hgnc_genes_url=hgnc_url,
             uniprot_proteins_url=uniprot_url,
             clinical_trials_url=trials_url,
+            orange_book_url=resolved_orange_book_url,
             disease_raw_path=disease_raw_path,
             hgnc_raw_path=hgnc_raw_path,
             uniprot_raw_path=uniprot_raw_path,
             clinical_trials_raw_path=trials_raw_path,
+            orange_book_raw_path=orange_book_raw_path,
             disease_terms_path=disease_terms_path,
             hgnc_genes_path=hgnc_genes_path,
             uniprot_proteins_path=uniprot_proteins_path,
             clinical_trials_path=clinical_trials_path,
+            orange_book_products_path=orange_book_products_path,
             curated_entities_path=curated_entities_path,
             disease_count=disease_count,
             gene_count=gene_count,
             protein_count=protein_count,
             clinical_trial_count=clinical_trial_count,
+            orange_book_product_count=orange_book_product_count,
         )
     except Exception:
         shutil.rmtree(snapshot_dir, ignore_errors=True)
@@ -213,23 +210,27 @@ def fetch_medical_source_snapshot(
         hgnc_genes_url=hgnc_url,
         uniprot_proteins_url=uniprot_url,
         clinical_trials_url=trials_url,
+        orange_book_url=resolved_orange_book_url,
         source_manifest_path=str(manifest_path),
         disease_ontology_path=str(disease_terms_path),
         hgnc_genes_path=str(hgnc_genes_path),
         uniprot_proteins_path=str(uniprot_proteins_path),
         clinical_trials_path=str(clinical_trials_path),
+        orange_book_path=str(orange_book_products_path),
         curated_entities_path=str(curated_entities_path),
         generated_at=generated_at,
-        source_count=5,
+        source_count=6,
         disease_count=disease_count,
         gene_count=gene_count,
         protein_count=protein_count,
         clinical_trial_count=clinical_trial_count,
+        orange_book_product_count=orange_book_product_count,
         curated_entity_count=len(DEFAULT_CURATED_MEDICAL_ENTITIES),
         disease_ontology_sha256=_sha256_file(disease_terms_path),
         hgnc_genes_sha256=_sha256_file(hgnc_genes_path),
         uniprot_proteins_sha256=_sha256_file(uniprot_proteins_path),
         clinical_trials_sha256=_sha256_file(clinical_trials_path),
+        orange_book_sha256=_sha256_file(orange_book_products_path),
         curated_entities_sha256=_sha256_file(curated_entities_path),
         warnings=warnings,
     )
@@ -309,14 +310,17 @@ def _download_uniprot_snapshot(
     next_url = _ensure_uniprot_page_size(normalized_source_url)
     collected_results: list[dict[str, object]] = []
     visited_urls: list[str] = []
-    while next_url and len(collected_results) < max_records:
+    while next_url and not _record_limit_reached(
+        collected_count=len(collected_results),
+        max_records=max_records,
+    ):
         visited_urls.append(next_url)
         payload, response_headers = _read_json_response(next_url, user_agent=user_agent)
         page_results = payload.get("results", [])
         if not isinstance(page_results, list):
             raise ValueError("UniProt payload does not contain a results list.")
-        remaining = max_records - len(collected_results)
-        collected_results.extend(page_results[:remaining])
+        remaining = None if max_records == 0 else max_records - len(collected_results)
+        collected_results.extend(page_results if remaining is None else page_results[:remaining])
         next_url = _extract_next_link(response_headers.get("Link"))
 
     raw_path = snapshot_dir / "uniprot_proteins.source.json"
@@ -359,22 +363,30 @@ def _download_clinical_trials_snapshot(
     max_records: int,
 ) -> tuple[str, Path, Path, int]:
     normalized_source_url = normalize_source_url(source_url)
-    next_url = _ensure_clinical_trials_page_size(normalized_source_url)
+    next_url = _ensure_clinical_trials_page_size(
+        _ensure_clinical_trials_fields(normalized_source_url)
+    )
     studies: list[dict[str, object]] = []
     page_token: str | None = None
     fetched_urls: list[str] = []
 
-    while next_url and len(studies) < max_records:
+    while next_url and not _record_limit_reached(
+        collected_count=len(studies),
+        max_records=max_records,
+    ):
         paged_url = _append_query_params(next_url, {"pageToken": page_token} if page_token else {})
         fetched_urls.append(paged_url)
         payload, _headers = _read_json_response(paged_url, user_agent=user_agent)
         page_studies = payload.get("studies", [])
         if not isinstance(page_studies, list):
             raise ValueError("ClinicalTrials.gov payload does not contain a studies list.")
-        remaining = max_records - len(studies)
-        studies.extend(page_studies[:remaining])
+        remaining = None if max_records == 0 else max_records - len(studies)
+        studies.extend(page_studies if remaining is None else page_studies[:remaining])
         page_token = payload.get("nextPageToken")
-        if not page_token or len(studies) >= max_records:
+        if not page_token or _record_limit_reached(
+            collected_count=len(studies),
+            max_records=max_records,
+        ):
             break
 
     raw_path = snapshot_dir / "clinical_trials.source.json"
@@ -419,6 +431,27 @@ def _download_clinical_trials_snapshot(
     return normalized_source_url, raw_path, formatted_path, len(normalized_studies)
 
 
+def _download_orange_book_snapshot(
+    source_url: str | Path,
+    *,
+    snapshot_dir: Path,
+    user_agent: str,
+) -> tuple[str, Path, Path, int]:
+    normalized_source_url = normalize_source_url(source_url)
+    raw_bytes = _read_bytes(normalized_source_url, user_agent=user_agent)
+    raw_suffix = ".zip" if zipfile.is_zipfile(io.BytesIO(raw_bytes)) else ".txt"
+    raw_path = snapshot_dir / f"orange_book.source{raw_suffix}"
+    raw_path.write_bytes(raw_bytes)
+    products_text = _extract_orange_book_products_text(raw_bytes)
+    products = _parse_orange_book_products(products_text)
+    formatted_path = snapshot_dir / "orange_book_products.json"
+    formatted_path.write_text(
+        json.dumps({"products": products}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return normalized_source_url, raw_path, formatted_path, len(products)
+
+
 def _write_curated_entities(path: Path) -> None:
     path.write_text(
         json.dumps({"entities": list(DEFAULT_CURATED_MEDICAL_ENTITIES)}, indent=2) + "\n",
@@ -436,19 +469,23 @@ def _write_source_manifest(
     hgnc_genes_url: str,
     uniprot_proteins_url: str,
     clinical_trials_url: str,
+    orange_book_url: str,
     disease_raw_path: Path,
     hgnc_raw_path: Path,
     uniprot_raw_path: Path,
     clinical_trials_raw_path: Path,
+    orange_book_raw_path: Path,
     disease_terms_path: Path,
     hgnc_genes_path: Path,
     uniprot_proteins_path: Path,
     clinical_trials_path: Path,
+    orange_book_products_path: Path,
     curated_entities_path: Path,
     disease_count: int,
     gene_count: int,
     protein_count: int,
     clinical_trial_count: int,
+    orange_book_product_count: int,
 ) -> None:
     path.write_text(
         json.dumps(
@@ -486,6 +523,13 @@ def _write_source_manifest(
                         raw_path=clinical_trials_raw_path,
                         formatted_path=clinical_trials_path,
                         record_count=clinical_trial_count,
+                    ),
+                    _source_manifest_entry(
+                        name="orange-book",
+                        source_url=orange_book_url,
+                        raw_path=orange_book_raw_path,
+                        formatted_path=orange_book_products_path,
+                        record_count=orange_book_product_count,
                     ),
                     {
                         "name": "curated-medical-entities",
@@ -568,6 +612,99 @@ def _append_disease_term(records: list[dict[str, object]], term: dict[str, objec
     )
 
 
+def _extract_orange_book_products_text(raw_bytes: bytes) -> str:
+    archive_buffer = io.BytesIO(raw_bytes)
+    if zipfile.is_zipfile(archive_buffer):
+        archive_buffer.seek(0)
+        with zipfile.ZipFile(archive_buffer) as archive:
+            for name in archive.namelist():
+                if Path(name).name.casefold() != "products.txt":
+                    continue
+                with archive.open(name) as handle:
+                    return handle.read().decode("utf-8-sig")
+        raise ValueError("Orange Book archive does not contain products.txt.")
+    return raw_bytes.decode("utf-8-sig")
+
+
+def _parse_orange_book_products(text: str) -> list[dict[str, object]]:
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return []
+    header = [_normalize_orange_book_header(value) for value in lines[0].split("~")]
+    products: list[dict[str, object]] = []
+    for line in lines[1:]:
+        columns = line.split("~")
+        if len(columns) < len(header):
+            columns.extend([""] * (len(header) - len(columns)))
+        row = {
+            header[index]: _clean_text(columns[index]) if index < len(columns) else ""
+            for index in range(len(header))
+        }
+        trade_name = row.get("trade_name", "")
+        ingredient = row.get("ingredient", "")
+        canonical_text = trade_name or ingredient
+        if not canonical_text:
+            continue
+        application_number = row.get("appl_no", "")
+        product_number = row.get("product_no", "")
+        application_type = row.get("appl_type", "")
+        source_id = _build_orange_book_source_id(
+            application_type=application_type,
+            application_number=application_number,
+            product_number=product_number,
+            fallback_name=canonical_text,
+        )
+        ingredient_aliases = [
+            _clean_text(part)
+            for part in ingredient.split(";")
+            if _clean_text(part)
+        ]
+        aliases = _dedupe_preserving_order(
+            [
+                alias
+                for alias in ingredient_aliases
+                if alias and alias.casefold() != canonical_text.casefold()
+            ]
+        )
+        products.append(
+            {
+                "entity_id": source_id,
+                "trade_name": trade_name,
+                "ingredient": ingredient,
+                "aliases": aliases,
+                "application_type": application_type,
+                "application_number": application_number,
+                "product_number": product_number,
+                "strength": row.get("strength", ""),
+                "applicant": row.get("applicant_full_name") or row.get("applicant", ""),
+                "approval_date": row.get("approval_date", ""),
+            }
+        )
+    return products
+
+
+def _normalize_orange_book_header(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9]+", "_", value.strip()).strip("_").casefold()
+    return normalized
+
+
+def _build_orange_book_source_id(
+    *,
+    application_type: str,
+    application_number: str,
+    product_number: str,
+    fallback_name: str,
+) -> str:
+    components = [
+        component
+        for component in (application_type, application_number, product_number)
+        if component
+    ]
+    if components:
+        return ":".join(components)
+    return fallback_name.casefold()
+
+
 def _extract_uniprot_recommended_name(item: dict[str, object]) -> str:
     description = item.get("proteinDescription")
     if not isinstance(description, dict):
@@ -616,6 +753,13 @@ def _ensure_uniprot_page_size(source_url: str) -> str:
     return _append_query_params(source_url, {"size": "500"})
 
 
+def _ensure_clinical_trials_fields(source_url: str) -> str:
+    return _append_query_params(
+        source_url,
+        {"fields": ",".join(DEFAULT_CLINICAL_TRIALS_FIELDS)},
+    )
+
+
 def _ensure_clinical_trials_page_size(source_url: str) -> str:
     return _append_query_params(source_url, {"pageSize": "200", "format": "json"})
 
@@ -629,6 +773,10 @@ def _append_query_params(source_url: str, params: dict[str, str]) -> str:
         if key not in query_items:
             query_items[key] = value
     return urlunparse(parsed._replace(query=urlencode(query_items)))
+
+
+def _record_limit_reached(*, collected_count: int, max_records: int) -> bool:
+    return max_records > 0 and collected_count >= max_records
 
 
 def _read_json_response(

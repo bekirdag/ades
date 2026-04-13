@@ -44,6 +44,8 @@ def test_cli_can_build_medical_bundle_then_generate_pack(tmp_path: Path) -> None
             str(medical_snapshots["uniprot_proteins"]),
             "--clinical-trials",
             str(medical_snapshots["clinical_trials"]),
+            "--orange-book-products",
+            str(medical_snapshots["orange_book_products"]),
             "--curated-entities",
             str(medical_snapshots["curated_entities"]),
             "--output-dir",
@@ -57,6 +59,7 @@ def test_cli_can_build_medical_bundle_then_generate_pack(tmp_path: Path) -> None
     medical_bundle_payload = json.loads(medical_bundle_result.stdout)
     assert general_bundle_payload["pack_id"] == "general-en"
     assert medical_bundle_payload["pack_id"] == "medical-en"
+    assert medical_bundle_payload["drug_count"] == 1
     assert Path(general_bundle_payload["sources_lock_path"]).exists()
     assert Path(medical_bundle_payload["sources_lock_path"]).exists()
     assert Path(medical_bundle_payload["bundle_dir"]).exists()

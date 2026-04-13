@@ -47,7 +47,7 @@ def test_service_tag_endpoint_uses_requested_pack(tmp_path: Path) -> None:
     response = client.post(
         "/v0/tag",
         json={
-            "text": "AAPL rallied on NASDAQ after USD 12.5 guidance from Apple.",
+            "text": "TICKA rallied on EXCHX after USD 12.5 guidance from Org Beta.",
             "pack": "finance-en",
             "content_type": "text/plain",
         },
@@ -81,7 +81,7 @@ def test_service_activation_and_lookup_endpoints(tmp_path: Path) -> None:
     assert active_packs.status_code == 200
     assert {pack["pack_id"] for pack in active_packs.json()} == {"general-en"}
 
-    inactive_lookup = client.get("/v0/lookup", params={"q": "AAPL", "exact_alias": True})
+    inactive_lookup = client.get("/v0/lookup", params={"q": "TICKA", "exact_alias": True})
     assert inactive_lookup.status_code == 200
     assert inactive_lookup.json()["candidates"] == []
 
@@ -89,9 +89,9 @@ def test_service_activation_and_lookup_endpoints(tmp_path: Path) -> None:
     assert activate_response.status_code == 200
     assert activate_response.json()["active"] is True
 
-    lookup = client.get("/v0/lookup", params={"q": "AAPL", "exact_alias": True})
+    lookup = client.get("/v0/lookup", params={"q": "TICKA", "exact_alias": True})
     assert lookup.status_code == 200
     payload = lookup.json()
     assert payload["candidates"]
     assert payload["candidates"][0]["kind"] == "alias"
-    assert payload["candidates"][0]["value"] == "AAPL"
+    assert payload["candidates"][0]["value"] == "TICKA"

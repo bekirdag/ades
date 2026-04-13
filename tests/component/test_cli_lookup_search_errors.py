@@ -17,7 +17,7 @@ def test_cli_lookup_reports_missing_explicit_config(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["packs", "lookup", "apple"],
+        ["packs", "lookup", "organization_entity"],
         env={"ADES_CONFIG_FILE": str(missing_config)},
     )
 
@@ -32,7 +32,7 @@ def test_cli_lookup_reports_invalid_runtime_target(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["packs", "lookup", "apple"],
+        ["packs", "lookup", "organization_entity"],
         env={
             "ADES_CONFIG_FILE": str(config_path),
             "ADES_RUNTIME_TARGET": "broken-runtime",

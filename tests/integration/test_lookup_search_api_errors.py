@@ -16,7 +16,7 @@ def test_public_lookup_rejects_missing_explicit_config(
         FileNotFoundError,
         match=f"ades config file not found: {missing_config}",
     ):
-        lookup_candidates("apple", storage_root=tmp_path)
+        lookup_candidates("org beta", storage_root=tmp_path)
 
 
 def test_public_lookup_rejects_invalid_runtime_target(
@@ -31,4 +31,4 @@ def test_public_lookup_rejects_invalid_runtime_target(
         UnsupportedRuntimeConfigurationError,
         match="Unsupported ades runtime target",
     ):
-        lookup_candidates("apple", storage_root=tmp_path)
+        lookup_candidates("org beta", storage_root=tmp_path)

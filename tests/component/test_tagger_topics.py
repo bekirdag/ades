@@ -8,7 +8,7 @@ def test_tagger_returns_topic_evidence_for_non_general_domains(tmp_path: Path) -
     PackInstaller(tmp_path).install("finance-en")
 
     response = tag_text(
-        text="Apple said AAPL traded on NASDAQ after USD 12.5 guidance.",
+        text="Org Beta said TICKA traded on EXCHX after USD 12.5 guidance.",
         pack="finance-en",
         content_type="text/plain",
         storage_root=tmp_path,
@@ -30,7 +30,7 @@ def test_tagger_falls_back_to_runtime_domain_topic_when_only_general_matches(tmp
     PackInstaller(tmp_path).install("finance-en")
 
     response = tag_text(
-        text="Apple released a statement.",
+        text="Org Beta released a statement.",
         pack="finance-en",
         content_type="text/plain",
         storage_root=tmp_path,

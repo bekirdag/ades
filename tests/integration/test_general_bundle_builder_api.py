@@ -29,14 +29,14 @@ def test_public_api_can_build_general_bundle_then_generate_install_and_tag(
         registry_url=registry.index_url,
     )
     response = tag(
-        "Tim Cook emailed jane@example.com about OpenAI in Istanbul. Visit https://openai.com now.",
+        "Person Alpha emailed contact@example.test about Org Alpha in Metro Alpha. Visit https://portal.example.test now.",
         pack="general-en",
         storage_root=install_root,
     )
 
     entities = {(entity.text, entity.label) for entity in response.entities}
-    assert ("Tim Cook", "person") in entities
-    assert ("jane@example.com", "email_address") in entities
-    assert ("OpenAI", "organization") in entities
-    assert ("Istanbul", "location") in entities
-    assert ("https://openai.com", "url") in entities
+    assert ("Person Alpha", "person") in entities
+    assert ("contact@example.test", "email_address") in entities
+    assert ("Org Alpha", "organization") in entities
+    assert ("Metro Alpha", "location") in entities
+    assert ("https://portal.example.test", "url") in entities

@@ -5,7 +5,6 @@
   "language": "en",
   "domain": "general",
   "tier": "base",
-  "description": "Shared English baseline entities and generic utility patterns.",
   "tags": [
     "baseline",
     "general",
@@ -16,7 +15,7 @@
     {
       "name": "pack",
       "url": "../../artifacts/general-en-0.1.0.tar.zst",
-      "sha256": "9f3aff527af6858cbec7678deb23afa71be6ab7918862d7c7e78bc74332a3fc9"
+      "sha256": "87dc6e660e1a0b18e09cb2ea628cd6597b82fd291d04752c4653940f54a7660a"
     }
   ],
   "models": [],
@@ -26,5 +25,6 @@
   "labels": [
     "labels.json"
   ],
-  "min_ades_version": "0.1.0"
+  "min_ades_version": "0.1.0",
+  "description": "Shared English baseline entities and generic utility patterns."
 }

@@ -11,8 +11,8 @@ def test_cli_tag_files_applies_max_files_guardrail(tmp_path: Path) -> None:
     PackInstaller(tmp_path).install("finance-en")
     first = tmp_path / "alpha.html"
     second = tmp_path / "beta.html"
-    first.write_text("<p>Apple said AAPL rallied.</p>", encoding="utf-8")
-    second.write_text("<p>NASDAQ guidance moved.</p>", encoding="utf-8")
+    first.write_text("<p>Org Beta said TICKA rallied.</p>", encoding="utf-8")
+    second.write_text("<p>EXCHX guidance moved.</p>", encoding="utf-8")
 
     runner = CliRunner()
     result = runner.invoke(

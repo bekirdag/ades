@@ -8,6 +8,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from ..packs.quality_defaults import DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES
+
 
 class PackSummary(BaseModel):
     """Installed pack metadata exposed by the service."""
@@ -20,6 +22,9 @@ class PackSummary(BaseModel):
     description: str | None = None
     tags: list[str] = Field(default_factory=list)
     active: bool = True
+    matcher_ready: bool = False
+    matcher_algorithm: str | None = None
+    matcher_entry_count: int | None = None
 
 
 class AvailablePackSummary(BaseModel):
@@ -44,6 +49,9 @@ class StatusResponse(BaseModel):
     version: str
     runtime_target: str
     metadata_backend: str
+    metadata_persistence_backend: str
+    exact_extraction_backend: str
+    operator_lookup_backend: str
     storage_root: str
     host: str
     port: int
@@ -91,7 +99,10 @@ class RegistryBuildFinanceBundleRequest(BaseModel):
     """Request body for building one normalized `finance-en` source bundle."""
 
     sec_companies_path: str
+    sec_submissions_path: str | None = None
+    sec_companyfacts_path: str | None = None
     symbol_directory_path: str
+    other_listed_path: str | None = None
     curated_entities_path: str
     output_dir: str
     version: str = "0.2.0"
@@ -124,8 +135,17 @@ class RegistryFetchFinanceSourcesRequest(BaseModel):
     output_dir: str = "/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en"
     snapshot: str | None = None
     sec_companies_url: str = "https://www.sec.gov/files/company_tickers.json"
+    sec_submissions_url: str = (
+        "https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip"
+    )
+    sec_companyfacts_url: str = (
+        "https://www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip"
+    )
     symbol_directory_url: str = (
         "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt"
+    )
+    other_listed_url: str = (
+        "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
     )
     user_agent: str = "ades/0.1.0 (ops@adestool.com)"
 
@@ -138,16 +158,25 @@ class RegistryFetchFinanceSourcesResponse(BaseModel):
     snapshot: str
     snapshot_dir: str
     sec_companies_url: str
+    sec_submissions_url: str
+    sec_companyfacts_url: str
     symbol_directory_url: str
+    other_listed_url: str
     source_manifest_path: str
     sec_companies_path: str
+    sec_submissions_path: str
+    sec_companyfacts_path: str
     symbol_directory_path: str
+    other_listed_path: str
     curated_entities_path: str
     generated_at: datetime
     source_count: int
     curated_entity_count: int
     sec_companies_sha256: str
+    sec_submissions_sha256: str
+    sec_companyfacts_sha256: str
     symbol_directory_sha256: str
+    other_listed_sha256: str
     curated_entities_sha256: str
     warnings: list[str] = Field(default_factory=list)
 
@@ -157,11 +186,21 @@ class RegistryFetchGeneralSourcesRequest(BaseModel):
 
     output_dir: str = "/mnt/githubActions/ades_big_data/pack_sources/raw/general-en"
     snapshot: str | None = None
-    wikidata_url: str = (
-        "https://www.wikidata.org/w/api.php?action=wbgetentities&"
-        "ids=Q265852|Q2283|Q95|Q3884|Q380&languages=en&props=labels|aliases&format=json"
+    wikidata_url: str | None = None
+    wikidata_truthy_url: str | None = (
+        "https://dumps.wikimedia.org/wikidatawiki/entities/latest-truthy.nt.gz"
     )
-    geonames_places_url: str = "https://download.geonames.org/export/dump/cities15000.zip"
+    wikidata_entities_url: str | None = (
+        "https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.gz"
+    )
+    geonames_places_url: str = "https://download.geonames.org/export/dump/allCountries.zip"
+    geonames_alternate_names_url: str | None = (
+        "https://download.geonames.org/export/dump/alternateNamesV2.zip"
+    )
+    geonames_modifications_url: str | None = None
+    geonames_deletes_url: str | None = None
+    geonames_alternate_modifications_url: str | None = None
+    geonames_alternate_deletes_url: str | None = None
     user_agent: str = "ades/0.1.0 (ops@adestool.com)"
 
 
@@ -207,13 +246,11 @@ class RegistryFetchMedicalSourcesRequest(BaseModel):
         "query=%28reviewed%3Atrue%20AND%20organism_id%3A9606%29&"
         "format=json&fields=accession%2Cprotein_name%2Cgene_names&size=500"
     )
-    clinical_trials_url: str = (
-        "https://clinicaltrials.gov/api/v2/studies?"
-        "query.cond=diabetes&pageSize=200&format=json"
-    )
+    clinical_trials_url: str = "https://clinicaltrials.gov/api/v2/studies?format=json"
+    orange_book_url: str = "https://www.fda.gov/media/76860/download?attachment"
     user_agent: str = "ades/0.1.0 (ops@adestool.com)"
-    uniprot_max_records: int = 2000
-    clinical_trials_max_records: int = 500
+    uniprot_max_records: int = Field(0, ge=0)
+    clinical_trials_max_records: int = Field(0, ge=0)
 
 
 class RegistryFetchMedicalSourcesResponse(BaseModel):
@@ -227,11 +264,13 @@ class RegistryFetchMedicalSourcesResponse(BaseModel):
     hgnc_genes_url: str
     uniprot_proteins_url: str
     clinical_trials_url: str
+    orange_book_url: str
     source_manifest_path: str
     disease_ontology_path: str
     hgnc_genes_path: str
     uniprot_proteins_path: str
     clinical_trials_path: str
+    orange_book_path: str
     curated_entities_path: str
     generated_at: datetime
     source_count: int
@@ -239,11 +278,13 @@ class RegistryFetchMedicalSourcesResponse(BaseModel):
     gene_count: int
     protein_count: int
     clinical_trial_count: int
+    orange_book_product_count: int
     curated_entity_count: int
     disease_ontology_sha256: str
     hgnc_genes_sha256: str
     uniprot_proteins_sha256: str
     clinical_trials_sha256: str
+    orange_book_sha256: str
     curated_entities_sha256: str
     warnings: list[str] = Field(default_factory=list)
 
@@ -286,6 +327,7 @@ class RegistryBuildMedicalBundleRequest(BaseModel):
     hgnc_genes_path: str
     uniprot_proteins_path: str
     clinical_trials_path: str
+    orange_book_products_path: str | None = None
     curated_entities_path: str
     output_dir: str
     version: str = "0.2.0"
@@ -310,6 +352,7 @@ class RegistryBuildMedicalBundleResponse(BaseModel):
     gene_count: int
     protein_count: int
     clinical_trial_count: int
+    drug_count: int
     curated_entity_count: int
     warnings: list[str] = Field(default_factory=list)
 
@@ -319,6 +362,7 @@ class RegistryValidateFinanceQualityRequest(BaseModel):
 
     bundle_dir: str
     output_dir: str
+    fixture_profile: str = "benchmark"
     version: str | None = None
     min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
     max_unexpected_hits: int = Field(0, ge=0)
@@ -400,10 +444,13 @@ class RegistryValidateGeneralQualityRequest(BaseModel):
 
     bundle_dir: str
     output_dir: str
+    fixture_profile: str = "benchmark"
     version: str | None = None
     min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
     max_unexpected_hits: int = Field(0, ge=0)
-    max_ambiguous_aliases: int = Field(0, ge=0)
+    max_ambiguous_aliases: int = Field(
+        DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES, ge=0
+    )
     max_dropped_alias_ratio: float = Field(0.5, ge=0.0, le=1.0)
 
 
@@ -413,6 +460,7 @@ class RegistryValidateMedicalQualityRequest(BaseModel):
     bundle_dir: str
     general_bundle_dir: str
     output_dir: str
+    fixture_profile: str = "benchmark"
     version: str | None = None
     min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
     max_unexpected_hits: int = Field(0, ge=0)
@@ -456,6 +504,252 @@ class RegistryPackQualityResponse(BaseModel):
     cases: list[RegistryPackQualityCaseResult] = Field(default_factory=list)
 
 
+class ExtractionQualityCaseResultResponse(BaseModel):
+    """Outcome for one evaluated extraction-quality document."""
+
+    name: str
+    expected_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    actual_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    matched_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    missing_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    unexpected_entities: list[RegistryQualityEntity] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    token_count: int
+    entity_count: int
+    entities_per_100_tokens: float
+    overlap_drop_count: int
+    chunk_count: int
+    timing_ms: int
+    passed: bool
+
+
+class ExtractionQualityReportResponse(BaseModel):
+    """Extraction-quality report for one installed pack and one golden set."""
+
+    pack_id: str
+    profile: str
+    hybrid: bool
+    document_count: int
+    expected_entity_count: int
+    actual_entity_count: int
+    matched_entity_count: int
+    missing_entity_count: int
+    unexpected_entity_count: int
+    recall: float
+    precision: float
+    entities_per_100_tokens: float
+    overlap_drop_count: int
+    chunk_count: int
+    low_density_warning_count: int
+    p50_latency_ms: int = 0
+    p95_latency_ms: int
+    per_label_expected: dict[str, int] = Field(default_factory=dict)
+    per_label_actual: dict[str, int] = Field(default_factory=dict)
+    per_label_matched: dict[str, int] = Field(default_factory=dict)
+    per_label_recall: dict[str, float] = Field(default_factory=dict)
+    per_lane_counts: dict[str, int] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    cases: list[ExtractionQualityCaseResultResponse] = Field(default_factory=list)
+
+
+class RegistryEvaluateExtractionQualityRequest(BaseModel):
+    """Request body for evaluating one installed pack against a golden set."""
+
+    pack_id: str
+    golden_set_path: str | None = None
+    profile: str = "default"
+    hybrid: bool = False
+    write_report: bool = True
+    report_path: str | None = None
+
+
+class RegistryEvaluateExtractionQualityResponse(ExtractionQualityReportResponse):
+    """Extraction-quality report plus optional persisted report path."""
+
+    report_path: str | None = None
+
+
+class RuntimeLatencyBenchmarkResponse(BaseModel):
+    """Latency summary for one runtime benchmark lane."""
+
+    sample_count: int
+    p50_latency_ms: int
+    p95_latency_ms: int
+
+
+class RuntimeDiskBenchmarkResponse(BaseModel):
+    """Disk-usage summary for runtime benchmark reporting."""
+
+    runtime_pack_bytes: int
+    matcher_artifact_bytes: int
+    matcher_entries_bytes: int
+    matcher_total_bytes: int
+    metadata_store_bytes: int | None = None
+
+
+class RuntimeBenchmarkReportResponse(BaseModel):
+    """Consolidated runtime benchmark report for one installed pack."""
+
+    pack_id: str
+    profile: str
+    hybrid: bool
+    metadata_backend: str
+    exact_extraction_backend: str
+    operator_lookup_backend: str
+    matcher_entry_count: int
+    matcher_state_count: int
+    matcher_cold_load_ms: int
+    lookup_query_count: int
+    warm_tagging: RuntimeLatencyBenchmarkResponse
+    operator_lookup: RuntimeLatencyBenchmarkResponse
+    disk_usage: RuntimeDiskBenchmarkResponse
+    quality_report: ExtractionQualityReportResponse
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegistryBenchmarkRuntimeRequest(BaseModel):
+    """Request body for benchmarking runtime matcher and metadata surfaces."""
+
+    pack_id: str
+    golden_set_path: str | None = None
+    profile: str = "default"
+    hybrid: bool = False
+    warm_runs: int = Field(3, ge=1, le=25)
+    lookup_limit: int = Field(20, ge=1, le=100)
+    write_report: bool = True
+    report_path: str | None = None
+
+
+class RegistryBenchmarkRuntimeResponse(RuntimeBenchmarkReportResponse):
+    """Runtime benchmark report plus optional persisted report path."""
+
+    report_path: str | None = None
+
+
+class LabelQualityDeltaResponse(BaseModel):
+    """Per-label recall delta between two quality reports."""
+
+    label: str
+    baseline_recall: float
+    candidate_recall: float
+    recall_delta: float
+
+
+class ExtractionQualityDeltaResponse(BaseModel):
+    """Aggregate delta between two extraction-quality reports."""
+
+    pack_id: str
+    baseline_mode: str
+    candidate_mode: str
+    recall_delta: float
+    precision_delta: float
+    p95_latency_delta_ms: int
+    per_label_deltas: list[LabelQualityDeltaResponse] = Field(default_factory=list)
+
+
+class RegistryCompareExtractionQualityRequest(BaseModel):
+    """Request body for comparing two stored extraction-quality reports."""
+
+    baseline_report_path: str
+    candidate_report_path: str
+
+
+class RegistryCompareExtractionQualityResponse(ExtractionQualityDeltaResponse):
+    """Quality delta plus the source report paths used for comparison."""
+
+    baseline_report_path: str
+    candidate_report_path: str
+
+
+class PackHealthResponse(BaseModel):
+    """Aggregated recent extraction-health view for one installed pack."""
+
+    pack_id: str
+    requested_window: int
+    observation_count: int
+    latest_pack_version: str | None = None
+    latest_observed_at: str | None = None
+    average_entity_count: float = 0.0
+    average_entities_per_100_tokens: float = 0.0
+    zero_entity_rate: float = 0.0
+    warning_rate: float = 0.0
+    low_density_warning_rate: float = 0.0
+    p95_timing_ms: int = 0
+    per_label_counts: dict[str, int] = Field(default_factory=dict)
+    per_lane_counts: dict[str, int] = Field(default_factory=dict)
+    warning_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class RegistryDiffPackRequest(BaseModel):
+    """Request body for diffing two runtime pack directories."""
+
+    old_pack_dir: str
+    new_pack_dir: str
+
+
+class RegistryPackDiffResponse(BaseModel):
+    """Machine-readable semantic diff between two runtime pack directories."""
+
+    pack_id: str
+    from_version: str | None = None
+    to_version: str | None = None
+    severity: str
+    requires_retag: bool
+    added_labels: list[str] = Field(default_factory=list)
+    removed_labels: list[str] = Field(default_factory=list)
+    added_rules: list[str] = Field(default_factory=list)
+    removed_rules: list[str] = Field(default_factory=list)
+    added_aliases: list[str] = Field(default_factory=list)
+    removed_aliases: list[str] = Field(default_factory=list)
+    changed_canonical_aliases: list[str] = Field(default_factory=list)
+    changed_metadata_fields: list[str] = Field(default_factory=list)
+
+
+class RegistryReleaseThresholdsResponse(BaseModel):
+    """Structured threshold configuration for one release decision."""
+
+    min_recall: float
+    min_precision: float
+    max_label_recall_drop: float
+    min_recall_lift: float
+    max_precision_drop: float
+    max_p95_latency_ms: int | None = None
+    max_model_artifact_bytes: int | None = None
+    max_peak_memory_mb: int | None = None
+
+
+class RegistryEvaluateReleaseThresholdsRequest(BaseModel):
+    """Request body for evaluating deterministic or hybrid release thresholds."""
+
+    report_path: str
+    mode: Literal["deterministic", "hybrid"] = "deterministic"
+    baseline_report_path: str | None = None
+    min_recall: float | None = Field(None, ge=0.0, le=1.0)
+    min_precision: float | None = Field(None, ge=0.0, le=1.0)
+    max_label_recall_drop: float | None = Field(None, ge=0.0, le=1.0)
+    min_recall_lift: float | None = Field(None, ge=0.0, le=1.0)
+    max_precision_drop: float | None = Field(None, ge=0.0, le=1.0)
+    max_p95_latency_ms: int | None = Field(None, ge=0)
+    max_model_artifact_bytes: int | None = Field(None, ge=0)
+    max_peak_memory_mb: int | None = Field(None, ge=0)
+    model_artifact_path: str | None = None
+    peak_memory_mb: int | None = Field(None, ge=0)
+
+
+class RegistryEvaluateReleaseThresholdsResponse(BaseModel):
+    """Structured release-threshold decision for one stored quality report."""
+
+    report_path: str
+    baseline_report_path: str | None = None
+    mode: Literal["deterministic", "hybrid"]
+    thresholds: RegistryReleaseThresholdsResponse
+    model_artifact_bytes: int | None = None
+    peak_memory_mb: int | None = None
+    passed: bool
+    reasons: list[str] = Field(default_factory=list)
+    quality_delta: ExtractionQualityDeltaResponse | None = None
+
+
 class RegistryGeneratePackRequest(BaseModel):
     """Request body for generating one pack directory from a normalized bundle."""
 
@@ -478,6 +772,14 @@ class RegistryGeneratePackResponse(BaseModel):
     labels_path: str
     aliases_path: str
     rules_path: str
+    matcher_artifact_path: str
+    matcher_entries_path: str
+    matcher_algorithm: str
+    matcher_entry_count: int
+    matcher_state_count: int
+    matcher_max_alias_length: int
+    matcher_artifact_sha256: str
+    matcher_entries_sha256: str
     sources_path: str | None = None
     build_path: str | None = None
     generated_at: datetime
@@ -519,6 +821,14 @@ class RegistryReportPackResponse(BaseModel):
     labels_path: str
     aliases_path: str
     rules_path: str
+    matcher_artifact_path: str
+    matcher_entries_path: str
+    matcher_algorithm: str
+    matcher_entry_count: int
+    matcher_state_count: int
+    matcher_max_alias_length: int
+    matcher_artifact_sha256: str
+    matcher_entries_sha256: str
     sources_path: str | None = None
     build_path: str | None = None
     generated_at: datetime
@@ -547,6 +857,7 @@ class RegistryRefreshGeneratedPacksRequest(BaseModel):
     bundle_dirs: list[str] = Field(default_factory=list)
     output_dir: str
     general_bundle_dir: str | None = None
+    materialize_registry: bool = False
     min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
     max_unexpected_hits: int = Field(0, ge=0)
     max_ambiguous_aliases: int | None = Field(None, ge=0)
@@ -572,11 +883,14 @@ class RegistryRefreshGeneratedPacksResponse(BaseModel):
     """Response body for one generated-pack refresh run."""
 
     output_dir: str
+    candidate_dir: str
     report_dir: str
     quality_dir: str
     generated_at: datetime
     pack_count: int
     passed: bool
+    materialize_registry: bool
+    registry_materialized: bool
     registry: RegistryBuildResponse | None = None
     warnings: list[str] = Field(default_factory=list)
     packs: list[RegistryRefreshPackResponse] = Field(default_factory=list)
@@ -893,11 +1207,14 @@ class ReleasePublishResponse(BaseModel):
 class EntityProvenance(BaseModel):
     """Deterministic provenance for a single entity match."""
 
-    match_kind: Literal["alias", "rule"]
+    match_kind: Literal["alias", "rule", "proposal"]
     match_path: str
     match_source: str
     source_pack: str
     source_domain: str
+    lane: str | None = None
+    model_name: str | None = None
+    model_version: str | None = None
 
 
 class EntityLink(BaseModel):
@@ -919,6 +1236,41 @@ class EntityMatch(BaseModel):
     relevance: float | None = None
     provenance: EntityProvenance | None = None
     link: EntityLink | None = None
+
+
+class TagMetrics(BaseModel):
+    """Structured tagging metrics used for quality loops and warnings."""
+
+    input_char_count: int
+    normalized_char_count: int
+    token_count: int
+    segment_count: int = 0
+    chunk_count: int = 0
+    entity_count: int = 0
+    entities_per_100_tokens: float = 0.0
+    overlap_drop_count: int = 0
+    per_label_counts: dict[str, int] = Field(default_factory=dict)
+    per_lane_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class TagSpanDecision(BaseModel):
+    """Optional debug record for overlap-resolution decisions."""
+
+    text: str
+    label: str
+    start: int
+    end: int
+    lane: str
+    kept: bool
+    reason: str | None = None
+
+
+class TagDebug(BaseModel):
+    """Optional debug payload for extraction decisions."""
+
+    kept_span_count: int = 0
+    discarded_span_count: int = 0
+    span_decisions: list[TagSpanDecision] = Field(default_factory=list)
 
 
 class SourceFingerprint(BaseModel):
@@ -1011,8 +1363,10 @@ class BatchFileTagRequest(BaseModel):
 class TagResponse(BaseModel):
     """Response body for tagging."""
 
+    schema_version: int = 2
     version: str
     pack: str
+    pack_version: str | None = None
     language: str
     content_type: str
     source_path: str | None = None
@@ -1021,6 +1375,8 @@ class TagResponse(BaseModel):
     saved_output_path: str | None = None
     entities: list[EntityMatch] = Field(default_factory=list)
     topics: list[TopicMatch] = Field(default_factory=list)
+    metrics: TagMetrics | None = None
+    debug: TagDebug | None = None
     warnings: list[str] = Field(default_factory=list)
     timing_ms: int
 
@@ -1154,6 +1510,13 @@ class LookupCandidate(BaseModel):
     pattern: str | None = None
     domain: str
     active: bool = True
+    canonical_text: str | None = None
+    generated: bool | None = None
+    source_name: str | None = None
+    entity_id: str | None = None
+    entity_prior: float | None = None
+    source_priority: float | None = None
+    popularity_weight: float | None = None
     score: float | None = None
 
 
@@ -1163,5 +1526,6 @@ class LookupResponse(BaseModel):
     query: str
     pack_id: str | None = None
     exact_alias: bool = False
+    fuzzy: bool = False
     active_only: bool = True
     candidates: list[LookupCandidate] = Field(default_factory=list)

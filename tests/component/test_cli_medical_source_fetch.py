@@ -28,6 +28,8 @@ def test_cli_can_fetch_medical_source_snapshot(tmp_path: Path) -> None:
             remote_sources["uniprot_proteins_url"],
             "--clinical-trials-url",
             remote_sources["clinical_trials_url"],
+            "--orange-book-url",
+            remote_sources["orange_book_url"],
             "--uniprot-max-records",
             "10",
             "--clinical-trials-max-records",
@@ -41,4 +43,4 @@ def test_cli_can_fetch_medical_source_snapshot(tmp_path: Path) -> None:
     assert payload["snapshot"] == "2026-04-10"
     assert Path(payload["source_manifest_path"]).exists()
     assert Path(payload["disease_ontology_path"]).exists()
-
+    assert Path(payload["orange_book_path"]).exists()

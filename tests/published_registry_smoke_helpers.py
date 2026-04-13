@@ -51,6 +51,7 @@ def create_working_published_registry_dir(root: Path) -> Path:
     refresh = refresh_generated_packs(
         [finance_bundle.bundle_dir, general_bundle.bundle_dir, medical_bundle.bundle_dir],
         output_dir=root / "refresh-output",
+        materialize_registry=True,
     )
     if not refresh.passed or refresh.registry is None:
         raise AssertionError("Expected generated registry refresh fixture to pass.")

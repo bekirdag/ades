@@ -40,11 +40,14 @@ class GeneratedPackRefreshResult:
     """Aggregate result for one generated-pack refresh run."""
 
     output_dir: str
+    candidate_dir: str
     report_dir: str
     quality_dir: str
     generated_at: str
     pack_count: int
     passed: bool
+    materialize_registry: bool
+    registry_materialized: bool
     registry: RegistryBuildResult | None = None
     warnings: list[str] = field(default_factory=list)
     packs: list[GeneratedPackRefreshItem] = field(default_factory=list)
@@ -55,12 +58,13 @@ def refresh_generated_pack_registry(
     *,
     output_dir: str | Path,
     general_bundle_dir: str | Path | None = None,
+    materialize_registry: bool = False,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
     max_ambiguous_aliases: int | None = None,
     max_dropped_alias_ratio: float = 0.5,
 ) -> GeneratedPackRefreshResult:
-    """Refresh one or more generated packs into a quality-gated registry release."""
+    """Refresh one or more generated packs into candidate bundles and optional registry output."""
 
     if not bundle_dirs:
         raise ValueError("At least one bundle directory is required.")
@@ -73,9 +77,10 @@ def refresh_generated_pack_registry(
 
     resolved_output_dir = Path(output_dir).expanduser().resolve()
     _ensure_clean_dir(resolved_output_dir)
-    report_dir = resolved_output_dir / "reports"
+    candidate_dir = resolved_output_dir / "candidates"
+    report_dir = candidate_dir
     quality_dir = resolved_output_dir / "quality"
-    report_dir.mkdir(parents=True, exist_ok=True)
+    candidate_dir.mkdir(parents=True, exist_ok=True)
     quality_dir.mkdir(parents=True, exist_ok=True)
 
     manifests_by_dir: dict[Path, SourceBundleManifest] = {}
@@ -101,7 +106,7 @@ def refresh_generated_pack_registry(
     warnings: list[str] = []
     for resolved_bundle_dir in resolved_bundle_dirs:
         manifest = manifests_by_dir[resolved_bundle_dir]
-        report = report_generated_pack(resolved_bundle_dir, output_dir=report_dir)
+        report = report_generated_pack(resolved_bundle_dir, output_dir=candidate_dir)
         quality = _validate_quality_for_pack(
             manifest=manifest,
             bundle_dir=resolved_bundle_dir,
@@ -129,11 +134,13 @@ def refresh_generated_pack_registry(
     )
     passed = quality_passed and source_governance_passed
     registry_result: RegistryBuildResult | None = None
-    if passed:
+    if passed and materialize_registry:
         registry_result = build_static_registry(
             [item.report.pack_dir for item in pack_results],
             output_dir=resolved_output_dir / "registry",
         )
+    elif passed:
+        warnings.append("registry_build_skipped:candidate_only")
     else:
         if not quality_passed:
             warnings.append("registry_build_skipped:quality_failed")
@@ -142,11 +149,14 @@ def refresh_generated_pack_registry(
 
     return GeneratedPackRefreshResult(
         output_dir=str(resolved_output_dir),
+        candidate_dir=str(candidate_dir),
         report_dir=str(report_dir),
         quality_dir=str(quality_dir),
         generated_at=_utc_timestamp(),
         pack_count=len(pack_results),
         passed=passed,
+        materialize_registry=materialize_registry,
+        registry_materialized=registry_result is not None,
         registry=registry_result,
         warnings=warnings,
         packs=pack_results,

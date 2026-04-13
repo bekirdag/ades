@@ -36,6 +36,7 @@ class MedicalSourceBundleResult:
     gene_count: int
     protein_count: int
     clinical_trial_count: int
+    drug_count: int
     curated_entity_count: int
     warnings: list[str] = field(default_factory=list)
 
@@ -46,6 +47,7 @@ def build_medical_source_bundle(
     hgnc_genes_path: str | Path,
     uniprot_proteins_path: str | Path,
     clinical_trials_path: str | Path,
+    orange_book_products_path: str | Path | None = None,
     curated_entities_path: str | Path,
     output_dir: str | Path,
     version: str = "0.2.0",
@@ -68,6 +70,14 @@ def build_medical_source_bundle(
         clinical_trials_path,
         label="ClinicalTrials.gov snapshot",
     )
+    orange_book_path = (
+        _resolve_input_file(
+            orange_book_products_path,
+            label="Orange Book products snapshot",
+        )
+        if orange_book_products_path is not None
+        else None
+    )
     curated_path = _resolve_input_file(
         curated_entities_path,
         label="curated medical entities snapshot",
@@ -85,11 +95,23 @@ def build_medical_source_bundle(
     genes = _load_hgnc_gene_entities(hgnc_path)
     proteins = _load_uniprot_protein_entities(uniprot_path)
     clinical_trials = _load_clinical_trial_entities(trials_path)
+    orange_book_drugs = (
+        _load_orange_book_drug_entities(orange_book_path)
+        if orange_book_path is not None
+        else []
+    )
     curated_entities = _load_curated_medical_entities(curated_path)
     rules = _build_medical_rule_records()
 
     entities = sorted(
-        [*clinical_trials, *curated_entities, *diseases, *genes, *proteins],
+        [
+            *clinical_trials,
+            *curated_entities,
+            *diseases,
+            *genes,
+            *orange_book_drugs,
+            *proteins,
+        ],
         key=lambda item: (
             str(item["entity_type"]).casefold(),
             str(item["canonical_text"]).casefold(),
@@ -131,13 +153,24 @@ def build_medical_source_bundle(
             record_count=len(clinical_trials),
             adapter="clinical_trials_json",
         ),
+    ]
+    if orange_book_path is not None:
+        sources.append(
+            build_bundle_source_entry(
+                name="orange-book",
+                snapshot_path=orange_book_path,
+                record_count=len(orange_book_drugs),
+                adapter="orange_book_products",
+            )
+        )
+    sources.append(
         build_bundle_source_entry(
             name="curated-medical-entities",
             snapshot_path=curated_path,
             record_count=len(curated_entities),
             adapter="curated_medical_entities",
-        ),
-    ]
+        )
+    )
     bundle_manifest_path.write_text(
         json.dumps(
             {
@@ -187,6 +220,8 @@ def build_medical_source_bundle(
         warnings.append("UniProt snapshot produced no protein entities.")
     if not clinical_trials:
         warnings.append("Clinical trial snapshot produced no clinical trial entities.")
+    if orange_book_path is not None and not orange_book_drugs:
+        warnings.append("Orange Book snapshot produced no drug entities.")
     if not curated_entities:
         warnings.append("Curated entity snapshot produced no medical entities.")
 
@@ -207,6 +242,7 @@ def build_medical_source_bundle(
         gene_count=len(genes),
         protein_count=len(proteins),
         clinical_trial_count=len(clinical_trials),
+        drug_count=len(orange_book_drugs),
         curated_entity_count=len(curated_entities),
         warnings=warnings,
     )
@@ -341,6 +377,55 @@ def _load_clinical_trial_entities(path: Path) -> list[dict[str, Any]]:
     return normalized
 
 
+def _load_orange_book_drug_entities(path: Path) -> list[dict[str, Any]]:
+    records = _read_json_records(path)
+    normalized: list[dict[str, Any]] = []
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        canonical_text = _clean_text(
+            item.get("canonical_text")
+            or item.get("trade_name")
+            or item.get("ingredient")
+            or item.get("name")
+        )
+        if not canonical_text:
+            continue
+        aliases = [
+            alias
+            for alias in _coerce_alias_list(item.get("aliases"))
+            if not _is_compact_medical_symbol(alias)
+        ]
+        source_id = (
+            _clean_text(
+                item.get("entity_id")
+                or item.get("source_id")
+                or item.get("application_number")
+            )
+            or canonical_text.casefold()
+        )
+        normalized.append(
+            {
+                "entity_id": f"orange-book:{source_id}",
+                "entity_type": "drug",
+                "canonical_text": canonical_text,
+                "aliases": aliases,
+                "source_name": "orange-book",
+                "source_id": source_id,
+                "metadata": {
+                    "ingredient": _clean_text(item.get("ingredient")),
+                    "application_type": _clean_text(item.get("application_type")),
+                    "application_number": _clean_text(item.get("application_number")),
+                    "product_number": _clean_text(item.get("product_number")),
+                    "strength": _clean_text(item.get("strength")),
+                    "approval_date": _clean_text(item.get("approval_date")),
+                    "applicant": _clean_text(item.get("applicant")),
+                },
+            }
+        )
+    return normalized
+
+
 def _load_curated_medical_entities(path: Path) -> list[dict[str, Any]]:
     records = _read_json_records(path)
     normalized: list[dict[str, Any]] = []
@@ -393,7 +478,7 @@ def _read_json_records(path: Path) -> list[Any]:
         ]
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, dict):
-        for key in ("entities", "terms", "genes", "proteins", "studies"):
+        for key in ("entities", "terms", "genes", "proteins", "studies", "products"):
             if key in payload and isinstance(payload[key], list):
                 return payload[key]
         return list(payload.values())

@@ -1,22 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-04-08T00:00:00Z",
+  "generated_at": "2026-04-11T13:44:00Z",
   "packs": {
-    "general-en": {
-      "version": "0.1.0",
-      "manifest_url": "packs/general-en/manifest.json",
-      "language": "en",
-      "domain": "general",
-      "tier": "base",
-      "description": "Shared English baseline entities and generic utility patterns.",
-      "tags": [
-        "baseline",
-        "general",
-        "english"
-      ],
-      "dependencies": [],
-      "min_ades_version": "0.1.0"
-    },
     "finance-en": {
       "version": "0.1.0",
       "manifest_url": "packs/finance-en/manifest.json",
@@ -32,6 +17,21 @@
       "dependencies": [
         "general-en"
       ],
+      "min_ades_version": "0.1.0"
+    },
+    "general-en": {
+      "version": "0.1.0",
+      "manifest_url": "packs/general-en/manifest.json",
+      "language": "en",
+      "domain": "general",
+      "tier": "base",
+      "description": "Shared English baseline entities and generic utility patterns.",
+      "tags": [
+        "baseline",
+        "general",
+        "english"
+      ],
+      "dependencies": [],
       "min_ades_version": "0.1.0"
     },
     "medical-en": {

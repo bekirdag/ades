@@ -33,6 +33,7 @@ def test_cli_list_packs_alias_defaults_to_available_registry_packs(tmp_path: Pat
         [
             "list",
             "packs",
+            "--json",
             "--registry-url",
             build_payload["index_url"],
         ],
@@ -49,6 +50,7 @@ def test_cli_list_packs_alias_defaults_to_available_registry_packs(tmp_path: Pat
         [
             "pull",
             "finance-en",
+            "--json",
             "--registry-url",
             build_payload["index_url"],
         ],
@@ -59,7 +61,7 @@ def test_cli_list_packs_alias_defaults_to_available_registry_packs(tmp_path: Pat
 
     installed_result = runner.invoke(
         app,
-        ["list", "packs", "--installed"],
+        ["list", "installed", "--json"],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
 

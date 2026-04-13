@@ -13,8 +13,10 @@ from pathlib import Path
 from uuid import uuid4
 
 from .fetch import normalize_source_url, read_bytes, read_text
+from .general_structure import evaluate_general_pack_structure
 from .manifest import PackManifest, RegistryIndex, RegistryPack
 from .registry import PackRegistry, default_registry_url
+from .rule_validation import validate_rules_payload
 from ..storage.backend import MetadataBackend, RuntimeTarget
 
 
@@ -88,8 +90,9 @@ class PackInstaller:
 
             installed = self.registry.get_pack(pack_id)
             if installed is not None and installed.version == manifest.version:
-                self.registry.sync_pack_from_disk(pack_id, active=installed.active)
-                installed = self.registry.get_pack(pack_id)
+                if self.registry.metadata_backend == MetadataBackend.SQLITE:
+                    self.registry.sync_pack_from_disk(pack_id, active=installed.active)
+                    installed = self.registry.get_pack(pack_id)
             if installed is not None and installed.version == manifest.version:
                 if installed.active:
                     if pack_id not in result.skipped:
@@ -137,6 +140,7 @@ class PackInstaller:
                 raise ValueError(
                     f"Extracted pack manifest missing after extraction: {manifest.pack_id}"
                 )
+            self._validate_extracted_pack(staging, manifest.pack_id)
 
             if destination.exists():
                 backup = self._temporary_pack_path(manifest.pack_id, "backup")
@@ -205,3 +209,33 @@ class PackInstaller:
             shutil.rmtree(path)
             return
         path.unlink()
+
+    @staticmethod
+    def _validate_extracted_pack(pack_dir: Path, pack_id: str) -> None:
+        rules_path = pack_dir / "rules.json"
+        if not rules_path.exists():
+            patterns: list[object] = []
+        else:
+            payload = json.loads(rules_path.read_text(encoding="utf-8"))
+            patterns = payload.get("patterns", [])
+            if not isinstance(patterns, list):
+                raise ValueError(
+                    f"Installed pack rules payload must contain a list: {pack_id}"
+                )
+            try:
+                validate_rules_payload(patterns)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Installed pack contains unsafe regex rules: {pack_id}: {exc}"
+                ) from exc
+        if pack_id != "general-en":
+            return
+        build_path = pack_dir / "build.json"
+        if not build_path.exists():
+            return
+        build_payload = json.loads(build_path.read_text(encoding="utf-8"))
+        failures, _warnings = evaluate_general_pack_structure(build_payload)
+        if failures:
+            raise ValueError(
+                "General-en install verification failed: " + " ".join(failures)
+            )

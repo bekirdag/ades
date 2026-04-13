@@ -57,8 +57,8 @@ def build_expected_batch_source_paths(working_dir: Path) -> list[str]:
 
 def build_expected_batch_input_sizes() -> list[int]:
     return [
-        len("<p>Apple said AAPL rallied.</p>\n".encode("utf-8")),
-        len("<p>NASDAQ closed near USD 12.5.</p>\n".encode("utf-8")),
+        len("<p>Issuer Alpha said TICKA rallied.</p>\n".encode("utf-8")),
+        len("<p>EXCHX closed near USD 12.5.</p>\n".encode("utf-8")),
     ]
 
 
@@ -109,8 +109,8 @@ def _build_fake_batch_source_fingerprint(content: str) -> dict[str, object]:
 
 def build_expected_batch_source_fingerprints() -> list[dict[str, object]]:
     return [
-        _build_fake_batch_source_fingerprint("<p>Apple said AAPL rallied.</p>\n"),
-        _build_fake_batch_source_fingerprint("<p>NASDAQ closed near USD 12.5.</p>\n"),
+        _build_fake_batch_source_fingerprint("<p>Issuer Alpha said TICKA rallied.</p>\n"),
+        _build_fake_batch_source_fingerprint("<p>EXCHX closed near USD 12.5.</p>\n"),
     ]
 
 
@@ -319,21 +319,21 @@ def build_fake_release_runner(
                         "content_type": "text/plain",
                         "entities": [
                             {
-                                "text": "Apple",
+                                "text": "Org Beta",
                                 "label": "organization",
                                 "start": 0,
                                 "end": 5,
                                 "confidence": 1.0,
                             },
                             {
-                                "text": "AAPL",
+                                "text": "TICKA",
                                 "label": "ticker",
                                 "start": 11,
                                 "end": 15,
                                 "confidence": 1.0,
                             },
                             {
-                                "text": "NASDAQ",
+                                "text": "EXCHX",
                                 "label": "exchange",
                                 "start": 26,
                                 "end": 32,
@@ -439,9 +439,9 @@ def build_fake_service_smoke(
                 "language": "en",
                 "content_type": "text/plain",
                 "entities": [
-                    {"text": "Apple", "label": "organization", "start": 0, "end": 5, "confidence": 1.0},
-                    {"text": "AAPL", "label": "ticker", "start": 11, "end": 15, "confidence": 1.0},
-                    {"text": "NASDAQ", "label": "exchange", "start": 26, "end": 32, "confidence": 1.0},
+                    {"text": "Org Beta", "label": "organization", "start": 0, "end": 5, "confidence": 1.0},
+                    {"text": "TICKA", "label": "ticker", "start": 11, "end": 15, "confidence": 1.0},
+                    {"text": "EXCHX", "label": "exchange", "start": 26, "end": 32, "confidence": 1.0},
                     {
                         "text": "USD 12.5",
                         "label": "currency_amount",
@@ -469,9 +469,9 @@ def build_fake_service_smoke(
                 "content_type": "text/html",
                 "source_path": str((storage_root.parent / "serve-smoke-input.html").resolve()),
                 "entities": [
-                    {"text": "Apple", "label": "organization", "start": 3, "end": 8, "confidence": 1.0},
-                    {"text": "AAPL", "label": "ticker", "start": 14, "end": 18, "confidence": 1.0},
-                    {"text": "NASDAQ", "label": "exchange", "start": 29, "end": 35, "confidence": 1.0},
+                    {"text": "Org Beta", "label": "organization", "start": 3, "end": 8, "confidence": 1.0},
+                    {"text": "TICKA", "label": "ticker", "start": 14, "end": 18, "confidence": 1.0},
+                    {"text": "EXCHX", "label": "exchange", "start": 29, "end": 35, "confidence": 1.0},
                     {
                         "text": "USD 12.5",
                         "label": "currency_amount",
@@ -523,9 +523,9 @@ def build_fake_service_smoke(
                         "language": "en",
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
-                        "input_size_bytes": len("<p>Apple said AAPL rallied.</p>\n".encode("utf-8")),
+                        "input_size_bytes": len("<p>Issuer Alpha said TICKA rallied.</p>\n".encode("utf-8")),
                         "source_fingerprint": _build_fake_batch_source_fingerprint(
-                            "<p>Apple said AAPL rallied.</p>\n"
+                            "<p>Issuer Alpha said TICKA rallied.</p>\n"
                         ),
                         "saved_output_path": str(
                             (
@@ -535,8 +535,8 @@ def build_fake_service_smoke(
                             ).resolve()
                         ),
                         "entities": [
-                            {"text": "Apple", "label": "organization", "start": 3, "end": 8, "confidence": 1.0},
-                            {"text": "AAPL", "label": "ticker", "start": 14, "end": 18, "confidence": 1.0},
+                            {"text": "Org Beta", "label": "organization", "start": 3, "end": 8, "confidence": 1.0},
+                            {"text": "TICKA", "label": "ticker", "start": 14, "end": 18, "confidence": 1.0},
                         ],
                         "topics": [],
                         "warnings": [],
@@ -549,10 +549,10 @@ def build_fake_service_smoke(
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-beta.html").resolve()),
                         "input_size_bytes": len(
-                            "<p>NASDAQ closed near USD 12.5.</p>\n".encode("utf-8")
+                            "<p>EXCHX closed near USD 12.5.</p>\n".encode("utf-8")
                         ),
                         "source_fingerprint": _build_fake_batch_source_fingerprint(
-                            "<p>NASDAQ closed near USD 12.5.</p>\n"
+                            "<p>EXCHX closed near USD 12.5.</p>\n"
                         ),
                         "saved_output_path": str(
                             (
@@ -562,7 +562,7 @@ def build_fake_service_smoke(
                             ).resolve()
                         ),
                         "entities": [
-                            {"text": "NASDAQ", "label": "exchange", "start": 3, "end": 9, "confidence": 1.0},
+                            {"text": "EXCHX", "label": "exchange", "start": 3, "end": 9, "confidence": 1.0},
                             {
                                 "text": "USD 12.5",
                                 "label": "currency_amount",
@@ -649,9 +649,9 @@ def build_fake_service_smoke(
                         "language": "en",
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
-                        "input_size_bytes": len("<p>Apple said AAPL rallied.</p>\n".encode("utf-8")),
+                        "input_size_bytes": len("<p>Issuer Alpha said TICKA rallied.</p>\n".encode("utf-8")),
                         "source_fingerprint": _build_fake_batch_source_fingerprint(
-                            "<p>Apple said AAPL rallied.</p>\n"
+                            "<p>Issuer Alpha said TICKA rallied.</p>\n"
                         ),
                         "saved_output_path": str(
                             (
@@ -661,8 +661,8 @@ def build_fake_service_smoke(
                             ).resolve()
                         ),
                         "entities": [
-                            {"text": "Apple", "label": "organization", "start": 3, "end": 8, "confidence": 1.0},
-                            {"text": "AAPL", "label": "ticker", "start": 14, "end": 18, "confidence": 1.0},
+                            {"text": "Org Beta", "label": "organization", "start": 3, "end": 8, "confidence": 1.0},
+                            {"text": "TICKA", "label": "ticker", "start": 14, "end": 18, "confidence": 1.0},
                         ],
                         "topics": [],
                         "warnings": [],
@@ -675,10 +675,10 @@ def build_fake_service_smoke(
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-beta.html").resolve()),
                         "input_size_bytes": len(
-                            "<p>NASDAQ closed near USD 12.5.</p>\n".encode("utf-8")
+                            "<p>EXCHX closed near USD 12.5.</p>\n".encode("utf-8")
                         ),
                         "source_fingerprint": _build_fake_batch_source_fingerprint(
-                            "<p>NASDAQ closed near USD 12.5.</p>\n"
+                            "<p>EXCHX closed near USD 12.5.</p>\n"
                         ),
                         "saved_output_path": str(
                             (
@@ -688,7 +688,7 @@ def build_fake_service_smoke(
                             ).resolve()
                         ),
                         "entities": [
-                            {"text": "NASDAQ", "label": "exchange", "start": 3, "end": 9, "confidence": 1.0},
+                            {"text": "EXCHX", "label": "exchange", "start": 3, "end": 9, "confidence": 1.0},
                             {
                                 "text": "USD 12.5",
                                 "label": "currency_amount",

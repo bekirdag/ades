@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 
 from ..api import (
     activate_pack,
+    benchmark_runtime,
     build_finance_source_bundle,
     fetch_finance_source_snapshot,
     build_general_source_bundle,
@@ -15,9 +16,14 @@ from ..api import (
     build_medical_source_bundle,
     fetch_medical_source_snapshot,
     build_registry,
+    compare_extraction_quality_reports,
     deactivate_pack,
+    diff_pack_versions,
+    evaluate_extraction_quality,
+    evaluate_extraction_release_thresholds,
     generate_pack_source,
     get_pack,
+    get_pack_health,
     list_available_packs,
     list_packs,
     lookup_candidates,
@@ -52,6 +58,7 @@ from .models import (
     LookupResponse,
     NpmInstallerInfo,
     PackSummary,
+    PackHealthResponse,
     ReleaseManifestRequest,
     ReleaseManifestResponse,
     ReleasePublishRequest,
@@ -77,7 +84,17 @@ from .models import (
     RegistryBuildMedicalBundleResponse,
     RegistryBuildRequest,
     RegistryBuildResponse,
+    RegistryBenchmarkRuntimeRequest,
+    RegistryBenchmarkRuntimeResponse,
+    RegistryCompareExtractionQualityRequest,
+    RegistryCompareExtractionQualityResponse,
+    RegistryDiffPackRequest,
+    RegistryEvaluateExtractionQualityRequest,
+    RegistryEvaluateExtractionQualityResponse,
+    RegistryEvaluateReleaseThresholdsRequest,
+    RegistryEvaluateReleaseThresholdsResponse,
     RegistryPackQualityResponse,
+    RegistryPackDiffResponse,
     RegistryPublishGeneratedReleaseRequest,
     RegistryPublishGeneratedReleaseResponse,
     RegistryPrepareDeployReleaseRequest,
@@ -98,6 +115,21 @@ from .models import (
     TagRequest,
     TagResponse,
 )
+
+
+def _bool_option(options: dict[str, object] | None, key: str) -> bool | None:
+    if not options or key not in options:
+        return None
+    value = options[key]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().casefold()
+        if normalized in {"1", "true", "yes", "y", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "n", "off"}:
+            return False
+    raise ValueError(f"Invalid boolean option for {key}.")
 
 
 def _raise_configuration_http_exception(exc: Exception) -> None:
@@ -268,6 +300,20 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
         return pack
 
+    @app.get("/v0/packs/{pack_id}/health", response_model=PackHealthResponse)
+    def runtime_get_pack_health(
+        pack_id: str,
+        limit: int = Query(100, ge=1, le=1000),
+    ) -> PackHealthResponse:
+        """Return aggregated recent extraction-health telemetry for one pack."""
+
+        try:
+            return get_pack_health(pack_id, storage_root=storage_root, limit=limit)
+        except FileNotFoundError as exc:
+            _raise_configuration_http_exception(exc)
+        except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+            _raise_configuration_http_exception(exc)
+
     @app.post("/v0/packs/{pack_id}/activate", response_model=PackSummary)
     def runtime_activate_pack(pack_id: str) -> PackSummary:
         """Activate a single installed pack."""
@@ -342,7 +388,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 output_dir=request.output_dir,
                 snapshot=request.snapshot,
                 sec_companies_url=request.sec_companies_url,
+                sec_submissions_url=request.sec_submissions_url,
+                sec_companyfacts_url=request.sec_companyfacts_url,
                 symbol_directory_url=request.symbol_directory_url,
+                other_listed_url=request.other_listed_url,
                 user_agent=request.user_agent,
             )
         except FileNotFoundError as exc:
@@ -368,7 +417,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         try:
             return build_finance_source_bundle(
                 sec_companies_path=request.sec_companies_path,
+                sec_submissions_path=request.sec_submissions_path,
+                sec_companyfacts_path=request.sec_companyfacts_path,
                 symbol_directory_path=request.symbol_directory_path,
+                other_listed_path=request.other_listed_path,
                 curated_entities_path=request.curated_entities_path,
                 output_dir=request.output_dir,
                 version=request.version,
@@ -426,7 +478,14 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 output_dir=request.output_dir,
                 snapshot=request.snapshot,
                 wikidata_url=request.wikidata_url,
+                wikidata_truthy_url=request.wikidata_truthy_url,
+                wikidata_entities_url=request.wikidata_entities_url,
                 geonames_places_url=request.geonames_places_url,
+                geonames_alternate_names_url=request.geonames_alternate_names_url,
+                geonames_modifications_url=request.geonames_modifications_url,
+                geonames_deletes_url=request.geonames_deletes_url,
+                geonames_alternate_modifications_url=request.geonames_alternate_modifications_url,
+                geonames_alternate_deletes_url=request.geonames_alternate_deletes_url,
                 user_agent=request.user_agent,
             )
         except FileNotFoundError as exc:
@@ -457,6 +516,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 hgnc_genes_url=request.hgnc_genes_url,
                 uniprot_proteins_url=request.uniprot_proteins_url,
                 clinical_trials_url=request.clinical_trials_url,
+                orange_book_url=request.orange_book_url,
                 user_agent=request.user_agent,
                 uniprot_max_records=request.uniprot_max_records,
                 clinical_trials_max_records=request.clinical_trials_max_records,
@@ -487,6 +547,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 hgnc_genes_path=request.hgnc_genes_path,
                 uniprot_proteins_path=request.uniprot_proteins_path,
                 clinical_trials_path=request.clinical_trials_path,
+                orange_book_products_path=request.orange_book_products_path,
                 curated_entities_path=request.curated_entities_path,
                 output_dir=request.output_dir,
                 version=request.version,
@@ -515,6 +576,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             return validate_finance_pack_quality(
                 request.bundle_dir,
                 output_dir=request.output_dir,
+                fixture_profile=request.fixture_profile,
                 version=request.version,
                 min_expected_recall=request.min_expected_recall,
                 max_unexpected_hits=request.max_unexpected_hits,
@@ -545,6 +607,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             return validate_general_pack_quality(
                 request.bundle_dir,
                 output_dir=request.output_dir,
+                fixture_profile=request.fixture_profile,
                 version=request.version,
                 min_expected_recall=request.min_expected_recall,
                 max_unexpected_hits=request.max_unexpected_hits,
@@ -576,6 +639,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 request.bundle_dir,
                 general_bundle_dir=request.general_bundle_dir,
                 output_dir=request.output_dir,
+                fixture_profile=request.fixture_profile,
                 version=request.version,
                 min_expected_recall=request.min_expected_recall,
                 max_unexpected_hits=request.max_unexpected_hits,
@@ -590,6 +654,126 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except NotADirectoryError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/evaluate-extraction-quality",
+        response_model=RegistryEvaluateExtractionQualityResponse,
+    )
+    def runtime_evaluate_extraction_quality(
+        request: RegistryEvaluateExtractionQualityRequest,
+    ) -> RegistryEvaluateExtractionQualityResponse:
+        """Evaluate one installed pack against one golden set."""
+
+        try:
+            return evaluate_extraction_quality(
+                request.pack_id,
+                storage_root=storage_root,
+                golden_set_path=request.golden_set_path,
+                profile=request.profile,
+                hybrid=request.hybrid,
+                write_report=request.write_report,
+                report_path=request.report_path,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/benchmark-runtime",
+        response_model=RegistryBenchmarkRuntimeResponse,
+    )
+    def runtime_benchmark_runtime(
+        request: RegistryBenchmarkRuntimeRequest,
+    ) -> RegistryBenchmarkRuntimeResponse:
+        """Benchmark matcher load, warm tagging, operator lookup, and disk usage."""
+
+        try:
+            return benchmark_runtime(
+                request.pack_id,
+                storage_root=storage_root,
+                golden_set_path=request.golden_set_path,
+                profile=request.profile,
+                hybrid=request.hybrid,
+                warm_runs=request.warm_runs,
+                lookup_limit=request.lookup_limit,
+                write_report=request.write_report,
+                report_path=request.report_path,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/compare-extraction-quality",
+        response_model=RegistryCompareExtractionQualityResponse,
+    )
+    def runtime_compare_extraction_quality(
+        request: RegistryCompareExtractionQualityRequest,
+    ) -> RegistryCompareExtractionQualityResponse:
+        """Compare two stored extraction-quality reports."""
+
+        try:
+            return compare_extraction_quality_reports(
+                baseline_report_path=request.baseline_report_path,
+                candidate_report_path=request.candidate_report_path,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/diff-pack",
+        response_model=RegistryPackDiffResponse,
+    )
+    def runtime_diff_pack(
+        request: RegistryDiffPackRequest,
+    ) -> RegistryPackDiffResponse:
+        """Diff two runtime pack directories."""
+
+        try:
+            return diff_pack_versions(
+                request.old_pack_dir,
+                request.new_pack_dir,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/evaluate-release-thresholds",
+        response_model=RegistryEvaluateReleaseThresholdsResponse,
+    )
+    def runtime_evaluate_release_thresholds(
+        request: RegistryEvaluateReleaseThresholdsRequest,
+    ) -> RegistryEvaluateReleaseThresholdsResponse:
+        """Evaluate one stored extraction-quality report against release thresholds."""
+
+        try:
+            return evaluate_extraction_release_thresholds(
+                report_path=request.report_path,
+                mode=request.mode,
+                baseline_report_path=request.baseline_report_path,
+                min_recall=request.min_recall,
+                min_precision=request.min_precision,
+                max_label_recall_drop=request.max_label_recall_drop,
+                min_recall_lift=request.min_recall_lift,
+                max_precision_drop=request.max_precision_drop,
+                max_p95_latency_ms=request.max_p95_latency_ms,
+                max_model_artifact_bytes=request.max_model_artifact_bytes,
+                max_peak_memory_mb=request.max_peak_memory_mb,
+                model_artifact_path=request.model_artifact_path,
+                peak_memory_mb=request.peak_memory_mb,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -657,6 +841,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 request.bundle_dirs,
                 output_dir=request.output_dir,
                 general_bundle_dir=request.general_bundle_dir,
+                materialize_registry=request.materialize_registry,
                 min_expected_recall=request.min_expected_recall,
                 max_unexpected_hits=request.max_unexpected_hits,
                 max_ambiguous_aliases=request.max_ambiguous_aliases,
@@ -752,6 +937,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 output_dir=request.output.directory if request.output else None,
                 pretty_output=request.output.pretty if request.output else True,
                 storage_root=storage_root,
+                debug=bool(_bool_option(request.options, "debug")),
+                hybrid=_bool_option(request.options, "hybrid"),
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -775,6 +962,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 output_dir=request.output.directory if request.output else None,
                 pretty_output=request.output.pretty if request.output else True,
                 storage_root=storage_root,
+                debug=bool(_bool_option(request.options, "debug")),
+                hybrid=_bool_option(request.options, "hybrid"),
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -825,6 +1014,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 max_input_bytes=request.max_input_bytes,
                 write_manifest=request.output.write_manifest if request.output else False,
                 manifest_output_path=request.output.manifest_path if request.output else None,
+                debug=bool(_bool_option(request.options, "debug")),
+                hybrid=_bool_option(request.options, "hybrid"),
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -840,6 +1031,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         q: str = Query(..., min_length=1),
         pack_id: str | None = Query(None),
         exact_alias: bool = Query(False),
+        fuzzy: bool = Query(False),
         active_only: bool = Query(True),
         limit: int = Query(20, ge=1, le=100),
     ) -> LookupResponse:
@@ -851,6 +1043,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 storage_root=storage_root,
                 pack_id=pack_id,
                 exact_alias=exact_alias,
+                fuzzy=fuzzy,
                 active_only=active_only,
                 limit=limit,
             )

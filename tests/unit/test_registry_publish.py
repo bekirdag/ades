@@ -15,7 +15,7 @@ def test_build_static_registry_writes_consumable_manifest_and_artifact(tmp_path:
         tmp_path / "sources",
         pack_id="general-en",
         domain="general",
-        aliases=(("OpenAI", "organization"),),
+        aliases=(("Org Alpha", "organization"),),
         rules=(("url", r"https?://[^\s]+"),),
     )
 
@@ -54,3 +54,40 @@ def test_build_static_registry_writes_consumable_manifest_and_artifact(tmp_path:
     assert packaged_manifest is not None
     assert packaged_manifest["artifacts"][0]["url"] == "../../artifacts/general-en-0.1.0.tar.zst"
     assert "sha256" not in packaged_manifest["artifacts"][0]
+
+
+def test_build_static_registry_excludes_build_only_analysis_artifacts(tmp_path: Path) -> None:
+    pack_dir = create_pack_source(
+        tmp_path / "sources",
+        pack_id="general-en",
+        domain="general",
+        aliases=(("Org Alpha", "organization"),),
+    )
+    (pack_dir / "analysis.sqlite").write_bytes(b"sqlite-build-only")
+    (pack_dir / "alias-analysis.json").write_text(
+        json.dumps({"summary": "build-only"}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (pack_dir / "build.json").write_text(
+        json.dumps({"included_entity_count": 1}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    result = build_static_registry([pack_dir], output_dir=tmp_path / "registry")
+
+    registry_root = Path(result.output_dir)
+    published_pack_dir = registry_root / "packs" / "general-en"
+    artifact_path = registry_root / "artifacts" / "general-en-0.1.0.tar.zst"
+
+    assert (published_pack_dir / "analysis.sqlite").exists() is False
+    assert (published_pack_dir / "alias-analysis.json").exists() is False
+    assert (published_pack_dir / "build.json").exists() is True
+
+    decompressor = zstandard.ZstdDecompressor()
+    with decompressor.stream_reader(io.BytesIO(artifact_path.read_bytes())) as reader:
+        with tarfile.open(fileobj=reader, mode="r|") as archive:
+            names = [member.name for member in archive]
+
+    assert "analysis.sqlite" not in names
+    assert "alias-analysis.json" not in names
+    assert "build.json" in names

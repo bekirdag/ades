@@ -13,8 +13,8 @@ def test_public_api_can_filter_discovered_batch_sources_and_report_summary(tmp_p
 
     keep_input = keep_dir / "keep-report.html"
     skip_input = skip_dir / "skip-report.html"
-    keep_input.write_text("<p>Apple said AAPL traded on NASDAQ.</p>", encoding="utf-8")
-    skip_input.write_text("<p>Apple said AAPL traded on NASDAQ.</p>", encoding="utf-8")
+    keep_input.write_text("<p>Org Beta said TICKA traded on EXCHX.</p>", encoding="utf-8")
+    skip_input.write_text("<p>Org Beta said TICKA traded on EXCHX.</p>", encoding="utf-8")
 
     response = tag_files(
         pack="finance-en",

@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 
 from ades import activate_pack, build_registry, deactivate_pack, list_packs, lookup_candidates, tag
-from ades.packs.installer import PackInstaller
+from ades.packs.installer import InstallResult, PackInstaller
+from ades.storage.backend import MetadataBackend
 from tests.pack_registry_helpers import (
     append_pack_alias,
     create_finance_registry_sources,
@@ -29,7 +30,7 @@ def test_repull_reactivates_inactive_dependency_same_version(tmp_path: Path) -> 
     assert result.skipped == ["finance-en"]
 
     entities = {(entity.text, entity.label) for entity in tag(
-        "Contact us at team@example.com and watch AAPL on NASDAQ.",
+        "Contact us at team@example.com and watch TICKA on EXCHX.",
         pack="finance-en",
         storage_root=install_root,
     ).entities}
@@ -84,6 +85,56 @@ def test_repull_repairs_stale_alias_metadata_before_skipping_same_version(
     )
 
 
+def test_postgresql_same_version_pull_skips_without_full_disk_resync() -> None:
+    class _FakeEntry:
+        manifest_url = "https://example.invalid/packs/general-en/manifest.json"
+
+    class _FakeIndex:
+        def get(self, pack_id: str):
+            assert pack_id == "general-en"
+            return _FakeEntry()
+
+    class _FakeManifest:
+        pack_id = "general-en"
+        version = "0.2.0"
+        dependencies: list[str] = []
+
+    class _FakePack:
+        pack_id = "general-en"
+        version = "0.2.0"
+        active = True
+
+    class _FakeStore:
+        def get_pack(self, pack_id: str, *, active_only: bool = False):
+            return _FakePack()
+
+    class _FakeRegistry:
+        metadata_backend = MetadataBackend.POSTGRESQL
+        store = _FakeStore()
+
+        def get_pack(self, pack_id: str):
+            return _FakePack()
+
+        def sync_pack_from_disk(self, pack_id: str, *, active: bool | None = None) -> bool:
+            raise AssertionError("same-version PostgreSQL pulls must not re-sync pack aliases")
+
+        def set_pack_active(self, pack_id: str, active: bool) -> bool:
+            return True
+
+    installer = object.__new__(PackInstaller)
+    installer.registry = _FakeRegistry()
+    installer.registry_url = "https://example.invalid/index.json"
+    installer._load_index = lambda: _FakeIndex()  # type: ignore[method-assign]
+    installer._load_manifest = lambda manifest_url: _FakeManifest()  # type: ignore[method-assign]
+
+    result = InstallResult(requested_pack="general-en", registry_url=installer.registry_url)
+
+    installer._install_recursive("general-en", result=result, visiting=set())
+
+    assert result.installed == []
+    assert result.skipped == ["general-en"]
+
+
 def test_lookup_repairs_missing_metadata_rows_from_filesystem(tmp_path: Path) -> None:
     general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
     registry = build_registry([general_dir, finance_dir], output_dir=tmp_path / "registry")
@@ -93,12 +144,12 @@ def test_lookup_repairs_missing_metadata_rows_from_filesystem(tmp_path: Path) ->
     installer.install("finance-en")
 
     delete_installed_pack_metadata(install_root, "finance-en")
-    repaired_lookup = installer.registry.lookup_candidates("AAPL", exact_alias=True)
+    repaired_lookup = installer.registry.lookup_candidates("TICKA", exact_alias=True)
 
     assert any(
         candidate["kind"] == "alias"
         and candidate["pack_id"] == "finance-en"
-        and candidate["value"] == "AAPL"
+        and candidate["value"] == "TICKA"
         and candidate["label"] == "ticker"
         for candidate in repaired_lookup
     )
@@ -108,10 +159,10 @@ def test_lookup_repairs_missing_metadata_rows_from_filesystem(tmp_path: Path) ->
     assert any(
         candidate.kind == "alias"
         and candidate.pack_id == "finance-en"
-        and candidate.value == "AAPL"
+        and candidate.value == "TICKA"
         and candidate.label == "ticker"
         for candidate in lookup_candidates(
-            "AAPL",
+            "TICKA",
             storage_root=install_root,
             exact_alias=True,
         ).candidates

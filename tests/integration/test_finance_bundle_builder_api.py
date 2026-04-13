@@ -17,7 +17,10 @@ def test_public_api_can_build_finance_bundle_then_generate_install_and_tag(
 
     bundle = build_finance_source_bundle(
         sec_companies_path=snapshots["sec_companies"],
+        sec_submissions_path=snapshots["sec_submissions"],
+        sec_companyfacts_path=snapshots["sec_companyfacts"],
         symbol_directory_path=snapshots["symbol_directory"],
+        other_listed_path=snapshots["other_listed"],
         curated_entities_path=snapshots["curated_entities"],
         output_dir=tmp_path / "bundles",
     )
@@ -35,14 +38,14 @@ def test_public_api_can_build_finance_bundle_then_generate_install_and_tag(
         registry_url=registry.index_url,
     )
     response = tag(
-        "Apple said AAPL traded on NASDAQ after USD 12.5 guidance and $MSFT rose.",
+        "Issuer Alpha said TICKA traded on EXCHX after USD 12.5 guidance and $TICKB rose.",
         pack="finance-en",
         storage_root=install_root,
     )
 
     entities = {(entity.text, entity.label) for entity in response.entities}
-    assert ("Apple", "organization") in entities
-    assert ("AAPL", "ticker") in entities
-    assert ("NASDAQ", "exchange") in entities
+    assert ("Issuer Alpha", "organization") in entities
+    assert ("TICKA", "ticker") in entities
+    assert ("EXCHX", "exchange") in entities
     assert ("USD 12.5", "currency_amount") in entities
-    assert ("$MSFT", "ticker") in entities
+    assert ("$TICKB", "ticker") in entities

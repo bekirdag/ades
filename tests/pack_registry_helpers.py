@@ -16,7 +16,7 @@ def create_pack_source(
     tags: tuple[str, ...] = (),
     labels: tuple[str, ...] = ("entity",),
     aliases: tuple[tuple[str, str], ...] = (),
-    rules: tuple[tuple[str, str], ...] = (),
+    rules: tuple[tuple[str, str] | tuple[str, str, str], ...] = (),
 ) -> Path:
     pack_dir = root / pack_id
     pack_dir.mkdir(parents=True, exist_ok=True)
@@ -41,12 +41,8 @@ def create_pack_source(
         json.dumps(
             {
                 "patterns": [
-                    {
-                        "name": name,
-                        "kind": "regex",
-                        "pattern": pattern,
-                    }
-                    for name, pattern in rules
+                    _rule_record(item)
+                    for item in rules
                 ]
             },
             indent=2,
@@ -114,8 +110,8 @@ def create_finance_registry_sources(
         tags=("finance", "markets", "english"),
         labels=("ticker", "exchange", "currency_amount"),
         aliases=(
-            ("AAPL", "ticker"),
-            ("NASDAQ", "exchange"),
+            ("TICKA", "ticker"),
+            ("EXCHX", "exchange"),
         ),
         rules=(
             ("currency_amount", r"\b(?:USD|EUR)\s?\d+(?:\.\d+)?\b"),
@@ -131,8 +127,53 @@ def append_pack_alias(pack_dir: Path, *, text: str, label: str) -> None:
     aliases_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def write_general_pack_build(
+    pack_dir: Path,
+    *,
+    person_count: int,
+    organization_count: int,
+    location_count: int,
+) -> None:
+    included_entity_count = person_count + organization_count + location_count
+    (pack_dir / "build.json").write_text(
+        json.dumps(
+            {
+                "included_entity_count": included_entity_count,
+                "entity_label_distribution": {
+                    "person": person_count,
+                    "organization": organization_count,
+                    "location": location_count,
+                },
+                "label_distribution": {
+                    "person": person_count,
+                    "organization": organization_count,
+                    "location": location_count,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def delete_installed_pack_metadata(storage_root: Path, pack_id: str) -> None:
     db_path = storage_root / "registry" / "ades.db"
     with sqlite3.connect(db_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("DELETE FROM installed_packs WHERE pack_id = ?", (pack_id,))
+
+
+def _rule_record(item: tuple[str, str] | tuple[str, str, str]) -> dict[str, str]:
+    if len(item) == 2:
+        name, pattern = item
+        label = name
+    else:
+        name, label, pattern = item
+    return {
+        "name": name,
+        "label": label,
+        "kind": "regex",
+        "pattern": pattern,
+    }

@@ -30,6 +30,41 @@ class PackArtifact:
 
 
 @dataclass(frozen=True)
+class PackMatcher:
+    """Matcher artifact metadata for a pack."""
+
+    schema_version: int
+    algorithm: str
+    normalization: str
+    artifact_path: str
+    entries_path: str
+    entry_count: int
+    state_count: int
+    max_alias_length: int
+    artifact_sha256: str | None = None
+    entries_sha256: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize matcher metadata."""
+
+        payload: dict[str, Any] = {
+            "schema_version": self.schema_version,
+            "algorithm": self.algorithm,
+            "normalization": self.normalization,
+            "artifact_path": self.artifact_path,
+            "entries_path": self.entries_path,
+            "entry_count": self.entry_count,
+            "state_count": self.state_count,
+            "max_alias_length": self.max_alias_length,
+        }
+        if self.artifact_sha256 is not None:
+            payload["artifact_sha256"] = self.artifact_sha256
+        if self.entries_sha256 is not None:
+            payload["entries_sha256"] = self.entries_sha256
+        return payload
+
+
+@dataclass(frozen=True)
 class PackManifest:
     """Machine-readable metadata for a single pack."""
 
@@ -46,7 +81,9 @@ class PackManifest:
     models: list[str] = field(default_factory=list)
     rules: list[str] = field(default_factory=list)
     labels: list[str] = field(default_factory=list)
+    matcher: PackMatcher | None = None
     min_ades_version: str = "0.1.0"
+    min_entities_per_100_tokens_warning: float | None = None
     sha256: str | None = None
     active: bool = True
     install_path: str | None = None
@@ -70,6 +107,29 @@ class PackManifest:
             )
             for item in data.get("artifacts", [])
         ]
+        matcher_data = data.get("matcher")
+        matcher = None
+        if matcher_data is not None:
+            matcher = PackMatcher(
+                schema_version=int(matcher_data.get("schema_version", 1)),
+                algorithm=str(matcher_data["algorithm"]),
+                normalization=str(matcher_data["normalization"]),
+                artifact_path=str(matcher_data["artifact_path"]),
+                entries_path=str(matcher_data["entries_path"]),
+                entry_count=int(matcher_data["entry_count"]),
+                state_count=int(matcher_data["state_count"]),
+                max_alias_length=int(matcher_data["max_alias_length"]),
+                artifact_sha256=(
+                    str(matcher_data["artifact_sha256"])
+                    if matcher_data.get("artifact_sha256") is not None
+                    else None
+                ),
+                entries_sha256=(
+                    str(matcher_data["entries_sha256"])
+                    if matcher_data.get("entries_sha256") is not None
+                    else None
+                ),
+            )
         return cls(
             schema_version=int(data.get("schema_version", 1)),
             pack_id=str(data["pack_id"]),
@@ -84,7 +144,13 @@ class PackManifest:
             models=list(data.get("models", [])),
             rules=list(data.get("rules", [])),
             labels=list(data.get("labels", [])),
+            matcher=matcher,
             min_ades_version=str(data.get("min_ades_version", "0.1.0")),
+            min_entities_per_100_tokens_warning=(
+                float(data["min_entities_per_100_tokens_warning"])
+                if data.get("min_entities_per_100_tokens_warning") is not None
+                else None
+            ),
             sha256=data.get("sha256"),
             active=bool(data.get("active", True)),
             install_path=data.get("install_path"),
@@ -110,6 +176,9 @@ class PackManifest:
             "description": self.description,
             "tags": list(self.tags),
             "active": self.active,
+            "matcher_ready": self.matcher is not None,
+            "matcher_algorithm": self.matcher.algorithm if self.matcher is not None else None,
+            "matcher_entry_count": self.matcher.entry_count if self.matcher is not None else None,
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -130,6 +199,12 @@ class PackManifest:
             "labels": list(self.labels),
             "min_ades_version": self.min_ades_version,
         }
+        if self.matcher is not None:
+            payload["matcher"] = self.matcher.to_dict()
+        if self.min_entities_per_100_tokens_warning is not None:
+            payload["min_entities_per_100_tokens_warning"] = (
+                self.min_entities_per_100_tokens_warning
+            )
         if self.description is not None:
             payload["description"] = self.description
         if self.sha256 is not None:

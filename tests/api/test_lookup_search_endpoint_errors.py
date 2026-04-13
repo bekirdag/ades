@@ -12,7 +12,7 @@ def test_lookup_endpoint_returns_404_for_missing_explicit_config(
     client = TestClient(create_app(storage_root=tmp_path))
     monkeypatch.setenv("ADES_CONFIG_FILE", str(missing_config))
 
-    response = client.get("/v0/lookup", params={"q": "apple"})
+    response = client.get("/v0/lookup", params={"q": "org beta"})
 
     assert response.status_code == 404
     assert response.json() == {
@@ -29,7 +29,7 @@ def test_lookup_endpoint_returns_400_for_invalid_runtime_target(
     monkeypatch.setenv("ADES_CONFIG_FILE", str(config_path))
     monkeypatch.setenv("ADES_RUNTIME_TARGET", "broken-runtime")
 
-    response = client.get("/v0/lookup", params={"q": "apple"})
+    response = client.get("/v0/lookup", params={"q": "org beta"})
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Unsupported ades runtime target: 'broken-runtime'"

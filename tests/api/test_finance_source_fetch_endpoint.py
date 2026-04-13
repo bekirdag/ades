@@ -16,7 +16,10 @@ def test_finance_source_fetch_endpoint_downloads_snapshot(tmp_path: Path) -> Non
             "output_dir": str(tmp_path / "raw" / "finance-en"),
             "snapshot": "2026-04-10",
             "sec_companies_url": remote_sources["sec_companies_url"],
+            "sec_submissions_url": remote_sources["sec_submissions_url"],
+            "sec_companyfacts_url": remote_sources["sec_companyfacts_url"],
             "symbol_directory_url": remote_sources["symbol_directory_url"],
+            "other_listed_url": remote_sources["other_listed_url"],
         },
     )
 
@@ -25,3 +28,4 @@ def test_finance_source_fetch_endpoint_downloads_snapshot(tmp_path: Path) -> Non
     assert payload["pack_id"] == "finance-en"
     assert payload["snapshot"] == "2026-04-10"
     assert Path(payload["curated_entities_path"]).exists()
+    assert Path(payload["sec_submissions_path"]).exists()

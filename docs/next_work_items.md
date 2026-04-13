@@ -90,7 +90,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 - Real finance-source ingestion and tuning:
   - implemented in `src/ades/packs/finance_sources.py`, with public surfaces in `src/ades/api.py`, `src/ades/cli.py`, and `src/ades/service/app.py`
   - adds `ades.fetch_finance_source_snapshot(...)`, `ades registry fetch-finance-sources`, and `POST /v0/registry/fetch-finance-sources` so dated SEC and Nasdaq snapshots are fetched reproducibly into `/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/<snapshot>/`, accompanied by repo-owned curated exchange aliases and `sources.fetch.json`
-  - extends pack generation with per-record `blocked_aliases` support and tunes the finance bundle input contract so noisy live symbols like `ON` and `USD` are stoplisted while `NASDAQ` remains available as the exchange alias instead of colliding with the real issuer name
+  - extends pack generation with per-record `blocked_aliases` support and tunes the finance bundle input contract so noisy live symbols like `ON` and `USD` are stoplisted while the canonical exchange alias remains available instead of colliding with the real issuer name
   - validates the first real live snapshot dated `2026-04-10`, which currently yields `entity_record_count=22881`, `alias_count=39101`, `ambiguous_alias_count=256`, clean fixture recall/precision, and a publishable finance-only refresh release under `/mnt/githubActions/ades_big_data/pack_releases/finance-en-2026-04-10`
   - adds categorized unit, component, integration, and API coverage for the new builder contract and updates `docs/library_pack_source_bundle_spec.md` so the durable operator docs match the emitted sidecar
 
@@ -316,7 +316,7 @@ Updated after closing the Phase A local-tool module hardening track on 2026-04-0
 
 - Tagger regression coverage for partial installed-pack row loss:
    - implemented in `tests/test_tagger.py`, `tests/component/test_lookup_driven_tagger.py`, `tests/integration/test_lookup_driven_tag_api.py`, and `tests/api/test_tag_lookup_aliases.py`
-   - proves alias-driven `finance-en` tagging still extracts `AAPL` and `NASDAQ` after the `finance-en` SQLite row is deleted while the on-disk pack remains installed
+   - proves alias-driven `finance-en` tagging still extracts `TICKA` and `EXCHX` after the `finance-en` SQLite row is deleted while the on-disk pack remains installed
    - keeps product behavior unchanged while locking in the existing recovery path with categorized unit, component, integration, and API coverage
 
 - Dependency-bearing release smoke validation for installed artifacts:

@@ -22,7 +22,7 @@ def test_remove_pack_deletes_requested_pack_and_metadata(tmp_path: Path) -> None
     assert (install_root / "packs" / "general-en").exists() is True
     assert {pack.pack_id for pack in list_packs(storage_root=install_root)} == {"general-en"}
     assert lookup_candidates(
-        "AAPL",
+        "TICKA",
         storage_root=install_root,
         exact_alias=True,
         active_only=False,

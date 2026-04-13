@@ -11,8 +11,8 @@ def test_tag_files_endpoint_can_replay_all_items_from_saved_manifest(tmp_path: P
     PackInstaller(tmp_path).install("finance-en")
     first_input = tmp_path / "alpha.html"
     second_input = tmp_path / "beta.html"
-    first_input.write_text("<p>Apple said AAPL rallied.</p>", encoding="utf-8")
-    second_input.write_text("<p>NASDAQ guidance moved.</p>", encoding="utf-8")
+    first_input.write_text("<p>Org Beta said TICKA rallied.</p>", encoding="utf-8")
+    second_input.write_text("<p>EXCHX guidance moved.</p>", encoding="utf-8")
     output_dir = tmp_path / "outputs"
 
     initial = tag_files(

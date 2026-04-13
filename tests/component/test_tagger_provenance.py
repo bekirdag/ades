@@ -8,7 +8,7 @@ def test_tagger_returns_alias_and_rule_provenance(tmp_path: Path) -> None:
     PackInstaller(tmp_path).install("finance-en")
 
     response = tag_text(
-        text="Apple said AAPL traded on NASDAQ after USD 12.5 guidance.",
+        text="Org Beta said TICKA traded on EXCHX after USD 12.5 guidance.",
         pack="finance-en",
         content_type="text/plain",
         storage_root=tmp_path,
@@ -16,15 +16,15 @@ def test_tagger_returns_alias_and_rule_provenance(tmp_path: Path) -> None:
 
     entities = {(entity.text, entity.label): entity for entity in response.entities}
 
-    apple = entities[("Apple", "organization")]
-    assert apple.provenance is not None
-    assert apple.provenance.match_kind == "alias"
-    assert apple.provenance.match_path == "lookup.alias.exact"
-    assert apple.provenance.source_pack == "general-en"
-    assert apple.provenance.source_domain == "general"
-    assert apple.link is not None
-    assert apple.link.entity_id == "ades:lookup_alias_exact:general-en:organization:apple"
-    assert apple.link.canonical_text == "Apple"
+    organization_entity = entities[("Org Beta", "organization")]
+    assert organization_entity.provenance is not None
+    assert organization_entity.provenance.match_kind == "alias"
+    assert organization_entity.provenance.match_path == "lookup.alias.exact"
+    assert organization_entity.provenance.source_pack == "general-en"
+    assert organization_entity.provenance.source_domain == "general"
+    assert organization_entity.link is not None
+    assert organization_entity.link.entity_id == "ades:lookup_alias_exact:general-en:organization:org-beta"
+    assert organization_entity.link.canonical_text == "Org Beta"
 
     currency = entities[("USD 12.5", "currency_amount")]
     assert currency.provenance is not None

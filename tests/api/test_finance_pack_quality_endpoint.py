@@ -28,5 +28,6 @@ def test_finance_pack_quality_endpoint_validates_generated_bundle(tmp_path: Path
     assert response.status_code == 200
     payload = response.json()
     assert payload["passed"] is True
-    assert payload["fixture_count"] == 3
-    assert payload["passed_case_count"] == 3
+    assert payload["fixture_profile"] == "benchmark"
+    assert payload["fixture_count"] == 5
+    assert payload["passed_case_count"] == 5

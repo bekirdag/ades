@@ -29,7 +29,7 @@ def test_cli_remove_deletes_requested_pack_and_keeps_dependencies(tmp_path: Path
 
     pull_result = runner.invoke(
         app,
-        ["pull", "finance-en", "--registry-url", registry_index],
+        ["pull", "finance-en", "--json", "--registry-url", registry_index],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert pull_result.exit_code == 0
@@ -45,7 +45,7 @@ def test_cli_remove_deletes_requested_pack_and_keeps_dependencies(tmp_path: Path
 
     listed = runner.invoke(
         app,
-        ["packs", "list"],
+        ["packs", "list", "--json"],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert listed.exit_code == 0
@@ -74,7 +74,7 @@ def test_cli_blocks_dependency_removal_with_installed_dependents(tmp_path: Path)
 
     pull_result = runner.invoke(
         app,
-        ["pull", "finance-en", "--registry-url", registry_index],
+        ["pull", "finance-en", "--json", "--registry-url", registry_index],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert pull_result.exit_code == 0

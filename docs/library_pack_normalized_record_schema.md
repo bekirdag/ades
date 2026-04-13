@@ -33,9 +33,9 @@ Supported optional fields:
 Example:
 
 ```json
-{"entity_id":"issuer:apple","entity_type":"issuer","canonical_text":"Apple Inc.","aliases":["AAPL issuer","Apple"],"source_name":"sec-companyfacts"}
-{"entity_id":"ticker:aapl","entity_type":"ticker","canonical_text":"AAPL","aliases":[],"source_name":"nasdaq-symbols"}
-{"entity_id":"exchange:nasdaq","entity_type":"exchange","canonical_text":"NASDAQ","aliases":["Nasdaq"],"source_name":"mic-codes"}
+{"entity_id":"issuer:issuer-alpha","entity_type":"issuer","canonical_text":"Issuer Alpha Holdings","aliases":["Issuer Alpha","Issuer Alpha Common"],"source_name":"finance-source-a"}
+{"entity_id":"ticker:ticka","entity_type":"ticker","canonical_text":"TICKA","aliases":[],"source_name":"finance-source-b"}
+{"entity_id":"exchange:exchx","entity_type":"exchange","canonical_text":"EXCHX","aliases":["Exchange Alpha"],"source_name":"exchange-source"}
 {"entity_id":"private:internal","entity_type":"issuer","canonical_text":"Internal Holdings LLC","build_only":true}
 ```
 

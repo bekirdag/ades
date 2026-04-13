@@ -32,4 +32,4 @@ def test_cli_can_smoke_published_registry_release(tmp_path: Path) -> None:
     assert payload["pack_count"] == 1
     assert payload["cases"][0]["pack_id"] == "finance-en"
     assert payload["cases"][0]["installed_pack_ids"] == ["finance-en"]
-    assert "AAPL" in payload["cases"][0]["matched_entity_texts"]
+    assert "TICKA" in payload["cases"][0]["matched_entity_texts"]

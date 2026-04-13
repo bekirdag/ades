@@ -22,7 +22,10 @@ from .packs.finance_bundle import build_finance_source_bundle as run_build_finan
 from .packs.finance_sources import (
     DEFAULT_FINANCE_SOURCE_OUTPUT_ROOT,
     DEFAULT_SEC_COMPANIES_URL,
+    DEFAULT_SEC_COMPANYFACTS_URL,
+    DEFAULT_SEC_SUBMISSIONS_URL,
     DEFAULT_SOURCE_FETCH_USER_AGENT,
+    DEFAULT_OTHER_LISTED_URL,
     DEFAULT_SYMBOL_DIRECTORY_URL,
     fetch_finance_source_snapshot as run_fetch_finance_source_snapshot,
 )
@@ -30,12 +33,18 @@ from .packs.finance_quality import validate_finance_pack_quality as run_validate
 from .packs.general_bundle import build_general_source_bundle as run_build_general_source_bundle
 from .packs.general_sources import (
     DEFAULT_GENERAL_SOURCE_OUTPUT_ROOT,
+    DEFAULT_GEONAMES_ALTERNATE_NAMES_URL,
     DEFAULT_GEONAMES_PLACES_URL,
     DEFAULT_SOURCE_FETCH_USER_AGENT as DEFAULT_GENERAL_SOURCE_FETCH_USER_AGENT,
-    DEFAULT_WIKIDATA_URL,
+    DEFAULT_WIKIDATA_ENTITIES_URL,
+    DEFAULT_WIKIDATA_SEED_SNAPSHOT_URL,
+    DEFAULT_WIKIDATA_TRUTHY_URL,
     fetch_general_source_snapshot as run_fetch_general_source_snapshot,
 )
-from .packs.general_quality import validate_general_pack_quality as run_validate_general_pack_quality
+from .packs.general_quality import (
+    DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES,
+    validate_general_pack_quality as run_validate_general_pack_quality,
+)
 from .packs.medical_bundle import build_medical_source_bundle as run_build_medical_source_bundle
 from .packs.medical_quality import validate_medical_pack_quality as run_validate_medical_pack_quality
 from .packs.medical_sources import (
@@ -44,10 +53,25 @@ from .packs.medical_sources import (
     DEFAULT_DISEASE_ONTOLOGY_URL,
     DEFAULT_HGNC_GENES_URL,
     DEFAULT_MEDICAL_SOURCE_OUTPUT_ROOT,
+    DEFAULT_ORANGE_BOOK_URL,
     DEFAULT_SOURCE_FETCH_USER_AGENT as DEFAULT_MEDICAL_SOURCE_FETCH_USER_AGENT,
     DEFAULT_UNIPROT_MAX_RECORDS,
     DEFAULT_UNIPROT_PROTEINS_URL,
     fetch_medical_source_snapshot as run_fetch_medical_source_snapshot,
+)
+from .extraction_quality import (
+    benchmark_report_path as default_benchmark_report_path,
+    benchmark_runtime_pack as run_benchmark_runtime_pack,
+    compare_quality_reports,
+    evaluate_golden_set,
+    get_pack_health_summary,
+    golden_set_path as default_golden_set_path,
+    load_golden_set,
+    load_quality_report,
+    record_tag_observation,
+    quality_report_path as default_quality_report_path,
+    write_runtime_benchmark_report,
+    write_quality_report,
 )
 from .packs.refresh import refresh_generated_pack_registry as run_refresh_generated_pack_registry
 from .packs.reporting import report_generated_pack as run_report_generated_pack
@@ -58,6 +82,12 @@ from .packs.publish import (
     smoke_test_published_registry as run_smoke_test_published_registry,
 )
 from .packs.registry import PackRegistry, load_registry_index
+from .packs.versioning import (
+    default_release_thresholds,
+    diff_pack_directories,
+    evaluate_release_thresholds,
+    ReleaseThresholds,
+)
 from .pipeline.files import TagFileSkippedEntry, discover_tag_file_sources, load_tag_file
 from .pipeline.tagger import tag_text
 from .release import release_versions as read_release_versions
@@ -81,16 +111,29 @@ from .service.models import (
     ReleaseVersionSyncResponse,
     NpmInstallerInfo,
     PackSummary,
+    PackHealthResponse,
     ReleaseVerificationResponse,
     RegistryBuildPackSummary,
     RegistryBuildResponse,
     RegistryBuildFinanceBundleResponse,
+    RegistryCompareExtractionQualityResponse,
+    RegistryEvaluateExtractionQualityResponse,
+    RegistryEvaluateReleaseThresholdsResponse,
+    RegistryPackDiffResponse,
+    RegistryReleaseThresholdsResponse,
     RegistryPrepareDeployReleaseResponse,
     RegistryFetchGeneralSourcesResponse,
     RegistryFetchMedicalSourcesResponse,
     RegistryFetchFinanceSourcesResponse,
     RegistryBuildGeneralBundleResponse,
     RegistryBuildMedicalBundleResponse,
+    ExtractionQualityCaseResultResponse,
+    ExtractionQualityDeltaResponse,
+    ExtractionQualityReportResponse,
+    LabelQualityDeltaResponse,
+    RegistryBenchmarkRuntimeResponse,
+    RuntimeDiskBenchmarkResponse,
+    RuntimeLatencyBenchmarkResponse,
     RegistryPackQualityCaseResult,
     RegistryPackQualityResponse,
     RegistryPublishedObject,
@@ -163,6 +206,9 @@ def status(
         version=settings_version(),
         runtime_target=settings.runtime_target.value,
         metadata_backend=settings.metadata_backend.value,
+        metadata_persistence_backend=registry.backend_plan.metadata_persistence_backend.value,
+        exact_extraction_backend=registry.backend_plan.exact_extraction_backend.value,
+        operator_lookup_backend=registry.backend_plan.operator_lookup_backend.value,
         storage_root=str(layout.storage_root),
         host=settings.host,
         port=settings.port,
@@ -224,6 +270,23 @@ def get_pack(
     if manifest is None:
         return None
     return PackSummary(**manifest.to_summary())
+
+
+def get_pack_health(
+    pack_id: str,
+    *,
+    storage_root: str | Path | None = None,
+    limit: int = 100,
+) -> PackHealthResponse:
+    """Return aggregated recent extraction-health telemetry for one pack."""
+
+    settings = _resolve_settings(storage_root=storage_root)
+    summary = get_pack_health_summary(
+        pack_id,
+        storage_root=settings.storage_root,
+        limit=limit,
+    )
+    return PackHealthResponse(**summary)
 
 
 def pull_pack(
@@ -301,6 +364,14 @@ def generate_pack_source(
         labels_path=result.labels_path,
         aliases_path=result.aliases_path,
         rules_path=result.rules_path,
+        matcher_artifact_path=result.matcher_artifact_path,
+        matcher_entries_path=result.matcher_entries_path,
+        matcher_algorithm=result.matcher_algorithm,
+        matcher_entry_count=result.matcher_entry_count,
+        matcher_state_count=result.matcher_state_count,
+        matcher_max_alias_length=result.matcher_max_alias_length,
+        matcher_artifact_sha256=result.matcher_artifact_sha256,
+        matcher_entries_sha256=result.matcher_entries_sha256,
         sources_path=result.sources_path,
         build_path=result.build_path,
         generated_at=result.generated_at,
@@ -348,6 +419,14 @@ def report_generated_pack(
         labels_path=result.labels_path,
         aliases_path=result.aliases_path,
         rules_path=result.rules_path,
+        matcher_artifact_path=result.matcher_artifact_path,
+        matcher_entries_path=result.matcher_entries_path,
+        matcher_algorithm=result.matcher_algorithm,
+        matcher_entry_count=result.matcher_entry_count,
+        matcher_state_count=result.matcher_state_count,
+        matcher_max_alias_length=result.matcher_max_alias_length,
+        matcher_artifact_sha256=result.matcher_artifact_sha256,
+        matcher_entries_sha256=result.matcher_entries_sha256,
         sources_path=result.sources_path,
         build_path=result.build_path,
         generated_at=result.generated_at,
@@ -376,6 +455,7 @@ def refresh_generated_packs(
     *,
     output_dir: str | Path,
     general_bundle_dir: str | Path | None = None,
+    materialize_registry: bool = False,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
     max_ambiguous_aliases: int | None = None,
@@ -387,6 +467,7 @@ def refresh_generated_packs(
         list(bundle_dirs),
         output_dir=output_dir,
         general_bundle_dir=general_bundle_dir,
+        materialize_registry=materialize_registry,
         min_expected_recall=min_expected_recall,
         max_unexpected_hits=max_unexpected_hits,
         max_ambiguous_aliases=max_ambiguous_aliases,
@@ -417,11 +498,14 @@ def refresh_generated_packs(
     )
     return RegistryRefreshGeneratedPacksResponse(
         output_dir=result.output_dir,
+        candidate_dir=result.candidate_dir,
         report_dir=result.report_dir,
         quality_dir=result.quality_dir,
         generated_at=result.generated_at,
         pack_count=result.pack_count,
         passed=result.passed,
+        materialize_registry=result.materialize_registry,
+        registry_materialized=result.registry_materialized,
         registry=registry_response,
         warnings=result.warnings,
         packs=[
@@ -595,7 +679,10 @@ def smoke_test_published_generated_registry(
 def build_finance_source_bundle(
     *,
     sec_companies_path: str | Path,
+    sec_submissions_path: str | Path | None = None,
+    sec_companyfacts_path: str | Path | None = None,
     symbol_directory_path: str | Path,
+    other_listed_path: str | Path | None = None,
     curated_entities_path: str | Path,
     output_dir: str | Path,
     version: str = "0.2.0",
@@ -604,7 +691,10 @@ def build_finance_source_bundle(
 
     result = run_build_finance_source_bundle(
         sec_companies_path=sec_companies_path,
+        sec_submissions_path=sec_submissions_path,
+        sec_companyfacts_path=sec_companyfacts_path,
         symbol_directory_path=symbol_directory_path,
+        other_listed_path=other_listed_path,
         curated_entities_path=curated_entities_path,
         output_dir=output_dir,
         version=version,
@@ -634,7 +724,10 @@ def fetch_finance_source_snapshot(
     output_dir: str | Path = DEFAULT_FINANCE_SOURCE_OUTPUT_ROOT,
     snapshot: str | None = None,
     sec_companies_url: str = DEFAULT_SEC_COMPANIES_URL,
+    sec_submissions_url: str = DEFAULT_SEC_SUBMISSIONS_URL,
+    sec_companyfacts_url: str = DEFAULT_SEC_COMPANYFACTS_URL,
     symbol_directory_url: str = DEFAULT_SYMBOL_DIRECTORY_URL,
+    other_listed_url: str = DEFAULT_OTHER_LISTED_URL,
     user_agent: str = DEFAULT_SOURCE_FETCH_USER_AGENT,
 ) -> RegistryFetchFinanceSourcesResponse:
     """Download one real finance source snapshot set into the big-data root."""
@@ -643,7 +736,10 @@ def fetch_finance_source_snapshot(
         output_dir=output_dir,
         snapshot=snapshot,
         sec_companies_url=sec_companies_url,
+        sec_submissions_url=sec_submissions_url,
+        sec_companyfacts_url=sec_companyfacts_url,
         symbol_directory_url=symbol_directory_url,
+        other_listed_url=other_listed_url,
         user_agent=user_agent,
     )
     return RegistryFetchFinanceSourcesResponse(
@@ -652,16 +748,25 @@ def fetch_finance_source_snapshot(
         snapshot=result.snapshot,
         snapshot_dir=result.snapshot_dir,
         sec_companies_url=result.sec_companies_url,
+        sec_submissions_url=result.sec_submissions_url,
+        sec_companyfacts_url=result.sec_companyfacts_url,
         symbol_directory_url=result.symbol_directory_url,
+        other_listed_url=result.other_listed_url,
         source_manifest_path=result.source_manifest_path,
         sec_companies_path=result.sec_companies_path,
+        sec_submissions_path=result.sec_submissions_path,
+        sec_companyfacts_path=result.sec_companyfacts_path,
         symbol_directory_path=result.symbol_directory_path,
+        other_listed_path=result.other_listed_path,
         curated_entities_path=result.curated_entities_path,
         generated_at=result.generated_at,
         source_count=result.source_count,
         curated_entity_count=result.curated_entity_count,
         sec_companies_sha256=result.sec_companies_sha256,
+        sec_submissions_sha256=result.sec_submissions_sha256,
+        sec_companyfacts_sha256=result.sec_companyfacts_sha256,
         symbol_directory_sha256=result.symbol_directory_sha256,
+        other_listed_sha256=result.other_listed_sha256,
         curated_entities_sha256=result.curated_entities_sha256,
         warnings=result.warnings,
     )
@@ -671,8 +776,16 @@ def fetch_general_source_snapshot(
     *,
     output_dir: str | Path = DEFAULT_GENERAL_SOURCE_OUTPUT_ROOT,
     snapshot: str | None = None,
-    wikidata_url: str = DEFAULT_WIKIDATA_URL,
+    wikidata_url: str | None = None,
+    wikidata_truthy_url: str | None = DEFAULT_WIKIDATA_TRUTHY_URL,
+    wikidata_entities_url: str | None = DEFAULT_WIKIDATA_ENTITIES_URL,
+    wikidata_seed_url: str | None = DEFAULT_WIKIDATA_SEED_SNAPSHOT_URL,
     geonames_places_url: str = DEFAULT_GEONAMES_PLACES_URL,
+    geonames_alternate_names_url: str | None = DEFAULT_GEONAMES_ALTERNATE_NAMES_URL,
+    geonames_modifications_url: str | None = None,
+    geonames_deletes_url: str | None = None,
+    geonames_alternate_modifications_url: str | None = None,
+    geonames_alternate_deletes_url: str | None = None,
     user_agent: str = DEFAULT_GENERAL_SOURCE_FETCH_USER_AGENT,
 ) -> RegistryFetchGeneralSourcesResponse:
     """Download one real general source snapshot set into the big-data root."""
@@ -681,7 +794,15 @@ def fetch_general_source_snapshot(
         output_dir=output_dir,
         snapshot=snapshot,
         wikidata_url=wikidata_url,
+        wikidata_truthy_url=wikidata_truthy_url,
+        wikidata_entities_url=wikidata_entities_url,
+        wikidata_seed_url=wikidata_seed_url,
         geonames_places_url=geonames_places_url,
+        geonames_alternate_names_url=geonames_alternate_names_url,
+        geonames_modifications_url=geonames_modifications_url,
+        geonames_deletes_url=geonames_deletes_url,
+        geonames_alternate_modifications_url=geonames_alternate_modifications_url,
+        geonames_alternate_deletes_url=geonames_alternate_deletes_url,
         user_agent=user_agent,
     )
     return RegistryFetchGeneralSourcesResponse(
@@ -715,6 +836,7 @@ def fetch_medical_source_snapshot(
     hgnc_genes_url: str = DEFAULT_HGNC_GENES_URL,
     uniprot_proteins_url: str = DEFAULT_UNIPROT_PROTEINS_URL,
     clinical_trials_url: str = DEFAULT_CLINICAL_TRIALS_URL,
+    orange_book_url: str = DEFAULT_ORANGE_BOOK_URL,
     user_agent: str = DEFAULT_MEDICAL_SOURCE_FETCH_USER_AGENT,
     uniprot_max_records: int = DEFAULT_UNIPROT_MAX_RECORDS,
     clinical_trials_max_records: int = DEFAULT_CLINICAL_TRIALS_MAX_RECORDS,
@@ -728,6 +850,7 @@ def fetch_medical_source_snapshot(
         hgnc_genes_url=hgnc_genes_url,
         uniprot_proteins_url=uniprot_proteins_url,
         clinical_trials_url=clinical_trials_url,
+        orange_book_url=orange_book_url,
         user_agent=user_agent,
         uniprot_max_records=uniprot_max_records,
         clinical_trials_max_records=clinical_trials_max_records,
@@ -741,11 +864,13 @@ def fetch_medical_source_snapshot(
         hgnc_genes_url=result.hgnc_genes_url,
         uniprot_proteins_url=result.uniprot_proteins_url,
         clinical_trials_url=result.clinical_trials_url,
+        orange_book_url=result.orange_book_url,
         source_manifest_path=result.source_manifest_path,
         disease_ontology_path=result.disease_ontology_path,
         hgnc_genes_path=result.hgnc_genes_path,
         uniprot_proteins_path=result.uniprot_proteins_path,
         clinical_trials_path=result.clinical_trials_path,
+        orange_book_path=result.orange_book_path,
         curated_entities_path=result.curated_entities_path,
         generated_at=result.generated_at,
         source_count=result.source_count,
@@ -753,11 +878,13 @@ def fetch_medical_source_snapshot(
         gene_count=result.gene_count,
         protein_count=result.protein_count,
         clinical_trial_count=result.clinical_trial_count,
+        orange_book_product_count=result.orange_book_product_count,
         curated_entity_count=result.curated_entity_count,
         disease_ontology_sha256=result.disease_ontology_sha256,
         hgnc_genes_sha256=result.hgnc_genes_sha256,
         uniprot_proteins_sha256=result.uniprot_proteins_sha256,
         clinical_trials_sha256=result.clinical_trials_sha256,
+        orange_book_sha256=result.orange_book_sha256,
         curated_entities_sha256=result.curated_entities_sha256,
         warnings=result.warnings,
     )
@@ -806,6 +933,7 @@ def build_medical_source_bundle(
     hgnc_genes_path: str | Path,
     uniprot_proteins_path: str | Path,
     clinical_trials_path: str | Path,
+    orange_book_products_path: str | Path | None = None,
     curated_entities_path: str | Path,
     output_dir: str | Path,
     version: str = "0.2.0",
@@ -817,6 +945,7 @@ def build_medical_source_bundle(
         hgnc_genes_path=hgnc_genes_path,
         uniprot_proteins_path=uniprot_proteins_path,
         clinical_trials_path=clinical_trials_path,
+        orange_book_products_path=orange_book_products_path,
         curated_entities_path=curated_entities_path,
         output_dir=output_dir,
         version=version,
@@ -838,6 +967,7 @@ def build_medical_source_bundle(
         gene_count=result.gene_count,
         protein_count=result.protein_count,
         clinical_trial_count=result.clinical_trial_count,
+        drug_count=result.drug_count,
         curated_entity_count=result.curated_entity_count,
         warnings=result.warnings,
     )
@@ -847,10 +977,11 @@ def validate_general_pack_quality(
     bundle_dir: str | Path,
     *,
     output_dir: str | Path,
+    fixture_profile: str = "benchmark",
     version: str | None = None,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
-    max_ambiguous_aliases: int = 0,
+    max_ambiguous_aliases: int = DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES,
     max_dropped_alias_ratio: float = 0.5,
 ) -> RegistryPackQualityResponse:
     """Build, install, and evaluate one generated `general-en` pack bundle."""
@@ -858,6 +989,7 @@ def validate_general_pack_quality(
     result = run_validate_general_pack_quality(
         str(bundle_dir),
         output_dir=str(output_dir),
+        fixture_profile=fixture_profile,
         version=version,
         min_expected_recall=min_expected_recall,
         max_unexpected_hits=max_unexpected_hits,
@@ -931,6 +1063,7 @@ def validate_medical_pack_quality(
     *,
     general_bundle_dir: str | Path,
     output_dir: str | Path,
+    fixture_profile: str = "benchmark",
     version: str | None = None,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
@@ -943,6 +1076,7 @@ def validate_medical_pack_quality(
         str(bundle_dir),
         general_bundle_dir=str(general_bundle_dir),
         output_dir=str(output_dir),
+        fixture_profile=fixture_profile,
         version=version,
         min_expected_recall=min_expected_recall,
         max_unexpected_hits=max_unexpected_hits,
@@ -1015,6 +1149,7 @@ def validate_finance_pack_quality(
     bundle_dir: str | Path,
     *,
     output_dir: str | Path,
+    fixture_profile: str = "benchmark",
     version: str | None = None,
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
@@ -1026,6 +1161,7 @@ def validate_finance_pack_quality(
     result = run_validate_finance_pack_quality(
         bundle_dir,
         output_dir=output_dir,
+        fixture_profile=fixture_profile,
         version=version,
         min_expected_recall=min_expected_recall,
         max_unexpected_hits=max_unexpected_hits,
@@ -1195,6 +1331,414 @@ def _quality_response_from_result(
     )
 
 
+def _registry_quality_entity(entity: object) -> dict[str, str]:
+    return {
+        "text": str(getattr(entity, "text")),
+        "label": str(getattr(entity, "label")),
+    }
+
+
+def _extraction_case_response(case: object) -> ExtractionQualityCaseResultResponse:
+    return ExtractionQualityCaseResultResponse(
+        name=str(getattr(case, "name")),
+        expected_entities=[
+            _registry_quality_entity(entity)
+            for entity in getattr(case, "expected_entities")
+        ],
+        actual_entities=[
+            _registry_quality_entity(entity)
+            for entity in getattr(case, "actual_entities")
+        ],
+        matched_entities=[
+            _registry_quality_entity(entity)
+            for entity in getattr(case, "matched_entities")
+        ],
+        missing_entities=[
+            _registry_quality_entity(entity)
+            for entity in getattr(case, "missing_entities")
+        ],
+        unexpected_entities=[
+            _registry_quality_entity(entity)
+            for entity in getattr(case, "unexpected_entities")
+        ],
+        warnings=[str(item) for item in getattr(case, "warnings")],
+        token_count=int(getattr(case, "token_count")),
+        entity_count=int(getattr(case, "entity_count")),
+        entities_per_100_tokens=float(getattr(case, "entities_per_100_tokens")),
+        overlap_drop_count=int(getattr(case, "overlap_drop_count")),
+        chunk_count=int(getattr(case, "chunk_count")),
+        timing_ms=int(getattr(case, "timing_ms")),
+        passed=bool(getattr(case, "passed")),
+    )
+
+
+def _extraction_report_response(
+    report: object,
+    *,
+    report_path: str | None = None,
+) -> RegistryEvaluateExtractionQualityResponse:
+    return RegistryEvaluateExtractionQualityResponse(
+        report_path=report_path,
+        pack_id=str(getattr(report, "pack_id")),
+        profile=str(getattr(report, "profile")),
+        hybrid=bool(getattr(report, "hybrid")),
+        document_count=int(getattr(report, "document_count")),
+        expected_entity_count=int(getattr(report, "expected_entity_count")),
+        actual_entity_count=int(getattr(report, "actual_entity_count")),
+        matched_entity_count=int(getattr(report, "matched_entity_count")),
+        missing_entity_count=int(getattr(report, "missing_entity_count")),
+        unexpected_entity_count=int(getattr(report, "unexpected_entity_count")),
+        recall=float(getattr(report, "recall")),
+        precision=float(getattr(report, "precision")),
+        entities_per_100_tokens=float(getattr(report, "entities_per_100_tokens")),
+        overlap_drop_count=int(getattr(report, "overlap_drop_count")),
+        chunk_count=int(getattr(report, "chunk_count")),
+        low_density_warning_count=int(getattr(report, "low_density_warning_count")),
+        p50_latency_ms=int(getattr(report, "p50_latency_ms", 0)),
+        p95_latency_ms=int(getattr(report, "p95_latency_ms")),
+        per_label_expected=dict(getattr(report, "per_label_expected")),
+        per_label_actual=dict(getattr(report, "per_label_actual")),
+        per_label_matched=dict(getattr(report, "per_label_matched")),
+        per_label_recall=dict(getattr(report, "per_label_recall")),
+        per_lane_counts=dict(getattr(report, "per_lane_counts")),
+        warnings=[str(item) for item in getattr(report, "warnings")],
+        cases=[
+            _extraction_case_response(case)
+            for case in getattr(report, "cases")
+        ],
+    )
+
+
+def _runtime_latency_response(summary: object) -> RuntimeLatencyBenchmarkResponse:
+    return RuntimeLatencyBenchmarkResponse(
+        sample_count=int(getattr(summary, "sample_count")),
+        p50_latency_ms=int(getattr(summary, "p50_latency_ms")),
+        p95_latency_ms=int(getattr(summary, "p95_latency_ms")),
+    )
+
+
+def _runtime_disk_response(summary: object) -> RuntimeDiskBenchmarkResponse:
+    return RuntimeDiskBenchmarkResponse(
+        runtime_pack_bytes=int(getattr(summary, "runtime_pack_bytes")),
+        matcher_artifact_bytes=int(getattr(summary, "matcher_artifact_bytes")),
+        matcher_entries_bytes=int(getattr(summary, "matcher_entries_bytes")),
+        matcher_total_bytes=int(getattr(summary, "matcher_total_bytes")),
+        metadata_store_bytes=(
+            int(getattr(summary, "metadata_store_bytes"))
+            if getattr(summary, "metadata_store_bytes") is not None
+            else None
+        ),
+    )
+
+
+def _runtime_benchmark_response(
+    report: object,
+    *,
+    report_path: str | None = None,
+) -> RegistryBenchmarkRuntimeResponse:
+    return RegistryBenchmarkRuntimeResponse(
+        report_path=report_path,
+        pack_id=str(getattr(report, "pack_id")),
+        profile=str(getattr(report, "profile")),
+        hybrid=bool(getattr(report, "hybrid")),
+        metadata_backend=str(getattr(report, "metadata_backend")),
+        exact_extraction_backend=str(getattr(report, "exact_extraction_backend")),
+        operator_lookup_backend=str(getattr(report, "operator_lookup_backend")),
+        matcher_entry_count=int(getattr(report, "matcher_entry_count")),
+        matcher_state_count=int(getattr(report, "matcher_state_count")),
+        matcher_cold_load_ms=int(getattr(report, "matcher_cold_load_ms")),
+        lookup_query_count=int(getattr(report, "lookup_query_count")),
+        warm_tagging=_runtime_latency_response(getattr(report, "warm_tagging")),
+        operator_lookup=_runtime_latency_response(getattr(report, "operator_lookup")),
+        disk_usage=_runtime_disk_response(getattr(report, "disk_usage")),
+        quality_report=ExtractionQualityReportResponse(
+            **_extraction_report_response(getattr(report, "quality_report"))
+            .model_dump(mode="json", exclude={"report_path"})
+        ),
+        warnings=[str(item) for item in getattr(report, "warnings")],
+    )
+
+
+def _quality_delta_response(delta: object) -> ExtractionQualityDeltaResponse:
+    return ExtractionQualityDeltaResponse(
+        pack_id=str(getattr(delta, "pack_id")),
+        baseline_mode=str(getattr(delta, "baseline_mode")),
+        candidate_mode=str(getattr(delta, "candidate_mode")),
+        recall_delta=float(getattr(delta, "recall_delta")),
+        precision_delta=float(getattr(delta, "precision_delta")),
+        p95_latency_delta_ms=int(getattr(delta, "p95_latency_delta_ms")),
+        per_label_deltas=[
+            LabelQualityDeltaResponse(
+                label=str(getattr(item, "label")),
+                baseline_recall=float(getattr(item, "baseline_recall")),
+                candidate_recall=float(getattr(item, "candidate_recall")),
+                recall_delta=float(getattr(item, "recall_delta")),
+            )
+            for item in getattr(delta, "per_label_deltas")
+        ],
+    )
+
+
+def _pack_diff_response(diff: object) -> RegistryPackDiffResponse:
+    return RegistryPackDiffResponse(
+        pack_id=str(getattr(diff, "pack_id")),
+        from_version=getattr(diff, "from_version"),
+        to_version=getattr(diff, "to_version"),
+        severity=str(getattr(diff, "severity")),
+        requires_retag=bool(getattr(diff, "requires_retag")),
+        added_labels=[str(item) for item in getattr(diff, "added_labels")],
+        removed_labels=[str(item) for item in getattr(diff, "removed_labels")],
+        added_rules=[str(item) for item in getattr(diff, "added_rules")],
+        removed_rules=[str(item) for item in getattr(diff, "removed_rules")],
+        added_aliases=[str(item) for item in getattr(diff, "added_aliases")],
+        removed_aliases=[str(item) for item in getattr(diff, "removed_aliases")],
+        changed_canonical_aliases=[
+            str(item) for item in getattr(diff, "changed_canonical_aliases")
+        ],
+        changed_metadata_fields=[
+            str(item) for item in getattr(diff, "changed_metadata_fields")
+        ],
+    )
+
+
+def evaluate_extraction_quality(
+    pack_id: str,
+    *,
+    storage_root: str | Path | None = None,
+    golden_set_path: str | Path | None = None,
+    profile: str = "default",
+    hybrid: bool = False,
+    write_report: bool = True,
+    report_path: str | Path | None = None,
+) -> RegistryEvaluateExtractionQualityResponse:
+    """Evaluate one installed pack against one golden set and optionally persist the report."""
+
+    settings = _resolve_settings(storage_root=storage_root)
+    if not write_report and report_path is not None:
+        raise ValueError("report_path requires write_report=True.")
+    resolved_golden_set_path = (
+        Path(golden_set_path).expanduser().resolve()
+        if golden_set_path is not None
+        else default_golden_set_path(pack_id, profile=profile)
+    )
+    golden_set = load_golden_set(resolved_golden_set_path)
+    if golden_set.pack_id != pack_id:
+        raise ValueError(
+            "Golden set pack_id does not match requested pack_id: "
+            f"{golden_set.pack_id} != {pack_id}"
+        )
+    report = evaluate_golden_set(
+        golden_set,
+        storage_root=settings.storage_root,
+        hybrid=hybrid,
+    )
+    persisted_report_path: str | None = None
+    if write_report:
+        destination = (
+            Path(report_path).expanduser().resolve()
+            if report_path is not None
+            else default_quality_report_path(
+                pack_id,
+                profile=golden_set.profile,
+                hybrid=hybrid,
+            )
+        )
+        persisted_report_path = str(write_quality_report(destination, report))
+    return _extraction_report_response(report, report_path=persisted_report_path)
+
+
+def benchmark_runtime(
+    pack_id: str,
+    *,
+    storage_root: str | Path | None = None,
+    golden_set_path: str | Path | None = None,
+    profile: str = "default",
+    hybrid: bool = False,
+    warm_runs: int = 3,
+    lookup_limit: int = 20,
+    write_report: bool = True,
+    report_path: str | Path | None = None,
+) -> RegistryBenchmarkRuntimeResponse:
+    """Benchmark one installed pack across matcher, tagging, and lookup lanes."""
+
+    settings = _resolve_settings(storage_root=storage_root)
+    if not write_report and report_path is not None:
+        raise ValueError("report_path requires write_report=True.")
+    resolved_golden_set_path = (
+        Path(golden_set_path).expanduser().resolve()
+        if golden_set_path is not None
+        else default_golden_set_path(pack_id, profile=profile)
+    )
+    golden_set = load_golden_set(resolved_golden_set_path)
+    if golden_set.pack_id != pack_id:
+        raise ValueError(
+            "Golden set pack_id does not match requested pack_id: "
+            f"{golden_set.pack_id} != {pack_id}"
+        )
+    benchmark = run_benchmark_runtime_pack(
+        golden_set,
+        storage_root=settings.storage_root,
+        runtime_target=settings.runtime_target,
+        metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
+        hybrid=hybrid,
+        warm_runs=warm_runs,
+        lookup_limit=lookup_limit,
+    )
+    persisted_report_path: str | None = None
+    if write_report:
+        destination = (
+            Path(report_path).expanduser().resolve()
+            if report_path is not None
+            else default_benchmark_report_path(
+                pack_id,
+                profile=golden_set.profile,
+                hybrid=hybrid,
+            )
+        )
+        persisted_report_path = str(write_runtime_benchmark_report(destination, benchmark))
+    return _runtime_benchmark_response(benchmark, report_path=persisted_report_path)
+
+
+def compare_extraction_quality_reports(
+    *,
+    baseline_report_path: str | Path,
+    candidate_report_path: str | Path,
+) -> RegistryCompareExtractionQualityResponse:
+    """Compare two stored extraction-quality reports."""
+
+    baseline_path = Path(baseline_report_path).expanduser().resolve()
+    candidate_path = Path(candidate_report_path).expanduser().resolve()
+    baseline = load_quality_report(baseline_path)
+    candidate = load_quality_report(candidate_path)
+    if baseline.pack_id != candidate.pack_id:
+        raise ValueError(
+            "Extraction-quality reports must belong to the same pack: "
+            f"{baseline.pack_id} != {candidate.pack_id}"
+        )
+    delta = compare_quality_reports(baseline, candidate)
+    return RegistryCompareExtractionQualityResponse(
+        baseline_report_path=str(baseline_path),
+        candidate_report_path=str(candidate_path),
+        **_quality_delta_response(delta).model_dump(mode="json"),
+    )
+
+
+def diff_pack_versions(
+    old_pack_dir: str | Path,
+    new_pack_dir: str | Path,
+) -> RegistryPackDiffResponse:
+    """Return the semantic diff between two runtime pack directories."""
+
+    return _pack_diff_response(diff_pack_directories(old_pack_dir, new_pack_dir))
+
+
+def evaluate_extraction_release_thresholds(
+    *,
+    report_path: str | Path,
+    mode: str,
+    baseline_report_path: str | Path | None = None,
+    min_recall: float | None = None,
+    min_precision: float | None = None,
+    max_label_recall_drop: float | None = None,
+    min_recall_lift: float | None = None,
+    max_precision_drop: float | None = None,
+    max_p95_latency_ms: int | None = None,
+    max_model_artifact_bytes: int | None = None,
+    max_peak_memory_mb: int | None = None,
+    model_artifact_path: str | Path | None = None,
+    peak_memory_mb: int | None = None,
+) -> RegistryEvaluateReleaseThresholdsResponse:
+    """Evaluate one stored extraction-quality report against release thresholds."""
+
+    if mode not in {"deterministic", "hybrid"}:
+        raise ValueError("mode must be deterministic or hybrid.")
+    resolved_report_path = Path(report_path).expanduser().resolve()
+    report = load_quality_report(resolved_report_path)
+    resolved_baseline_path: Path | None = None
+    baseline_report = None
+    if baseline_report_path is not None:
+        resolved_baseline_path = Path(baseline_report_path).expanduser().resolve()
+        baseline_report = load_quality_report(resolved_baseline_path)
+        if baseline_report.pack_id != report.pack_id:
+            raise ValueError(
+                "Baseline and candidate reports must belong to the same pack: "
+                f"{baseline_report.pack_id} != {report.pack_id}"
+            )
+    resolved_model_artifact_bytes: int | None = None
+    if model_artifact_path is not None:
+        resolved_model_artifact_bytes = (
+            Path(model_artifact_path).expanduser().resolve().stat().st_size
+        )
+    defaults = default_release_thresholds(mode)
+    thresholds = ReleaseThresholds(
+        min_recall=defaults.min_recall if min_recall is None else min_recall,
+        min_precision=defaults.min_precision if min_precision is None else min_precision,
+        max_label_recall_drop=(
+            defaults.max_label_recall_drop
+            if max_label_recall_drop is None
+            else max_label_recall_drop
+        ),
+        min_recall_lift=(
+            defaults.min_recall_lift
+            if min_recall_lift is None
+            else min_recall_lift
+        ),
+        max_precision_drop=(
+            defaults.max_precision_drop
+            if max_precision_drop is None
+            else max_precision_drop
+        ),
+        max_p95_latency_ms=(
+            defaults.max_p95_latency_ms
+            if max_p95_latency_ms is None
+            else max_p95_latency_ms
+        ),
+        max_model_artifact_bytes=(
+            defaults.max_model_artifact_bytes
+            if max_model_artifact_bytes is None
+            else max_model_artifact_bytes
+        ),
+        max_peak_memory_mb=(
+            defaults.max_peak_memory_mb
+            if max_peak_memory_mb is None
+            else max_peak_memory_mb
+        ),
+    )
+    decision = evaluate_release_thresholds(
+        report,
+        mode=mode,
+        thresholds=thresholds,
+        baseline_report=baseline_report,
+        model_artifact_bytes=resolved_model_artifact_bytes,
+        peak_memory_mb=peak_memory_mb,
+    )
+    return RegistryEvaluateReleaseThresholdsResponse(
+        report_path=str(resolved_report_path),
+        baseline_report_path=str(resolved_baseline_path) if resolved_baseline_path else None,
+        mode=str(mode),
+        thresholds=RegistryReleaseThresholdsResponse(
+            min_recall=thresholds.min_recall,
+            min_precision=thresholds.min_precision,
+            max_label_recall_drop=thresholds.max_label_recall_drop,
+            min_recall_lift=thresholds.min_recall_lift,
+            max_precision_drop=thresholds.max_precision_drop,
+            max_p95_latency_ms=thresholds.max_p95_latency_ms,
+            max_model_artifact_bytes=thresholds.max_model_artifact_bytes,
+            max_peak_memory_mb=thresholds.max_peak_memory_mb,
+        ),
+        model_artifact_bytes=resolved_model_artifact_bytes,
+        peak_memory_mb=peak_memory_mb,
+        passed=decision.passed,
+        reasons=[str(item) for item in decision.reasons],
+        quality_delta=(
+            _quality_delta_response(decision.quality_delta)
+            if decision.quality_delta is not None
+            else None
+        ),
+    )
+
+
 def npm_installer_info() -> NpmInstallerInfo:
     """Return the canonical npm-wrapper bootstrap metadata."""
 
@@ -1300,25 +1844,37 @@ def tag(
     output_dir: str | Path | None = None,
     pretty_output: bool = True,
     storage_root: str | Path | None = None,
+    debug: bool = False,
+    hybrid: bool | None = None,
 ) -> TagResponse:
     """Run in-process tagging through the installed local runtime."""
 
     settings = _resolve_settings(storage_root=storage_root)
     resolved_pack = pack or settings.default_pack
+    registry = PackRegistry(
+        settings.storage_root,
+        runtime_target=settings.runtime_target,
+        metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
+    )
     response = tag_text(
         text=text,
         pack=resolved_pack,
         content_type=content_type,
         storage_root=settings.storage_root,
+        debug=debug,
+        hybrid=hybrid,
+        registry=registry,
     )
     if output_path is not None or output_dir is not None:
-        return persist_tag_response_json(
+        response = persist_tag_response_json(
             response,
             pack_id=resolved_pack,
             output_path=output_path,
             output_dir=output_dir,
             pretty=pretty_output,
         )
+    record_tag_observation(settings.storage_root, response)
     return response
 
 
@@ -1331,11 +1887,19 @@ def tag_file(
     output_dir: str | Path | None = None,
     pretty_output: bool = True,
     storage_root: str | Path | None = None,
+    debug: bool = False,
+    hybrid: bool | None = None,
 ) -> TagResponse:
     """Run in-process tagging for a local file path."""
 
     settings = _resolve_settings(storage_root=storage_root)
     resolved_pack = pack or settings.default_pack
+    registry = PackRegistry(
+        settings.storage_root,
+        runtime_target=settings.runtime_target,
+        metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
+    )
     resolved_path, text, resolved_content_type, input_size_bytes, source_fingerprint = load_tag_file(
         path,
         content_type=content_type,
@@ -1345,6 +1909,9 @@ def tag_file(
         pack=resolved_pack,
         content_type=resolved_content_type,
         storage_root=settings.storage_root,
+        debug=debug,
+        hybrid=hybrid,
+        registry=registry,
     )
     response = response.model_copy(
         update={
@@ -1355,13 +1922,14 @@ def tag_file(
         }
     )
     if output_path is not None or output_dir is not None:
-        return persist_tag_response_json(
+        response = persist_tag_response_json(
             response,
             pack_id=resolved_pack,
             output_path=output_path,
             output_dir=output_dir,
             pretty=pretty_output,
         )
+    record_tag_observation(settings.storage_root, response)
     return response
 
 
@@ -1387,10 +1955,18 @@ def tag_files(
     max_input_bytes: int | None = None,
     write_manifest: bool = False,
     manifest_output_path: str | Path | None = None,
-    ) -> BatchTagResponse:
+    debug: bool = False,
+    hybrid: bool | None = None,
+) -> BatchTagResponse:
     """Run in-process tagging for multiple local file paths."""
 
     settings = _resolve_settings(storage_root=storage_root)
+    registry = PackRegistry(
+        settings.storage_root,
+        runtime_target=settings.runtime_target,
+        metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
+    )
     explicit_paths = [Path(path) for path in paths]
     resolved_directories = [Path(path) for path in directories]
     resolved_glob_patterns = list(glob_patterns)
@@ -1486,6 +2062,9 @@ def tag_files(
                             pack=resolved_pack,
                             content_type=resolved_content_type,
                             storage_root=settings.storage_root,
+                            debug=debug,
+                            hybrid=hybrid,
+                            registry=registry,
                         ).model_copy(
                             update={
                                 "content_type": resolved_content_type,
@@ -1501,6 +2080,7 @@ def tag_files(
                             output_dir=output_dir if not has_saved_output_path else None,
                             pretty=pretty_output,
                         )
+                        record_tag_observation(settings.storage_root, repaired_response)
                         repaired_reused_output_count += 1
                         rerun_repaired.append(str(resolved_path))
                         reused_item = build_batch_manifest_item_from_tag_response(
@@ -1517,17 +2097,20 @@ def tag_files(
             pack=resolved_pack,
             content_type=resolved_content_type,
             storage_root=settings.storage_root,
+            debug=debug,
+            hybrid=hybrid,
+            registry=registry,
         )
-        items.append(
-            response.model_copy(
-                update={
-                    "content_type": resolved_content_type,
-                    "source_path": str(resolved_path),
-                    "input_size_bytes": input_size_bytes,
-                    "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
-                }
-            )
+        response = response.model_copy(
+            update={
+                "content_type": resolved_content_type,
+                "source_path": str(resolved_path),
+                "input_size_bytes": input_size_bytes,
+                "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
+            }
         )
+        record_tag_observation(settings.storage_root, response)
+        items.append(response)
         if replay_plan is not None:
             if baseline_item is None:
                 rerun_newly_processed.append(str(resolved_path))
@@ -1742,10 +2325,14 @@ def lookup_candidates(
     storage_root: str | Path | None = None,
     pack_id: str | None = None,
     exact_alias: bool = False,
+    fuzzy: bool = False,
     active_only: bool = True,
     limit: int = 20,
 ) -> LookupResponse:
     """Search deterministic metadata candidates from the configured local store."""
+
+    if exact_alias and fuzzy:
+        raise ValueError("Lookup cannot request both exact_alias and fuzzy mode.")
 
     settings = _resolve_settings(storage_root=storage_root)
     registry = PackRegistry(
@@ -1761,6 +2348,7 @@ def lookup_candidates(
             query,
             pack_id=pack_id,
             exact_alias=exact_alias,
+            fuzzy=fuzzy,
             active_only=active_only,
             limit=bounded_limit,
         )
@@ -1769,6 +2357,7 @@ def lookup_candidates(
         query=query,
         pack_id=pack_id,
         exact_alias=exact_alias,
+        fuzzy=fuzzy,
         active_only=active_only,
         candidates=candidates,
     )

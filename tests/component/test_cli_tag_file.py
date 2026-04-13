@@ -10,7 +10,7 @@ from ades.packs.installer import PackInstaller
 def test_cli_tag_supports_local_files(tmp_path: Path) -> None:
     PackInstaller(tmp_path).install("finance-en")
     input_path = tmp_path / "report.html"
-    input_path.write_text("<p>Apple said AAPL traded on NASDAQ.</p>", encoding="utf-8")
+    input_path.write_text("<p>Org Beta said TICKA traded on EXCHX.</p>", encoding="utf-8")
 
     runner = CliRunner()
     result = runner.invoke(
@@ -31,6 +31,6 @@ def test_cli_tag_supports_local_files(tmp_path: Path) -> None:
 
     assert payload["source_path"] == str(input_path.resolve())
     assert payload["content_type"] == "text/html"
-    assert ("Apple", "organization") in pairs
-    assert ("AAPL", "ticker") in pairs
-    assert ("NASDAQ", "exchange") in pairs
+    assert ("Org Beta", "organization") in pairs
+    assert ("TICKA", "ticker") in pairs
+    assert ("EXCHX", "exchange") in pairs

@@ -2,21 +2,30 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 import json
 from pathlib import Path
 
+import click
 import typer
+from typer.main import get_command
 
 from .api import activate_pack as api_activate_pack
+from .api import benchmark_runtime as api_benchmark_runtime
 from .api import build_finance_source_bundle as api_build_finance_source_bundle
 from .api import build_general_source_bundle as api_build_general_source_bundle
 from .api import build_medical_source_bundle as api_build_medical_source_bundle
 from .api import build_registry as api_build_registry
+from .api import compare_extraction_quality_reports as api_compare_extraction_quality_reports
 from .api import deactivate_pack as api_deactivate_pack
+from .api import diff_pack_versions as api_diff_pack_versions
+from .api import evaluate_extraction_quality as api_evaluate_extraction_quality
+from .api import evaluate_extraction_release_thresholds as api_evaluate_extraction_release_thresholds
 from .api import fetch_finance_source_snapshot as api_fetch_finance_source_snapshot
 from .api import fetch_general_source_snapshot as api_fetch_general_source_snapshot
 from .api import fetch_medical_source_snapshot as api_fetch_medical_source_snapshot
 from .api import generate_pack_source as api_generate_pack_source
+from .api import get_pack_health as api_get_pack_health
 from .api import lookup_candidates as api_lookup_candidates
 from .api import list_available_packs as api_list_available_packs
 from .api import list_packs as api_list_packs
@@ -41,7 +50,8 @@ from .api import validate_release as api_validate_release
 from .api import verify_release as api_verify_release
 from .api import write_release_manifest as api_write_release_manifest
 from .config import InvalidConfigurationError, get_settings
-from .packs.installer import PackInstaller
+from .packs.installer import InstallResult, PackInstaller
+from .packs.quality_defaults import DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES
 from .storage import UnsupportedRuntimeConfigurationError
 from .storage.paths import build_storage_layout, ensure_storage_layout
 
@@ -61,6 +71,46 @@ def _echo_json(payload: object) -> None:
     """Render one payload as stable JSON for the CLI."""
 
     typer.echo(json.dumps(payload, indent=2))
+
+
+def _format_cli_cell(
+    value: object,
+    *,
+    empty: str = "-",
+    max_width: int | None = None,
+) -> str:
+    """Render one CLI cell value as compact human-readable text."""
+
+    if value is None:
+        text = empty
+    elif isinstance(value, bool):
+        text = "yes" if value else "no"
+    elif isinstance(value, list):
+        text = ", ".join(str(item) for item in value) if value else empty
+    else:
+        text = str(value).strip() or empty
+    if max_width is not None and len(text) > max_width:
+        if max_width <= 3:
+            return text[:max_width]
+        return f"{text[: max_width - 3]}..."
+    return text
+
+
+def _render_text_table(headers: list[str], rows: list[list[str]]) -> str:
+    """Render one plain-text ASCII table."""
+
+    widths = [len(header) for header in headers]
+    for row in rows:
+        for index, cell in enumerate(row):
+            widths[index] = max(widths[index], len(cell))
+
+    def render_row(row: list[str]) -> str:
+        return "  ".join(cell.ljust(widths[index]) for index, cell in enumerate(row)).rstrip()
+
+    divider = ["-" * width for width in widths]
+    lines = [render_row(headers), render_row(divider)]
+    lines.extend(render_row(row) for row in rows)
+    return "\n".join(lines)
 
 
 def _exit_with_cli_error(exc: Exception) -> None:
@@ -100,11 +150,158 @@ def _echo_pack_listing(*, mode: str, packs: list[dict[str, object]], registry_ur
     _echo_json(payload)
 
 
+def _echo_pack_listing_table(
+    *,
+    mode: str,
+    packs: list[dict[str, object]],
+    registry_url: str | None = None,
+    active_only: bool = False,
+) -> None:
+    """Render one installed or available pack listing as a human-readable table."""
+
+    if mode == "available":
+        typer.echo(f"Available packs ({len(packs)})")
+        if registry_url is not None:
+            typer.echo(f"Registry: {registry_url}")
+        if not packs:
+            typer.echo("No packs are available from the configured registry.")
+            return
+        headers = [
+            "PACK ID",
+            "VERSION",
+            "DOMAIN",
+            "TIER",
+            "LANG",
+            "DEPENDENCIES",
+            "DESCRIPTION",
+        ]
+        rows = [
+            [
+                _format_cli_cell(pack.get("pack_id")),
+                _format_cli_cell(pack.get("version")),
+                _format_cli_cell(pack.get("domain")),
+                _format_cli_cell(pack.get("tier")),
+                _format_cli_cell(pack.get("language")),
+                _format_cli_cell(pack.get("dependencies"), max_width=24),
+                _format_cli_cell(pack.get("description"), max_width=52),
+            ]
+            for pack in packs
+        ]
+        typer.echo(_render_text_table(headers, rows))
+        return
+
+    title = "Installed packs"
+    if active_only:
+        title += " (active only)"
+    title += f" ({len(packs)})"
+    typer.echo(title)
+    if not packs:
+        typer.echo("No packs are installed yet. Run `ades pull general-en` or `ades pull <pack-id>` to add one.")
+        return
+    headers = [
+        "PACK ID",
+        "VERSION",
+        "DOMAIN",
+        "TIER",
+        "LANG",
+        "ACTIVE",
+        "DESCRIPTION",
+    ]
+    rows = [
+        [
+            _format_cli_cell(pack.get("pack_id")),
+            _format_cli_cell(pack.get("version")),
+            _format_cli_cell(pack.get("domain")),
+            _format_cli_cell(pack.get("tier")),
+            _format_cli_cell(pack.get("language")),
+            _format_cli_cell(pack.get("active")),
+            _format_cli_cell(pack.get("description"), max_width=52),
+        ]
+        for pack in packs
+    ]
+    typer.echo(_render_text_table(headers, rows))
+
+
+def _echo_pull_summary(result: InstallResult) -> None:
+    """Render one human-readable pack pull summary."""
+
+    typer.echo("Pull complete")
+    typer.echo(f"Requested pack: {result.requested_pack}")
+    typer.echo(f"Registry: {result.registry_url}")
+    typer.echo("")
+    typer.echo(f"Installed ({len(result.installed)}):")
+    if result.installed:
+        for pack_id in result.installed:
+            typer.echo(f"  {pack_id}")
+    else:
+        typer.echo("  none")
+    typer.echo(f"Skipped ({len(result.skipped)}):")
+    if result.skipped:
+        for pack_id in result.skipped:
+            typer.echo(f"  {pack_id}")
+    else:
+        typer.echo("  none")
+
+
+def _echo_pack_health_summary(payload: dict[str, object]) -> None:
+    """Render one pack-health response as compact operator-facing tables."""
+
+    summary_rows = [
+        ["PACK", _format_cli_cell(payload.get("pack_id"))],
+        ["WINDOW", _format_cli_cell(payload.get("requested_window"))],
+        ["OBSERVATIONS", _format_cli_cell(payload.get("observation_count"))],
+        ["LATEST VERSION", _format_cli_cell(payload.get("latest_pack_version"))],
+        ["LATEST OBSERVED", _format_cli_cell(payload.get("latest_observed_at"))],
+        ["AVG ENTITIES", _format_cli_cell(f"{float(payload.get('average_entity_count', 0.0)):.2f}")],
+        [
+            "AVG DENSITY",
+            _format_cli_cell(
+                f"{float(payload.get('average_entities_per_100_tokens', 0.0)):.2f}"
+            ),
+        ],
+        ["ZERO ENTITY RATE", _format_cli_cell(f"{float(payload.get('zero_entity_rate', 0.0)):.2%}")],
+        ["WARNING RATE", _format_cli_cell(f"{float(payload.get('warning_rate', 0.0)):.2%}")],
+        [
+            "LOW DENSITY RATE",
+            _format_cli_cell(
+                f"{float(payload.get('low_density_warning_rate', 0.0)):.2%}"
+            ),
+        ],
+        ["P95 LATENCY MS", _format_cli_cell(payload.get("p95_timing_ms"))],
+    ]
+    typer.echo(_render_text_table(["Metric", "Value"], summary_rows))
+
+    per_label = payload.get("per_label_counts")
+    if isinstance(per_label, dict) and per_label:
+        label_rows = [
+            [_format_cli_cell(label), _format_cli_cell(count)]
+            for label, count in sorted(
+                per_label.items(),
+                key=lambda item: (-int(item[1]), str(item[0]).casefold(), str(item[0])),
+            )
+        ]
+        typer.echo("")
+        typer.echo(_render_text_table(["Label", "Count"], label_rows))
+
+    per_lane = payload.get("per_lane_counts")
+    if isinstance(per_lane, dict) and per_lane:
+        lane_rows = [
+            [_format_cli_cell(lane), _format_cli_cell(count)]
+            for lane, count in sorted(
+                per_lane.items(),
+                key=lambda item: (-int(item[1]), str(item[0]).casefold(), str(item[0])),
+            )
+        ]
+        typer.echo("")
+        typer.echo(_render_text_table(["Lane", "Count"], lane_rows))
+
+
 def _render_pack_listing(
     *,
     available: bool,
     active_only: bool,
     registry_url: str | None,
+    json_output: bool,
 ) -> None:
     """Render either an installed-pack or available-pack listing."""
 
@@ -121,11 +318,18 @@ def _render_pack_listing(
             _exit_with_configuration_error(exc)
         except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
             _exit_with_configuration_error(exc)
-        _echo_pack_listing(
-            mode="available",
-            packs=packs,
-            registry_url=effective_registry_url,
-        )
+        if json_output:
+            _echo_pack_listing(
+                mode="available",
+                packs=packs,
+                registry_url=effective_registry_url,
+            )
+        else:
+            _echo_pack_listing_table(
+                mode="available",
+                packs=packs,
+                registry_url=effective_registry_url,
+            )
         return
 
     if registry_url is not None:
@@ -139,7 +343,84 @@ def _render_pack_listing(
         _exit_with_configuration_error(exc)
     except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
         _exit_with_configuration_error(exc)
-    _echo_pack_listing(mode="installed", packs=packs)
+    if json_output:
+        _echo_pack_listing(mode="installed", packs=packs)
+    else:
+        _echo_pack_listing_table(mode="installed", packs=packs, active_only=active_only)
+
+
+def _echo_help(command_path: list[str] | None = None) -> None:
+    """Render help for the root CLI or one nested command path."""
+
+    path = [segment.strip() for segment in (command_path or []) if segment.strip()]
+    info_parts = ["ades"]
+    command: click.Command = get_command(app)
+    with ExitStack() as stack:
+        context: click.Context = stack.enter_context(click.Context(command, info_name="ades"))
+        for segment in path:
+            if not isinstance(command, click.Group):
+                joined = " ".join(info_parts)
+                _exit_with_cli_error(
+                    ValueError(f"Command `{joined}` does not have subcommands. Run `ades help` for the root command list.")
+                )
+            next_command = command.get_command(context, segment)
+            if next_command is None:
+                joined = " ".join(["ades", *path])
+                _exit_with_cli_error(ValueError(f"Unknown command path `{joined}`. Run `ades help` for the available commands."))
+            command = next_command
+            info_parts.append(segment)
+            context = stack.enter_context(click.Context(command, info_name=segment, parent=context))
+        typer.echo(command.get_help(context))
+
+
+def _resolve_tag_pack_or_exit(
+    pack: str | None,
+    *,
+    manifest_input: Path | None = None,
+) -> str | None:
+    """Resolve one tag pack id and stop the CLI with user-facing guidance when unavailable."""
+
+    try:
+        settings = get_settings()
+        installed_packs = api_list_packs()
+    except FileNotFoundError as exc:
+        _exit_with_configuration_error(exc)
+    except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+        _exit_with_configuration_error(exc)
+
+    resolved_pack = pack
+    if resolved_pack is None and manifest_input is not None:
+        try:
+            manifest_payload = json.loads(manifest_input.read_text(encoding="utf-8"))
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return None
+        manifest_pack = manifest_payload.get("pack") if isinstance(manifest_payload, dict) else None
+        if isinstance(manifest_pack, str) and manifest_pack.strip():
+            resolved_pack = manifest_pack.strip()
+    if resolved_pack is None:
+        resolved_pack = settings.default_pack
+    if not installed_packs:
+        _exit_with_cli_error(
+            ValueError(
+                "No packs are installed yet. Run `ades pull general-en` or `ades pull <pack-id>` before using `ades tag`."
+            )
+        )
+
+    installed_by_id = {summary.pack_id: summary for summary in installed_packs}
+    selected_pack = installed_by_id.get(resolved_pack)
+    if selected_pack is None:
+        _exit_with_cli_error(
+            ValueError(
+                f"Pack `{resolved_pack}` is not installed. Run `ades pull {resolved_pack}` first or choose an installed pack with `--pack`."
+            )
+        )
+    if not selected_pack.active:
+        _exit_with_cli_error(
+            ValueError(
+                f"Pack `{resolved_pack}` is installed but inactive. Run `ades packs activate {resolved_pack}` first."
+            )
+        )
+    return resolved_pack
 
 
 @app.command()
@@ -155,10 +436,24 @@ def status() -> None:
     _echo_json(payload.model_dump(mode="json"))
 
 
+@app.command("help")
+def help_command(
+    command_path: list[str] | None = typer.Argument(
+        None,
+        metavar="[COMMAND] [SUBCOMMAND]...",
+        help="Optional command path to inspect, for example `ades help list packs`.",
+    ),
+) -> None:
+    """Show help for the CLI or one nested command."""
+
+    _echo_help(command_path)
+
+
 @packs_app.command("list")
 def packs_list(
     available: bool = typer.Option(False, "--available", help="List registry packs instead."),
     active_only: bool = typer.Option(False, "--active-only", help="List only active installed packs."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable table."),
     registry_url: str | None = typer.Option(
         None,
         "--registry-url",
@@ -171,6 +466,7 @@ def packs_list(
         available=available,
         active_only=active_only,
         registry_url=registry_url,
+        json_output=json_output,
     )
 
 
@@ -186,6 +482,7 @@ def list_packs_alias(
         "--active-only",
         help="List only active installed packs when using --installed.",
     ),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable table."),
     registry_url: str | None = typer.Option(
         None,
         "--registry-url",
@@ -198,6 +495,22 @@ def list_packs_alias(
         available=not installed,
         active_only=active_only,
         registry_url=registry_url,
+        json_output=json_output,
+    )
+
+
+@list_app.command("installed")
+def list_installed_alias(
+    active_only: bool = typer.Option(False, "--active-only", help="List only active installed packs."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable table."),
+) -> None:
+    """List installed packs with a human-readable table by default."""
+
+    _render_pack_listing(
+        available=False,
+        active_only=active_only,
+        registry_url=None,
+        json_output=json_output,
     )
 
 
@@ -251,16 +564,22 @@ def packs_lookup(
     query: str,
     pack: str = typer.Option(None, help="Restrict lookup to a single pack."),
     exact_alias: bool = typer.Option(False, "--exact-alias", help="Match alias text exactly."),
+    fuzzy: bool = typer.Option(
+        False,
+        "--fuzzy",
+        help="Use fuzzy operator lookup when the backend supports it.",
+    ),
     active_only: bool = typer.Option(True, "--active-only/--include-inactive", help="Search only active packs by default."),
     limit: int = typer.Option(20, min=1, max=100, help="Maximum number of candidates to return."),
 ) -> None:
-    """Search deterministic alias and rule metadata from the local SQLite store."""
+    """Search deterministic alias and rule metadata from the configured local store."""
 
     try:
         response = api_lookup_candidates(
             query,
             pack_id=pack,
             exact_alias=exact_alias,
+            fuzzy=fuzzy,
             active_only=active_only,
             limit=limit,
         )
@@ -271,9 +590,41 @@ def packs_lookup(
     _echo_json(response.model_dump(mode="json"))
 
 
+@packs_app.command("health")
+def packs_health(
+    pack: str,
+    limit: int = typer.Option(
+        100,
+        "--limit",
+        min=1,
+        max=1000,
+        help="Number of recent observations to summarize.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Print JSON instead of a human-readable summary.",
+    ),
+) -> None:
+    """Summarize recent extraction health for one installed pack."""
+
+    try:
+        response = api_get_pack_health(pack, limit=limit)
+    except FileNotFoundError as exc:
+        _exit_with_configuration_error(exc)
+    except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
+        _exit_with_configuration_error(exc)
+    payload = response.model_dump(mode="json")
+    if json_output:
+        _echo_json(payload)
+        return
+    _echo_pack_health_summary(payload)
+
+
 @app.command()
 def pull(
     pack: str,
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable summary."),
     registry_url: str | None = typer.Option(
         None,
         "--registry-url",
@@ -290,14 +641,17 @@ def pull(
         _exit_with_configuration_error(exc)
     except InvalidConfigurationError as exc:
         _exit_with_configuration_error(exc)
-    _echo_json(
-        {
-            "requested_pack": result.requested_pack,
-            "registry_url": result.registry_url,
-            "installed": result.installed,
-            "skipped": result.skipped,
-        }
-    )
+    if json_output:
+        _echo_json(
+            {
+                "requested_pack": result.requested_pack,
+                "registry_url": result.registry_url,
+                "installed": result.installed,
+                "skipped": result.skipped,
+            }
+        )
+    else:
+        _echo_pull_summary(result)
 
 
 @registry_app.command("build")
@@ -412,6 +766,11 @@ def registry_refresh_generated_packs(
         "--general-bundle-dir",
         help="Optional general-en bundle directory for medical pack refresh when it is not in the positional bundle list.",
     ),
+    materialize_registry: bool = typer.Option(
+        False,
+        "--materialize-registry/--candidate-only",
+        help="Materialize a static registry from passing candidate bundles instead of stopping after candidate reports and quality output.",
+    ),
     min_expected_recall: float = typer.Option(
         1.0,
         "--min-expected-recall",
@@ -446,6 +805,7 @@ def registry_refresh_generated_packs(
             bundle_dirs,
             output_dir=output_dir,
             general_bundle_dir=general_bundle_dir,
+            materialize_registry=materialize_registry,
             min_expected_recall=min_expected_recall,
             max_unexpected_hits=max_unexpected_hits,
             max_ambiguous_aliases=max_ambiguous_aliases,
@@ -580,6 +940,11 @@ def registry_validate_finance_quality(
         "--output-dir",
         help="Directory where generated pack, registry, and install validation output should be written.",
     ),
+    fixture_profile: str = typer.Option(
+        "benchmark",
+        "--fixture-profile",
+        help="Finance quality suite to run: benchmark or smoke.",
+    ),
     version: str | None = typer.Option(
         None,
         "--version",
@@ -618,6 +983,7 @@ def registry_validate_finance_quality(
         response = api_validate_finance_pack_quality(
             bundle_dir,
             output_dir=output_dir,
+            fixture_profile=fixture_profile,
             version=version,
             min_expected_recall=min_expected_recall,
             max_unexpected_hits=max_unexpected_hits,
@@ -639,6 +1005,11 @@ def registry_validate_general_quality(
         "--output-dir",
         help="Directory where generated pack, registry, and install validation output should be written.",
     ),
+    fixture_profile: str = typer.Option(
+        "benchmark",
+        "--fixture-profile",
+        help="General quality suite to run: benchmark or smoke.",
+    ),
     version: str | None = typer.Option(
         None,
         "--version",
@@ -658,7 +1029,7 @@ def registry_validate_general_quality(
         help="Maximum unexpected tagged entities allowed across fixture cases.",
     ),
     max_ambiguous_aliases: int = typer.Option(
-        25,
+        DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES,
         "--max-ambiguous-aliases",
         min=0,
         help="Maximum ambiguous alias keys allowed after generation.",
@@ -677,6 +1048,7 @@ def registry_validate_general_quality(
         response = api_validate_general_pack_quality(
             bundle_dir,
             output_dir=output_dir,
+            fixture_profile=fixture_profile,
             version=version,
             min_expected_recall=min_expected_recall,
             max_unexpected_hits=max_unexpected_hits,
@@ -702,6 +1074,11 @@ def registry_validate_medical_quality(
         ...,
         "--output-dir",
         help="Directory where generated packs, registry, and install validation output should be written.",
+    ),
+    fixture_profile: str = typer.Option(
+        "benchmark",
+        "--fixture-profile",
+        help="Medical quality suite to run: benchmark or smoke.",
     ),
     version: str | None = typer.Option(
         None,
@@ -742,6 +1119,7 @@ def registry_validate_medical_quality(
             bundle_dir,
             general_bundle_dir=general_bundle_dir,
             output_dir=output_dir,
+            fixture_profile=fixture_profile,
             version=version,
             min_expected_recall=min_expected_recall,
             max_unexpected_hits=max_unexpected_hits,
@@ -749,6 +1127,261 @@ def registry_validate_medical_quality(
             max_dropped_alias_ratio=max_dropped_alias_ratio,
         )
     except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+    if not response.passed:
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("evaluate-extraction-quality")
+def registry_evaluate_extraction_quality(
+    pack_id: str = typer.Argument(..., help="Installed pack id to evaluate."),
+    golden_set_path: Path | None = typer.Option(
+        None,
+        "--golden-set-path",
+        help="Optional explicit golden set JSON path. Defaults to the /mnt quality root.",
+    ),
+    profile: str = typer.Option(
+        "default",
+        "--profile",
+        help="Golden set profile to use when --golden-set-path is omitted.",
+    ),
+    hybrid: bool = typer.Option(
+        False,
+        "--hybrid/--deterministic",
+        help="Evaluate hybrid mode instead of deterministic mode.",
+    ),
+    write_report: bool = typer.Option(
+        True,
+        "--write-report/--no-write-report",
+        help="Persist the evaluated report to disk.",
+    ),
+    report_path: Path | None = typer.Option(
+        None,
+        "--report-path",
+        help="Optional explicit JSON path for the persisted quality report.",
+    ),
+) -> None:
+    """Evaluate one installed pack against one golden set."""
+
+    try:
+        response = api_evaluate_extraction_quality(
+            pack_id,
+            golden_set_path=golden_set_path,
+            profile=profile,
+            hybrid=hybrid,
+            write_report=write_report,
+            report_path=report_path,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("benchmark-runtime")
+def registry_benchmark_runtime(
+    pack_id: str = typer.Argument(..., help="Installed pack id to benchmark."),
+    golden_set_path: Path | None = typer.Option(
+        None,
+        "--golden-set-path",
+        help="Optional explicit golden set JSON path. Defaults to the /mnt quality root.",
+    ),
+    profile: str = typer.Option(
+        "default",
+        "--profile",
+        help="Golden set profile to use when --golden-set-path is omitted.",
+    ),
+    hybrid: bool = typer.Option(
+        False,
+        "--hybrid/--deterministic",
+        help="Benchmark hybrid mode instead of deterministic mode.",
+    ),
+    warm_runs: int = typer.Option(
+        3,
+        "--warm-runs",
+        min=1,
+        max=25,
+        help="Number of warm tagging passes to benchmark per golden document.",
+    ),
+    lookup_limit: int = typer.Option(
+        20,
+        "--lookup-limit",
+        min=1,
+        max=100,
+        help="Candidate limit for operator lookup benchmark queries.",
+    ),
+    write_report: bool = typer.Option(
+        True,
+        "--write-report/--no-write-report",
+        help="Persist the runtime benchmark report to disk.",
+    ),
+    report_path: Path | None = typer.Option(
+        None,
+        "--report-path",
+        help="Optional explicit JSON path for the persisted benchmark report.",
+    ),
+) -> None:
+    """Benchmark matcher load, warm tagging, operator lookup, and disk usage."""
+
+    try:
+        response = api_benchmark_runtime(
+            pack_id,
+            golden_set_path=golden_set_path,
+            profile=profile,
+            hybrid=hybrid,
+            warm_runs=warm_runs,
+            lookup_limit=lookup_limit,
+            write_report=write_report,
+            report_path=report_path,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("compare-extraction-quality")
+def registry_compare_extraction_quality(
+    baseline_report_path: Path = typer.Option(
+        ...,
+        "--baseline-report-path",
+        help="Stored baseline extraction-quality report JSON.",
+    ),
+    candidate_report_path: Path = typer.Option(
+        ...,
+        "--candidate-report-path",
+        help="Stored candidate extraction-quality report JSON.",
+    ),
+) -> None:
+    """Compare two stored extraction-quality reports."""
+
+    try:
+        response = api_compare_extraction_quality_reports(
+            baseline_report_path=baseline_report_path,
+            candidate_report_path=candidate_report_path,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("diff-pack")
+def registry_diff_pack(
+    old_pack_dir: Path = typer.Argument(..., help="Earlier runtime pack directory."),
+    new_pack_dir: Path = typer.Argument(..., help="Candidate runtime pack directory."),
+) -> None:
+    """Return the semantic diff between two runtime pack directories."""
+
+    try:
+        response = api_diff_pack_versions(
+            old_pack_dir,
+            new_pack_dir,
+        )
+    except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("evaluate-release-thresholds")
+def registry_evaluate_release_thresholds(
+    report_path: Path = typer.Option(
+        ...,
+        "--report-path",
+        help="Stored extraction-quality report JSON to evaluate.",
+    ),
+    mode: str = typer.Option(
+        "deterministic",
+        "--mode",
+        help="Release threshold mode: deterministic or hybrid.",
+    ),
+    baseline_report_path: Path | None = typer.Option(
+        None,
+        "--baseline-report-path",
+        help="Optional baseline quality report for per-label or hybrid deltas.",
+    ),
+    min_recall: float | None = typer.Option(
+        None,
+        "--min-recall",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable recall. Uses the locked mode default when omitted.",
+    ),
+    min_precision: float | None = typer.Option(
+        None,
+        "--min-precision",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable precision. Uses the locked mode default when omitted.",
+    ),
+    max_label_recall_drop: float | None = typer.Option(
+        None,
+        "--max-label-recall-drop",
+        min=0.0,
+        max=1.0,
+        help="Maximum allowed negative per-label recall delta. Uses the locked mode default when omitted.",
+    ),
+    min_recall_lift: float | None = typer.Option(
+        None,
+        "--min-recall-lift",
+        min=0.0,
+        max=1.0,
+        help="Minimum recall lift required for hybrid mode. Uses the locked mode default when omitted.",
+    ),
+    max_precision_drop: float | None = typer.Option(
+        None,
+        "--max-precision-drop",
+        min=0.0,
+        max=1.0,
+        help="Maximum precision drop allowed for hybrid mode. Uses the locked mode default when omitted.",
+    ),
+    max_p95_latency_ms: int | None = typer.Option(
+        None,
+        "--max-p95-latency-ms",
+        min=0,
+        help="Maximum allowed p95 latency in milliseconds. Uses the locked mode default when omitted.",
+    ),
+    max_model_artifact_bytes: int | None = typer.Option(
+        None,
+        "--max-model-artifact-bytes",
+        min=0,
+        help="Maximum allowed model artifact size in bytes for hybrid mode. Uses the locked mode default when omitted.",
+    ),
+    max_peak_memory_mb: int | None = typer.Option(
+        None,
+        "--max-peak-memory-mb",
+        min=0,
+        help="Maximum allowed model peak memory in MB for hybrid mode. Uses the locked mode default when omitted.",
+    ),
+    model_artifact_path: Path | None = typer.Option(
+        None,
+        "--model-artifact-path",
+        help="Optional model artifact path used to measure hybrid artifact size.",
+    ),
+    peak_memory_mb: int | None = typer.Option(
+        None,
+        "--peak-memory-mb",
+        min=0,
+        help="Observed hybrid peak memory in MB.",
+    ),
+) -> None:
+    """Evaluate one stored extraction-quality report against release thresholds."""
+
+    try:
+        response = api_evaluate_extraction_release_thresholds(
+            report_path=report_path,
+            mode=mode,
+            baseline_report_path=baseline_report_path,
+            min_recall=min_recall,
+            min_precision=min_precision,
+            max_label_recall_drop=max_label_recall_drop,
+            min_recall_lift=min_recall_lift,
+            max_precision_drop=max_precision_drop,
+            max_p95_latency_ms=max_p95_latency_ms,
+            max_model_artifact_bytes=max_model_artifact_bytes,
+            max_peak_memory_mb=max_peak_memory_mb,
+            model_artifact_path=model_artifact_path,
+            peak_memory_mb=peak_memory_mb,
+        )
+    except (FileNotFoundError, ValueError) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
     if not response.passed:
@@ -772,10 +1405,25 @@ def registry_fetch_finance_sources(
         "--sec-url",
         help="URL or file path for the SEC company_tickers snapshot.",
     ),
+    sec_submissions_url: str = typer.Option(
+        "https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip",
+        "--sec-submissions-url",
+        help="URL or file path for the SEC submissions bulk snapshot.",
+    ),
+    sec_companyfacts_url: str = typer.Option(
+        "https://www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip",
+        "--sec-companyfacts-url",
+        help="URL or file path for the SEC companyfacts bulk snapshot.",
+    ),
     symbol_directory_url: str = typer.Option(
         "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt",
         "--symbol-directory-url",
         help="URL or file path for the Nasdaq symbol-directory snapshot.",
+    ),
+    other_listed_url: str = typer.Option(
+        "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt",
+        "--other-listed-url",
+        help="URL or file path for the Nasdaq other-listed snapshot.",
     ),
     user_agent: str = typer.Option(
         "ades/0.1.0 (ops@adestool.com)",
@@ -790,7 +1438,10 @@ def registry_fetch_finance_sources(
             output_dir=output_dir,
             snapshot=snapshot,
             sec_companies_url=sec_url,
+            sec_submissions_url=sec_submissions_url,
+            sec_companyfacts_url=sec_companyfacts_url,
             symbol_directory_url=symbol_directory_url,
+            other_listed_url=other_listed_url,
             user_agent=user_agent,
         )
     except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
@@ -805,10 +1456,25 @@ def registry_build_finance_bundle(
         "--sec-company-tickers",
         help="Path to the SEC company_tickers snapshot JSON file.",
     ),
+    sec_submissions: Path | None = typer.Option(
+        None,
+        "--sec-submissions",
+        help="Optional path to the SEC submissions bulk snapshot ZIP file.",
+    ),
+    sec_companyfacts: Path | None = typer.Option(
+        None,
+        "--sec-companyfacts",
+        help="Optional path to the SEC companyfacts bulk snapshot ZIP file.",
+    ),
     symbol_directory: Path = typer.Option(
         ...,
         "--symbol-directory",
         help="Path to the symbol-directory delimited file.",
+    ),
+    other_listed: Path | None = typer.Option(
+        None,
+        "--other-listed",
+        help="Optional path to the other-listed delimited file.",
     ),
     curated_entities: Path = typer.Option(
         ...,
@@ -831,7 +1497,10 @@ def registry_build_finance_bundle(
     try:
         response = api_build_finance_source_bundle(
             sec_companies_path=sec_company_tickers,
+            sec_submissions_path=sec_submissions,
+            sec_companyfacts_path=sec_companyfacts,
             symbol_directory_path=symbol_directory,
+            other_listed_path=other_listed,
             curated_entities_path=curated_entities,
             output_dir=output_dir,
             version=version,
@@ -896,15 +1565,50 @@ def registry_fetch_general_sources(
         "--snapshot",
         help="Snapshot date in YYYY-MM-DD format. Defaults to today.",
     ),
-    wikidata_url: str = typer.Option(
-        "https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q265852|Q2283|Q95|Q3884|Q380&languages=en&props=labels|aliases&format=json",
+    wikidata_url: str | None = typer.Option(
+        None,
         "--wikidata-url",
-        help="URL or file path for the bounded Wikidata general-entity snapshot.",
+        help="Optional URL or file path for a prefiltered bounded Wikidata entity snapshot. If omitted, the two-pass truthy-plus-JSON dump flow is used.",
+    ),
+    wikidata_truthy_url: str | None = typer.Option(
+        "https://dumps.wikimedia.org/wikidatawiki/entities/latest-truthy.nt.gz",
+        "--wikidata-truthy-url",
+        help="URL or file path for the Wikidata truthy RDF dump used for type gating.",
+    ),
+    wikidata_entities_url: str | None = typer.Option(
+        "https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.gz",
+        "--wikidata-entities-url",
+        help="URL or file path for the Wikidata JSON dump used to hydrate the selected QIDs.",
     ),
     geonames_url: str = typer.Option(
-        "https://download.geonames.org/export/dump/cities15000.zip",
+        "https://download.geonames.org/export/dump/allCountries.zip",
         "--geonames-url",
-        help="URL or file path for the GeoNames cities15000 snapshot zip.",
+        help="URL or file path for the GeoNames allCountries snapshot zip.",
+    ),
+    geonames_alternate_names_url: str | None = typer.Option(
+        "https://download.geonames.org/export/dump/alternateNamesV2.zip",
+        "--geonames-alternate-names-url",
+        help="Optional URL or file path for the GeoNames alternateNamesV2 snapshot zip.",
+    ),
+    geonames_modifications_url: str | None = typer.Option(
+        None,
+        "--geonames-modifications-url",
+        help="Optional URL or file path for a GeoNames modifications delta file.",
+    ),
+    geonames_deletes_url: str | None = typer.Option(
+        None,
+        "--geonames-deletes-url",
+        help="Optional URL or file path for a GeoNames deletes delta file.",
+    ),
+    geonames_alternate_modifications_url: str | None = typer.Option(
+        None,
+        "--geonames-alternate-modifications-url",
+        help="Optional URL or file path for a GeoNames alternate-names modifications delta file.",
+    ),
+    geonames_alternate_deletes_url: str | None = typer.Option(
+        None,
+        "--geonames-alternate-deletes-url",
+        help="Optional URL or file path for a GeoNames alternate-names deletes delta file.",
     ),
     user_agent: str = typer.Option(
         "ades/0.1.0 (ops@adestool.com)",
@@ -919,7 +1623,14 @@ def registry_fetch_general_sources(
             output_dir=output_dir,
             snapshot=snapshot,
             wikidata_url=wikidata_url,
+            wikidata_truthy_url=wikidata_truthy_url,
+            wikidata_entities_url=wikidata_entities_url,
             geonames_places_url=geonames_url,
+            geonames_alternate_names_url=geonames_alternate_names_url,
+            geonames_modifications_url=geonames_modifications_url,
+            geonames_deletes_url=geonames_deletes_url,
+            geonames_alternate_modifications_url=geonames_alternate_modifications_url,
+            geonames_alternate_deletes_url=geonames_alternate_deletes_url,
             user_agent=user_agent,
         )
     except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
@@ -955,9 +1666,14 @@ def registry_fetch_medical_sources(
         help="URL or file path for the UniProt reviewed-protein source JSON.",
     ),
     clinical_trials_url: str = typer.Option(
-        "https://clinicaltrials.gov/api/v2/studies?query.cond=diabetes&pageSize=200&format=json",
+        "https://clinicaltrials.gov/api/v2/studies?format=json",
         "--clinical-trials-url",
         help="URL or file path for the ClinicalTrials.gov study source JSON.",
+    ),
+    orange_book_url: str = typer.Option(
+        "https://www.fda.gov/media/76860/download?attachment",
+        "--orange-book-url",
+        help="URL or file path for the Orange Book products download.",
     ),
     user_agent: str = typer.Option(
         "ades/0.1.0 (ops@adestool.com)",
@@ -965,16 +1681,16 @@ def registry_fetch_medical_sources(
         help="User-Agent header for HTTP source fetches.",
     ),
     uniprot_max_records: int = typer.Option(
-        2000,
+        0,
         "--uniprot-max-records",
-        min=1,
-        help="Maximum number of UniProt protein records to keep in one snapshot.",
+        min=0,
+        help="Maximum number of UniProt protein records to keep in one snapshot. Use 0 for no cap.",
     ),
     clinical_trials_max_records: int = typer.Option(
-        500,
+        0,
         "--clinical-trials-max-records",
-        min=1,
-        help="Maximum number of ClinicalTrials.gov studies to keep in one snapshot.",
+        min=0,
+        help="Maximum number of ClinicalTrials.gov studies to keep in one snapshot. Use 0 for no cap.",
     ),
 ) -> None:
     """Download one real medical source snapshot set under the big-data root."""
@@ -987,6 +1703,7 @@ def registry_fetch_medical_sources(
             hgnc_genes_url=hgnc_genes_url,
             uniprot_proteins_url=uniprot_proteins_url,
             clinical_trials_url=clinical_trials_url,
+            orange_book_url=orange_book_url,
             user_agent=user_agent,
             uniprot_max_records=uniprot_max_records,
             clinical_trials_max_records=clinical_trials_max_records,
@@ -1018,6 +1735,11 @@ def registry_build_medical_bundle(
         "--clinical-trials",
         help="JSON or JSONL snapshot of ClinicalTrials.gov study records.",
     ),
+    orange_book_products: Path | None = typer.Option(
+        None,
+        "--orange-book-products",
+        help="Optional JSON or JSONL snapshot of Orange Book drug products.",
+    ),
     curated_entities: Path = typer.Option(
         ...,
         "--curated-entities",
@@ -1042,6 +1764,7 @@ def registry_build_medical_bundle(
             hgnc_genes_path=hgnc_genes,
             uniprot_proteins_path=uniprot_proteins,
             clinical_trials_path=clinical_trials,
+            orange_book_products_path=orange_book_products,
             curated_entities_path=curated_entities,
             output_dir=output_dir,
             version=version,
@@ -1251,11 +1974,12 @@ def tag(
         raise typer.BadParameter("Use inline text or --file, not both.")
     if output is not None and output_dir is not None:
         raise typer.BadParameter("Use --output or --output-dir, not both.")
+    resolved_pack = _resolve_tag_pack_or_exit(pack)
 
     if file is not None:
         response = api_tag_file(
             file,
-            pack=pack,
+            pack=resolved_pack,
             content_type=content_type,
             output_path=output,
             output_dir=output_dir,
@@ -1264,7 +1988,7 @@ def tag(
     else:
         response = api_tag(
             text,
-            pack=pack,
+            pack=resolved_pack,
             content_type=content_type or "text/plain",
             output_path=output,
             output_dir=output_dir,
@@ -1379,9 +2103,10 @@ def tag_files(
         )
     if (write_manifest or manifest_output is not None) and output_dir is None:
         raise typer.BadParameter("Use --output-dir when writing a batch manifest.")
+    resolved_pack = _resolve_tag_pack_or_exit(pack, manifest_input=manifest_input)
     response = api_tag_files(
         files or [],
-        pack=pack,
+        pack=resolved_pack,
         content_type=content_type,
         output_dir=output_dir,
         pretty_output=not compact_output,

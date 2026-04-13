@@ -50,7 +50,7 @@ def test_cli_pull_failure_does_not_leave_partial_pack_install(tmp_path: Path) ->
 
     packs_result = runner.invoke(
         app,
-        ["packs", "list"],
+        ["packs", "list", "--json"],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert packs_result.exit_code == 0

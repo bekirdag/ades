@@ -32,13 +32,13 @@ def test_validate_medical_pack_quality_reports_passing_fixture_metrics(tmp_path:
     )
 
     assert report.pack_id == "medical-en"
-    assert report.fixture_profile == "default"
-    assert report.fixture_count == 3
-    assert report.passed_case_count == 3
+    assert report.fixture_profile == "benchmark"
+    assert report.fixture_count == 5
+    assert report.passed_case_count == 5
     assert report.failed_case_count == 0
-    assert report.expected_entity_count == 12
-    assert report.actual_entity_count == 12
-    assert report.matched_expected_entity_count == 12
+    assert report.expected_entity_count == 21
+    assert report.actual_entity_count == 21
+    assert report.matched_expected_entity_count == 21
     assert report.missing_expected_entity_count == 0
     assert report.unexpected_entity_count == 0
     assert report.expected_recall == 1.0

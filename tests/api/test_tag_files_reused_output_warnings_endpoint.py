@@ -13,8 +13,8 @@ def test_tag_files_endpoint_warns_when_reused_output_file_is_missing(tmp_path: P
     corpus_dir.mkdir()
     stable_input = corpus_dir / "stable.html"
     changed_input = corpus_dir / "changed.html"
-    stable_input.write_text("<p>Apple said AAPL rallied.</p>", encoding="utf-8")
-    changed_input.write_text("<p>NASDAQ guidance moved.</p>", encoding="utf-8")
+    stable_input.write_text("<p>Org Beta said TICKA rallied.</p>", encoding="utf-8")
+    changed_input.write_text("<p>EXCHX guidance moved.</p>", encoding="utf-8")
     output_dir = tmp_path / "outputs"
 
     initial = tag_files(
@@ -28,7 +28,7 @@ def test_tag_files_endpoint_warns_when_reused_output_file_is_missing(tmp_path: P
     stable_output.unlink()
     manifest_path = Path(initial.saved_manifest_path)
 
-    changed_input.write_text("<p>NASDAQ guidance moved again.</p>", encoding="utf-8")
+    changed_input.write_text("<p>EXCHX guidance moved again.</p>", encoding="utf-8")
     client = TestClient(create_app(storage_root=tmp_path))
     response = client.post(
         "/v0/tag/files",

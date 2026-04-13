@@ -21,5 +21,6 @@ def test_public_api_can_validate_generated_finance_pack_quality(
     )
 
     assert report.passed is True
+    assert report.fixture_profile == "benchmark"
     assert report.registry_index_url.startswith("file://")
     assert report.passed_case_count == report.fixture_count

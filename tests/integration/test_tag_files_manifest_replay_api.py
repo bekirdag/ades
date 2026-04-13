@@ -7,8 +7,8 @@ def test_public_api_can_replay_processed_items_from_saved_manifest(tmp_path: Pat
     pull_pack("finance-en", storage_root=tmp_path)
     first_input = tmp_path / "alpha.html"
     second_input = tmp_path / "beta.html"
-    first_input.write_text("<p>Apple said AAPL rallied.</p>", encoding="utf-8")
-    second_input.write_text("<p>NASDAQ guidance moved.</p>", encoding="utf-8")
+    first_input.write_text("<p>Org Beta said TICKA rallied.</p>", encoding="utf-8")
+    second_input.write_text("<p>EXCHX guidance moved.</p>", encoding="utf-8")
     output_dir = tmp_path / "outputs"
 
     initial = tag_files(

@@ -35,7 +35,7 @@ For IPTC taxonomy tagging specifically, look at `valurank/distilroberta-base-top
 
 **Stage 5 — Candidate generation (for entity linking)**
 
-Before you can link "Apple" to Apple Inc., you need to generate candidates. The architecture:
+Before you can link "Alpha" to Org Alpha Holdings, you need to generate candidates. The architecture:
 
 1. Build an alias table from a Wikidata dump (map surface forms → entity IDs)
 2. Index entities in OpenSearch with BM25 for fuzzy lookup
@@ -51,7 +51,7 @@ Three viable open source choices, roughly in order of quality vs. complexity:
 - **OpenTapioca**: a simple, fast Named Entity Linking system for Wikidata that can be run locally with pre-trained models and stays synchronized with Wikidata in real time. Best if you want near-zero maintenance on KB freshness.
 - **spaCy EntityLinker**: integrates natively into the spaCy pipeline, requires building a KnowledgeBase from the Wikidata dump, gives most control for custom domains
 
-For collective disambiguation (the trick where "Apple" in the same doc as "Tim Cook" and "iPhone" biases toward Apple Inc.), you need either a coherence model or a simple graph-based voting pass over all entity candidates in the document.
+For collective disambiguation (the trick where "Alpha" in the same doc as "Person Alpha" and "Device Alpha" biases toward Org Alpha Holdings), you need either a coherence model or a simple graph-based voting pass over all entity candidates in the document.
 
 **Stage 7 — Relation & event extraction**
 
@@ -304,7 +304,7 @@ Great question — and yes, this tool has natural integration points across seve
 
 Docdex is a local code indexer using Tantivy and AST-based indexing. Right now it indexes code structure — symbols, types, function signatures. The enrichment pipeline adds a semantic layer on top of that:
 
-- **Entity extraction over code comments and docstrings.** When a developer writes "this function calls the Stripe API to process refunds," the tagger can extract `Stripe` as a company entity, `refunds` as a financial concept, and link them to canonical knowledge. That makes docstrings searchable by concept, not just keyword.
+- **Entity extraction over code comments and docstrings.** When a developer writes "this function calls the Provider Alpha API to process refunds," the tagger can extract `Provider Alpha` as a company entity, `refunds` as a financial concept, and link them to canonical knowledge. That makes docstrings searchable by concept, not just keyword.
 - **Relation extraction over architecture docs.** If a repo has markdown docs describing service dependencies ("OrderService calls PaymentService via gRPC"), the relation extractor can surface those as typed edges — useful for dependency graphs.
 - **Topic classification over files and modules.** Tag each file or module with a domain label (authentication, data persistence, billing logic). This gives you a semantic map of the codebase that goes beyond folder structure.
 - **Cross-repo entity linking.** If multiple repos mention "the auth service" or "the Kafka cluster," entity linking can resolve those to the same canonical concept across codebases, making cross-repo search genuinely useful.
@@ -321,10 +321,10 @@ The enrichment pipeline is essentially a financial news intelligence layer:
 
 - Every article ingested gets entity tags (companies, people, instruments, regulators) with relevance scores
 - Topic classification maps articles to financial taxonomies (earnings, M&A, central bank, IPO)
-- Relation extraction surfaces named events: "Apple acquired X," "Fed raised rates by Y bps," "CEO appointed at Z"
-- Entity linking connects mentions to canonical records — so "Tim Cook," "Apple's CEO," and "Cook" in the same article all resolve to Q37079
+- Relation extraction surfaces named events: "Org Alpha acquired Org Beta," "Regulator Alpha raised rates by Y bps," "CEO appointed at Org Gamma"
+- Entity linking connects mentions to canonical records — so "Person Alpha," "Org Alpha's CEO," and "Alpha" in the same article all resolve to `ent:person-alpha`
 
-This enables the product features that matter for a financial media platform: entity-centric news feeds ("show me everything about Q312 this week"), event alerts ("notify when Acquisition relation detected for watchlist companies"), and cross-article entity timelines.
+This enables the product features that matter for a financial media platform: entity-centric news feeds ("show me everything about `ent:org-alpha` this week"), event alerts ("notify when Acquisition relation detected for watchlist companies"), and cross-article entity timelines.
 
 ---
 
@@ -334,7 +334,7 @@ This enables the product features that matter for a financial media platform: en
 
 The trading system doesn't consume enriched articles directly, but the enrichment pipeline is a natural upstream data source:
 
-- **Sentiment + entity extraction as trading signals.** An article tagged with `Apple Inc.` (relevance: 0.91) and topic `earnings report` (score: 0.88) is a structured event that the trading system can act on, rather than raw text it has to parse itself.
+- **Sentiment + entity extraction as trading signals.** An article tagged with `Org Alpha Holdings` (relevance: 0.91) and topic `earnings report` (score: 0.88) is a structured event that the trading system can act on, rather than raw text it has to parse itself.
 - **Event detection as order triggers.** Relation extraction surfacing `Acquisition` or `RevenueReport` events can feed directly into event-driven strategy logic.
 - **Named entity frequency as market sentiment proxy.** How often is a company mentioned in negative vs. neutral vs. positive topic contexts this week compared to last week?
 
@@ -370,11 +370,11 @@ MSwarm orchestrator
 └── Trading agent    → consumes entity/event output as signals
 ```
 
-Each agent gets the same structured output format — entities, topics, relations, relevance scores — which means agents can share context about the same real-world entities across different domains. If the Docdex agent and the News agent both tag content mentioning `Apple Inc. (Q312)`, they're using the same canonical identifier, so MSwarm can reason across them without any entity resolution at the orchestration level.
+Each agent gets the same structured output format — entities, topics, relations, relevance scores — which means agents can share context about the same real-world entities across different domains. If the Docdex agent and the News agent both tag content mentioning `Org Alpha Holdings (ent:org-alpha)`, they're using the same canonical identifier, so MSwarm can reason across them without any entity resolution at the orchestration level.
 
 Concretely for each agent:
 
-**Docdex agent** — tag code documentation, surface entity-linked concepts, enable semantic code search queries like "find all code related to Stripe payment processing."
+**Docdex agent** — tag code documentation, surface entity-linked concepts, enable semantic code search queries like "find all code related to Provider Alpha payment processing."
 
 **Mcoda agent** — if Mcoda deals with data or research content, entity and topic tagging makes that content queryable by concept rather than keyword. Relation extraction over research text can surface methodology connections or citation-worthy claims.
 
@@ -521,7 +521,7 @@ The right model for this is exactly how Ollama works:
 ades pull finance-en       # downloads the finance/English pack
 ades pull medical-en       # downloads the medical/English pack
 ades serve                 # starts local HTTP server on localhost:8734
-ades tag "Apple CEO Tim Cook announced..."   # CLI usage
+ades tag "Org Alpha CEO Person Alpha announced..."   # CLI usage
 ```
 
 The key engineering decisions for this to work well:
@@ -538,7 +538,7 @@ The key engineering decisions for this to work well:
 from ades import Tagger
 
 tagger = Tagger(profile="finance-en-lite")
-result = tagger.tag("Apple CEO Tim Cook announced quarterly earnings...")
+result = tagger.tag("Org Alpha CEO Person Alpha announced quarterly earnings...")
 ```
 
 **5. Quantized models** — ONNX export + INT8 quantization cuts model sizes roughly in half and speeds up CPU inference significantly. GLiNER already supports ONNX export out of the box.
@@ -576,9 +576,9 @@ Let me explain the distinct value layers.
 
 LLMs have three structural weaknesses when dealing with documents and knowledge:
 
-1. **They don't know what they don't know.** An LLM reading "Apple announced Q3 results" doesn't automatically know this Apple is Q312, that Tim Cook is its CEO (Q37079), or that this event belongs to the `earnings report` topic class. It guesses from training data, which may be stale or wrong.
+1. **They don't know what they don't know.** An LLM reading "Alpha announced Q3 results" doesn't automatically know this Alpha is `ent:org-alpha`, that Person Alpha is its CEO (`ent:person-alpha`), or that this event belongs to the `earnings report` topic class. It guesses from training data, which may be stale or wrong.
 
-2. **They can't reliably distinguish entities.** "Apple" the company, "Apple" the fruit, "Apple Corps" the Beatles label — an LLM in a zero-shot prompt has no reliable mechanism to resolve this. It pattern-matches from context, which fails on ambiguous or niche cases.
+2. **They can't reliably distinguish entities.** "Alpha" the organization, "Alpha" the product line, and "Alpha Labs" the research group can all appear in the same corpus. An LLM in a zero-shot prompt has no reliable mechanism to resolve this. It pattern-matches from context, which fails on ambiguous or niche cases.
 
 3. **Their context window is flat.** An LLM sees a chunk of text. It doesn't see a structured graph of which entities are most central, how they relate, or how this document connects to 10,000 others mentioning the same entities.
 
@@ -592,23 +592,23 @@ Standard RAG gives an LLM chunks of text retrieved by vector similarity. The enr
 
 Instead of:
 ```
-Query: "What did Apple say about margins?"
+Query: "What did Org Alpha say about margins?"
 → retrieve top-5 chunks by cosine similarity
 → LLM reads chunks and answers
 ```
 
 You get:
 ```
-Query: "What did Apple say about margins?"
-→ resolve "Apple" to Q312 (Apple Inc.)
-→ retrieve chunks WHERE entity_id = Q312
+Query: "What did Org Alpha say about margins?"
+→ resolve "Org Alpha" to ent:org-alpha (Org Alpha Holdings)
+→ retrieve chunks WHERE entity_id = ent:org-alpha
      AND topic = "earnings report"
      AND relevance > 0.7
 → sort by relevance score descending
 → LLM reads pre-filtered, entity-anchored chunks and answers
 ```
 
-The LLM gets higher signal content. Hallucination risk drops because the retrieval is entity-anchored rather than embedding-approximate. This matters enormously for financial or legal content where "Apple" vs "Apple Corps" is not a minor distinction.
+The LLM gets higher signal content. Hallucination risk drops because the retrieval is entity-anchored rather than embedding-approximate. This matters enormously for financial or legal content where "Org Alpha" vs "Alpha Labs" is not a minor distinction.
 
 ---
 
@@ -622,15 +622,15 @@ You are analyzing a financial news article. Here is structured metadata
 extracted from it before you read the full text:
 
 Entities (by relevance):
-- Apple Inc. (Q312, company) — relevance: 0.91
-- Tim Cook (Q37079, person, CEO of Apple Inc.) — relevance: 0.78
-- Cupertino (Q488726, city) — relevance: 0.22
+- Org Alpha Holdings (ent:org-alpha, company) — relevance: 0.91
+- Person Alpha (ent:person-alpha, person, CEO of Org Alpha Holdings) — relevance: 0.78
+- Metro Alpha (ent:metro-alpha, city) — relevance: 0.22
 
 Topics: earnings report (0.88), technology sector (0.76)
 
 Relations detected:
-- Tim Cook [CEO_of] Apple Inc.
-- Apple Inc. [reported_revenue] $94.9B [for_period] Q3 2026
+- Person Alpha [CEO_of] Org Alpha Holdings
+- Org Alpha Holdings [reported_revenue] $94.9B [for_period] Q3 2026
 
 Now read the article and answer the user's question.
 ---
@@ -648,7 +648,7 @@ This is the most powerful use case for MSwarm specifically.
 An agent that processes 1,000 documents over its lifetime has no persistent memory of which entities appeared where, how often, or in what context — unless you give it one. The enrichment pipeline builds that memory automatically.
 
 ```
-Agent query: "What has been said about Stripe across all documents I've processed?"
+Agent query: "What has been said about Org Delta across all documents I've processed?"
 
 Without enrichment:
 → vector search over embeddings
@@ -658,10 +658,10 @@ Without enrichment:
 With enrichment:
 → SELECT * FROM linked_entity
      JOIN document ON ...
-     WHERE entity.qid = 'Q1440848'  -- Stripe Inc.
+     WHERE entity_id = 'ent:org-delta'  -- Org Delta
      ORDER BY relevance DESC
 → returns structured timeline: dates, topics, relations, relevance scores
-→ agent gets a pre-organized dossier on Stripe
+→ agent gets a pre-organized dossier on Org Delta
 ```
 
 The agent doesn't burn context window re-extracting what the pipeline already extracted. It gets structured facts and uses the context window for reasoning, not extraction.
@@ -675,18 +675,18 @@ This is a well-documented failure mode: LLMs confabulate entity details, especia
 The enrichment pipeline gives you a verification layer:
 
 ```
-LLM output: "Tim Cook became Apple CEO in 2012."
-Enrichment KB: Tim Cook (Q37079) became Apple CEO in 2011.
+LLM output: "Person Alpha became Org Alpha CEO in 2012."
+Enrichment KB: Person Alpha (ent:person-alpha) became Org Alpha CEO in 2011.
 → flag discrepancy, correct before returning to user
 ```
 
 Or more proactively — before the LLM answers a question about an entity, inject the KB record as ground truth:
 
 ```
-User: "Who is the CEO of Apple?"
-→ resolve Apple → Q312
-→ lookup current CEO relation → Q37079 (Tim Cook), as of KB last updated
-→ inject: "According to KB: Tim Cook (Q37079) is CEO of Apple Inc. (Q312)"
+User: "Who is the CEO of Org Alpha?"
+→ resolve Org Alpha → ent:org-alpha
+→ lookup current CEO relation → ent:person-alpha (Person Alpha), as of KB last updated
+→ inject: "According to KB: Person Alpha (ent:person-alpha) is CEO of Org Alpha Holdings (ent:org-alpha)"
 → LLM answers with grounded context
 ```
 
@@ -700,7 +700,7 @@ This is directly relevant to your existing infrastructure thinking around Qwen, 
 
 Smaller models are weak at:
 - Zero-shot entity extraction on niche domains
-- Disambiguation (Apple the company vs. Apple Corps)
+- Disambiguation (Org Alpha the company vs. Alpha Labs the research group)
 - Relation extraction from complex sentences
 - Maintaining entity consistency across a long document
 
@@ -725,7 +725,7 @@ The pipeline essentially acts as a **structured pre-processor that elevates a 7B
 
 ## Use Case 6 — Tool Calling Grounding
 
-When an LLM uses tool calls (function calling), it often hallucinates tool parameters — especially entity identifiers. If the LLM decides to call `get_company_filings(company="Apple")`, which Apple? Which identifier format does the API expect?
+When an LLM uses tool calls (function calling), it often hallucinates tool parameters — especially entity identifiers. If the LLM decides to call `get_company_filings(company="Org Alpha")`, which Org Alpha? Which identifier format does the API expect?
 
 The enrichment pipeline gives the LLM pre-resolved canonical IDs to use in tool calls:
 
@@ -733,9 +733,9 @@ The enrichment pipeline gives the LLM pre-resolved canonical IDs to use in tool 
 {
   "tool": "get_company_filings",
   "parameters": {
-    "entity_id": "Q312",
-    "canonical_name": "Apple Inc.",
-    "isin": "US0378331005"
+    "entity_id": "ent:org-alpha",
+    "canonical_name": "Org Alpha Holdings",
+    "external_ref": "REF-ALPHA-001"
   }
 }
 ```
@@ -751,9 +751,9 @@ An LLM asked to synthesize information across 50 documents about a company has n
 With enrichment:
 
 ```
-"Summarize everything relevant about Stripe's fundraising history"
+"Summarize everything relevant about Org Delta's funding history"
 
-→ query: linked_entity WHERE qid = 'Q1440848'
+→ query: linked_entity WHERE entity_id = 'ent:org-delta'
          AND relation_type IN ('FundingRound', 'Acquisition', 'IPO')
          ORDER BY document.published_at ASC
 
@@ -782,4 +782,3 @@ The LLM's job becomes writing and reasoning, not extraction and organization. Th
 The way to think about it: **the enrichment pipeline does the left-brain structured extraction work so the LLM can focus entirely on right-brain reasoning and generation.** That division of labor is where you get the best quality-to-cost ratio, and it's the architecture that scales — because the pipeline runs once per document and the results are reused by every LLM call that touches that document forever.
 
 For MSwarm specifically, this means every agent in the swarm shares a structured, entity-anchored world model that was built once and maintained continuously — rather than each agent re-deriving its own understanding of the same documents from scratch.
-

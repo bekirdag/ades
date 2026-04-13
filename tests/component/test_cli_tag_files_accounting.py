@@ -13,7 +13,7 @@ def test_cli_tag_files_reports_sizes_and_skipped_rejected_inputs(tmp_path: Path)
     corpus_dir.mkdir()
     keep_input = corpus_dir / "keep-report.html"
     generated_output = corpus_dir / "keep-report.finance-en.ades.json"
-    keep_input.write_text("<p>Apple said AAPL traded on NASDAQ.</p>", encoding="utf-8")
+    keep_input.write_text("<p>Org Beta said TICKA traded on EXCHX.</p>", encoding="utf-8")
     generated_output.write_text("{}", encoding="utf-8")
     missing_input = tmp_path / "missing.html"
 
@@ -39,7 +39,7 @@ def test_cli_tag_files_reports_sizes_and_skipped_rejected_inputs(tmp_path: Path)
     assert payload["item_count"] == 1
     assert payload["summary"]["processed_count"] == 1
     assert payload["summary"]["processed_input_bytes"] == len(
-        "<p>Apple said AAPL traded on NASDAQ.</p>".encode("utf-8")
+        "<p>Org Beta said TICKA traded on EXCHX.</p>".encode("utf-8")
     )
     assert payload["summary"]["skipped_count"] == 2
     assert payload["summary"]["rejected_count"] == 1

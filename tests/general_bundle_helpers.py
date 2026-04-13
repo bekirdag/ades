@@ -15,79 +15,79 @@ def create_general_raw_snapshots(root: Path) -> dict[str, Path]:
                     {
                         "id": "Q1",
                         "entity_type": "person",
-                        "label": "Tim Cook",
-                        "aliases": ["Timothy Cook"],
+                        "label": "Person Alpha",
+                        "aliases": ["Person Alpha Variant"],
                     },
                     {
                         "id": "Q2",
                         "entity_type": "organization",
-                        "label": "OpenAI",
-                        "aliases": ["Open AI"],
+                        "label": "Org Alpha",
+                        "aliases": ["Org Alpha Variant"],
                     },
                     {
                         "id": "Q3",
                         "entity_type": "person",
-                        "label": "Satya Nadella",
+                        "label": "Person Beta",
                         "aliases": [],
                     },
                     {
                         "id": "Q4",
                         "entity_type": "person",
-                        "label": "Jensen Huang",
+                        "label": "Person Gamma",
                         "aliases": [],
                     },
                     {
                         "id": "Q5",
                         "entity_type": "organization",
-                        "label": "Nvidia",
+                        "label": "Org Delta",
                         "aliases": [],
                     },
                     {
                         "id": "Q6",
                         "entity_type": "organization",
-                        "label": "Anthropic",
+                        "label": "Org Epsilon",
                         "aliases": [],
                     },
                     {
                         "id": "Q7",
                         "entity_type": "person",
-                        "label": "Sam Altman",
+                        "label": "Person Delta",
                         "aliases": [],
                     },
                     {
                         "id": "Q8",
                         "entity_type": "organization",
-                        "label": "Google DeepMind",
-                        "aliases": ["DeepMind Technologies"],
+                        "label": "Org Zeta",
+                        "aliases": ["Org Zeta Variant"],
                     },
                     {
                         "id": "Q9",
                         "entity_type": "person",
-                        "label": "Sundar Pichai",
+                        "label": "Person Epsilon",
                         "aliases": [
-                            "Pichai Sundarajan",
-                            "Pichai Sundararajan",
-                            "Pichai",
-                            "Sundara Pichai",
+                            "Person Epsilon Variant One",
+                            "Person Epsilon Variant Two",
+                            "EpsilonSurname",
+                            "Person Epsilon Variant Three",
                         ],
                     },
                     {
                         "id": "Q10",
                         "entity_type": "person",
-                        "label": "Demis Hassabis",
-                        "aliases": ["Hassabis", "Sir Demis Hassabis"],
+                        "label": "Person Zeta",
+                        "aliases": ["ZetaSurname", "Person Zeta Honorific"],
                     },
                     {
                         "id": "Q11",
                         "entity_type": "person",
-                        "label": "Mira Murati",
-                        "aliases": ["Ermira Murati"],
+                        "label": "Person Eta",
+                        "aliases": ["Person Eta Variant"],
                     },
                     {
                         "id": "Q12",
                         "entity_type": "person",
-                        "label": "Ilya Sutskever",
-                        "aliases": ["Ilya Efimovich Sutskever"],
+                        "label": "Person Theta",
+                        "aliases": ["Person Theta Variant"],
                     },
                 ]
             },
@@ -102,8 +102,8 @@ def create_general_raw_snapshots(root: Path) -> dict[str, Path]:
         "\n".join(
             [
                 "geonameid|name|alternatenames|feature_class|feature_code|country_code",
-                "745044|Istanbul|Constantinople,Byzantium|P|PPLA|TR",
-                "2643743|London|Londres|P|PPLC|GB",
+                "745044|Metro Alpha|Metro Alpha Historic,Byzantium|P|PPLA|TR",
+                "2643743|Metro Beta|Metro Beta Alt|P|PPLC|GB",
             ]
         )
         + "\n",
@@ -117,13 +117,13 @@ def create_general_raw_snapshots(root: Path) -> dict[str, Path]:
                 "entities": [
                     {
                         "entity_type": "organization",
-                        "canonical_text": "Apple",
+                        "canonical_text": "Org Beta",
                         "aliases": [],
                     },
                     {
                         "entity_type": "location",
-                        "canonical_text": "Tokyo",
-                        "aliases": ["Tokio"],
+                        "canonical_text": "Metro Gamma",
+                        "aliases": ["Metro Gamma Variant"],
                     }
                 ]
             },
@@ -151,120 +151,132 @@ def create_general_remote_sources(root: Path) -> dict[str, str]:
                 "entities": {
                     "Q265852": {
                         "id": "Q265852",
-                        "labels": {"en": {"value": "Tim Cook"}},
+                        "entity_type": "person",
+                        "labels": {"en": {"value": "Person Alpha"}},
                         "aliases": {
                             "en": [
-                                {"value": "Timothy Cook"},
-                                {"value": "Tim Apple"},
+                                {"value": "Person Alpha Variant"},
+                                {"value": "Person Alpha Alias"},
                             ]
                         },
                     },
                     "Q2283": {
                         "id": "Q2283",
-                        "labels": {"en": {"value": "Microsoft"}},
+                        "entity_type": "organization",
+                        "labels": {"en": {"value": "Org Gamma"}},
                         "aliases": {
                             "en": [
-                                {"value": "Microsoft Corporation"},
+                                {"value": "Issuer Beta Group"},
                             ]
                         },
                     },
                     "Q7426870": {
                         "id": "Q7426870",
-                        "labels": {"en": {"value": "Satya Nadella"}},
+                        "entity_type": "person",
+                        "labels": {"en": {"value": "Person Beta"}},
                         "aliases": {
                             "en": [
-                                {"value": "Satya Narayana Nadella"},
+                                {"value": "Person Beta Variant"},
                             ]
                         },
                     },
                     "Q305177": {
                         "id": "Q305177",
-                        "labels": {"en": {"value": "Jensen Huang"}},
+                        "entity_type": "person",
+                        "labels": {"en": {"value": "Person Gamma"}},
                         "aliases": {
                             "en": [
-                                {"value": "Jen-Hsun Huang"},
+                                {"value": "Person Gamma Variant"},
                             ]
                         },
                     },
                     "Q182477": {
                         "id": "Q182477",
-                        "labels": {"en": {"value": "Nvidia"}},
+                        "entity_type": "organization",
+                        "labels": {"en": {"value": "Org Delta"}},
                         "aliases": {
                             "en": [
-                                {"value": "NVIDIA"},
+                                {"value": "Org Delta Variant"},
                             ]
                         },
                     },
                     "Q116758847": {
                         "id": "Q116758847",
-                        "labels": {"en": {"value": "Anthropic"}},
+                        "entity_type": "organization",
+                        "labels": {"en": {"value": "Org Epsilon"}},
                         "aliases": {
                             "en": [
-                                {"value": "Anthropic PBC"},
+                                {"value": "Org Epsilon Variant"},
                             ]
                         },
                     },
                     "Q7407093": {
                         "id": "Q7407093",
-                        "labels": {"en": {"value": "Sam Altman"}},
+                        "entity_type": "person",
+                        "labels": {"en": {"value": "Person Delta"}},
                         "aliases": {
                             "en": [
-                                {"value": "Samuel Altman"},
-                                {"value": "Samuel Harris Altman"},
-                                {"value": "Sam Harris Altman"},
+                                {"value": "Person Delta Variant"},
+                                {"value": "Person Delta Variant Two"},
+                                {"value": "Person Delta Variant Three"},
                             ]
                         },
                     },
                     "Q15733006": {
                         "id": "Q15733006",
-                        "labels": {"en": {"value": "Google DeepMind"}},
+                        "entity_type": "organization",
+                        "labels": {"en": {"value": "Org Zeta"}},
                         "aliases": {
                             "en": [
-                                {"value": "DeepMind Technologies Limited"},
-                                {"value": "DeepMind Technologies Limited (London)"},
-                                {"value": "DeepMind Technologies"},
-                                {"value": "deepmind.com"},
-                                {"value": "Google Deep Mind"},
+                                {"value": "Org Zeta Variant Limited"},
+                                {"value": "Org Zeta Variant Limited (Metro Beta)"},
+                                {"value": "Org Zeta Variant"},
+                                {"value": "orgzeta.example.test"},
+                                {"value": "Org Zeta Variant Split"},
                             ]
                         },
                     },
                     "Q3503829": {
                         "id": "Q3503829",
-                        "labels": {"en": {"value": "Sundar Pichai"}},
+                        "entity_type": "person",
+                        "labels": {"en": {"value": "Person Epsilon"}},
                         "aliases": {
                             "en": [
-                                {"value": "Pichai Sundarajan"},
-                                {"value": "Pichai Sundararajan"},
-                                {"value": "Pichai"},
-                                {"value": "Sundara Pichai"},
+                                {"value": "Person Epsilon Variant One"},
+                                {"value": "Person Epsilon Variant Two"},
+                                {"value": "EpsilonSurname"},
+                                {"value": "Person Epsilon Variant Three"},
                             ]
                         },
                     },
                     "Q3022141": {
                         "id": "Q3022141",
-                        "labels": {"en": {"value": "Demis Hassabis"}},
+                        "entity_type": "person",
+                        "labels": {"en": {"value": "Person Zeta"}},
                         "aliases": {
                             "en": [
-                                {"value": "Hassabis"},
-                                {"value": "Sir Demis Hassabis"},
+                                {"value": "ZetaSurname"},
+                                {"value": "Person Zeta Honorific"},
                             ]
                         },
                     },
                     "Q116706551": {
                         "id": "Q116706551",
-                        "labels": {"en": {"value": "Mira Murati"}},
+                        "entity_type": "person",
+                        "labels": {"en": {"value": "Person Eta"}},
                         "aliases": {
                             "en": [
-                                {"value": "Ermira Murati"},
+                                {"value": "Person Eta Variant"},
                             ]
                         },
                     },
                     "Q21712134": {
                         "id": "Q21712134",
-                        "labels": {"en": {"value": "Ilya Sutskever"}},
+                        "entity_type": "person",
+                        "labels": {"en": {"value": "Person Theta"}},
                         "aliases": {
                             "en": [
-                                {"value": "Ilya Efimovich Sutskever"},
+                                {"value": "Person Theta Variant"},
                             ]
                         },
                     },
@@ -282,8 +294,8 @@ def create_general_remote_sources(root: Path) -> dict[str, str]:
             "cities15000.txt",
             "\n".join(
                 [
-                    "745044\tIstanbul\tIstanbul\tConstantinople,Byzantium\t41.01384\t28.94966\tP\tPPLA\tTR\t\t34\t\t\t\t15462452\t\t39\tEurope/Istanbul\t2024-06-20",
-                    "2643743\tLondon\tLondon\tLondres\t51.50853\t-0.12574\tP\tPPLC\tGB\t\tH9\t\t\t\t8961989\t\t25\tEurope/London\t2024-06-20",
+                    "745044\tMetro Alpha\tMetro Alpha\tMetro Alpha Historic,Byzantium\t41.01384\t28.94966\tP\tPPLA\tTR\t\t34\t\t\t\t15462452\t\t39\tEurope/Metro Alpha\t2024-06-20",
+                    "2643743\tMetro Beta\tMetro Beta\tMetro Beta Alt\t51.50853\t-0.12574\tP\tPPLC\tGB\t\tH9\t\t\t\t8961989\t\t25\tEurope/Metro Beta\t2024-06-20",
                 ]
             )
             + "\n",

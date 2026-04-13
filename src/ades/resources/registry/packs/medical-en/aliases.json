@@ -1,16 +1,36 @@
 {
   "aliases": [
     {
-      "text": "aspirin",
+      "text": "compound alpha",
       "label": "drug"
     },
     {
-      "text": "diabetes",
+      "text": "compound alpha acid",
+      "label": "drug"
+    },
+    {
+      "text": "disease alpha",
       "label": "disease"
     },
     {
-      "text": "BRCA1",
+      "text": "disease beta alias",
+      "label": "disease"
+    },
+    {
+      "text": "GENEA1",
       "label": "gene"
+    },
+    {
+      "text": "GENEA1ALT",
+      "label": "gene"
+    },
+    {
+      "text": "Protein Alpha",
+      "label": "protein"
+    },
+    {
+      "text": "NCT00000001",
+      "label": "clinical_trial"
     }
   ]
 }

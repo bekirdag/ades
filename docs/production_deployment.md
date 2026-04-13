@@ -68,7 +68,7 @@ With the local config above:
 ades status
 ades list packs
 ades pull finance-en
-ades tag "Apple shares rose after strong quarterly guidance."
+ades tag "Org Alpha issued updated guidance."
 ```
 
 `ades packs list --available` remains available for the explicit legacy path, while `ades list packs` is the shorter default for registry pack discovery.

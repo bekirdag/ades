@@ -68,12 +68,12 @@ SMOKE_REMOVE_GUARDRAIL_MESSAGE = (
     f"Cannot remove pack {SMOKE_DEPENDENCY_PACK_ID} while installed dependent packs exist: "
     f"{SMOKE_PULL_PACK_ID}"
 )
-SMOKE_TAG_TEXT = "Apple said AAPL traded on NASDAQ after USD 12.5 guidance."
+SMOKE_TAG_TEXT = "Issuer Alpha said TICKA traded on EXCHX after USD 12.5 guidance."
 SMOKE_TAG_FILE_NAME = "serve-smoke-input.html"
-SMOKE_TAG_FILE_CONTENT = "<p>Apple said AAPL traded on NASDAQ after USD 12.5 guidance.</p>\n"
+SMOKE_TAG_FILE_CONTENT = "<p>Issuer Alpha said TICKA traded on EXCHX after USD 12.5 guidance.</p>\n"
 SMOKE_TAG_BATCH_FILES = (
-    ("serve-smoke-batch-alpha.html", "<p>Apple said AAPL rallied.</p>\n"),
-    ("serve-smoke-batch-beta.html", "<p>NASDAQ closed near USD 12.5.</p>\n"),
+    ("serve-smoke-batch-alpha.html", "<p>Issuer Alpha said TICKA rallied.</p>\n"),
+    ("serve-smoke-batch-beta.html", "<p>EXCHX closed near USD 12.5.</p>\n"),
 )
 SMOKE_TAG_BATCH_FAKE_MODIFIED_TIME_NS = 1775769721594998319
 SMOKE_TAG_BATCH_OUTPUT_DIR_NAME = "serve-smoke-batch-outputs"

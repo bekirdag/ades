@@ -8,11 +8,11 @@ def test_registry_lookup_supports_multi_term_cross_field_alias_search(tmp_path: 
     PackInstaller(tmp_path).install("finance-en")
     registry = PackRegistry(tmp_path)
 
-    candidates = registry.lookup_candidates("apple organization", limit=10)
+    candidates = registry.lookup_candidates("org beta organization", limit=10)
 
     assert candidates
     assert candidates[0]["kind"] == "alias"
-    assert candidates[0]["value"] == "Apple"
+    assert candidates[0]["value"] == "Org Beta"
     assert candidates[0]["label"] == "organization"
 
 

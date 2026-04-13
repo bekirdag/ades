@@ -9,7 +9,7 @@ def test_public_api_reports_manifest_lineage(tmp_path: Path) -> None:
     corpus_dir = tmp_path / "corpus"
     corpus_dir.mkdir()
     source_path = corpus_dir / "report.html"
-    source_path.write_text("<p>Apple said AAPL rallied.</p>", encoding="utf-8")
+    source_path.write_text("<p>Org Beta said TICKA rallied.</p>", encoding="utf-8")
     output_dir = tmp_path / "outputs"
 
     initial = tag_files(

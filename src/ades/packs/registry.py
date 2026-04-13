@@ -13,8 +13,9 @@ from ..storage.backend import (
     build_metadata_store,
     normalize_metadata_backend,
     normalize_runtime_target,
+    resolve_backend_plan,
 )
-from ..storage.paths import build_storage_layout, ensure_storage_layout
+from ..storage.paths import build_storage_layout, ensure_storage_layout, iter_pack_manifest_paths
 from .manifest import PackManifest, RegistryIndex
 
 
@@ -32,6 +33,10 @@ class PackRegistry:
         self.layout = ensure_storage_layout(build_storage_layout(storage_root))
         self.runtime_target = normalize_runtime_target(runtime_target)
         self.metadata_backend = normalize_metadata_backend(metadata_backend)
+        self.backend_plan = resolve_backend_plan(
+            runtime_target=self.runtime_target,
+            metadata_backend=self.metadata_backend,
+        )
         self.store = build_metadata_store(
             self.layout,
             runtime_target=self.runtime_target,
@@ -44,6 +49,8 @@ class PackRegistry:
         """Return all installed packs that have a manifest."""
 
         packs = self.store.list_installed_packs(active_only=active_only)
+        if not self._allows_implicit_metadata_repairs():
+            return self._merge_visible_filesystem_packs(packs, active_only=active_only)
         known_packs = packs if not active_only else self.store.list_installed_packs(active_only=False)
         if self._sync_missing_filesystem_packs(known_packs):
             return self.store.list_installed_packs(active_only=active_only)
@@ -63,8 +70,10 @@ class PackRegistry:
         pack_dir = self.layout.packs_dir / pack_id
         if not (pack_dir / "manifest.json").exists():
             return None
-        self.store.sync_pack_from_dir(pack_dir)
-        return self.store.get_pack(pack_id, active_only=active_only)
+        manifest = PackManifest.load(pack_dir / "manifest.json")
+        if active_only and not manifest.active:
+            return None
+        return manifest
 
     def pack_exists(self, pack_id: str, *, active_only: bool = False) -> bool:
         """Check whether a pack manifest is present."""
@@ -103,7 +112,7 @@ class PackRegistry:
 
         return self.store.list_pack_rules(pack_id)
 
-    def list_pack_aliases(self, pack_id: str) -> list[dict[str, str]]:
+    def list_pack_aliases(self, pack_id: str) -> list[dict[str, str | float | bool]]:
         """Return indexed aliases for a pack."""
 
         return self.store.list_pack_aliases(pack_id)
@@ -114,6 +123,7 @@ class PackRegistry:
         *,
         pack_id: str | None = None,
         exact_alias: bool = False,
+        fuzzy: bool = False,
         active_only: bool = True,
         limit: int = 20,
     ) -> list[dict[str, str | float | bool | None]]:
@@ -123,11 +133,16 @@ class PackRegistry:
             query,
             pack_id=pack_id,
             exact_alias=exact_alias,
+            fuzzy=fuzzy,
             active_only=active_only,
             limit=limit,
         )
         if candidates:
             return candidates
+        if not self._allows_implicit_metadata_repairs():
+            if pack_id is not None and self.get_pack(pack_id, active_only=active_only) is None:
+                return []
+            return []
         if pack_id is not None:
             if self.get_pack(pack_id, active_only=active_only) is None:
                 return []
@@ -139,20 +154,41 @@ class PackRegistry:
             query,
             pack_id=pack_id,
             exact_alias=exact_alias,
+            fuzzy=fuzzy,
             active_only=active_only,
             limit=limit,
         )
 
     def _bootstrap_if_needed(self) -> None:
+        if not self._allows_implicit_metadata_repairs():
+            return
         if self.store.count_installed_packs() == 0:
             self.store.sync_from_filesystem(self.layout.packs_dir)
+
+    def _allows_implicit_metadata_repairs(self) -> bool:
+        return self.metadata_backend == MetadataBackend.SQLITE
+
+    def _merge_visible_filesystem_packs(
+        self,
+        packs: list[PackManifest],
+        *,
+        active_only: bool,
+    ) -> list[PackManifest]:
+        manifests_by_id = {pack.pack_id: pack for pack in packs}
+        if self.layout.packs_dir.exists():
+            for manifest_path in iter_pack_manifest_paths(self.layout.packs_dir):
+                manifest = PackManifest.load(manifest_path)
+                if active_only and not manifest.active:
+                    continue
+                manifests_by_id.setdefault(manifest.pack_id, manifest)
+        return sorted(manifests_by_id.values(), key=lambda pack: pack.pack_id)
 
     def _sync_missing_filesystem_packs(self, packs: list[PackManifest]) -> bool:
         if not self.layout.packs_dir.exists():
             return False
         known_ids = {pack.pack_id for pack in packs}
         repaired = False
-        for manifest_path in sorted(self.layout.packs_dir.glob("*/manifest.json")):
+        for manifest_path in iter_pack_manifest_paths(self.layout.packs_dir):
             pack_dir = manifest_path.parent
             if pack_dir.name in known_ids:
                 continue

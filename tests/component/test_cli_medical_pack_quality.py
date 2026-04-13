@@ -68,5 +68,7 @@ def test_cli_can_validate_generated_medical_pack_quality(tmp_path) -> None:
     assert quality_result.exit_code == 0
     quality_payload = json.loads(quality_result.stdout)
     assert quality_payload["pack_id"] == "medical-en"
+    assert quality_payload["fixture_profile"] == "benchmark"
     assert quality_payload["passed"] is True
     assert quality_payload["expected_recall"] == 1.0
+    assert quality_payload["expected_entity_count"] == 21

@@ -16,8 +16,8 @@ def test_tag_files_endpoint_supports_filters_and_returns_summary(tmp_path: Path)
 
     keep_input = keep_dir / "keep-report.html"
     skip_input = skip_dir / "skip-report.html"
-    keep_input.write_text("<p>Apple said AAPL traded on NASDAQ.</p>", encoding="utf-8")
-    skip_input.write_text("<p>Apple said AAPL traded on NASDAQ.</p>", encoding="utf-8")
+    keep_input.write_text("<p>Org Beta said TICKA traded on EXCHX.</p>", encoding="utf-8")
+    skip_input.write_text("<p>Org Beta said TICKA traded on EXCHX.</p>", encoding="utf-8")
 
     client = TestClient(create_app(storage_root=tmp_path))
     response = client.post(

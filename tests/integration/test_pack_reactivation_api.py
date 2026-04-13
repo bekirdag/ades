@@ -41,7 +41,7 @@ def test_public_api_repull_reactivates_inactive_dependency(tmp_path: Path) -> No
     }
 
     entities = {(entity.text, entity.label) for entity in tag(
-        "Contact us at team@example.com and watch AAPL on NASDAQ.",
+        "Contact us at team@example.com and watch TICKA on EXCHX.",
         pack="finance-en",
         storage_root=install_root,
     ).entities}
@@ -92,7 +92,7 @@ def test_public_api_lookup_repairs_missing_pack_metadata_rows(tmp_path: Path) ->
 
     delete_installed_pack_metadata(install_root, "finance-en")
     repaired_lookup = lookup_candidates(
-        "AAPL",
+        "TICKA",
         storage_root=install_root,
         exact_alias=True,
     ).candidates
@@ -100,7 +100,7 @@ def test_public_api_lookup_repairs_missing_pack_metadata_rows(tmp_path: Path) ->
     assert any(
         candidate.kind == "alias"
         and candidate.pack_id == "finance-en"
-        and candidate.value == "AAPL"
+        and candidate.value == "TICKA"
         and candidate.label == "ticker"
         for candidate in repaired_lookup
     )

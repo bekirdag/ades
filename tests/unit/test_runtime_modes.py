@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from fastapi import FastAPI
 import pytest
 
 from ades.config import Settings
@@ -27,3 +28,21 @@ def test_production_service_requires_explicit_runtime(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError):
         create_production_app(storage_root=os.getcwd())
+
+
+def test_production_service_accepts_postgresql_runtime(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_create_app(*, storage_root):
+        captured["storage_root"] = storage_root
+        return FastAPI()
+
+    monkeypatch.setenv("ADES_RUNTIME_TARGET", "production_server")
+    monkeypatch.setenv("ADES_METADATA_BACKEND", "postgresql")
+    monkeypatch.setenv("ADES_DATABASE_URL", "postgresql://db.example/ades")
+    monkeypatch.setattr("ades.service.production.create_app", _fake_create_app)
+
+    app = create_production_app(storage_root=tmp_path)
+
+    assert isinstance(app, FastAPI)
+    assert captured["storage_root"] == tmp_path

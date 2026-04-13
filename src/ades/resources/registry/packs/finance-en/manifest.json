@@ -5,7 +5,6 @@
   "language": "en",
   "domain": "finance",
   "tier": "domain",
-  "description": "English financial entities, exchanges, tickers, and money patterns.",
   "tags": [
     "finance",
     "markets",
@@ -18,7 +17,7 @@
     {
       "name": "pack",
       "url": "../../artifacts/finance-en-0.1.0.tar.zst",
-      "sha256": "f6c73d2e938371793087dbaad64e82712a16c5ea5df17395955533fa89ec43a4"
+      "sha256": "a6c13e1ebbfc488d5586d6afe9bde64b06ed4642c5a0ac8878fcbfda95163eaa"
     }
   ],
   "models": [],
@@ -28,5 +27,6 @@
   "labels": [
     "labels.json"
   ],
-  "min_ades_version": "0.1.0"
+  "min_ades_version": "0.1.0",
+  "description": "English financial entities, exchanges, tickers, and money patterns."
 }

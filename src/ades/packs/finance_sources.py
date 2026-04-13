@@ -18,37 +18,20 @@ DEFAULT_FINANCE_SOURCE_OUTPUT_ROOT = Path(
     "/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en"
 )
 DEFAULT_SEC_COMPANIES_URL = "https://www.sec.gov/files/company_tickers.json"
+DEFAULT_SEC_SUBMISSIONS_URL = (
+    "https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip"
+)
+DEFAULT_SEC_COMPANYFACTS_URL = (
+    "https://www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip"
+)
 DEFAULT_SYMBOL_DIRECTORY_URL = (
     "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt"
 )
-DEFAULT_SOURCE_FETCH_USER_AGENT = "ades/0.1.0 (ops@adestool.com)"
-DEFAULT_CURATED_FINANCE_ENTITIES: tuple[dict[str, object], ...] = (
-    {
-        "entity_type": "exchange",
-        "canonical_text": "NASDAQ",
-        "aliases": ["Nasdaq", "Nasdaq Stock Market"],
-    },
-    {
-        "entity_type": "exchange",
-        "canonical_text": "NYSE",
-        "aliases": ["New York Stock Exchange"],
-    },
-    {
-        "entity_type": "exchange",
-        "canonical_text": "NYSE American",
-        "aliases": ["AMEX", "American Stock Exchange"],
-    },
-    {
-        "entity_type": "exchange",
-        "canonical_text": "CBOE",
-        "aliases": ["Chicago Board Options Exchange"],
-    },
-    {
-        "entity_type": "exchange",
-        "canonical_text": "CME",
-        "aliases": ["Chicago Mercantile Exchange"],
-    },
+DEFAULT_OTHER_LISTED_URL = (
+    "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
 )
+DEFAULT_SOURCE_FETCH_USER_AGENT = "ades/0.1.0 (ops@adestool.com)"
+DEFAULT_CURATED_FINANCE_ENTITIES: tuple[dict[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -60,16 +43,25 @@ class FinanceSourceFetchResult:
     snapshot: str
     snapshot_dir: str
     sec_companies_url: str
+    sec_submissions_url: str
+    sec_companyfacts_url: str
     symbol_directory_url: str
+    other_listed_url: str
     source_manifest_path: str
     sec_companies_path: str
+    sec_submissions_path: str
+    sec_companyfacts_path: str
     symbol_directory_path: str
+    other_listed_path: str
     curated_entities_path: str
     generated_at: str
     source_count: int
     curated_entity_count: int
     sec_companies_sha256: str
+    sec_submissions_sha256: str
+    sec_companyfacts_sha256: str
     symbol_directory_sha256: str
+    other_listed_sha256: str
     curated_entities_sha256: str
     warnings: list[str] = field(default_factory=list)
 
@@ -79,7 +71,10 @@ def fetch_finance_source_snapshot(
     output_dir: str | Path = DEFAULT_FINANCE_SOURCE_OUTPUT_ROOT,
     snapshot: str | None = None,
     sec_companies_url: str = DEFAULT_SEC_COMPANIES_URL,
+    sec_submissions_url: str = DEFAULT_SEC_SUBMISSIONS_URL,
+    sec_companyfacts_url: str = DEFAULT_SEC_COMPANYFACTS_URL,
     symbol_directory_url: str = DEFAULT_SYMBOL_DIRECTORY_URL,
+    other_listed_url: str = DEFAULT_OTHER_LISTED_URL,
     user_agent: str = DEFAULT_SOURCE_FETCH_USER_AGENT,
 ) -> FinanceSourceFetchResult:
     """Download one immutable finance source snapshot set into the big-data root."""
@@ -102,21 +97,42 @@ def fetch_finance_source_snapshot(
             snapshot_dir / "sec_company_tickers.json",
             user_agent=user_agent,
         )
+        sec_submissions_resolved_url = _download_source(
+            sec_submissions_url,
+            snapshot_dir / "sec_submissions.zip",
+            user_agent=user_agent,
+        )
+        sec_companyfacts_resolved_url = _download_source(
+            sec_companyfacts_url,
+            snapshot_dir / "sec_companyfacts.zip",
+            user_agent=user_agent,
+        )
         symbol_url = _download_source(
             symbol_directory_url,
             snapshot_dir / "nasdaqtraded.txt",
             user_agent=user_agent,
         )
+        other_listed_resolved_url = _download_source(
+            other_listed_url,
+            snapshot_dir / "otherlisted.txt",
+            user_agent=user_agent,
+        )
         curated_entities_path = snapshot_dir / "curated_finance_entities.json"
         _write_curated_entities(curated_entities_path)
         _validate_sec_snapshot(snapshot_dir / "sec_company_tickers.json")
+        _validate_nonempty_snapshot(snapshot_dir / "sec_submissions.zip")
+        _validate_nonempty_snapshot(snapshot_dir / "sec_companyfacts.zip")
         _validate_symbol_directory(snapshot_dir / "nasdaqtraded.txt")
+        _validate_symbol_directory(snapshot_dir / "otherlisted.txt")
     except Exception:
         shutil.rmtree(snapshot_dir, ignore_errors=True)
         raise
 
     sec_companies_path = snapshot_dir / "sec_company_tickers.json"
+    sec_submissions_path = snapshot_dir / "sec_submissions.zip"
+    sec_companyfacts_path = snapshot_dir / "sec_companyfacts.zip"
     symbol_directory_path = snapshot_dir / "nasdaqtraded.txt"
+    other_listed_path = snapshot_dir / "otherlisted.txt"
     curated_entities_path = snapshot_dir / "curated_finance_entities.json"
     manifest_path = snapshot_dir / "sources.fetch.json"
     _write_source_manifest(
@@ -125,9 +141,15 @@ def fetch_finance_source_snapshot(
         generated_at=generated_at,
         user_agent=user_agent,
         sec_companies_url=sec_url,
+        sec_submissions_url=sec_submissions_resolved_url,
+        sec_companyfacts_url=sec_companyfacts_resolved_url,
         symbol_directory_url=symbol_url,
+        other_listed_url=other_listed_resolved_url,
         sec_companies_path=sec_companies_path,
+        sec_submissions_path=sec_submissions_path,
+        sec_companyfacts_path=sec_companyfacts_path,
         symbol_directory_path=symbol_directory_path,
+        other_listed_path=other_listed_path,
         curated_entities_path=curated_entities_path,
     )
 
@@ -137,16 +159,25 @@ def fetch_finance_source_snapshot(
         snapshot=resolved_snapshot,
         snapshot_dir=str(snapshot_dir),
         sec_companies_url=sec_url,
+        sec_submissions_url=sec_submissions_resolved_url,
+        sec_companyfacts_url=sec_companyfacts_resolved_url,
         symbol_directory_url=symbol_url,
+        other_listed_url=other_listed_resolved_url,
         source_manifest_path=str(manifest_path),
         sec_companies_path=str(sec_companies_path),
+        sec_submissions_path=str(sec_submissions_path),
+        sec_companyfacts_path=str(sec_companyfacts_path),
         symbol_directory_path=str(symbol_directory_path),
+        other_listed_path=str(other_listed_path),
         curated_entities_path=str(curated_entities_path),
         generated_at=generated_at,
-        source_count=3,
+        source_count=6,
         curated_entity_count=len(DEFAULT_CURATED_FINANCE_ENTITIES),
         sec_companies_sha256=_sha256_file(sec_companies_path),
+        sec_submissions_sha256=_sha256_file(sec_submissions_path),
+        sec_companyfacts_sha256=_sha256_file(sec_companyfacts_path),
         symbol_directory_sha256=_sha256_file(symbol_directory_path),
+        other_listed_sha256=_sha256_file(other_listed_path),
         curated_entities_sha256=_sha256_file(curated_entities_path),
         warnings=warnings,
     )
@@ -189,9 +220,15 @@ def _write_source_manifest(
     generated_at: str,
     user_agent: str,
     sec_companies_url: str,
+    sec_submissions_url: str,
+    sec_companyfacts_url: str,
     symbol_directory_url: str,
+    other_listed_url: str,
     sec_companies_path: Path,
+    sec_submissions_path: Path,
+    sec_companyfacts_path: Path,
     symbol_directory_path: Path,
+    other_listed_path: Path,
     curated_entities_path: Path,
 ) -> None:
     path.write_text(
@@ -209,9 +246,24 @@ def _write_source_manifest(
                         path=sec_companies_path,
                     ),
                     _source_manifest_entry(
+                        name="sec-submissions",
+                        source_url=sec_submissions_url,
+                        path=sec_submissions_path,
+                    ),
+                    _source_manifest_entry(
+                        name="sec-companyfacts",
+                        source_url=sec_companyfacts_url,
+                        path=sec_companyfacts_path,
+                    ),
+                    _source_manifest_entry(
                         name="symbol-directory",
                         source_url=symbol_directory_url,
                         path=symbol_directory_path,
+                    ),
+                    _source_manifest_entry(
+                        name="other-listed",
+                        source_url=other_listed_url,
+                        path=other_listed_path,
                     ),
                     _source_manifest_entry(
                         name="curated-finance-entities",
@@ -241,6 +293,11 @@ def _validate_sec_snapshot(path: Path) -> None:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, (dict, list)):
         raise ValueError(f"Unsupported SEC snapshot structure: {path}")
+
+
+def _validate_nonempty_snapshot(path: Path) -> None:
+    if path.stat().st_size <= 0:
+        raise ValueError(f"Snapshot is empty: {path}")
 
 
 def _validate_symbol_directory(path: Path) -> None:

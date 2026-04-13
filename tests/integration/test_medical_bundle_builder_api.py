@@ -29,6 +29,7 @@ def test_public_api_can_build_medical_bundle_then_generate_install_and_tag(
         hgnc_genes_path=medical_snapshots["hgnc_genes"],
         uniprot_proteins_path=medical_snapshots["uniprot_proteins"],
         clinical_trials_path=medical_snapshots["clinical_trials"],
+        orange_book_products_path=medical_snapshots["orange_book_products"],
         curated_entities_path=medical_snapshots["curated_entities"],
         output_dir=tmp_path / "medical-bundles",
     )
@@ -54,15 +55,15 @@ def test_public_api_can_build_medical_bundle_then_generate_install_and_tag(
         registry_url=registry.index_url,
     )
     response = tag(
-        "BRCA1 and p53 protein were studied in NCT04280705 after Aspirin 10 mg dosing for diabetes.",
+        "GENEA1 and Protein Alpha were studied in NCT00000001 after Compound Alpha 10 mg dosing for disease alpha.",
         pack="medical-en",
         storage_root=install_root,
     )
 
     entities = {(entity.text, entity.label) for entity in response.entities}
-    assert ("BRCA1", "gene") in entities
-    assert ("p53 protein", "protein") in entities
-    assert ("NCT04280705", "clinical_trial") in entities
-    assert ("Aspirin", "drug") in entities
+    assert ("GENEA1", "gene") in entities
+    assert ("Protein Alpha", "protein") in entities
+    assert ("NCT00000001", "clinical_trial") in entities
+    assert ("Compound Alpha", "drug") in entities
     assert ("10 mg", "dosage") in entities
-    assert ("diabetes", "disease") in entities
+    assert ("disease alpha", "disease") in entities

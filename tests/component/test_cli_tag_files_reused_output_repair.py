@@ -13,8 +13,8 @@ def test_cli_tag_files_can_repair_missing_reused_outputs(tmp_path: Path) -> None
     corpus_dir.mkdir()
     stable_input = corpus_dir / "stable.html"
     changed_input = corpus_dir / "changed.html"
-    stable_input.write_text("<p>Apple said AAPL rallied.</p>", encoding="utf-8")
-    changed_input.write_text("<p>NASDAQ guidance moved.</p>", encoding="utf-8")
+    stable_input.write_text("<p>Org Beta said TICKA rallied.</p>", encoding="utf-8")
+    changed_input.write_text("<p>EXCHX guidance moved.</p>", encoding="utf-8")
     output_dir = tmp_path / "outputs"
 
     runner = CliRunner()
@@ -36,7 +36,7 @@ def test_cli_tag_files_can_repair_missing_reused_outputs(tmp_path: Path) -> None
 
     stable_output = output_dir / "stable.finance-en.ades.json"
     stable_output.unlink()
-    changed_input.write_text("<p>NASDAQ guidance moved again.</p>", encoding="utf-8")
+    changed_input.write_text("<p>EXCHX guidance moved again.</p>", encoding="utf-8")
     manifest_path = output_dir / "batch.finance-en.ades-manifest.json"
     replay = runner.invoke(
         app,

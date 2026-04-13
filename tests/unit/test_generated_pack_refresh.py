@@ -10,7 +10,7 @@ from tests.general_bundle_helpers import create_general_raw_snapshots
 from tests.medical_bundle_helpers import create_medical_raw_snapshots
 
 
-def test_refresh_generated_pack_registry_builds_multi_pack_release(
+def test_refresh_generated_pack_registry_builds_multi_pack_candidates_by_default(
     tmp_path: Path,
 ) -> None:
     general_snapshots = create_general_raw_snapshots(tmp_path / "general-snapshots")
@@ -37,12 +37,48 @@ def test_refresh_generated_pack_registry_builds_multi_pack_release(
 
     assert response.passed is True
     assert response.pack_count == 2
-    assert response.registry is not None
-    assert response.registry.packs[0].pack_id == "general-en"
-    assert response.registry.packs[1].pack_id == "medical-en"
+    assert response.materialize_registry is False
+    assert response.registry_materialized is False
+    assert response.registry is None
+    assert Path(response.candidate_dir).exists()
     assert response.packs[0].pack_id == "general-en"
     assert response.packs[1].pack_id == "medical-en"
     assert response.packs[1].quality.passed is True
+    assert "registry_build_skipped:candidate_only" in response.warnings
+
+
+def test_refresh_generated_pack_registry_materializes_registry_when_requested(
+    tmp_path: Path,
+) -> None:
+    general_snapshots = create_general_raw_snapshots(tmp_path / "general-snapshots")
+    medical_snapshots = create_medical_raw_snapshots(tmp_path / "medical-snapshots")
+    general_bundle = build_general_source_bundle(
+        wikidata_entities_path=general_snapshots["wikidata_entities"],
+        geonames_places_path=general_snapshots["geonames_places"],
+        curated_entities_path=general_snapshots["curated_entities"],
+        output_dir=tmp_path / "general-bundles",
+    )
+    medical_bundle = build_medical_source_bundle(
+        disease_ontology_path=medical_snapshots["disease_ontology"],
+        hgnc_genes_path=medical_snapshots["hgnc_genes"],
+        uniprot_proteins_path=medical_snapshots["uniprot_proteins"],
+        clinical_trials_path=medical_snapshots["clinical_trials"],
+        curated_entities_path=medical_snapshots["curated_entities"],
+        output_dir=tmp_path / "medical-bundles",
+    )
+
+    response = refresh_generated_pack_registry(
+        [general_bundle.bundle_dir, medical_bundle.bundle_dir],
+        output_dir=tmp_path / "refresh-output",
+        materialize_registry=True,
+    )
+
+    assert response.passed is True
+    assert response.materialize_registry is True
+    assert response.registry_materialized is True
+    assert response.registry is not None
+    assert response.registry.packs[0].pack_id == "general-en"
+    assert response.registry.packs[1].pack_id == "medical-en"
     index_payload = json.loads(Path(response.registry.index_path).read_text(encoding="utf-8"))
     assert sorted(index_payload["packs"]) == ["general-en", "medical-en"]
 
@@ -65,7 +101,7 @@ def test_refresh_generated_pack_registry_skips_registry_on_quality_failure(
         if line.strip()
     ]
     filtered_records = [
-        record for record in records if record.get("canonical_text") != "OpenAI"
+        record for record in records if record.get("canonical_text") != "Org Alpha"
     ]
     entities_path.write_text(
         "".join(json.dumps(record, sort_keys=True) + "\n" for record in filtered_records),

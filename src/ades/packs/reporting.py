@@ -27,6 +27,14 @@ class GeneratedPackReport:
     labels_path: str
     aliases_path: str
     rules_path: str
+    matcher_artifact_path: str
+    matcher_entries_path: str
+    matcher_algorithm: str
+    matcher_entry_count: int
+    matcher_state_count: int
+    matcher_max_alias_length: int
+    matcher_artifact_sha256: str
+    matcher_entries_sha256: str
     sources_path: str | None
     build_path: str | None
     generated_at: str
@@ -83,10 +91,7 @@ def report_generated_pack(
         resolved_bundle_dir / bundle.entities_path,
         include_build_only=include_build_only,
     )
-    label_distribution = _load_label_distribution(
-        Path(generated.aliases_path),
-        Path(generated.rules_path),
-    )
+    label_distribution = dict(generated.label_distribution)
     dropped_alias_total = generated.alias_count + generated.dropped_alias_count
     dropped_alias_ratio = (
         round(generated.dropped_alias_count / dropped_alias_total, 4)
@@ -108,6 +113,14 @@ def report_generated_pack(
         labels_path=generated.labels_path,
         aliases_path=generated.aliases_path,
         rules_path=generated.rules_path,
+        matcher_artifact_path=generated.matcher_artifact_path,
+        matcher_entries_path=generated.matcher_entries_path,
+        matcher_algorithm=generated.matcher_algorithm,
+        matcher_entry_count=generated.matcher_entry_count,
+        matcher_state_count=generated.matcher_state_count,
+        matcher_max_alias_length=generated.matcher_max_alias_length,
+        matcher_artifact_sha256=generated.matcher_artifact_sha256,
+        matcher_entries_sha256=generated.matcher_entries_sha256,
         sources_path=generated.sources_path,
         build_path=generated.build_path,
         generated_at=generated.generated_at,
@@ -146,50 +159,27 @@ def _count_unique_canonicals(
     return len(canonicals)
 
 
-def _load_label_distribution(
-    aliases_path: Path,
-    rules_path: Path,
-) -> dict[str, int]:
-    distribution: dict[str, int] = {}
-
-    aliases_payload = json.loads(aliases_path.read_text(encoding="utf-8"))
-    for item in aliases_payload.get("aliases", []):
-        label = _clean_text(item.get("label"))
-        if label:
-            distribution[label] = distribution.get(label, 0) + 1
-
-    rules_payload = json.loads(rules_path.read_text(encoding="utf-8"))
-    for item in rules_payload.get("patterns", []):
-        label = _clean_text(item.get("label"))
-        if label:
-            distribution[label] = distribution.get(label, 0) + 1
-
-    return {
-        label: distribution[label]
-        for label in sorted(distribution, key=lambda value: (value.casefold(), value))
-    }
-
-
-def _read_jsonl_records(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl_records(path: Path) -> Any:
     resolved = path.expanduser().resolve()
     if not resolved.exists():
         raise FileNotFoundError(f"Normalized input file not found: {resolved}")
     if not resolved.is_file():
         raise FileExistsError(f"Normalized input path is not a file: {resolved}")
 
-    records: list[dict[str, Any]] = []
-    for index, line in enumerate(resolved.read_text(encoding="utf-8").splitlines(), start=1):
-        stripped = line.strip()
-        if not stripped:
-            continue
-        try:
-            payload = json.loads(stripped)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSONL record in {resolved} line {index}") from exc
-        if not isinstance(payload, dict):
-            raise ValueError(f"JSONL record in {resolved} line {index} must be an object.")
-        records.append(payload)
-    return records
+    with resolved.open("r", encoding="utf-8") as handle:
+        for index, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                payload = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSONL record in {resolved} line {index}") from exc
+            if not isinstance(payload, dict):
+                raise ValueError(
+                    f"JSONL record in {resolved} line {index} must be an object."
+                )
+            yield payload
 
 
 def _coerce_bool(raw_value: Any) -> bool:

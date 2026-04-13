@@ -37,4 +37,5 @@ def test_public_api_can_validate_generated_medical_pack_quality(
 
     assert report.passed is True
     assert report.pack_id == "medical-en"
+    assert report.fixture_profile == "benchmark"
     assert report.expected_recall == 1.0

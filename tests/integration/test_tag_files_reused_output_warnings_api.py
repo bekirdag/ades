@@ -9,8 +9,8 @@ def test_public_api_warns_when_reused_output_file_is_missing(tmp_path: Path) -> 
     corpus_dir.mkdir()
     stable_input = corpus_dir / "stable.html"
     changed_input = corpus_dir / "changed.html"
-    stable_input.write_text("<p>Apple said AAPL rallied.</p>", encoding="utf-8")
-    changed_input.write_text("<p>NASDAQ guidance moved.</p>", encoding="utf-8")
+    stable_input.write_text("<p>Org Beta said TICKA rallied.</p>", encoding="utf-8")
+    changed_input.write_text("<p>EXCHX guidance moved.</p>", encoding="utf-8")
     output_dir = tmp_path / "outputs"
 
     initial = tag_files(
@@ -24,7 +24,7 @@ def test_public_api_warns_when_reused_output_file_is_missing(tmp_path: Path) -> 
     stable_output.unlink()
     manifest_path = Path(initial.saved_manifest_path)
 
-    changed_input.write_text("<p>NASDAQ guidance moved again.</p>", encoding="utf-8")
+    changed_input.write_text("<p>EXCHX guidance moved again.</p>", encoding="utf-8")
     replay = tag_files(
         directories=[corpus_dir],
         pack="finance-en",

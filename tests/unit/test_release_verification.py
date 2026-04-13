@@ -81,8 +81,8 @@ def _served_batch_manifest_payload(
     )
     effective_input_sizes = (
         [
-            len("<p>Apple said AAPL rallied.</p>\n".encode("utf-8")),
-            len("<p>NASDAQ closed near USD 12.5.</p>\n".encode("utf-8")),
+            len("<p>Issuer Alpha said TICKA rallied.</p>\n".encode("utf-8")),
+            len("<p>EXCHX closed near USD 12.5.</p>\n".encode("utf-8")),
         ]
         if input_sizes is None
         else input_sizes
@@ -253,8 +253,8 @@ def _served_batch_manifest_replay_payload(
     )
     effective_input_sizes = (
         [
-            len("<p>Apple said AAPL rallied.</p>\n".encode("utf-8")),
-            len("<p>NASDAQ closed near USD 12.5.</p>\n".encode("utf-8")),
+            len("<p>Issuer Alpha said TICKA rallied.</p>\n".encode("utf-8")),
+            len("<p>EXCHX closed near USD 12.5.</p>\n".encode("utf-8")),
         ]
         if input_sizes is None
         else input_sizes

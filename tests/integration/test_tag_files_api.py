@@ -11,8 +11,8 @@ def test_public_api_can_tag_multiple_local_html_files(tmp_path: Path) -> None:
     beta_dir.mkdir()
     first_input = alpha_dir / "report.html"
     second_input = beta_dir / "report.html"
-    first_input.write_text("<p>Apple said AAPL traded on NASDAQ.</p>", encoding="utf-8")
-    second_input.write_text("<p>NASDAQ said Apple moved AAPL guidance.</p>", encoding="utf-8")
+    first_input.write_text("<p>Org Beta said TICKA traded on EXCHX.</p>", encoding="utf-8")
+    second_input.write_text("<p>EXCHX said Org Beta moved TICKA guidance.</p>", encoding="utf-8")
     output_dir = tmp_path / "outputs"
 
     response = tag_files(
@@ -31,9 +31,9 @@ def test_public_api_can_tag_multiple_local_html_files(tmp_path: Path) -> None:
     }
     saved_paths = {item.saved_output_path for item in response.items}
 
-    assert (str(first_input.resolve()), "Apple", "organization") in pairs
-    assert (str(first_input.resolve()), "AAPL", "ticker") in pairs
-    assert (str(second_input.resolve()), "NASDAQ", "exchange") in pairs
+    assert (str(first_input.resolve()), "Org Beta", "organization") in pairs
+    assert (str(first_input.resolve()), "TICKA", "ticker") in pairs
+    assert (str(second_input.resolve()), "EXCHX", "exchange") in pairs
     assert saved_paths == {
         str(output_dir.resolve() / "report.finance-en.ades.json"),
         str(output_dir.resolve() / "report.finance-en.ades-2.json"),

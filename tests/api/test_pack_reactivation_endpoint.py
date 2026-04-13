@@ -41,7 +41,7 @@ def test_service_pack_endpoints_reflect_reactivated_dependency_after_repull(tmp_
     tag_response = client.post(
         "/v0/tag",
         json={
-            "text": "Contact us at team@example.com and watch AAPL on NASDAQ.",
+            "text": "Contact us at team@example.com and watch TICKA on EXCHX.",
             "pack": "finance-en",
             "content_type": "text/plain",
         },
@@ -109,13 +109,13 @@ def test_service_lookup_repairs_missing_metadata_rows(tmp_path: Path) -> None:
 
     lookup_after = client.get(
         "/v0/lookup",
-        params={"q": "AAPL", "exact_alias": True},
+        params={"q": "TICKA", "exact_alias": True},
     )
     assert lookup_after.status_code == 200
     assert any(
         candidate["kind"] == "alias"
         and candidate["pack_id"] == "finance-en"
-        and candidate["value"] == "AAPL"
+        and candidate["value"] == "TICKA"
         and candidate["label"] == "ticker"
         for candidate in lookup_after.json()["candidates"]
     )

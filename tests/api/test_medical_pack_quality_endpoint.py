@@ -39,4 +39,5 @@ def test_medical_quality_endpoint_validates_generated_pack(tmp_path) -> None:
     payload = response.json()
     assert payload["pack_id"] == "medical-en"
     assert payload["passed"] is True
-    assert payload["expected_entity_count"] == 12
+    assert payload["fixture_profile"] == "benchmark"
+    assert payload["expected_entity_count"] == 21

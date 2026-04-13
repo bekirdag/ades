@@ -11,14 +11,21 @@ import shutil
 from typing import Any
 import unicodedata
 
+from ..runtime_matcher import build_matcher_artifact_from_aliases_json
+from ..text_processing import canonicalize_text, normalize_lookup_text
+from .alias_analysis import (
+    AliasAnalysisResult,
+    analyze_alias_candidates,
+    build_alias_candidate,
+    iter_retained_aliases_from_db,
+    write_alias_analysis_report,
+)
 from .manifest import PackArtifact, PackManifest
+from .manifest import PackMatcher
+from .rule_validation import validate_rule_pattern
 
 
 _WHITESPACE_RE = re.compile(r"\s+")
-_ORG_SUFFIX_RE = re.compile(
-    r"(?:,\s*)?(?:inc\.?|corp\.?|corporation|co\.?|company|llc|ltd\.?|limited|plc|group|holdings?|sa|ag|nv)$",
-    flags=re.IGNORECASE,
-)
 _ORG_LIKE_LABELS = {
     "bank",
     "company",
@@ -27,6 +34,35 @@ _ORG_LIKE_LABELS = {
     "fund",
     "issuer",
     "organization",
+}
+_ORG_SUFFIX_TOKENS = {
+    "ag",
+    "adviser",
+    "advisers",
+    "advisor",
+    "advisors",
+    "associate",
+    "associates",
+    "capital",
+    "co",
+    "company",
+    "corp",
+    "corporation",
+    "group",
+    "holding",
+    "holdings",
+    "inc",
+    "limited",
+    "llc",
+    "ltd",
+    "management",
+    "nv",
+    "partner",
+    "partners",
+    "plc",
+    "sa",
+    "venture",
+    "ventures",
 }
 _QUOTE_TRANSLATION = str.maketrans(
     {
@@ -51,6 +87,7 @@ _ALLOWED_SOURCE_LICENSE_CLASSES = {
     "build-only",
     "blocked-pending-license-review",
 }
+_ALLOWED_ALIAS_RESOLUTION_MODES = {"analyze", "pre_resolved_explicit"}
 
 
 @dataclass(frozen=True)
@@ -135,11 +172,13 @@ class SourceBundleManifest:
     tags: list[str] = field(default_factory=list)
     dependencies: list[str] = field(default_factory=list)
     min_ades_version: str = "0.1.0"
+    min_entities_per_100_tokens_warning: float | None = None
     entities_path: str = "normalized/entities.jsonl"
     rules_path: str | None = "normalized/rules.jsonl"
     label_mappings: dict[str, str] = field(default_factory=dict)
     stoplisted_aliases: list[str] = field(default_factory=list)
     allowed_ambiguous_aliases: list[str] = field(default_factory=list)
+    alias_resolution: str = "analyze"
     sources: list[SourceSnapshot] = field(default_factory=list)
 
     @classmethod
@@ -152,6 +191,13 @@ class SourceBundleManifest:
             if not data.get(field_name):
                 raise ValueError(f"Bundle manifest is missing required field: {field_name}")
         sources = [SourceSnapshot.from_dict(item) for item in data.get("sources", [])]
+        alias_resolution = str(data.get("alias_resolution", "analyze")).strip() or "analyze"
+        if alias_resolution not in _ALLOWED_ALIAS_RESOLUTION_MODES:
+            allowed = ", ".join(sorted(_ALLOWED_ALIAS_RESOLUTION_MODES))
+            raise ValueError(
+                f"Bundle manifest uses unsupported alias_resolution '{alias_resolution}'. "
+                f"Expected one of: {allowed}"
+            )
         return cls(
             schema_version=int(data.get("schema_version", 1)),
             pack_id=str(data["pack_id"]),
@@ -163,6 +209,11 @@ class SourceBundleManifest:
             tags=[str(item) for item in data.get("tags", [])],
             dependencies=[str(item) for item in data.get("dependencies", [])],
             min_ades_version=str(data.get("min_ades_version", "0.1.0")),
+            min_entities_per_100_tokens_warning=(
+                float(data["min_entities_per_100_tokens_warning"])
+                if data.get("min_entities_per_100_tokens_warning") is not None
+                else None
+            ),
             entities_path=str(data.get("entities_path", "normalized/entities.jsonl")),
             rules_path=(
                 str(data["rules_path"])
@@ -177,6 +228,7 @@ class SourceBundleManifest:
             allowed_ambiguous_aliases=[
                 str(item) for item in data.get("allowed_ambiguous_aliases", [])
             ],
+            alias_resolution=alias_resolution,
             sources=sources,
         )
 
@@ -205,6 +257,14 @@ class GeneratedPackSourceResult:
     labels_path: str
     aliases_path: str
     rules_path: str
+    matcher_artifact_path: str
+    matcher_entries_path: str
+    matcher_algorithm: str
+    matcher_entry_count: int
+    matcher_state_count: int
+    matcher_max_alias_length: int
+    matcher_artifact_sha256: str
+    matcher_entries_sha256: str
     sources_path: str | None
     build_path: str | None
     generated_at: str
@@ -221,6 +281,8 @@ class GeneratedPackSourceResult:
     dropped_alias_count: int
     ambiguous_alias_count: int
     source_license_classes: dict[str, int] = field(default_factory=dict)
+    entity_label_distribution: dict[str, int] = field(default_factory=dict)
+    label_distribution: dict[str, int] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -254,11 +316,20 @@ def generate_pack_source(
     if pack_dir.exists():
         shutil.rmtree(pack_dir)
     pack_dir.mkdir(parents=True, exist_ok=True)
-
-    entity_records = _load_jsonl_records(
-        resolved_bundle_dir / bundle.entities_path,
-        required=True,
+    labels_path = pack_dir / "labels.json"
+    aliases_path = pack_dir / "aliases.json"
+    rules_path = pack_dir / "rules.json"
+    manifest_path = pack_dir / "manifest.json"
+    matcher_dir = pack_dir / "matcher"
+    sources_path = pack_dir / "sources.json" if include_build_metadata else None
+    build_path = pack_dir / "build.json" if include_build_metadata else None
+    analysis_db_path = (
+        pack_dir / "analysis.sqlite"
+        if include_build_metadata and bundle.alias_resolution == "analyze"
+        else None
     )
+    alias_analysis_path = pack_dir / "alias-analysis.json" if include_build_metadata else None
+
     rule_records = _load_jsonl_records(
         resolved_bundle_dir / bundle.rules_path,
         required=False,
@@ -281,53 +352,85 @@ def generate_pack_source(
     }
 
     labels: set[str] = set()
-    alias_labels: dict[str, set[str]] = {}
-    alias_entries: dict[tuple[str, str], str] = {}
+    entity_label_distribution: dict[str, int] = {}
     included_entity_count = 0
     included_rule_count = 0
     dropped_record_count = 0
     dropped_alias_count = 0
+    input_entity_count = 0
 
-    for index, record in enumerate(entity_records, start=1):
-        if _coerce_bool(record.get("build_only")) and not include_build_only:
-            dropped_record_count += 1
-            continue
-        raw_blocked_aliases = record.get("blocked_aliases", [])
-        if raw_blocked_aliases is None:
-            raw_blocked_aliases = []
-        if not isinstance(raw_blocked_aliases, list):
-            raise ValueError("Normalized entity blocked_aliases must be a list.")
-        blocked_aliases = {
-            _normalized_key(item)
-            for item in raw_blocked_aliases
-            if _normalized_key(item)
-        }
-        label = _resolve_record_label(
-            record,
-            label_mappings=label_mappings,
-            kind="entity",
-            record_index=index,
-        )
-        labels.add(label)
-        included_entity_count += 1
+    def iter_alias_candidates() -> Any:
+        nonlocal dropped_alias_count
+        nonlocal dropped_record_count
+        nonlocal included_entity_count
+        nonlocal input_entity_count
+        for index, record in enumerate(
+            _iter_jsonl_records(
+                resolved_bundle_dir / bundle.entities_path,
+                required=True,
+            ),
+            start=1,
+        ):
+            input_entity_count += 1
+            if _coerce_bool(record.get("build_only")) and not include_build_only:
+                dropped_record_count += 1
+                continue
+            raw_blocked_aliases = record.get("blocked_aliases", [])
+            if raw_blocked_aliases is None:
+                raw_blocked_aliases = []
+            if not isinstance(raw_blocked_aliases, list):
+                raise ValueError("Normalized entity blocked_aliases must be a list.")
+            blocked_aliases = {
+                _normalized_key(item)
+                for item in raw_blocked_aliases
+                if _normalized_key(item)
+            }
+            label = _resolve_record_label(
+                record,
+                label_mappings=label_mappings,
+                kind="entity",
+                record_index=index,
+            )
+            labels.add(label)
+            included_entity_count += 1
+            entity_label_distribution[label] = entity_label_distribution.get(label, 0) + 1
 
-        canonical_text = _require_clean_text(
-            record.get("canonical_text"),
-            kind="entity canonical_text",
-            record_index=index,
-        )
-        for candidate in _iter_entity_alias_candidates(canonical_text, record, label):
-            normalized_key = _normalized_key(candidate)
-            if not normalized_key:
-                continue
-            if normalized_key in blocked_aliases:
-                dropped_alias_count += 1
-                continue
-            if _should_drop_alias(normalized_key, candidate, stoplisted_aliases):
-                dropped_alias_count += 1
-                continue
-            alias_labels.setdefault(normalized_key, set()).add(label)
-            alias_entries.setdefault((normalized_key, label), candidate)
+            canonical_text = _require_clean_text(
+                record.get("canonical_text"),
+                kind="entity canonical_text",
+                record_index=index,
+            )
+            for candidate, generated in _iter_entity_alias_candidates(
+                canonical_text,
+                record,
+                label,
+                pack_domain=bundle.domain,
+            ):
+                normalized_key = _normalized_key(candidate)
+                if not normalized_key:
+                    continue
+                if normalized_key in blocked_aliases:
+                    dropped_alias_count += 1
+                    continue
+                if _should_drop_alias(
+                    normalized_key,
+                    candidate,
+                    stoplisted_aliases,
+                    label=label,
+                    canonical_text=canonical_text,
+                    generated=generated,
+                    pack_domain=bundle.domain,
+                ):
+                    dropped_alias_count += 1
+                    continue
+                yield build_alias_candidate(
+                    alias_key=normalized_key,
+                    display_text=candidate,
+                    label=label,
+                    canonical_text=canonical_text,
+                    record=record,
+                    generated=generated,
+                )
 
     patterns: list[dict[str, str]] = []
     for index, record in enumerate(rule_records, start=1):
@@ -350,8 +453,8 @@ def generate_pack_source(
                 f"Rule record {index} in {bundle.rules_path} uses unsupported kind: {kind}"
             )
         try:
-            re.compile(pattern, flags=re.IGNORECASE)
-        except re.error as exc:
+            validate_rule_pattern(pattern)
+        except ValueError as exc:
             raise ValueError(
                 f"Rule record {index} in {bundle.rules_path} has invalid regex pattern: {exc}"
             ) from exc
@@ -372,21 +475,36 @@ def generate_pack_source(
             }
         )
 
-    ambiguous_alias_count = 0
-    aliases: list[dict[str, str]] = []
-    for normalized_key in sorted(alias_labels, key=_stable_sort_key):
-        labels_for_alias = alias_labels[normalized_key]
-        if len(labels_for_alias) > 1 and normalized_key not in allowed_ambiguous_aliases:
-            ambiguous_alias_count += 1
-            dropped_alias_count += len(labels_for_alias)
-            continue
-        for label in sorted(labels_for_alias, key=_stable_sort_key):
-            aliases.append(
-                {
-                    "text": alias_entries[(normalized_key, label)],
-                    "label": label,
-                }
-            )
+    if bundle.alias_resolution == "pre_resolved_explicit":
+        (
+            alias_analysis,
+            pre_resolved_labels,
+            pre_resolved_entity_label_distribution,
+            included_entity_count,
+            input_entity_count,
+            dropped_record_count,
+            dropped_alias_count,
+        ) = _write_pre_resolved_aliases_json(
+            aliases_path,
+            bundle_dir=resolved_bundle_dir,
+            bundle=bundle,
+            label_mappings=label_mappings,
+            stoplisted_aliases=stoplisted_aliases,
+            include_build_only=include_build_only,
+        )
+        labels.update(pre_resolved_labels)
+        entity_label_distribution = pre_resolved_entity_label_distribution
+    else:
+        alias_analysis = analyze_alias_candidates(
+            iter_alias_candidates(),
+            allowed_ambiguous_aliases=allowed_ambiguous_aliases,
+            analysis_db_path=analysis_db_path,
+            materialize_retained_aliases=analysis_db_path is None,
+        )
+    if alias_analysis_path is not None:
+        write_alias_analysis_report(alias_analysis_path, alias_analysis)
+    ambiguous_alias_count = alias_analysis.ambiguous_alias_count
+    dropped_alias_count += alias_analysis.blocked_alias_count
 
     labels_payload = sorted(labels, key=_stable_sort_key)
     patterns_payload = sorted(
@@ -397,35 +515,47 @@ def generate_pack_source(
             item["pattern"],
         ),
     )
-    aliases_payload = sorted(
-        aliases,
-        key=lambda item: (
-            _stable_sort_key(item["text"]),
-            _stable_sort_key(item["label"]),
-        ),
+    label_distribution = _build_label_distribution(
+        alias_analysis.retained_label_counts,
+        patterns_payload,
     )
+    entity_label_distribution = {
+        label: entity_label_distribution[label]
+        for label in sorted(entity_label_distribution, key=_stable_sort_key)
+    }
 
     if not labels_payload:
         raise ValueError("Bundle did not yield any runtime labels.")
-
-    labels_path = pack_dir / "labels.json"
-    aliases_path = pack_dir / "aliases.json"
-    rules_path = pack_dir / "rules.json"
-    manifest_path = pack_dir / "manifest.json"
-    sources_path = pack_dir / "sources.json" if include_build_metadata else None
-    build_path = pack_dir / "build.json" if include_build_metadata else None
 
     labels_path.write_text(
         json.dumps(labels_payload, indent=2) + "\n",
         encoding="utf-8",
     )
-    aliases_path.write_text(
-        json.dumps({"aliases": aliases_payload}, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    if bundle.alias_resolution == "pre_resolved_explicit":
+        aliases_payload = None
+    elif alias_analysis.retained_aliases_materialized:
+        aliases_payload = sorted(
+            alias_analysis.retained_aliases,
+            key=lambda item: (
+                _stable_sort_key(item["text"]),
+                _stable_sort_key(item["label"]),
+            ),
+        )
+        _write_aliases_json(aliases_path, aliases_payload)
+    else:
+        if analysis_db_path is None:
+            raise ValueError(
+                "Alias analysis database is required when retained aliases are not materialized."
+            )
+        aliases_payload = None
+        _write_aliases_json_from_analysis_db(aliases_path, analysis_db_path)
     rules_path.write_text(
         json.dumps({"patterns": patterns_payload}, indent=2) + "\n",
         encoding="utf-8",
+    )
+    matcher_artifact = build_matcher_artifact_from_aliases_json(
+        aliases_path,
+        output_dir=matcher_dir,
     )
 
     manifest = PackManifest(
@@ -451,7 +581,20 @@ def generate_pack_source(
         models=[],
         rules=["rules.json"],
         labels=["labels.json"],
+        matcher=PackMatcher(
+            schema_version=1,
+            algorithm=matcher_artifact.algorithm,
+            normalization=matcher_artifact.normalization,
+            artifact_path=str(matcher_dir.name + "/automaton.json"),
+            entries_path=str(matcher_dir.name + "/entries.jsonl"),
+            entry_count=matcher_artifact.entry_count,
+            state_count=matcher_artifact.state_count,
+            max_alias_length=matcher_artifact.max_alias_length,
+            artifact_sha256=matcher_artifact.artifact_sha256,
+            entries_sha256=matcher_artifact.entries_sha256,
+        ),
         min_ades_version=bundle.min_ades_version,
+        min_entities_per_100_tokens_warning=bundle.min_entities_per_100_tokens_warning,
     )
     manifest_path.write_text(
         json.dumps(manifest.to_dict(), indent=2) + "\n",
@@ -493,21 +636,48 @@ def generate_pack_source(
                     "bundle_dir": str(resolved_bundle_dir),
                     "bundle_manifest_path": str(bundle_manifest_path),
                     "include_build_only": include_build_only,
-                    "input_entity_count": len(entity_records),
+                    "input_entity_count": input_entity_count,
                     "input_rule_count": len(rule_records),
                     "included_entity_count": included_entity_count,
                     "included_rule_count": included_rule_count,
                     "dropped_record_count": dropped_record_count,
                     "dropped_alias_count": dropped_alias_count,
                     "ambiguous_alias_count": ambiguous_alias_count,
+                    "analysis_backend": alias_analysis.backend,
+                    "analysis_db_path": (
+                        str(analysis_db_path) if analysis_db_path is not None else None
+                    ),
+                    "alias_analysis_report_path": (
+                        str(alias_analysis_path) if alias_analysis_path is not None else None
+                    ),
+                    "candidate_alias_count": alias_analysis.candidate_alias_count,
+                    "retained_alias_count": alias_analysis.retained_alias_count,
+                    "collision_blocked_alias_count": alias_analysis.blocked_alias_count,
+                    "exact_identifier_alias_count": alias_analysis.exact_identifier_alias_count,
+                    "natural_language_alias_count": alias_analysis.natural_language_alias_count,
+                    "blocked_reason_counts": alias_analysis.blocked_reason_counts,
+                    "retained_label_counts": alias_analysis.retained_label_counts,
                     "label_count": len(labels_payload),
-                    "alias_count": len(aliases_payload),
+                    "alias_count": alias_analysis.retained_alias_count,
                     "rule_count": len(patterns_payload),
+                    "matcher": {
+                        "algorithm": matcher_artifact.algorithm,
+                        "normalization": matcher_artifact.normalization,
+                        "artifact_path": str(Path(matcher_artifact.artifact_path)),
+                        "entries_path": str(Path(matcher_artifact.entries_path)),
+                        "entry_count": matcher_artifact.entry_count,
+                        "state_count": matcher_artifact.state_count,
+                        "max_alias_length": matcher_artifact.max_alias_length,
+                        "artifact_sha256": matcher_artifact.artifact_sha256,
+                        "entries_sha256": matcher_artifact.entries_sha256,
+                    },
                     "source_count": len(bundle.sources),
                     "source_license_classes": source_governance.source_license_classes,
                     "publishable_source_count": source_governance.publishable_source_count,
                     "restricted_source_count": source_governance.restricted_source_count,
                     "publishable_sources_only": source_governance.publishable_sources_only,
+                    "entity_label_distribution": entity_label_distribution,
+                    "label_distribution": label_distribution,
                 },
                 indent=2,
             )
@@ -516,7 +686,7 @@ def generate_pack_source(
         )
 
     warnings = list(source_governance.warnings)
-    if not aliases_payload:
+    if alias_analysis.retained_alias_count == 0:
         warnings.append("Generated pack does not include any aliases.")
     if not patterns_payload:
         warnings.append("Generated pack does not include any rules.")
@@ -531,11 +701,19 @@ def generate_pack_source(
         labels_path=str(labels_path),
         aliases_path=str(aliases_path),
         rules_path=str(rules_path),
+        matcher_artifact_path=matcher_artifact.artifact_path,
+        matcher_entries_path=matcher_artifact.entries_path,
+        matcher_algorithm=matcher_artifact.algorithm,
+        matcher_entry_count=matcher_artifact.entry_count,
+        matcher_state_count=matcher_artifact.state_count,
+        matcher_max_alias_length=matcher_artifact.max_alias_length,
+        matcher_artifact_sha256=matcher_artifact.artifact_sha256,
+        matcher_entries_sha256=matcher_artifact.entries_sha256,
         sources_path=str(sources_path) if sources_path is not None else None,
         build_path=str(build_path) if build_path is not None else None,
         generated_at=generated_at,
         label_count=len(labels_payload),
-        alias_count=len(aliases_payload),
+        alias_count=alias_analysis.retained_alias_count,
         rule_count=len(patterns_payload),
         source_count=len(bundle.sources),
         publishable_source_count=source_governance.publishable_source_count,
@@ -547,34 +725,218 @@ def generate_pack_source(
         dropped_alias_count=dropped_alias_count,
         ambiguous_alias_count=ambiguous_alias_count,
         source_license_classes=source_governance.source_license_classes,
+        entity_label_distribution=entity_label_distribution,
+        label_distribution=label_distribution,
         warnings=warnings,
     )
 
 
-def _load_jsonl_records(path: Path | None, *, required: bool) -> list[dict[str, Any]]:
+def _iter_jsonl_records(
+    path: Path | None,
+    *,
+    required: bool,
+) -> Any:
     if path is None:
-        return []
+        return
     resolved = path.expanduser().resolve()
     if not resolved.exists():
         if required:
             raise FileNotFoundError(f"Normalized input file not found: {resolved}")
-        return []
+        return
     if not resolved.is_file():
         raise FileExistsError(f"Normalized input path is not a file: {resolved}")
 
-    records: list[dict[str, Any]] = []
-    for index, line in enumerate(resolved.read_text(encoding="utf-8").splitlines(), start=1):
-        stripped = line.strip()
-        if not stripped:
-            continue
-        try:
-            payload = json.loads(stripped)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSONL record in {resolved} line {index}") from exc
-        if not isinstance(payload, dict):
-            raise ValueError(f"JSONL record in {resolved} line {index} must be an object.")
-        records.append(payload)
-    return records
+    with resolved.open("r", encoding="utf-8") as handle:
+        for index, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                payload = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSONL record in {resolved} line {index}") from exc
+            if not isinstance(payload, dict):
+                raise ValueError(
+                    f"JSONL record in {resolved} line {index} must be an object."
+                )
+            yield payload
+
+
+def _load_jsonl_records(path: Path | None, *, required: bool) -> list[dict[str, Any]]:
+    return list(_iter_jsonl_records(path, required=required))
+
+
+def _write_pre_resolved_aliases_json(
+    path: Path,
+    *,
+    bundle_dir: Path,
+    bundle: SourceBundleManifest,
+    label_mappings: dict[str, str],
+    stoplisted_aliases: set[str],
+    include_build_only: bool,
+) -> tuple[
+    AliasAnalysisResult,
+    set[str],
+    dict[str, int],
+    int,
+    int,
+    int,
+    int,
+]:
+    labels: set[str] = set()
+    entity_label_distribution: dict[str, int] = {}
+    included_entity_count = 0
+    input_entity_count = 0
+    dropped_record_count = 0
+    dropped_alias_count = 0
+    candidate_alias_count = 0
+    exact_identifier_alias_count = 0
+    natural_language_alias_count = 0
+    retained_label_counts: dict[str, int] = {}
+
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write('{\n  "aliases": [\n')
+        first = True
+        for index, record in enumerate(
+            _iter_jsonl_records(bundle_dir / bundle.entities_path, required=True),
+            start=1,
+        ):
+            input_entity_count += 1
+            if _coerce_bool(record.get("build_only")) and not include_build_only:
+                dropped_record_count += 1
+                continue
+            raw_blocked_aliases = record.get("blocked_aliases", [])
+            if raw_blocked_aliases is None:
+                raw_blocked_aliases = []
+            if not isinstance(raw_blocked_aliases, list):
+                raise ValueError("Normalized entity blocked_aliases must be a list.")
+            blocked_aliases = {
+                _normalized_key(item)
+                for item in raw_blocked_aliases
+                if _normalized_key(item)
+            }
+            label = _resolve_record_label(
+                record,
+                label_mappings=label_mappings,
+                kind="entity",
+                record_index=index,
+            )
+            labels.add(label)
+            included_entity_count += 1
+            entity_label_distribution[label] = entity_label_distribution.get(label, 0) + 1
+            canonical_text = _require_clean_text(
+                record.get("canonical_text"),
+                kind="entity canonical_text",
+                record_index=index,
+            )
+            seen_alias_keys: set[str] = set()
+            source_domain = _clean_text(record.get("source_domain")) or bundle.domain
+            for candidate_text in _iter_entity_explicit_aliases(canonical_text, record):
+                normalized_key = _normalized_key(candidate_text)
+                if not normalized_key:
+                    continue
+                if normalized_key in seen_alias_keys:
+                    continue
+                seen_alias_keys.add(normalized_key)
+                if normalized_key in blocked_aliases:
+                    dropped_alias_count += 1
+                    continue
+                if _should_drop_alias(
+                    normalized_key,
+                    candidate_text,
+                    stoplisted_aliases,
+                    label=label,
+                    canonical_text=canonical_text,
+                    generated=False,
+                    pack_domain=bundle.domain,
+                ):
+                    dropped_alias_count += 1
+                    continue
+                candidate = build_alias_candidate(
+                    alias_key=normalized_key,
+                    display_text=candidate_text,
+                    label=label,
+                    canonical_text=canonical_text,
+                    record=record,
+                    generated=False,
+                )
+                payload = _serialize_alias_payload(candidate, source_domain=source_domain)
+                if not first:
+                    handle.write(",\n")
+                handle.write(f"    {json.dumps(payload, sort_keys=True)}")
+                first = False
+                candidate_alias_count += 1
+                retained_label_counts[label] = retained_label_counts.get(label, 0) + 1
+                if candidate.lane == "exact":
+                    exact_identifier_alias_count += 1
+                else:
+                    natural_language_alias_count += 1
+        handle.write("\n  ]\n}\n")
+
+    alias_analysis = AliasAnalysisResult(
+        backend="pre_resolved_bundle",
+        database_path=None,
+        candidate_alias_count=candidate_alias_count,
+        retained_alias_count=candidate_alias_count,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=exact_identifier_alias_count,
+        natural_language_alias_count=natural_language_alias_count,
+        blocked_reason_counts={},
+        retained_label_counts={
+            label: retained_label_counts[label]
+            for label in sorted(retained_label_counts, key=_stable_sort_key)
+        },
+        retained_aliases_materialized=False,
+        retained_aliases=[],
+        top_collision_clusters=[],
+    )
+    return (
+        alias_analysis,
+        labels,
+        {
+            label: entity_label_distribution[label]
+            for label in sorted(entity_label_distribution, key=_stable_sort_key)
+        },
+        included_entity_count,
+        input_entity_count,
+        dropped_record_count,
+        dropped_alias_count,
+    )
+
+
+def _write_aliases_json(path: Path, aliases: list[dict[str, Any]]) -> None:
+    path.write_text(
+        json.dumps({"aliases": aliases}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_aliases_json_from_analysis_db(path: Path, analysis_db_path: Path) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write('{\n  "aliases": [\n')
+        first = True
+        for item in iter_retained_aliases_from_db(analysis_db_path):
+            if not first:
+                handle.write(",\n")
+            handle.write(f"    {json.dumps(item, sort_keys=True)}")
+            first = False
+        handle.write("\n  ]\n}\n")
+
+
+def _build_label_distribution(
+    alias_label_counts: dict[str, int],
+    patterns: list[dict[str, str]],
+) -> dict[str, int]:
+    distribution = dict(alias_label_counts)
+    for item in patterns:
+        label = _clean_text(item.get("label"))
+        if label:
+            distribution[label] = distribution.get(label, 0) + 1
+    return {
+        label: distribution[label]
+        for label in sorted(distribution, key=_stable_sort_key)
+    }
 
 
 def _resolve_record_label(
@@ -638,6 +1000,36 @@ def _iter_entity_alias_candidates(
     canonical_text: str,
     record: dict[str, Any],
     label: str,
+    *,
+    pack_domain: str,
+) -> list[tuple[str, bool]]:
+    seen: set[str] = set()
+    candidates: list[tuple[str, bool]] = []
+    raw_aliases = record.get("aliases", [])
+    if raw_aliases is None:
+        raw_aliases = []
+    if not isinstance(raw_aliases, list):
+        raise ValueError("Normalized entity aliases must be a list.")
+    explicit_values = [canonical_text, *raw_aliases]
+    for raw_index, raw_value in enumerate(explicit_values):
+        cleaned = _clean_text(raw_value)
+        if not cleaned:
+            continue
+        is_generated_base = raw_index != 0
+        for variant, generated in _expand_alias_variants(
+            cleaned,
+            label,
+            pack_domain=pack_domain,
+        ):
+            if variant not in seen:
+                seen.add(variant)
+                candidates.append((variant, generated or is_generated_base))
+    return candidates
+
+
+def _iter_entity_explicit_aliases(
+    canonical_text: str,
+    record: dict[str, Any],
 ) -> list[str]:
     seen: set[str] = set()
     candidates: list[str] = []
@@ -648,28 +1040,112 @@ def _iter_entity_alias_candidates(
         raise ValueError("Normalized entity aliases must be a list.")
     for raw_value in [canonical_text, *raw_aliases]:
         cleaned = _clean_text(raw_value)
-        if not cleaned:
+        if not cleaned or cleaned in seen:
             continue
-        for variant in _expand_alias_variants(cleaned, label):
-            if variant not in seen:
-                seen.add(variant)
-                candidates.append(variant)
+        seen.add(cleaned)
+        candidates.append(cleaned)
     return candidates
 
 
-def _expand_alias_variants(text: str, label: str) -> list[str]:
-    variants = [text]
+def _serialize_alias_payload(candidate: Any, *, source_domain: str) -> dict[str, Any]:
+    rounded_score = round(float(candidate.score), 4)
+    return {
+        "text": str(candidate.display_text),
+        "label": str(candidate.label),
+        "normalized_text": str(candidate.alias_key),
+        "canonical_text": str(candidate.canonical_text),
+        "score": rounded_score,
+        "alias_score": rounded_score,
+        "generated": bool(candidate.generated),
+        "source_name": str(candidate.source_name),
+        "entity_id": str(candidate.entity_id),
+        "source_priority": round(float(candidate.features.source_priority), 4),
+        "popularity_weight": round(float(candidate.features.popularity_weight), 4),
+        "source_domain": str(source_domain),
+    }
+
+
+def _expand_alias_variants(
+    text: str,
+    label: str,
+    *,
+    pack_domain: str,
+) -> list[tuple[str, bool]]:
+    variants: list[tuple[str, bool]] = [(text, False)]
+    canonical = canonicalize_text(text)
+    if canonical and canonical != text:
+        variants.append((canonical, True))
     if label.casefold() in _ORG_LIKE_LABELS:
-        stripped = _clean_text(_ORG_SUFFIX_RE.sub("", text))
+        stripped = _strip_org_suffix_tokens(text, pack_domain=pack_domain)
         if stripped and stripped != text:
-            variants.append(stripped)
+            variants.append((stripped, True))
+    if label.casefold() == "person":
+        short_person_name = _build_person_first_last_variant(text)
+        if short_person_name and short_person_name != text:
+            variants.append((short_person_name, True))
+    compact = _clean_text(re.sub(r"\s*[-/]\s*", " ", text))
+    if compact and compact != text:
+        variants.append((compact, True))
     return variants
+
+
+def _strip_org_suffix_tokens(text: str, *, pack_domain: str) -> str:
+    tokens = text.split()
+    if len(tokens) < 2:
+        return ""
+    stripped_tokens = list(tokens)
+    while len(stripped_tokens) > 1:
+        normalized = stripped_tokens[-1].rstrip(".,").casefold()
+        if normalized not in _ORG_SUFFIX_TOKENS:
+            break
+        stripped_tokens.pop()
+    if not stripped_tokens or len(stripped_tokens) == len(tokens):
+        return ""
+    stripped = _clean_text(" ".join(stripped_tokens))
+    if (
+        pack_domain == "general"
+        and _is_single_token_alpha_alias(stripped)
+        and _compact_alnum_length(stripped) < 6
+    ):
+        return ""
+    return stripped
+
+
+def _build_person_first_last_variant(text: str) -> str:
+    tokens = text.split()
+    if len(tokens) < 3 or len(tokens) > 4:
+        return ""
+    if not _looks_like_name_edge_token(tokens[0]) or not _looks_like_name_edge_token(tokens[-1]):
+        return ""
+    middle_tokens = tokens[1:-1]
+    if not middle_tokens or not all(_looks_like_middle_name_token(token) for token in middle_tokens):
+        return ""
+    return _clean_text(f"{tokens[0]} {tokens[-1]}")
+
+
+def _looks_like_name_edge_token(token: str) -> bool:
+    stripped = token.strip(".,")
+    return len(stripped) >= 2 and stripped[:1].isupper()
+
+
+def _looks_like_middle_name_token(token: str) -> bool:
+    stripped = token.strip(".,")
+    if not stripped:
+        return False
+    if len(stripped) == 1 and stripped.isalpha():
+        return True
+    return stripped[:1].isupper() and stripped[1:].islower()
 
 
 def _should_drop_alias(
     normalized_key: str,
     display_value: str,
     stoplisted_aliases: set[str],
+    *,
+    label: str,
+    canonical_text: str,
+    generated: bool,
+    pack_domain: str,
 ) -> bool:
     if normalized_key in stoplisted_aliases:
         return True
@@ -677,6 +1153,18 @@ def _should_drop_alias(
         return True
     if not any(character.isalnum() for character in display_value):
         return True
+    if pack_domain == "general" and _is_single_token_alpha_alias(display_value):
+        if label.casefold() in {"person", "location"}:
+            return display_value.casefold() != canonical_text.casefold()
+        if (
+            label.casefold() in _ORG_LIKE_LABELS
+            and display_value.casefold() != canonical_text.casefold()
+            and not display_value.isupper()
+            and _compact_alnum_length(display_value) < 6
+        ):
+            return True
+        if generated and label.casefold() in _ORG_LIKE_LABELS and not display_value.isupper():
+            return _compact_alnum_length(display_value) < 6
     return False
 
 
@@ -695,11 +1183,7 @@ def _require_clean_text(
 def _clean_text(raw_value: Any) -> str:
     if raw_value is None:
         return ""
-    value = unicodedata.normalize("NFKC", str(raw_value))
-    value = value.translate(_QUOTE_TRANSLATION)
-    value = value.translate(_DASH_TRANSLATION)
-    value = _WHITESPACE_RE.sub(" ", value).strip()
-    return value
+    return canonicalize_text(str(raw_value))
 
 
 def _coerce_bool(raw_value: Any) -> bool:
@@ -713,11 +1197,20 @@ def _coerce_bool(raw_value: Any) -> bool:
 
 
 def _normalized_key(value: str) -> str:
-    return _clean_text(value).casefold()
+    return normalize_lookup_text(value)
 
 
 def _stable_sort_key(value: str) -> tuple[str, str]:
     return (value.casefold(), value)
+
+
+def _is_single_token_alpha_alias(value: str) -> bool:
+    tokens = [token for token in re.split(r"[\s\-_./]+", value.strip()) if token]
+    return len(tokens) == 1 and tokens[0].isalpha()
+
+
+def _compact_alnum_length(value: str) -> int:
+    return len("".join(character for character in value if character.isalnum()))
 
 
 def _utc_timestamp() -> str:

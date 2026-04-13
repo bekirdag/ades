@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import atexit
 from dataclasses import replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
+from threading import Lock
 
 from ..packs.manifest import PackManifest
-from .paths import StorageLayout
+from ..text_processing import normalize_lookup_text
+from .paths import StorageLayout, iter_pack_manifest_paths
 
 try:
     import psycopg
@@ -21,12 +24,96 @@ except ImportError as exc:  # pragma: no cover - exercised only without the serv
 else:
     _PSYCOPG_IMPORT_ERROR = None
 
+try:
+    from psycopg_pool import ConnectionPool
+except ImportError:  # pragma: no cover - exercised when pool extra is absent.
+    ConnectionPool = None
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
 SEARCH_TERM_RE = re.compile(r"[a-z0-9]+")
+_POOL_MIN_SIZE = 2
+_POOL_MAX_SIZE = 10
+_POOL_TIMEOUT_SECONDS = 30.0
+_POOL_NAME = "ades-metadata-store"
+_POOL_CACHE_LOCK = Lock()
+_POOL_CACHE: dict[str, object] = {}
+_PG_TRGM_ALIAS_THRESHOLD = 0.2
+_PG_TRGM_RULE_THRESHOLD = 0.15
+_SCHEMA_LOCK_KEY = 48324001
+_REQUIRED_TABLE_NAMES = frozenset(
+    {
+        "installed_packs",
+        "pack_dependencies",
+        "pack_labels",
+        "pack_rules",
+        "pack_aliases",
+    }
+)
+_REQUIRED_PACK_ALIASES_COLUMNS = frozenset(
+    {
+        "normalized_alias_text",
+        "canonical_text",
+        "alias_score",
+        "generated",
+        "source_name",
+        "entity_id",
+        "source_priority",
+        "popularity_weight",
+    }
+)
+_REQUIRED_EXACT_INDEX_NAMES = frozenset(
+    {
+        "idx_installed_packs_active",
+        "idx_pack_aliases_lookup",
+        "idx_pack_rules_lookup",
+    }
+)
+
+
+def _close_shared_pools() -> None:
+    with _POOL_CACHE_LOCK:
+        pools = list(_POOL_CACHE.values())
+        _POOL_CACHE.clear()
+    for pool in pools:
+        close = getattr(pool, "close", None)
+        if callable(close):
+            close()
+
+
+atexit.register(_close_shared_pools)
+
+
+def _build_shared_connection_pool(database_url: str) -> object | None:
+    if ConnectionPool is None:
+        return None
+    pool = ConnectionPool(
+        conninfo=database_url,
+        kwargs={"row_factory": dict_row},
+        min_size=_POOL_MIN_SIZE,
+        max_size=_POOL_MAX_SIZE,
+        open=True,
+        timeout=_POOL_TIMEOUT_SECONDS,
+        name=_POOL_NAME,
+    )
+    pool.wait(timeout=_POOL_TIMEOUT_SECONDS)
+    return pool
+
+
+def _get_shared_connection_pool(database_url: str) -> object | None:
+    if ConnectionPool is None:
+        return None
+    with _POOL_CACHE_LOCK:
+        pool = _POOL_CACHE.get(database_url)
+        if pool is not None:
+            return pool
+        pool = _build_shared_connection_pool(database_url)
+        if pool is not None:
+            _POOL_CACHE[database_url] = pool
+        return pool
 
 
 class PostgreSQLMetadataStore:
@@ -44,6 +131,8 @@ class PostgreSQLMetadataStore:
             )
         self.layout = layout
         self.database_url = database_url
+        self._pool = _get_shared_connection_pool(database_url)
+        self._pg_trgm_enabled = False
         self.ensure_schema()
 
     def ensure_schema(self) -> None:
@@ -96,6 +185,14 @@ class PostgreSQLMetadataStore:
                 pack_id TEXT NOT NULL REFERENCES installed_packs(pack_id) ON DELETE CASCADE,
                 alias_text TEXT NOT NULL,
                 label TEXT NOT NULL,
+                normalized_alias_text TEXT NOT NULL DEFAULT '',
+                canonical_text TEXT NOT NULL DEFAULT '',
+                alias_score DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+                generated BOOLEAN NOT NULL DEFAULT FALSE,
+                source_name TEXT NOT NULL DEFAULT '',
+                entity_id TEXT NOT NULL DEFAULT '',
+                source_priority DOUBLE PRECISION NOT NULL DEFAULT 0.6,
+                popularity_weight DOUBLE PRECISION NOT NULL DEFAULT 0.5,
                 source_domain TEXT NOT NULL,
                 position INTEGER NOT NULL,
                 PRIMARY KEY (pack_id, alias_text, label)
@@ -107,16 +204,104 @@ class PostgreSQLMetadataStore:
             """,
             """
             CREATE INDEX IF NOT EXISTS idx_pack_aliases_lookup
-            ON pack_aliases(alias_text, label)
+            ON pack_aliases(normalized_alias_text, label)
             """,
             """
             CREATE INDEX IF NOT EXISTS idx_pack_rules_lookup
             ON pack_rules(rule_name, label)
             """,
+            """
+            ALTER TABLE pack_aliases
+            ADD COLUMN IF NOT EXISTS normalized_alias_text TEXT NOT NULL DEFAULT ''
+            """,
+            """
+            ALTER TABLE pack_aliases
+            ADD COLUMN IF NOT EXISTS canonical_text TEXT NOT NULL DEFAULT ''
+            """,
+            """
+            ALTER TABLE pack_aliases
+            ADD COLUMN IF NOT EXISTS alias_score DOUBLE PRECISION NOT NULL DEFAULT 1.0
+            """,
+            """
+            ALTER TABLE pack_aliases
+            ADD COLUMN IF NOT EXISTS generated BOOLEAN NOT NULL DEFAULT FALSE
+            """,
+            """
+            ALTER TABLE pack_aliases
+            ADD COLUMN IF NOT EXISTS source_name TEXT NOT NULL DEFAULT ''
+            """,
+            """
+            ALTER TABLE pack_aliases
+            ADD COLUMN IF NOT EXISTS entity_id TEXT NOT NULL DEFAULT ''
+            """,
+            """
+            ALTER TABLE pack_aliases
+            ADD COLUMN IF NOT EXISTS source_priority DOUBLE PRECISION NOT NULL DEFAULT 0.6
+            """,
+            """
+            ALTER TABLE pack_aliases
+            ADD COLUMN IF NOT EXISTS popularity_weight DOUBLE PRECISION NOT NULL DEFAULT 0.5
+            """,
         ]
         with self._connect() as connection:
-            for statement in statements:
-                connection.execute(statement)
+            schema_current, pg_trgm_enabled = self._schema_state(connection)
+            if schema_current:
+                self._pg_trgm_enabled = pg_trgm_enabled
+                return
+
+            connection.execute("SELECT pg_advisory_lock(%s)", (_SCHEMA_LOCK_KEY,))
+            try:
+                schema_current, pg_trgm_enabled = self._schema_state(connection)
+                if not schema_current:
+                    for statement in statements:
+                        connection.execute(statement)
+                    pg_trgm_enabled = self._enable_optional_pg_trgm(connection)
+                self._pg_trgm_enabled = pg_trgm_enabled
+            finally:
+                connection.execute("SELECT pg_advisory_unlock(%s)", (_SCHEMA_LOCK_KEY,))
+
+    def _schema_state(self, connection) -> tuple[bool, bool]:
+        table_rows = connection.execute(
+            """
+            SELECT tablename
+            FROM pg_tables
+            WHERE schemaname = current_schema()
+              AND tablename = ANY(%s)
+            """,
+            (list(_REQUIRED_TABLE_NAMES),),
+        ).fetchall()
+        table_names = {str(row["tablename"]) for row in table_rows}
+        if table_names != _REQUIRED_TABLE_NAMES:
+            return False, False
+
+        alias_column_rows = connection.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'pack_aliases'
+              AND column_name = ANY(%s)
+            """,
+            (list(_REQUIRED_PACK_ALIASES_COLUMNS),),
+        ).fetchall()
+        alias_columns = {str(row["column_name"]) for row in alias_column_rows}
+        if alias_columns != _REQUIRED_PACK_ALIASES_COLUMNS:
+            return False, False
+
+        index_rows = connection.execute(
+            """
+            SELECT indexname
+            FROM pg_indexes
+            WHERE schemaname = current_schema()
+              AND indexname = ANY(%s)
+            """,
+            (list(_REQUIRED_EXACT_INDEX_NAMES),),
+        ).fetchall()
+        index_names = {str(row["indexname"]) for row in index_rows}
+        if index_names != _REQUIRED_EXACT_INDEX_NAMES:
+            return False, False
+
+        return True, self._is_pg_trgm_enabled(connection)
 
     def count_installed_packs(self) -> int:
         with self._connect() as connection:
@@ -203,7 +388,7 @@ class PostgreSQLMetadataStore:
         root = packs_dir or self.layout.packs_dir
         if not root.exists():
             return
-        for manifest_path in sorted(root.glob("*/manifest.json")):
+        for manifest_path in iter_pack_manifest_paths(root):
             self.sync_pack_from_dir(manifest_path.parent)
 
     def list_installed_packs(self, *, active_only: bool = False) -> list[PackManifest]:
@@ -306,11 +491,13 @@ class PostgreSQLMetadataStore:
             for row in rows
         ]
 
-    def list_pack_aliases(self, pack_id: str) -> list[dict[str, str]]:
+    def list_pack_aliases(self, pack_id: str) -> list[dict[str, str | float | bool]]:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT alias_text, label, source_domain
+                SELECT alias_text, label, normalized_alias_text, canonical_text, alias_score,
+                       generated, source_name, entity_id, source_priority, popularity_weight,
+                       source_domain
                 FROM pack_aliases
                 WHERE pack_id = %s
                 ORDER BY position ASC, alias_text ASC
@@ -321,6 +508,14 @@ class PostgreSQLMetadataStore:
             {
                 "text": str(row["alias_text"]),
                 "label": str(row["label"]),
+                "normalized_text": str(row["normalized_alias_text"]),
+                "canonical_text": str(row["canonical_text"]),
+                "alias_score": float(row["alias_score"]),
+                "generated": bool(row["generated"]),
+                "source_name": str(row["source_name"]),
+                "entity_id": str(row["entity_id"]),
+                "source_priority": float(row["source_priority"]),
+                "popularity_weight": float(row["popularity_weight"]),
                 "source_domain": str(row["source_domain"]),
             }
             for row in rows
@@ -332,17 +527,21 @@ class PostgreSQLMetadataStore:
         *,
         pack_id: str | None = None,
         exact_alias: bool = False,
+        fuzzy: bool = False,
         active_only: bool = True,
         limit: int = 20,
     ) -> list[dict[str, str | float | bool | None]]:
         normalized = query.strip()
         if not normalized:
             return []
+        if exact_alias and fuzzy:
+            raise ValueError("Lookup cannot request both exact_alias and fuzzy mode.")
 
         alias_candidates = self._lookup_alias_candidates(
             normalized,
             pack_id=pack_id,
             exact_alias=exact_alias,
+            fuzzy=fuzzy,
             active_only=active_only,
             limit=limit,
         )
@@ -352,6 +551,7 @@ class PostgreSQLMetadataStore:
         rule_candidates = self._lookup_rule_candidates(
             normalized,
             pack_id=pack_id,
+            fuzzy=fuzzy,
             active_only=active_only,
             limit=limit,
         )
@@ -370,6 +570,8 @@ class PostgreSQLMetadataStore:
         manifest_path = Path(str(row["manifest_path"]))
         if not manifest_path.exists():
             return None
+        if manifest_path.parent.name.startswith("."):
+            return None
 
         source_manifest = PackManifest.load(manifest_path)
         return PackManifest(
@@ -386,7 +588,9 @@ class PostgreSQLMetadataStore:
             models=list(source_manifest.models),
             rules=list(source_manifest.rules),
             labels=list(source_manifest.labels),
+            matcher=source_manifest.matcher,
             min_ades_version=source_manifest.min_ades_version,
+            min_entities_per_100_tokens_warning=source_manifest.min_entities_per_100_tokens_warning,
             sha256=row["sha256"],
             active=bool(row["active"]),
             install_path=str(row["install_path"]),
@@ -446,30 +650,75 @@ class PostgreSQLMetadataStore:
                 ],
             )
 
-    def _replace_aliases(self, connection, pack_id: str, aliases: list[dict[str, str]]) -> None:
+    def _replace_aliases(
+        self,
+        connection,
+        pack_id: str,
+        aliases: list[dict[str, str | float | bool]],
+    ) -> None:
         connection.execute("DELETE FROM pack_aliases WHERE pack_id = %s", (pack_id,))
-        with connection.cursor() as cursor:
-            cursor.executemany(
-                """
-                INSERT INTO pack_aliases (
-                    pack_id,
-                    alias_text,
-                    label,
-                    source_domain,
-                    position
-                ) VALUES (%s, %s, %s, %s, %s)
-                """,
-                [
-                    (
-                        pack_id,
-                        alias["text"],
-                        alias["label"],
-                        alias["source_domain"],
-                        position,
-                    )
-                    for position, alias in enumerate(aliases)
-                ],
+        rows = [
+            (
+                pack_id,
+                alias["text"],
+                alias["label"],
+                alias["normalized_text"],
+                alias["canonical_text"],
+                alias["alias_score"],
+                bool(alias["generated"]),
+                alias["source_name"],
+                alias["entity_id"],
+                alias["source_priority"],
+                alias["popularity_weight"],
+                alias["source_domain"],
+                position,
             )
+            for position, alias in enumerate(aliases)
+        ]
+        if not rows:
+            return
+        insert_sql = """
+            INSERT INTO pack_aliases (
+                pack_id,
+                alias_text,
+                label,
+                normalized_alias_text,
+                canonical_text,
+                alias_score,
+                generated,
+                source_name,
+                entity_id,
+                source_priority,
+                popularity_weight,
+                source_domain,
+                position
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        copy_sql = """
+            COPY pack_aliases (
+                pack_id,
+                alias_text,
+                label,
+                normalized_alias_text,
+                canonical_text,
+                alias_score,
+                generated,
+                source_name,
+                entity_id,
+                source_priority,
+                popularity_weight,
+                source_domain,
+                position
+            ) FROM STDIN
+        """
+        with connection.cursor() as cursor:
+            copy_method = getattr(cursor, "copy", None)
+            if callable(copy_method):
+                with copy_method(copy_sql) as copy:
+                    for row in rows:
+                        copy.write_row(row)
+                return
+            cursor.executemany(insert_sql, rows)
 
     def _lookup_alias_candidates(
         self,
@@ -477,6 +726,7 @@ class PostgreSQLMetadataStore:
         *,
         pack_id: str | None,
         exact_alias: bool,
+        fuzzy: bool,
         active_only: bool,
         limit: int,
     ) -> list[dict[str, str | float | bool | None]]:
@@ -489,8 +739,15 @@ class PostgreSQLMetadataStore:
             params.append(pack_id)
 
         if exact_alias:
-            filters.append("LOWER(a.alias_text) = LOWER(%s)")
-            params.append(query)
+            filters.append("a.normalized_alias_text = %s")
+            params.append(normalize_lookup_text(query))
+        elif fuzzy and getattr(self, "_pg_trgm_enabled", False):
+            return self._lookup_alias_candidates_pg_trgm(
+                query,
+                filters=filters,
+                params=params,
+                limit=limit,
+            )
         else:
             like_query = f"%{query.lower()}%"
             filters.append(
@@ -507,6 +764,13 @@ class PostgreSQLMetadataStore:
                     a.pack_id,
                     a.alias_text,
                     a.label,
+                    a.canonical_text,
+                    a.alias_score,
+                    a.generated,
+                    a.source_name,
+                    a.entity_id,
+                    a.source_priority,
+                    a.popularity_weight,
                     a.source_domain,
                     p.active
                 FROM pack_aliases AS a
@@ -523,6 +787,13 @@ class PostgreSQLMetadataStore:
                 "pack_id": str(row["pack_id"]),
                 "label": str(row["label"]),
                 "value": str(row["alias_text"]),
+                "canonical_text": str(row["canonical_text"]),
+                "generated": bool(row["generated"]),
+                "source_name": str(row["source_name"]),
+                "entity_id": str(row["entity_id"]),
+                "entity_prior": float(row["alias_score"]),
+                "source_priority": float(row["source_priority"]),
+                "popularity_weight": float(row["popularity_weight"]),
                 "pattern": None,
                 "domain": str(row["source_domain"]),
                 "active": bool(row["active"]),
@@ -531,7 +802,10 @@ class PostgreSQLMetadataStore:
                     alias_text=str(row["alias_text"]),
                     label=str(row["label"]),
                     source_domain=str(row["source_domain"]),
+                    alias_prior=float(row["alias_score"]),
                     exact_alias=exact_alias,
+                    fuzzy=fuzzy,
+                    match_score=None,
                 ),
             }
             for row in rows
@@ -542,6 +816,7 @@ class PostgreSQLMetadataStore:
         query: str,
         *,
         pack_id: str | None,
+        fuzzy: bool,
         active_only: bool,
         limit: int,
     ) -> list[dict[str, str | float | bool | None]]:
@@ -553,6 +828,13 @@ class PostgreSQLMetadataStore:
             filters.append("r.pack_id = %s")
             params.append(pack_id)
 
+        if fuzzy and getattr(self, "_pg_trgm_enabled", False):
+            return self._lookup_rule_candidates_pg_trgm(
+                query,
+                filters=filters,
+                params=params,
+                limit=limit,
+            )
         like_query = f"%{query.lower()}%"
         filters.append(
             "(LOWER(r.rule_name) LIKE %s OR LOWER(r.label) LIKE %s OR LOWER(r.pattern) LIKE %s OR LOWER(r.source_domain) LIKE %s)"
@@ -594,13 +876,203 @@ class PostgreSQLMetadataStore:
                     label=str(row["label"]),
                     pattern=str(row["pattern"]),
                     source_domain=str(row["source_domain"]),
+                    fuzzy=fuzzy,
+                    match_score=None,
+                ),
+            }
+            for row in rows
+        ]
+
+    def _lookup_alias_candidates_pg_trgm(
+        self,
+        query: str,
+        *,
+        filters: list[str],
+        params: list[object],
+        limit: int,
+    ) -> list[dict[str, str | float | bool | None]]:
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        trigram_params = [query, query, query]
+        query_params = trigram_params + params + [_PG_TRGM_ALIAS_THRESHOLD, limit]
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT *
+                FROM (
+                    SELECT
+                        a.pack_id,
+                        a.alias_text,
+                        a.label,
+                        a.canonical_text,
+                        a.alias_score,
+                        a.generated,
+                        a.source_name,
+                        a.entity_id,
+                        a.source_priority,
+                        a.popularity_weight,
+                        a.source_domain,
+                        p.active,
+                        GREATEST(
+                            similarity(a.alias_text, %s),
+                            similarity(a.label, %s),
+                            similarity(a.source_domain, %s)
+                        ) AS match_score
+                    FROM pack_aliases AS a
+                    JOIN installed_packs AS p ON p.pack_id = a.pack_id
+                    {where_clause}
+                ) AS ranked
+                WHERE ranked.match_score >= %s
+                ORDER BY ranked.match_score DESC, ranked.alias_score DESC, ranked.alias_text ASC, ranked.label ASC
+                LIMIT %s
+                """,
+                query_params,
+            ).fetchall()
+        return [
+            {
+                "kind": "alias",
+                "pack_id": str(row["pack_id"]),
+                "label": str(row["label"]),
+                "value": str(row["alias_text"]),
+                "canonical_text": str(row["canonical_text"]),
+                "generated": bool(row["generated"]),
+                "source_name": str(row["source_name"]),
+                "entity_id": str(row["entity_id"]),
+                "entity_prior": float(row["alias_score"]),
+                "source_priority": float(row["source_priority"]),
+                "popularity_weight": float(row["popularity_weight"]),
+                "pattern": None,
+                "domain": str(row["source_domain"]),
+                "active": bool(row["active"]),
+                "score": self._alias_score(
+                    query,
+                    alias_text=str(row["alias_text"]),
+                    label=str(row["label"]),
+                    source_domain=str(row["source_domain"]),
+                    alias_prior=float(row["alias_score"]),
+                    exact_alias=False,
+                    fuzzy=True,
+                    match_score=float(row["match_score"]),
+                ),
+            }
+            for row in rows
+        ]
+
+    def _lookup_rule_candidates_pg_trgm(
+        self,
+        query: str,
+        *,
+        filters: list[str],
+        params: list[object],
+        limit: int,
+    ) -> list[dict[str, str | float | bool | None]]:
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        trigram_params = [query, query, query, query]
+        query_params = trigram_params + params + [_PG_TRGM_RULE_THRESHOLD, limit]
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT *
+                FROM (
+                    SELECT
+                        r.pack_id,
+                        r.rule_name,
+                        r.label,
+                        r.pattern,
+                        r.source_domain,
+                        p.active,
+                        GREATEST(
+                            similarity(r.rule_name, %s),
+                            similarity(r.label, %s),
+                            similarity(r.pattern, %s),
+                            similarity(r.source_domain, %s)
+                        ) AS match_score
+                    FROM pack_rules AS r
+                    JOIN installed_packs AS p ON p.pack_id = r.pack_id
+                    {where_clause}
+                ) AS ranked
+                WHERE ranked.match_score >= %s
+                ORDER BY ranked.match_score DESC, ranked.rule_name ASC, ranked.label ASC
+                LIMIT %s
+                """,
+                query_params,
+            ).fetchall()
+        return [
+            {
+                "kind": "rule",
+                "pack_id": str(row["pack_id"]),
+                "label": str(row["label"]),
+                "value": str(row["rule_name"]),
+                "pattern": str(row["pattern"]),
+                "domain": str(row["source_domain"]),
+                "active": bool(row["active"]),
+                "score": self._rule_score(
+                    query,
+                    rule_name=str(row["rule_name"]),
+                    label=str(row["label"]),
+                    pattern=str(row["pattern"]),
+                    source_domain=str(row["source_domain"]),
+                    fuzzy=True,
+                    match_score=float(row["match_score"]),
                 ),
             }
             for row in rows
         ]
 
     def _connect(self):
+        if getattr(self, "_pool", None) is not None:
+            return self._pool.connection()
         return psycopg.connect(self.database_url, row_factory=dict_row)
+
+    def _is_pg_trgm_enabled(self, connection) -> bool:
+        row = connection.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_extension
+                WHERE extname = 'pg_trgm'
+            ) AS enabled
+            """
+        ).fetchone()
+        return bool(row and row["enabled"])
+
+    def _enable_optional_pg_trgm(self, connection) -> bool:
+        statements = [
+            "CREATE EXTENSION IF NOT EXISTS pg_trgm",
+            """
+            CREATE INDEX IF NOT EXISTS idx_pack_aliases_alias_text_trgm
+            ON pack_aliases USING GIN (alias_text gin_trgm_ops)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_pack_aliases_label_trgm
+            ON pack_aliases USING GIN (label gin_trgm_ops)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_pack_aliases_source_domain_trgm
+            ON pack_aliases USING GIN (source_domain gin_trgm_ops)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_pack_rules_rule_name_trgm
+            ON pack_rules USING GIN (rule_name gin_trgm_ops)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_pack_rules_label_trgm
+            ON pack_rules USING GIN (label gin_trgm_ops)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_pack_rules_pattern_trgm
+            ON pack_rules USING GIN (pattern gin_trgm_ops)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_pack_rules_source_domain_trgm
+            ON pack_rules USING GIN (source_domain gin_trgm_ops)
+            """,
+        ]
+        try:
+            for statement in statements:
+                connection.execute(statement)
+        except Exception:
+            return False
+        return True
 
     @staticmethod
     def _alias_score(
@@ -609,7 +1081,10 @@ class PostgreSQLMetadataStore:
         alias_text: str,
         label: str,
         source_domain: str,
+        alias_prior: float,
         exact_alias: bool,
+        fuzzy: bool,
+        match_score: float | None,
     ) -> float:
         normalized_query = query.lower()
         normalized_alias = alias_text.lower()
@@ -622,13 +1097,18 @@ class PostgreSQLMetadataStore:
             source_domain,
         )
         if exact_alias or normalized_alias == normalized_query:
-            return 1.0
+            return round(min(1.0, 0.7 + (alias_prior * 0.3)), 4)
+        if fuzzy and match_score is not None:
+            score = 0.35 + (min(1.0, max(0.0, match_score)) * 0.4)
+            score += coverage * 0.1
+            score = (score * 0.75) + (alias_prior * 0.25)
+            return round(min(0.97, score), 4)
         if coverage == 0.0:
             return 0.0
         if normalized_alias.startswith(normalized_query):
-            return 0.95
+            return round(min(0.98, 0.75 + (alias_prior * 0.23)), 4)
         if normalized_query in normalized_alias:
-            return 0.85
+            return round(min(0.94, 0.65 + (alias_prior * 0.24)), 4)
         score = 0.45 + (coverage * 0.35)
         if normalized_query and normalized_query in normalized_label:
             score += 0.04
@@ -636,7 +1116,8 @@ class PostgreSQLMetadataStore:
             score += 0.03
         if coverage == 1.0 and len(PostgreSQLMetadataStore._query_terms(query)) > 1:
             score += 0.05
-        return round(min(0.9, score), 4)
+        score = (score * 0.75) + (alias_prior * 0.25)
+        return round(min(0.95, score), 4)
 
     @staticmethod
     def _rule_score(
@@ -646,6 +1127,8 @@ class PostgreSQLMetadataStore:
         label: str,
         pattern: str,
         source_domain: str,
+        fuzzy: bool,
+        match_score: float | None,
     ) -> float:
         normalized_query = query.lower()
         coverage = PostgreSQLMetadataStore._field_coverage(
@@ -657,6 +1140,9 @@ class PostgreSQLMetadataStore:
         )
         if rule_name.lower() == normalized_query:
             return 0.9
+        if fuzzy and match_score is not None:
+            score = 0.3 + (min(1.0, max(0.0, match_score)) * 0.45) + (coverage * 0.1)
+            return round(min(0.9, score), 4)
         if coverage == 0.0:
             return 0.0
         if normalized_query in rule_name.lower():
@@ -719,19 +1205,27 @@ class PostgreSQLMetadataStore:
         ]
 
     @staticmethod
-    def _load_aliases(pack_dir: Path, domain: str) -> list[dict[str, str]]:
+    def _load_aliases(pack_dir: Path, domain: str) -> list[dict[str, str | float | bool]]:
         path = pack_dir / "aliases.json"
         if not path.exists():
             return []
         data = json.loads(path.read_text(encoding="utf-8"))
         aliases = data.get("aliases", [])
-        loaded: list[dict[str, str]] = []
+        loaded: list[dict[str, str | float | bool]] = []
         for item in aliases:
             if isinstance(item, str):
                 loaded.append(
                     {
                         "text": item,
                         "label": "alias",
+                        "normalized_text": normalize_lookup_text(item),
+                        "canonical_text": str(item),
+                        "alias_score": 1.0,
+                        "generated": False,
+                        "source_name": "",
+                        "entity_id": "",
+                        "source_priority": 0.6,
+                        "popularity_weight": 0.5,
                         "source_domain": domain,
                     }
                 )
@@ -740,6 +1234,18 @@ class PostgreSQLMetadataStore:
                 {
                     "text": str(item["text"]),
                     "label": str(item.get("label", "alias")),
+                    "normalized_text": str(
+                        item.get("normalized_text") or normalize_lookup_text(str(item["text"]))
+                    ),
+                    "canonical_text": str(
+                        item.get("canonical_text") or item.get("text") or ""
+                    ),
+                    "alias_score": float(item.get("score", item.get("alias_score", 1.0))),
+                    "generated": bool(item.get("generated", False)),
+                    "source_name": str(item.get("source_name", "")),
+                    "entity_id": str(item.get("entity_id", "")),
+                    "source_priority": float(item.get("source_priority", 0.6)),
+                    "popularity_weight": float(item.get("popularity_weight", 0.5)),
                     "source_domain": domain,
                 }
             )

@@ -27,11 +27,11 @@ def test_smoke_test_published_registry_validates_finance_and_medical(
     medical_case = next(case for case in result.cases if case.pack_id == "medical-en")
     assert finance_case.installed_pack_ids == ["finance-en"]
     assert finance_case.missing_entity_texts == []
-    assert "AAPL" in finance_case.matched_entity_texts
+    assert "TICKA" in finance_case.matched_entity_texts
     assert "ticker" in finance_case.matched_labels
     assert medical_case.installed_pack_ids == ["general-en", "medical-en"]
     assert medical_case.missing_entity_texts == []
-    assert "BRCA1" in medical_case.matched_entity_texts
+    assert "GENEA1" in medical_case.matched_entity_texts
     assert "disease" in medical_case.matched_labels
 
 

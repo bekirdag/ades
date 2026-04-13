@@ -1,15 +1,27 @@
 {
   "aliases": [
     {
-      "text": "NASDAQ",
+      "text": "EXCHX",
       "label": "exchange"
     },
     {
-      "text": "NYSE",
+      "text": "Exchange Alpha",
       "label": "exchange"
     },
     {
-      "text": "AAPL",
+      "text": "EXCHY",
+      "label": "exchange"
+    },
+    {
+      "text": "Exchange Beta",
+      "label": "exchange"
+    },
+    {
+      "text": "TICKA",
+      "label": "ticker"
+    },
+    {
+      "text": "TICKB",
       "label": "ticker"
     }
   ]

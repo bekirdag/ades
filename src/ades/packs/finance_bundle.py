@@ -9,13 +9,11 @@ import json
 from pathlib import Path
 import shutil
 from typing import Any
+import zipfile
 
 from .source_lock import build_bundle_source_entry, write_sources_lock
 
 _FINANCE_STOPLISTED_ALIASES = ["N/A", "ON", "USD"]
-_ISSUER_BLOCKED_ALIAS_MAP = {
-    "nasdaq, inc.": ["NASDAQ"],
-}
 
 
 @dataclass(frozen=True)
@@ -43,7 +41,10 @@ class FinanceSourceBundleResult:
 def build_finance_source_bundle(
     *,
     sec_companies_path: str | Path,
+    sec_submissions_path: str | Path | None = None,
+    sec_companyfacts_path: str | Path | None = None,
     symbol_directory_path: str | Path,
+    other_listed_path: str | Path | None = None,
     curated_entities_path: str | Path,
     output_dir: str | Path,
     version: str = "0.2.0",
@@ -54,9 +55,33 @@ def build_finance_source_bundle(
         sec_companies_path,
         label="SEC company tickers snapshot",
     )
+    sec_submissions_resolved_path = (
+        _resolve_input_file(
+            sec_submissions_path,
+            label="SEC submissions snapshot",
+        )
+        if sec_submissions_path is not None
+        else None
+    )
+    sec_companyfacts_resolved_path = (
+        _resolve_input_file(
+            sec_companyfacts_path,
+            label="SEC companyfacts snapshot",
+        )
+        if sec_companyfacts_path is not None
+        else None
+    )
     symbol_path = _resolve_input_file(
         symbol_directory_path,
         label="symbol directory snapshot",
+    )
+    other_listed_resolved_path = (
+        _resolve_input_file(
+            other_listed_path,
+            label="other listed symbol snapshot",
+        )
+        if other_listed_path is not None
+        else None
     )
     curated_path = _resolve_input_file(
         curated_entities_path,
@@ -71,8 +96,45 @@ def build_finance_source_bundle(
     normalized_dir = bundle_dir / "normalized"
     normalized_dir.mkdir(parents=True, exist_ok=True)
 
-    sec_issuers = _load_sec_company_issuers(sec_path)
-    symbol_entities = _load_symbol_directory_tickers(symbol_path)
+    sec_company_items = _load_sec_company_items(sec_path)
+    sec_source_ids = _collect_sec_source_ids(sec_company_items)
+
+    sec_submission_profiles = (
+        _load_sec_submission_profiles(
+            sec_submissions_resolved_path,
+            target_source_ids=sec_source_ids,
+        )
+        if sec_submissions_resolved_path is not None
+        else {}
+    )
+    sec_companyfacts_profiles = (
+        _load_sec_companyfacts_profiles(
+            sec_companyfacts_resolved_path,
+            target_source_ids=sec_source_ids,
+        )
+        if sec_companyfacts_resolved_path is not None
+        else {}
+    )
+    sec_issuers = _build_sec_company_issuers(
+        sec_company_items,
+        submission_profiles=sec_submission_profiles,
+        companyfacts_profiles=sec_companyfacts_profiles,
+    )
+    primary_symbol_entities = _load_symbol_directory_tickers(
+        symbol_path,
+        source_name="symbol-directory",
+    )
+    other_listed_entities = (
+        _load_symbol_directory_tickers(
+            other_listed_resolved_path,
+            source_name="other-listed",
+        )
+        if other_listed_resolved_path is not None
+        else []
+    )
+    symbol_entities = _dedupe_symbol_entities(
+        [*primary_symbol_entities, *other_listed_entities]
+    )
     curated_entities = _load_curated_finance_entities(curated_path)
     rules = _build_finance_rule_records()
 
@@ -101,19 +163,50 @@ def build_finance_source_bundle(
             record_count=len(sec_issuers),
             adapter="sec_company_tickers_json",
         ),
+    ]
+    if sec_submissions_resolved_path is not None:
+        sources.append(
+            build_bundle_source_entry(
+                name="sec-submissions",
+                snapshot_path=sec_submissions_resolved_path,
+                record_count=len(sec_submission_profiles),
+                adapter="sec_submissions_zip",
+            )
+        )
+    if sec_companyfacts_resolved_path is not None:
+        sources.append(
+            build_bundle_source_entry(
+                name="sec-companyfacts",
+                snapshot_path=sec_companyfacts_resolved_path,
+                record_count=len(sec_companyfacts_profiles),
+                adapter="sec_companyfacts_zip",
+            )
+        )
+    sources.append(
         build_bundle_source_entry(
             name="symbol-directory",
             snapshot_path=symbol_path,
-            record_count=len(symbol_entities),
+            record_count=len(primary_symbol_entities),
             adapter="delimited_symbol_directory",
-        ),
+        )
+    )
+    if other_listed_resolved_path is not None:
+        sources.append(
+            build_bundle_source_entry(
+                name="other-listed",
+                snapshot_path=other_listed_resolved_path,
+                record_count=len(other_listed_entities),
+                adapter="delimited_symbol_directory",
+            )
+        )
+    sources.append(
         build_bundle_source_entry(
             name="curated-finance-entities",
             snapshot_path=curated_path,
             record_count=len(curated_entities),
             adapter="curated_finance_entities",
-        ),
-    ]
+        )
+    )
     bundle_manifest_path.write_text(
         json.dumps(
             {
@@ -156,6 +249,8 @@ def build_finance_source_bundle(
         warnings.append("SEC snapshot produced no issuer entities.")
     if not symbol_entities:
         warnings.append("Symbol directory snapshot produced no ticker entities.")
+    if other_listed_resolved_path is not None and not other_listed_entities:
+        warnings.append("Other listed snapshot produced no ticker entities.")
     if not curated_entities:
         warnings.append("Curated entity snapshot produced no finance entities.")
 
@@ -179,7 +274,7 @@ def build_finance_source_bundle(
     )
 
 
-def _load_sec_company_issuers(path: Path) -> list[dict[str, Any]]:
+def _load_sec_company_items(path: Path) -> list[dict[str, Any]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, dict):
         raw_records = list(payload.values())
@@ -187,39 +282,160 @@ def _load_sec_company_issuers(path: Path) -> list[dict[str, Any]]:
         raw_records = payload
     else:
         raise ValueError(f"Unsupported SEC snapshot structure: {path}")
+    return [item for item in raw_records if isinstance(item, dict)]
 
+
+def _collect_sec_source_ids(items: list[dict[str, Any]]) -> set[str]:
+    source_ids: set[str] = set()
+    for item in items:
+        source_id = _format_sec_source_id(item.get("cik_str") or item.get("cik"))
+        if source_id:
+            source_ids.add(source_id)
+    return source_ids
+
+
+def _build_sec_company_issuers(
+    items: list[dict[str, Any]],
+    *,
+    submission_profiles: dict[str, dict[str, Any]],
+    companyfacts_profiles: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
-    for item in raw_records:
-        if not isinstance(item, dict):
-            continue
+    for item in items:
         canonical_text = _clean_text(
             item.get("title") or item.get("name") or item.get("issuer")
         )
         if not canonical_text:
             continue
-        cik = item.get("cik_str") or item.get("cik")
-        source_id = str(int(cik)).zfill(10) if cik is not None else canonical_text.casefold()
+        source_id = _format_sec_source_id(item.get("cik_str") or item.get("cik"))
+        if not source_id:
+            source_id = canonical_text.casefold()
         metadata: dict[str, Any] = {}
         ticker = _clean_text(item.get("ticker"))
         if ticker:
             metadata["ticker"] = ticker
+        submission_profile = submission_profiles.get(source_id, {})
+        companyfacts_profile = companyfacts_profiles.get(source_id, {})
+        aliases = _dedupe_preserving_order(
+            [
+                alias
+                for alias in [
+                    *submission_profile.get("former_names", []),
+                    _clean_text(companyfacts_profile.get("entity_name")),
+                ]
+                if alias and alias.casefold() != canonical_text.casefold()
+            ]
+        )
+        exchanges = submission_profile.get("exchanges", [])
+        if exchanges:
+            metadata["exchanges"] = exchanges
+        submission_tickers = submission_profile.get("tickers", [])
+        if submission_tickers and "ticker" not in metadata:
+            metadata["ticker"] = submission_tickers[0]
         record = {
             "entity_id": f"sec-cik:{source_id}",
             "entity_type": "issuer",
             "canonical_text": canonical_text,
-            "aliases": [],
+            "aliases": aliases,
             "source_name": "sec-company-tickers",
             "source_id": source_id,
             "metadata": metadata,
         }
-        blocked_aliases = _ISSUER_BLOCKED_ALIAS_MAP.get(canonical_text.casefold(), [])
+        blocked_aliases = _derive_issuer_blocked_aliases(
+            canonical_text=canonical_text,
+            aliases=aliases,
+            metadata=metadata,
+        )
         if blocked_aliases:
             record["blocked_aliases"] = list(blocked_aliases)
         records.append(record)
     return records
 
 
-def _load_symbol_directory_tickers(path: Path) -> list[dict[str, Any]]:
+def _derive_issuer_blocked_aliases(
+    *,
+    canonical_text: str,
+    aliases: list[str],
+    metadata: dict[str, Any],
+) -> list[str]:
+    blocked: list[str] = []
+    canonical_key = canonical_text.casefold()
+    known_alias_keys = {alias.casefold() for alias in aliases}
+    for exchange_name in metadata.get("exchanges", []):
+        cleaned_exchange = _clean_text(exchange_name)
+        if not cleaned_exchange:
+            continue
+        candidates = [cleaned_exchange]
+        compact = "".join(character for character in cleaned_exchange if character.isalpha())
+        if compact and compact.isalpha() and len(compact) <= 8:
+            candidates.append(compact.upper())
+        for candidate in candidates:
+            candidate_key = candidate.casefold()
+            if candidate_key == canonical_key or candidate_key in known_alias_keys:
+                continue
+            if candidate_key in canonical_key:
+                blocked.append(candidate)
+    return _dedupe_preserving_order(blocked)
+
+
+def _load_sec_submission_profiles(
+    path: Path,
+    *,
+    target_source_ids: set[str],
+) -> dict[str, dict[str, Any]]:
+    profiles: dict[str, dict[str, Any]] = {}
+    for item in _read_targeted_zip_json_records(path, target_source_ids=target_source_ids):
+        cik = item.get("cik")
+        if cik is None:
+            continue
+        source_id = _format_sec_source_id(cik)
+        if not source_id:
+            continue
+        former_names = [
+            _clean_text(entry.get("name"))
+            for entry in item.get("formerNames", []) or []
+            if isinstance(entry, dict) and _clean_text(entry.get("name"))
+        ]
+        profiles[source_id] = {
+            "tickers": [
+                _clean_text(value)
+                for value in item.get("tickers", []) or []
+                if _clean_text(value)
+            ],
+            "exchanges": [
+                _clean_text(value)
+                for value in item.get("exchanges", []) or []
+                if _clean_text(value)
+            ],
+            "former_names": former_names,
+        }
+    return profiles
+
+
+def _load_sec_companyfacts_profiles(
+    path: Path,
+    *,
+    target_source_ids: set[str],
+) -> dict[str, dict[str, Any]]:
+    profiles: dict[str, dict[str, Any]] = {}
+    for item in _read_targeted_zip_json_records(path, target_source_ids=target_source_ids):
+        cik = item.get("cik")
+        if cik is None:
+            continue
+        source_id = _format_sec_source_id(cik)
+        if not source_id:
+            continue
+        profiles[source_id] = {
+            "entity_name": _clean_text(item.get("entityName")),
+        }
+    return profiles
+
+
+def _load_symbol_directory_tickers(
+    path: Path,
+    *,
+    source_name: str,
+) -> list[dict[str, Any]]:
     first_line = path.read_text(encoding="utf-8").splitlines()[0]
     delimiter = "|" if "|" in first_line else ","
     with path.open("r", encoding="utf-8", newline="") as handle:
@@ -228,6 +444,7 @@ def _load_symbol_directory_tickers(path: Path) -> list[dict[str, Any]]:
         for row in reader:
             symbol = _clean_text(
                 row.get("Symbol")
+                or row.get("ACT Symbol")
                 or row.get("symbol")
                 or row.get("Ticker")
             )
@@ -247,11 +464,71 @@ def _load_symbol_directory_tickers(path: Path) -> list[dict[str, Any]]:
                     "entity_type": "ticker",
                     "canonical_text": symbol.upper(),
                     "aliases": aliases,
-                    "source_name": "symbol-directory",
+                    "source_name": source_name,
                     "source_id": symbol.upper(),
                 }
             )
     return records
+
+
+def _dedupe_symbol_entities(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: dict[str, dict[str, Any]] = {}
+    for item in records:
+        key = str(item.get("source_id") or item.get("canonical_text") or "").upper()
+        if not key:
+            continue
+        existing = deduped.get(key)
+        if existing is None:
+            deduped[key] = item
+            continue
+        aliases = _dedupe_preserving_order(
+            [*existing.get("aliases", []), *item.get("aliases", [])]
+        )
+        existing["aliases"] = aliases
+    return list(deduped.values())
+
+
+def _read_targeted_zip_json_records(
+    path: Path,
+    *,
+    target_source_ids: set[str],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    if not target_source_ids:
+        return records
+    with zipfile.ZipFile(path) as archive:
+        for source_id in sorted(target_source_ids):
+            member_name = f"CIK{source_id}.json"
+            try:
+                with archive.open(member_name) as handle:
+                    payload = json.loads(handle.read().decode("utf-8"))
+            except KeyError:
+                continue
+            if isinstance(payload, dict):
+                records.append(payload)
+    return records
+
+
+def _format_sec_source_id(value: Any) -> str:
+    cleaned = _clean_text(value)
+    if not cleaned:
+        return ""
+    digits = "".join(character for character in cleaned if character.isdigit())
+    if not digits:
+        return ""
+    return digits.zfill(10)
+
+
+def _dedupe_preserving_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        key = value.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(value)
+    return deduped
 
 
 def _load_curated_finance_entities(path: Path) -> list[dict[str, Any]]:

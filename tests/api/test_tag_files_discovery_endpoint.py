@@ -16,8 +16,8 @@ def test_tag_files_endpoint_supports_directory_and_glob_discovery(tmp_path: Path
 
     nested_input = nested_dir / "report.html"
     globbed_input = glob_dir / "bulletin.html"
-    nested_input.write_text("<p>Apple said AAPL traded on NASDAQ.</p>", encoding="utf-8")
-    globbed_input.write_text("<p>NASDAQ said Apple moved AAPL guidance.</p>", encoding="utf-8")
+    nested_input.write_text("<p>Org Beta said TICKA traded on EXCHX.</p>", encoding="utf-8")
+    globbed_input.write_text("<p>EXCHX said Org Beta moved TICKA guidance.</p>", encoding="utf-8")
 
     client = TestClient(create_app(storage_root=tmp_path))
     response = client.post(

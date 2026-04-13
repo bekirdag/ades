@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+import re
 import shutil
 
 from ..pipeline.tagger import tag_text
@@ -87,6 +88,7 @@ def validate_generated_pack_quality(
     output_dir: str | Path,
     quality_dir_name: str,
     cases: tuple[PackQualityCase, ...],
+    fixture_profile: str = "default",
     dependency_bundle_dirs: tuple[str | Path, ...] = (),
     version: str | None = None,
     min_expected_recall: float = 1.0,
@@ -148,12 +150,14 @@ def validate_generated_pack_quality(
             content_type="text/plain",
             storage_root=install_root,
         )
-        actual_entities = _sorted_entities({(entity.text, entity.label) for entity in response.entities})
-        expected_entities = _sorted_entities(
+        actual_keys = _normalize_entities(
+            {(entity.text, entity.label) for entity in response.entities}
+        )
+        expected_keys = _normalize_entities(
             {(entity.text, entity.label) for entity in case.expected_entities}
         )
-        actual_keys = {(item.text, item.label) for item in actual_entities}
-        expected_keys = {(item.text, item.label) for item in expected_entities}
+        actual_entities = _sorted_entities(actual_keys)
+        expected_entities = _sorted_entities(expected_keys)
         matched_entities = _sorted_entities(actual_keys & expected_keys)
         missing_entities = _sorted_entities(expected_keys - actual_keys)
         unexpected_entities = _sorted_entities(actual_keys - expected_keys)
@@ -231,7 +235,7 @@ def validate_generated_pack_quality(
         registry_index_url=registry.index_url,
         storage_root=str(install_root),
         evaluated_at=_utc_timestamp(),
-        fixture_profile="default",
+        fixture_profile=fixture_profile,
         fixture_count=len(cases),
         passed_case_count=strict_pass_count,
         failed_case_count=len(cases) - strict_pass_count,
@@ -266,6 +270,43 @@ def _sorted_entities(values: set[tuple[str, str]]) -> list[PackQualityEntity]:
         PackQualityEntity(text=text, label=label)
         for text, label in sorted(values, key=lambda item: (item[0].casefold(), item[1].casefold()))
     ]
+
+
+def _normalize_entities(values: set[tuple[str, str]]) -> set[tuple[str, str]]:
+    retained = set(values)
+    ordered_values = sorted(
+        values,
+        key=lambda item: (len(item[0].strip()), item[0].casefold(), item[1].casefold()),
+    )
+    for text, label in ordered_values:
+        current = (text, label)
+        if current not in retained:
+            continue
+        for other_text, other_label in retained:
+            if other_label != label or other_text == text:
+                continue
+            if len(other_text.strip()) <= len(text.strip()):
+                continue
+            if _is_subsumed_same_label_entity(shorter=text, longer=other_text):
+                retained.discard(current)
+                break
+    return retained
+
+
+def _is_subsumed_same_label_entity(*, shorter: str, longer: str) -> bool:
+    normalized_shorter = shorter.strip().casefold()
+    normalized_longer = longer.strip().casefold()
+    if not normalized_shorter or not normalized_longer:
+        return False
+    if normalized_shorter == normalized_longer:
+        return False
+    return (
+        re.search(
+            rf"(?<!\w){re.escape(normalized_shorter)}(?!\w)",
+            normalized_longer,
+        )
+        is not None
+    )
 
 
 def _format_entity(entity: PackQualityEntity) -> str:

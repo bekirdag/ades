@@ -21,17 +21,19 @@ def test_validate_finance_pack_quality_reports_passing_fixture_metrics(tmp_path:
     )
 
     assert report.passed is True
-    assert report.fixture_profile == "default"
-    assert report.fixture_count == 3
-    assert report.passed_case_count == 3
+    assert report.fixture_profile == "benchmark"
+    assert report.fixture_count == 5
+    assert report.passed_case_count == 5
     assert report.failed_case_count == 0
-    assert report.expected_entity_count == 9
-    assert report.matched_expected_entity_count == 9
+    assert report.expected_entity_count == 16
+    assert report.actual_entity_count == 16
+    assert report.matched_expected_entity_count == 16
     assert report.missing_expected_entity_count == 0
     assert report.unexpected_entity_count == 0
     assert report.expected_recall == 1.0
     assert report.precision == 1.0
-    assert report.unique_canonical_count == 6
+    assert report.alias_count == 18
+    assert report.unique_canonical_count == 9
     assert report.rule_count == 2
     assert Path(report.generated_pack_dir).exists()
     assert Path(report.registry_index_path).exists()

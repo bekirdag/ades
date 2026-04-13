@@ -34,6 +34,7 @@ def test_cli_can_build_registry_and_pull_from_registry_url(tmp_path: Path) -> No
             "packs",
             "list",
             "--available",
+            "--json",
             "--registry-url",
             build_payload["index_url"],
         ],
@@ -52,6 +53,7 @@ def test_cli_can_build_registry_and_pull_from_registry_url(tmp_path: Path) -> No
         [
             "pull",
             "finance-en",
+            "--json",
             "--registry-url",
             build_payload["index_url"],
         ],

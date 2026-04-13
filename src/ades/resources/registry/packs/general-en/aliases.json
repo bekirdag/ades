@@ -1,16 +1,28 @@
 {
   "aliases": [
     {
-      "text": "OpenAI",
+      "text": "Org Alpha",
       "label": "organization"
     },
     {
-      "text": "Tim Cook",
+      "text": "Org Beta",
+      "label": "organization"
+    },
+    {
+      "text": "Person Alpha",
       "label": "person"
     },
     {
-      "text": "Apple",
-      "label": "organization"
+      "text": "Person Alpha Variant",
+      "label": "person"
+    },
+    {
+      "text": "Metro Alpha",
+      "label": "location"
+    },
+    {
+      "text": "Metro Alpha Historic",
+      "label": "location"
     }
   ]
 }

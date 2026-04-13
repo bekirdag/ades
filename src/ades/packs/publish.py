@@ -27,6 +27,13 @@ from ..pipeline.tagger import tag_text
 IGNORED_PACK_FILE_NAMES = {
     ".DS_Store",
 }
+IGNORED_BUILD_ONLY_FILE_NAMES = {
+    "analysis.sqlite",
+    "analysis.sqlite-journal",
+    "analysis.sqlite-wal",
+    "analysis.sqlite-shm",
+    "alias-analysis.json",
+}
 IGNORED_PACK_SUFFIXES = {
     ".pyc",
     ".tar.zst",
@@ -171,25 +178,25 @@ _PUBLISHED_REGISTRY_SMOKE_FIXTURE_PROFILE = "published_registry_consumer"
 _PUBLISHED_REGISTRY_SMOKE_SPECS: dict[str, _PublishedRegistrySmokeSpec] = {
     "finance-en": _PublishedRegistrySmokeSpec(
         pack_id="finance-en",
-        text="Apple said AAPL traded on NASDAQ after USD 12.5 guidance.",
+        text="Issuer Alpha said TICKA traded on EXCHX after USD 12.5 guidance.",
         expected_installed_pack_ids=("finance-en",),
-        expected_entity_texts=("Apple", "AAPL", "NASDAQ", "USD 12.5"),
+        expected_entity_texts=("Issuer Alpha", "TICKA", "EXCHX", "USD 12.5"),
         expected_labels=("organization", "ticker", "exchange", "currency_amount"),
     ),
     "medical-en": _PublishedRegistrySmokeSpec(
         pack_id="medical-en",
         text=(
-            "BRCA1 and p53 protein were studied in NCT04280705 after "
-            "Aspirin 10 mg dosing for diabetes."
+            "GENEA1 and Protein Alpha were studied in NCT00000001 after "
+            "Compound Alpha 10 mg dosing for disease alpha."
         ),
         expected_installed_pack_ids=("general-en", "medical-en"),
         expected_entity_texts=(
-            "BRCA1",
-            "p53 protein",
-            "NCT04280705",
-            "Aspirin",
+            "GENEA1",
+            "Protein Alpha",
+            "NCT00000001",
+            "Compound Alpha",
             "10 mg",
-            "diabetes",
+            "disease alpha",
         ),
         expected_labels=("gene", "protein", "clinical_trial", "drug", "dosage", "disease"),
     ),
@@ -257,7 +264,13 @@ def build_static_registry(
         shutil.copytree(
             pack_dir,
             published_pack_dir,
-            ignore=shutil.ignore_patterns(*IGNORED_PACK_PATTERNS, "*.tar.zst", "__pycache__", "*.pyc"),
+            ignore=shutil.ignore_patterns(
+                *IGNORED_PACK_PATTERNS,
+                *IGNORED_BUILD_ONLY_FILE_NAMES,
+                "*.tar.zst",
+                "__pycache__",
+                "*.pyc",
+            ),
         )
         (published_pack_dir / "manifest.json").write_text(
             json.dumps(published_manifest.to_dict(), indent=2) + "\n",
@@ -510,6 +523,7 @@ def _build_published_manifest(
         rules=list(source_manifest.rules),
         labels=list(source_manifest.labels),
         min_ades_version=source_manifest.min_ades_version,
+        matcher=source_manifest.matcher,
     )
 
 
@@ -520,16 +534,33 @@ def _validate_manifest_sources(pack_dir: Path, manifest: PackManifest) -> None:
             raise FileNotFoundError(
                 f"Pack source file listed in manifest is missing: {resolved}"
             )
+    if manifest.matcher is None:
+        return
+    for relative_path in [manifest.matcher.artifact_path, manifest.matcher.entries_path]:
+        resolved = pack_dir / relative_path
+        if not resolved.exists():
+            raise FileNotFoundError(
+                f"Pack matcher file listed in manifest is missing: {resolved}"
+            )
 
 
 def _write_pack_artifact(source_pack_dir: Path, manifest: PackManifest, artifact_path: Path) -> None:
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="ades-pack-build-") as temp_dir:
+    with tempfile.TemporaryDirectory(
+        prefix="ades-pack-build-",
+        dir=str(artifact_path.parent),
+    ) as temp_dir:
         staging_dir = Path(temp_dir) / source_pack_dir.name
         shutil.copytree(
             source_pack_dir,
             staging_dir,
-            ignore=shutil.ignore_patterns(*IGNORED_PACK_PATTERNS, "*.tar.zst", "__pycache__", "*.pyc"),
+            ignore=shutil.ignore_patterns(
+                *IGNORED_PACK_PATTERNS,
+                *IGNORED_BUILD_ONLY_FILE_NAMES,
+                "*.tar.zst",
+                "__pycache__",
+                "*.pyc",
+            ),
         )
         (staging_dir / "manifest.json").write_text(
             json.dumps(manifest.to_dict(), indent=2) + "\n",
@@ -565,6 +596,8 @@ def _iter_pack_entries(source_dir: Path) -> list[Path]:
 
 def _should_include_in_pack(path: Path) -> bool:
     if path.name in IGNORED_PACK_FILE_NAMES:
+        return False
+    if path.name in IGNORED_BUILD_ONLY_FILE_NAMES:
         return False
     if any(part == "__pycache__" for part in path.parts):
         return False

@@ -10,7 +10,7 @@ from ades.service.app import create_app
 def test_tag_file_endpoint_can_persist_results(tmp_path: Path) -> None:
     PackInstaller(tmp_path).install("finance-en")
     input_path = tmp_path / "report.html"
-    input_path.write_text("<p>Apple said AAPL traded on NASDAQ.</p>", encoding="utf-8")
+    input_path.write_text("<p>Org Beta said TICKA traded on EXCHX.</p>", encoding="utf-8")
     output_dir = tmp_path / "outputs"
 
     client = TestClient(create_app(storage_root=tmp_path))

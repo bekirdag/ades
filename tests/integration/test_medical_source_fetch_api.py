@@ -14,6 +14,7 @@ def test_public_api_can_fetch_medical_source_snapshot(tmp_path: Path) -> None:
         hgnc_genes_url=remote_sources["hgnc_genes_url"],
         uniprot_proteins_url=remote_sources["uniprot_proteins_url"],
         clinical_trials_url=remote_sources["clinical_trials_url"],
+        orange_book_url=remote_sources["orange_book_url"],
         uniprot_max_records=10,
         clinical_trials_max_records=10,
     )
@@ -21,4 +22,4 @@ def test_public_api_can_fetch_medical_source_snapshot(tmp_path: Path) -> None:
     assert result.pack_id == "medical-en"
     assert result.snapshot == "2026-04-10"
     assert Path(result.source_manifest_path).exists()
-
+    assert Path(result.orange_book_path).exists()

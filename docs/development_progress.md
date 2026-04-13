@@ -251,7 +251,7 @@ This file records the implementation progress of `ades` as the project moves tow
 
 - Added a reproducible finance-source fetcher in `src/ades/packs/finance_sources.py` plus public Python, CLI, and localhost service surfaces so dated SEC and Nasdaq source snapshots can be downloaded directly into `/mnt/githubActions/ades_big_data/pack_sources/raw/finance-en/<snapshot>/` instead of being staged by hand.
 - Added immutable snapshot metadata through `sources.fetch.json`, including exact upstream URLs, fetched paths, SHA-256 digests, byte sizes, and the fetch user agent, while keeping the raw-source layout outside the repo.
-- Extended generated-pack alias pruning with per-record `blocked_aliases` support and tuned the finance bundle inputs so the live `NASDAQ, INC.` issuer no longer suppresses the exchange alias and noisy real-world ticker aliases like `ON` and `USD` are dropped before they reach the runtime pack.
+- Extended generated-pack alias pruning with per-record `blocked_aliases` support and tuned the finance bundle inputs so live issuer aliases no longer suppress exchange aliases and noisy real-world ticker aliases like `ON` and `USD` are dropped before they reach the runtime pack.
 - Validated the first live finance snapshot dated `2026-04-10`: the real bundle now emits `22881` normalized entity records, the quality gate passes at `expected_recall=1.0` and `precision=1.0`, and `refresh-generated-packs` produces a publishable finance-only registry release under `/mnt/githubActions/ades_big_data/pack_releases/finance-en-2026-04-10`.
 
 ### 31. Real medical-source and general-source live bundle tuning
@@ -307,7 +307,7 @@ This file records the implementation progress of `ades` as the project moves tow
 
 ### 34. Clean-environment pull-and-tag smoke validation for release artifacts
 
-- Extended `src/ades/release.py` so release smoke verification now runs the installed CLI through `ades status`, `ades pull general-en`, and `ades tag "Contact OpenAI via smoke@example.com"` instead of stopping at `status` only.
+- Extended `src/ades/release.py` so release smoke verification now runs the installed CLI through `ades status`, `ades pull general-en`, and `ades tag "Issuer Alpha said TICKA traded on EXCHX after USD 12.5 guidance."` instead of stopping at `status` only.
 - Added deterministic pull/tag parsing and warning logic so release verification now proves bundled-registry pull and post-pull tagging behavior for both the installed Python wheel and the installed npm wrapper in clean environments.
 - Extended the shared release smoke response model in `src/ades/service/models.py` so callers can inspect the pull command result, tag command result, pulled pack ids, and tagged labels for each smoke-install artifact.
 - Updated the fake release runner and categorized unit, component, integration, and API coverage so the release verify/validate surfaces exercise the new pull/tag smoke path and explicit tag-failure warnings.
@@ -345,7 +345,7 @@ This file records the implementation progress of `ades` as the project moves tow
 
 - Added explicit alias-driven regression coverage so the tagger surfaces now prove `finance-en` entity extraction still works after the installed-pack SQLite row is deleted while the on-disk pack files remain available.
 - Kept product code unchanged because the runtime already recovered through the current registry/runtime seam; this item closes the coverage gap that previously left the tagger path unproven under the same partial metadata-loss condition.
-- Extended the categorized tagger tests in `tests/test_tagger.py`, `tests/component/test_lookup_driven_tagger.py`, `tests/integration/test_lookup_driven_tag_api.py`, and `tests/api/test_tag_lookup_aliases.py` with alias-only assertions on `AAPL` and `NASDAQ` after deleting the `finance-en` row from `storage_root/registry/ades.db`.
+- Extended the categorized tagger tests in `tests/test_tagger.py`, `tests/component/test_lookup_driven_tagger.py`, `tests/integration/test_lookup_driven_tag_api.py`, and `tests/api/test_tag_lookup_aliases.py` with alias-only assertions on `TICKA` and `EXCHX` after deleting the `finance-en` row from `storage_root/registry/ades.db`.
 - Verified the item through focused tagger-regression tests with `9 passed`, `python -m compileall src/ades`, and the repo-standard `docdexd run-tests --repo /home/wodo/apps/ades` release-validation flow, including `180 passed` under `pytest -q` plus successful wheel/npm clean-environment smoke validation.
 
 ### 40. Dependency-bearing release smoke validation for installed artifacts

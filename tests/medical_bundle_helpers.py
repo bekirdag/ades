@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import zipfile
 
 
 def create_medical_raw_snapshots(root: Path) -> dict[str, Path]:
@@ -13,13 +14,13 @@ def create_medical_raw_snapshots(root: Path) -> dict[str, Path]:
                 "terms": [
                     {
                         "id": "DOID:9352",
-                        "name": "diabetes",
-                        "synonyms": ["diabetes mellitus"],
+                        "name": "disease alpha",
+                        "synonyms": ["disease alpha syndrome"],
                     },
                     {
                         "id": "DOID:8469",
-                        "name": "influenza",
-                        "synonyms": ["flu"],
+                        "name": "disease beta",
+                        "synonyms": ["disease beta alias"],
                     },
                 ]
             },
@@ -36,8 +37,8 @@ def create_medical_raw_snapshots(root: Path) -> dict[str, Path]:
                 "genes": [
                     {
                         "hgnc_id": "HGNC:1100",
-                        "symbol": "BRCA1",
-                        "aliases": ["RNF53"],
+                        "symbol": "GENEA1",
+                        "aliases": ["GENEA1ALT"],
                     }
                 ]
             },
@@ -54,8 +55,8 @@ def create_medical_raw_snapshots(root: Path) -> dict[str, Path]:
                 "proteins": [
                     {
                         "accession": "P04637",
-                        "recommended_name": "p53 protein",
-                        "aliases": ["cellular tumor antigen p53"],
+                        "recommended_name": "Protein Alpha",
+                        "aliases": ["Protein Alpha Long Form"],
                     }
                 ]
             },
@@ -71,10 +72,35 @@ def create_medical_raw_snapshots(root: Path) -> dict[str, Path]:
             {
                 "studies": [
                     {
-                        "nct_id": "NCT04280705",
-                        "brief_title": "Diabetes Aspirin Trial",
-                        "conditions": ["diabetes"],
-                        "interventions": ["Aspirin"],
+                        "nct_id": "NCT00000001",
+                        "brief_title": "Study Alpha Compound Trial",
+                        "conditions": ["disease alpha"],
+                        "interventions": ["Compound Alpha"],
+                    }
+                ]
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    orange_book_path = raw_dir / "orange_book_products.json"
+    orange_book_path.write_text(
+        json.dumps(
+            {
+                "products": [
+                    {
+                        "entity_id": "NDA:020603:001",
+                        "trade_name": "Brand Alpha",
+                        "ingredient": "Ingredient Alpha",
+                        "aliases": ["Ingredient Alpha"],
+                        "application_type": "NDA",
+                        "application_number": "020603",
+                        "product_number": "001",
+                        "strength": "500MG",
+                        "applicant": "Sponsor Alpha Labs",
+                        "approval_date": "1995-03-03",
                     }
                 ]
             },
@@ -91,8 +117,8 @@ def create_medical_raw_snapshots(root: Path) -> dict[str, Path]:
                 "entities": [
                     {
                         "entity_type": "drug",
-                        "canonical_text": "Aspirin",
-                        "aliases": ["acetylsalicylic acid"],
+                        "canonical_text": "Compound Alpha",
+                        "aliases": ["Compound Alpha Acid"],
                     }
                 ]
             },
@@ -107,6 +133,7 @@ def create_medical_raw_snapshots(root: Path) -> dict[str, Path]:
         "hgnc_genes": hgnc_path,
         "uniprot_proteins": uniprot_path,
         "clinical_trials": trials_path,
+        "orange_book_products": orange_book_path,
         "curated_entities": curated_path,
     }
 
@@ -123,13 +150,13 @@ def create_medical_remote_sources(root: Path) -> dict[str, str]:
                 "",
                 "[Term]",
                 "id: DOID:9352",
-                "name: diabetes",
-                'synonym: "diabetes mellitus" EXACT []',
+                "name: disease alpha",
+                'synonym: "disease alpha syndrome" EXACT []',
                 "",
                 "[Term]",
                 "id: DOID:8469",
-                "name: influenza",
-                'synonym: "flu" EXACT []',
+                "name: disease beta",
+                'synonym: "disease beta alias" EXACT []',
                 "",
             ]
         ),
@@ -145,8 +172,8 @@ def create_medical_remote_sources(root: Path) -> dict[str, str]:
                         {
                             "status": "Approved",
                             "hgnc_id": "HGNC:1100",
-                            "symbol": "BRCA1",
-                            "alias_symbol": ["RNF53"],
+                            "symbol": "GENEA1",
+                            "alias_symbol": ["GENEA1ALT"],
                         }
                     ]
                 }
@@ -166,12 +193,12 @@ def create_medical_remote_sources(root: Path) -> dict[str, str]:
                         "primaryAccession": "P04637",
                         "proteinDescription": {
                             "recommendedName": {
-                                "fullName": {"value": "p53 protein"}
+                                "fullName": {"value": "Protein Alpha"}
                             },
                             "alternativeNames": [
                                 {
                                     "fullName": {
-                                        "value": "cellular tumor antigen p53"
+                                        "value": "Protein Alpha Long Form"
                                     }
                                 }
                             ],
@@ -198,14 +225,14 @@ def create_medical_remote_sources(root: Path) -> dict[str, str]:
                     {
                         "protocolSection": {
                             "identificationModule": {
-                                "nctId": "NCT04280705",
-                                "briefTitle": "Diabetes Aspirin Trial",
+                                "nctId": "NCT00000001",
+                                "briefTitle": "Study Alpha Compound Trial",
                             },
                             "conditionsModule": {
-                                "conditions": ["diabetes"]
+                                "conditions": ["disease alpha"]
                             },
                             "armsInterventionsModule": {
-                                "interventions": [{"name": "Aspirin"}]
+                                "interventions": [{"name": "Compound Alpha"}]
                             },
                         }
                     }
@@ -217,9 +244,23 @@ def create_medical_remote_sources(root: Path) -> dict[str, str]:
         encoding="utf-8",
     )
 
+    orange_book_path = remote_dir / "orange_book.source.zip"
+    with zipfile.ZipFile(orange_book_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "products.txt",
+            "\n".join(
+                [
+                    "Ingredient~DF;Route~Trade_Name~Applicant~Strength~Appl_Type~Appl_No~Product_No~TE_Code~Approval_Date~RLD~RS~Type~Applicant_Full_Name",
+                    "Ingredient Alpha~TABLET;ORAL~Brand Alpha~BMS~500MG~NDA~020603~001~~1995-03-03~Yes~Yes~RX~Sponsor Alpha Labs",
+                ]
+            )
+            + "\n",
+        )
+
     return {
         "disease_ontology_url": disease_path.as_uri(),
         "hgnc_genes_url": hgnc_path.as_uri(),
         "uniprot_proteins_url": uniprot_path.as_uri(),
         "clinical_trials_url": trials_path.as_uri(),
+        "orange_book_url": orange_book_path.as_uri(),
     }

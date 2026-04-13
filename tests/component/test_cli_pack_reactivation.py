@@ -33,7 +33,7 @@ def test_cli_repull_reactivates_inactive_dependency(tmp_path: Path) -> None:
 
     first_pull = runner.invoke(
         app,
-        ["pull", "finance-en", "--registry-url", registry_index],
+        ["pull", "finance-en", "--json", "--registry-url", registry_index],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert first_pull.exit_code == 0
@@ -56,7 +56,7 @@ def test_cli_repull_reactivates_inactive_dependency(tmp_path: Path) -> None:
 
     repull = runner.invoke(
         app,
-        ["pull", "finance-en", "--registry-url", registry_index],
+        ["pull", "finance-en", "--json", "--registry-url", registry_index],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert repull.exit_code == 0
@@ -66,7 +66,7 @@ def test_cli_repull_reactivates_inactive_dependency(tmp_path: Path) -> None:
 
     active_packs = runner.invoke(
         app,
-        ["packs", "list", "--active-only"],
+        ["packs", "list", "--active-only", "--json"],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert active_packs.exit_code == 0
@@ -98,7 +98,7 @@ def test_cli_repull_repairs_stale_pack_alias_metadata(tmp_path: Path) -> None:
 
     first_pull = runner.invoke(
         app,
-        ["pull", "finance-en", "--registry-url", registry_index],
+        ["pull", "finance-en", "--json", "--registry-url", registry_index],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert first_pull.exit_code == 0
@@ -119,7 +119,7 @@ def test_cli_repull_repairs_stale_pack_alias_metadata(tmp_path: Path) -> None:
 
     repull = runner.invoke(
         app,
-        ["pull", "finance-en", "--registry-url", registry_index],
+        ["pull", "finance-en", "--json", "--registry-url", registry_index],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert repull.exit_code == 0
@@ -164,7 +164,7 @@ def test_cli_lookup_repairs_missing_pack_metadata_rows(tmp_path: Path) -> None:
 
     first_pull = runner.invoke(
         app,
-        ["pull", "finance-en", "--registry-url", registry_index],
+        ["pull", "finance-en", "--json", "--registry-url", registry_index],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert first_pull.exit_code == 0
@@ -173,21 +173,21 @@ def test_cli_lookup_repairs_missing_pack_metadata_rows(tmp_path: Path) -> None:
 
     lookup_after = runner.invoke(
         app,
-        ["packs", "lookup", "AAPL", "--exact-alias"],
+        ["packs", "lookup", "TICKA", "--exact-alias"],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert lookup_after.exit_code == 0
     assert any(
         candidate["kind"] == "alias"
         and candidate["pack_id"] == "finance-en"
-        and candidate["value"] == "AAPL"
+        and candidate["value"] == "TICKA"
         and candidate["label"] == "ticker"
         for candidate in json.loads(lookup_after.stdout)["candidates"]
     )
 
     listed = runner.invoke(
         app,
-        ["packs", "list"],
+        ["packs", "list", "--json"],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert listed.exit_code == 0
@@ -219,7 +219,7 @@ def test_cli_blocks_dependency_deactivation_with_active_dependents(tmp_path: Pat
 
     first_pull = runner.invoke(
         app,
-        ["pull", "finance-en", "--registry-url", registry_index],
+        ["pull", "finance-en", "--json", "--registry-url", registry_index],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert first_pull.exit_code == 0
@@ -237,7 +237,7 @@ def test_cli_blocks_dependency_deactivation_with_active_dependents(tmp_path: Pat
 
     active_packs = runner.invoke(
         app,
-        ["packs", "list", "--active-only"],
+        ["packs", "list", "--active-only", "--json"],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert active_packs.exit_code == 0
@@ -269,7 +269,7 @@ def test_cli_activate_reactivates_inactive_dependencies(tmp_path: Path) -> None:
 
     first_pull = runner.invoke(
         app,
-        ["pull", "finance-en", "--registry-url", registry_index],
+        ["pull", "finance-en", "--json", "--registry-url", registry_index],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert first_pull.exit_code == 0
@@ -298,7 +298,7 @@ def test_cli_activate_reactivates_inactive_dependencies(tmp_path: Path) -> None:
 
     active_packs = runner.invoke(
         app,
-        ["packs", "list", "--active-only"],
+        ["packs", "list", "--active-only", "--json"],
         env={"ADES_STORAGE_ROOT": str(install_root)},
     )
     assert active_packs.exit_code == 0
