@@ -40,6 +40,132 @@ _LABEL_SPECIFICITY_WEIGHTS = {
     "person": 0.72,
     "location": 0.7,
 }
+_RUNTIME_FUNCTION_WORDS = {
+    "a",
+    "an",
+    "the",
+    "this",
+    "that",
+    "these",
+    "those",
+    "some",
+    "any",
+    "each",
+    "every",
+    "my",
+    "your",
+    "his",
+    "her",
+    "its",
+    "our",
+    "their",
+}
+_RUNTIME_GENERIC_PHRASE_LEADS = _RUNTIME_FUNCTION_WORDS | {
+    "him",
+    "he",
+    "i",
+    "it",
+    "me",
+    "she",
+    "they",
+    "them",
+    "us",
+    "we",
+    "you",
+}
+_RUNTIME_AUXILIARY_WORDS = {
+    "am",
+    "are",
+    "be",
+    "been",
+    "being",
+    "can",
+    "could",
+    "did",
+    "do",
+    "does",
+    "had",
+    "has",
+    "have",
+    "is",
+    "may",
+    "might",
+    "must",
+    "shall",
+    "should",
+    "was",
+    "were",
+    "will",
+    "would",
+}
+_RUNTIME_CALENDAR_SINGLE_TOKEN_WORDS = {
+    "april",
+    "august",
+    "december",
+    "february",
+    "friday",
+    "january",
+    "july",
+    "june",
+    "march",
+    "monday",
+    "november",
+    "october",
+    "saturday",
+    "september",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday",
+}
+_RUNTIME_PERSON_PARTICLES = {
+    "al",
+    "ap",
+    "ben",
+    "bin",
+    "da",
+    "dal",
+    "de",
+    "del",
+    "della",
+    "der",
+    "di",
+    "do",
+    "dos",
+    "du",
+    "el",
+    "ibn",
+    "la",
+    "le",
+    "st",
+    "van",
+    "von",
+}
+_RUNTIME_GENERIC_LOCATION_HEADS = {
+    "city",
+    "county",
+    "district",
+    "province",
+    "region",
+    "state",
+    "town",
+    "village",
+    "world",
+}
+_RUNTIME_GENERIC_ENTITY_HEADS = {
+    "bank",
+    "company",
+    "department",
+    "founder",
+    "fund",
+    "market",
+    "product",
+    "report",
+    "stock",
+}
+_RUNTIME_GENERIC_SINGLE_TOKEN_HEADS = (
+    _RUNTIME_GENERIC_ENTITY_HEADS | _RUNTIME_GENERIC_LOCATION_HEADS | {"university"}
+)
 
 
 @dataclass(frozen=True)
@@ -97,6 +223,8 @@ class AliasClusterCandidate:
     source_name: str
     source_id: str
     entity_id: str
+    label_candidate_count: int = 1
+    non_generated_candidate_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -110,6 +238,8 @@ class AliasClusterCandidate:
             "source_name": self.source_name,
             "source_id": self.source_id,
             "entity_id": self.entity_id,
+            "label_candidate_count": self.label_candidate_count,
+            "non_generated_candidate_count": self.non_generated_candidate_count,
         }
 
 
@@ -259,144 +389,122 @@ def analyze_alias_candidates(
             _insert_candidates(connection, buffered_candidates)
         _finalize_analysis_store(connection)
         connection.commit()
-
-        retain_aliases_in_memory = materialize_retained_aliases or analysis_db_path is None
-        retained_aliases: list[dict[str, Any]] = []
-        retained_alias_rows: list[
-            tuple[str, str, str, str, int, float, str, str, str, float, float]
-        ] = []
-        retained_label_counts: dict[str, int] = {}
-        blocked_reason_counts: dict[str, int] = {}
-        blocked_alias_count = 0
-        ambiguous_alias_count = 0
-        retained_alias_count = 0
-        top_clusters: list[AliasClusterReport] = []
-
-        def flush_retained_alias_rows() -> None:
-            nonlocal retained_alias_rows
-            if not retained_alias_rows:
-                return
-            _insert_retained_aliases(connection, retained_alias_rows)
-            retained_alias_rows = []
-
-        for alias_key, candidate_count in connection.execute(
-            """
-            SELECT alias_key, COUNT(*)
-            FROM alias_candidates
-            GROUP BY alias_key
-            ORDER BY alias_key ASC
-            """
-        ):
-            rows = _load_cluster_candidates(connection, alias_key)
-            cluster = _resolve_cluster(
-                alias_key=alias_key,
-                candidate_count=int(candidate_count),
-                candidates=rows,
-                allowed_ambiguous_aliases=allowed_ambiguous_aliases,
-            )
-            if cluster.ambiguous:
-                ambiguous_alias_count += 1
-            if cluster.label_count > 1:
-                top_clusters.append(cluster)
-                top_clusters.sort(
-                    key=lambda item: (
-                        not item.ambiguous,
-                        -item.label_count,
-                        -item.candidate_count,
-                        item.alias_key,
-                    )
-                )
-                if len(top_clusters) > top_cluster_limit:
-                    top_clusters = top_clusters[:top_cluster_limit]
-            for label in cluster.retained_labels:
-                representative = next(
-                    candidate for candidate in cluster.candidates if candidate.label == label
-                )
-                retained_alias_count += 1
-                retained_label_counts[representative.label] = (
-                    retained_label_counts.get(representative.label, 0) + 1
-                )
-                if retain_aliases_in_memory:
-                    retained_aliases.append(
-                        {
-                            "text": representative.display_text,
-                            "label": representative.label,
-                            "generated": representative.generated,
-                            "score": round(representative.score, 4),
-                            "canonical_text": representative.canonical_text,
-                            "source_name": representative.source_name,
-                            "entity_id": representative.entity_id,
-                            "source_priority": round(
-                                representative.features.source_priority,
-                                4,
-                            ),
-                            "popularity_weight": round(
-                                representative.features.popularity_weight,
-                                4,
-                            ),
-                        }
-                    )
-                else:
-                    retained_alias_rows.append(
-                        (
-                            representative.display_text,
-                            representative.label,
-                            representative.display_text.casefold(),
-                            representative.label.casefold(),
-                            1 if representative.generated else 0,
-                            round(representative.score, 4),
-                            representative.canonical_text,
-                            representative.source_name,
-                            representative.entity_id,
-                            round(representative.features.source_priority, 4),
-                            round(representative.features.popularity_weight, 4),
-                        )
-                    )
-                    if len(retained_alias_rows) >= 20_000:
-                        flush_retained_alias_rows()
-            if cluster.reason is not None and cluster.blocked_labels:
-                blocked_reason_counts[cluster.reason] = (
-                    blocked_reason_counts.get(cluster.reason, 0) + len(cluster.blocked_labels)
-                )
-                blocked_alias_count += len(cluster.blocked_labels)
-            _insert_cluster_decision(connection, cluster)
-
-        flush_retained_alias_rows()
-        connection.commit()
-        if retain_aliases_in_memory:
-            ordered_aliases = sorted(
-                retained_aliases,
-                key=lambda item: (
-                    item["text"].casefold(),
-                    item["text"],
-                    item["label"].casefold(),
-                    item["label"],
-                ),
-            )
-        else:
-            ordered_aliases = []
-        ordered_blocked_reason_counts = {
-            reason: blocked_reason_counts[reason]
-            for reason in sorted(blocked_reason_counts, key=lambda value: (value.casefold(), value))
-        }
-        ordered_retained_label_counts = {
-            label: retained_label_counts[label]
-            for label in sorted(retained_label_counts, key=lambda value: (value.casefold(), value))
-        }
-        return AliasAnalysisResult(
-            backend=DEFAULT_ALIAS_ANALYSIS_BACKEND,
-            database_path=str(analysis_db_path) if analysis_db_path is not None else None,
+        return _resolve_candidate_store(
+            connection,
+            allowed_ambiguous_aliases=allowed_ambiguous_aliases,
+            analysis_db_path=analysis_db_path,
             candidate_alias_count=candidate_alias_count,
-            retained_alias_count=retained_alias_count,
-            blocked_alias_count=blocked_alias_count,
-            ambiguous_alias_count=ambiguous_alias_count,
             exact_identifier_alias_count=exact_identifier_alias_count,
             natural_language_alias_count=natural_language_alias_count,
-            blocked_reason_counts=ordered_blocked_reason_counts,
-            retained_label_counts=ordered_retained_label_counts,
-            retained_aliases_materialized=retain_aliases_in_memory,
-            retained_aliases=ordered_aliases,
-            top_collision_clusters=top_clusters,
+            top_cluster_limit=top_cluster_limit,
+            materialize_retained_aliases=materialize_retained_aliases,
+        )
+    finally:
+        connection.close()
+
+
+def analyze_alias_candidates_from_db(
+    source_analysis_db_path: str | Path,
+    *,
+    allowed_ambiguous_aliases: set[str],
+    analysis_db_path: Path | None = None,
+    top_cluster_limit: int = DEFAULT_ALIAS_ANALYSIS_TOP_CLUSTERS,
+    materialize_retained_aliases: bool = True,
+) -> AliasAnalysisResult:
+    """Re-resolve aliases from an existing candidate-store SQLite database."""
+
+    resolved_source_path = Path(source_analysis_db_path).expanduser().resolve()
+    if not resolved_source_path.exists():
+        raise FileNotFoundError(
+            f"Alias analysis source database not found: {resolved_source_path}"
+        )
+    if analysis_db_path is not None:
+        analysis_db_path = analysis_db_path.expanduser().resolve()
+        analysis_db_path.parent.mkdir(parents=True, exist_ok=True)
+        if analysis_db_path == resolved_source_path:
+            raise ValueError("analysis_db_path must differ from source_analysis_db_path.")
+    connection = sqlite3.connect(str(analysis_db_path) if analysis_db_path is not None else ":memory:")
+    try:
+        _configure_analysis_connection(
+            connection,
+            file_backed=analysis_db_path is not None,
+        )
+        _initialize_analysis_store(connection)
+        connection.execute("ATTACH DATABASE ? AS source_db", (str(resolved_source_path),))
+        try:
+            counts = connection.execute(
+                """
+                SELECT
+                    COUNT(*),
+                    COALESCE(SUM(CASE WHEN lane = 'exact' THEN 1 ELSE 0 END), 0)
+                FROM source_db.alias_candidates
+                """
+            ).fetchone()
+            if counts is None:
+                candidate_alias_count = 0
+                exact_identifier_alias_count = 0
+            else:
+                candidate_alias_count = int(counts[0])
+                exact_identifier_alias_count = int(counts[1])
+            natural_language_alias_count = (
+                candidate_alias_count - exact_identifier_alias_count
+            )
+            connection.execute(
+                """
+                INSERT INTO alias_candidates (
+                    alias_key,
+                    display_text,
+                    label,
+                    canonical_text,
+                    entity_id,
+                    source_name,
+                    source_id,
+                    lane,
+                    generated,
+                    score,
+                    source_priority,
+                    status_weight,
+                    preferred_name_weight,
+                    popularity_weight,
+                    identifier_specificity_weight,
+                    label_specificity_weight,
+                    alias_form_penalty
+                )
+                SELECT
+                    alias_key,
+                    display_text,
+                    label,
+                    canonical_text,
+                    entity_id,
+                    source_name,
+                    source_id,
+                    lane,
+                    generated,
+                    score,
+                    source_priority,
+                    status_weight,
+                    preferred_name_weight,
+                    popularity_weight,
+                    identifier_specificity_weight,
+                    label_specificity_weight,
+                    alias_form_penalty
+                FROM source_db.alias_candidates
+                """
+            )
+            connection.commit()
+        finally:
+            connection.execute("DETACH DATABASE source_db")
+        _finalize_analysis_store(connection)
+        connection.commit()
+        return _resolve_candidate_store(
+            connection,
+            allowed_ambiguous_aliases=allowed_ambiguous_aliases,
+            analysis_db_path=analysis_db_path,
+            candidate_alias_count=candidate_alias_count,
+            exact_identifier_alias_count=exact_identifier_alias_count,
+            natural_language_alias_count=natural_language_alias_count,
+            top_cluster_limit=top_cluster_limit,
+            materialize_retained_aliases=materialize_retained_aliases,
         )
     finally:
         connection.close()
@@ -511,6 +619,28 @@ def _resolve_cluster(
             candidates=ordered_candidates,
         )
 
+    short_geopolitical_candidate = _select_short_geopolitical_candidate(
+        alias_key=alias_key,
+        candidates=ordered_candidates,
+    )
+    if short_geopolitical_candidate is not None:
+        return AliasClusterReport(
+            alias_key=alias_key,
+            lane=lane,
+            candidate_count=candidate_count,
+            label_count=label_count,
+            ambiguous=False,
+            retained_labels=[short_geopolitical_candidate.label],
+            blocked_labels=[
+                candidate.label
+                for candidate in ordered_candidates
+                if candidate.label != short_geopolitical_candidate.label
+            ],
+            reason="strong_short_geopolitical_alias",
+            top_score=top_score,
+            runner_up_score=runner_up_score,
+            candidates=ordered_candidates,
+        )
     if _is_short_token_like(alias_key):
         return AliasClusterReport(
             alias_key=alias_key,
@@ -556,6 +686,49 @@ def _resolve_cluster(
             runner_up_score=runner_up_score,
             candidates=ordered_candidates,
         )
+    supported_location_candidate = _select_supported_location_candidate(
+        ordered_candidates
+    )
+    if supported_location_candidate is not None:
+        return AliasClusterReport(
+            alias_key=alias_key,
+            lane=lane,
+            candidate_count=candidate_count,
+            label_count=label_count,
+            ambiguous=False,
+            retained_labels=[supported_location_candidate.label],
+            blocked_labels=[
+                candidate.label
+                for candidate in ordered_candidates
+                if candidate.label != supported_location_candidate.label
+            ],
+            reason="supported_location_over_generated_competitors",
+            top_score=top_score,
+            runner_up_score=runner_up_score,
+            candidates=ordered_candidates,
+        )
+    family_preferred_location_candidate = _select_family_preferred_location_candidate(
+        alias_key=alias_key,
+        candidates=ordered_candidates,
+    )
+    if family_preferred_location_candidate is not None:
+        return AliasClusterReport(
+            alias_key=alias_key,
+            lane=lane,
+            candidate_count=candidate_count,
+            label_count=label_count,
+            ambiguous=False,
+            retained_labels=[family_preferred_location_candidate.label],
+            blocked_labels=[
+                candidate.label
+                for candidate in ordered_candidates
+                if candidate.label != family_preferred_location_candidate.label
+            ],
+            reason="family_preferred_location_alias",
+            top_score=top_score,
+            runner_up_score=runner_up_score,
+            candidates=ordered_candidates,
+        )
     if top_candidate.score >= 0.58 and score_gap >= 0.05:
         return AliasClusterReport(
             alias_key=alias_key,
@@ -582,6 +755,163 @@ def _resolve_cluster(
         top_score=top_score,
         runner_up_score=runner_up_score,
         candidates=ordered_candidates,
+    )
+
+
+def _resolve_candidate_store(
+    connection: sqlite3.Connection,
+    *,
+    allowed_ambiguous_aliases: set[str],
+    analysis_db_path: Path | None,
+    candidate_alias_count: int,
+    exact_identifier_alias_count: int,
+    natural_language_alias_count: int,
+    top_cluster_limit: int,
+    materialize_retained_aliases: bool,
+) -> AliasAnalysisResult:
+    retain_aliases_in_memory = materialize_retained_aliases or analysis_db_path is None
+    retained_aliases: list[dict[str, Any]] = []
+    retained_alias_rows: list[
+        tuple[str, str, str, str, int, float, str, str, str, float, float, str]
+    ] = []
+    retained_label_counts: dict[str, int] = {}
+    blocked_reason_counts: dict[str, int] = {}
+    blocked_alias_count = 0
+    ambiguous_alias_count = 0
+    retained_alias_count = 0
+    top_clusters: list[AliasClusterReport] = []
+
+    def flush_retained_alias_rows() -> None:
+        nonlocal retained_alias_rows
+        if not retained_alias_rows:
+            return
+        _insert_retained_aliases(connection, retained_alias_rows)
+        retained_alias_rows = []
+
+    for alias_key, candidate_count in connection.execute(
+        """
+        SELECT alias_key, COUNT(*)
+        FROM alias_candidates
+        GROUP BY alias_key
+        ORDER BY alias_key ASC
+        """
+    ):
+        rows = _load_cluster_candidates(connection, alias_key)
+        cluster = _resolve_cluster(
+            alias_key=alias_key,
+            candidate_count=int(candidate_count),
+            candidates=rows,
+            allowed_ambiguous_aliases=allowed_ambiguous_aliases,
+        )
+        if cluster.ambiguous:
+            ambiguous_alias_count += 1
+        if cluster.label_count > 1:
+            top_clusters.append(cluster)
+            top_clusters.sort(
+                key=lambda item: (
+                    not item.ambiguous,
+                    -item.label_count,
+                    -item.candidate_count,
+                    item.alias_key,
+                )
+            )
+            if len(top_clusters) > top_cluster_limit:
+                top_clusters = top_clusters[:top_cluster_limit]
+        for label in cluster.retained_labels:
+            representative = next(
+                candidate for candidate in cluster.candidates if candidate.label == label
+            )
+            retained_alias_count += 1
+            retained_label_counts[representative.label] = (
+                retained_label_counts.get(representative.label, 0) + 1
+            )
+            runtime_tier = _resolve_runtime_tier(
+                alias_key=alias_key,
+                candidate=representative,
+            )
+            if retain_aliases_in_memory:
+                retained_aliases.append(
+                    {
+                        "text": representative.display_text,
+                        "label": representative.label,
+                        "generated": representative.generated,
+                        "score": round(representative.score, 4),
+                        "canonical_text": representative.canonical_text,
+                        "source_name": representative.source_name,
+                        "entity_id": representative.entity_id,
+                        "source_priority": round(
+                            representative.features.source_priority,
+                            4,
+                        ),
+                        "popularity_weight": round(
+                            representative.features.popularity_weight,
+                            4,
+                        ),
+                        "runtime_tier": runtime_tier,
+                    }
+                )
+            else:
+                retained_alias_rows.append(
+                    (
+                        representative.display_text,
+                        representative.label,
+                        representative.display_text.casefold(),
+                        representative.label.casefold(),
+                        1 if representative.generated else 0,
+                        round(representative.score, 4),
+                        representative.canonical_text,
+                        representative.source_name,
+                        representative.entity_id,
+                        round(representative.features.source_priority, 4),
+                        round(representative.features.popularity_weight, 4),
+                        runtime_tier,
+                    )
+                )
+                if len(retained_alias_rows) >= 20_000:
+                    flush_retained_alias_rows()
+        if cluster.reason is not None and cluster.blocked_labels:
+            blocked_reason_counts[cluster.reason] = (
+                blocked_reason_counts.get(cluster.reason, 0) + len(cluster.blocked_labels)
+            )
+            blocked_alias_count += len(cluster.blocked_labels)
+        _insert_cluster_decision(connection, cluster)
+
+    flush_retained_alias_rows()
+    connection.commit()
+    if retain_aliases_in_memory:
+        ordered_aliases = sorted(
+            retained_aliases,
+            key=lambda item: (
+                item["text"].casefold(),
+                item["text"],
+                item["label"].casefold(),
+                item["label"],
+            ),
+        )
+    else:
+        ordered_aliases = []
+    ordered_blocked_reason_counts = {
+        reason: blocked_reason_counts[reason]
+        for reason in sorted(blocked_reason_counts, key=lambda value: (value.casefold(), value))
+    }
+    ordered_retained_label_counts = {
+        label: retained_label_counts[label]
+        for label in sorted(retained_label_counts, key=lambda value: (value.casefold(), value))
+    }
+    return AliasAnalysisResult(
+        backend=DEFAULT_ALIAS_ANALYSIS_BACKEND,
+        database_path=str(analysis_db_path) if analysis_db_path is not None else None,
+        candidate_alias_count=candidate_alias_count,
+        retained_alias_count=retained_alias_count,
+        blocked_alias_count=blocked_alias_count,
+        ambiguous_alias_count=ambiguous_alias_count,
+        exact_identifier_alias_count=exact_identifier_alias_count,
+        natural_language_alias_count=natural_language_alias_count,
+        blocked_reason_counts=ordered_blocked_reason_counts,
+        retained_label_counts=ordered_retained_label_counts,
+        retained_aliases_materialized=retain_aliases_in_memory,
+        retained_aliases=ordered_aliases,
+        top_collision_clusters=top_clusters,
     )
 
 
@@ -630,7 +960,8 @@ def _initialize_analysis_store(connection: sqlite3.Connection) -> None:
             source_name TEXT NOT NULL DEFAULT '',
             entity_id TEXT NOT NULL DEFAULT '',
             source_priority REAL NOT NULL DEFAULT 0.6,
-            popularity_weight REAL NOT NULL DEFAULT 0.5
+            popularity_weight REAL NOT NULL DEFAULT 0.5,
+            runtime_tier TEXT NOT NULL DEFAULT 'runtime_exact_high_precision'
         );
         DELETE FROM alias_cluster_decisions;
         DELETE FROM retained_aliases;
@@ -753,32 +1084,307 @@ def _load_cluster_candidates(
         """,
         (alias_key,),
     ).fetchall()
-    best_by_label: dict[str, AliasClusterCandidate] = {}
+    label_rows: dict[str, list[tuple[Any, ...]]] = {}
+    label_candidate_counts: dict[str, int] = {}
+    label_non_generated_counts: dict[str, int] = {}
     for row in rows:
         label = str(row[0])
-        if label in best_by_label:
-            continue
-        best_by_label[label] = AliasClusterCandidate(
-            label=label,
-            display_text=str(row[1]),
-            canonical_text=str(row[2]),
-            lane=str(row[3]),
-            generated=bool(row[4]),
-            score=round(float(row[5]), 4),
-            features=AliasScoreFeatures(
-                source_priority=round(float(row[6]), 4),
-                status_weight=round(float(row[7]), 4),
-                preferred_name_weight=round(float(row[8]), 4),
-                popularity_weight=round(float(row[9]), 4),
-                identifier_specificity_weight=round(float(row[10]), 4),
-                label_specificity_weight=round(float(row[11]), 4),
-                alias_form_penalty=round(float(row[12]), 4),
-            ),
-            source_name=str(row[13]),
-            source_id=str(row[14]),
-            entity_id=str(row[15]),
+        label_rows.setdefault(label, []).append(row)
+        label_candidate_counts[label] = label_candidate_counts.get(label, 0) + 1
+        if not bool(row[4]):
+            label_non_generated_counts[label] = label_non_generated_counts.get(label, 0) + 1
+    best_by_label: dict[str, AliasClusterCandidate] = {}
+    for label, label_specific_rows in label_rows.items():
+        cluster_candidates = [
+            AliasClusterCandidate(
+                label=label,
+                display_text=str(row[1]),
+                canonical_text=str(row[2]),
+                lane=str(row[3]),
+                generated=bool(row[4]),
+                score=round(float(row[5]), 4),
+                features=AliasScoreFeatures(
+                    source_priority=round(float(row[6]), 4),
+                    status_weight=round(float(row[7]), 4),
+                    preferred_name_weight=round(float(row[8]), 4),
+                    popularity_weight=round(float(row[9]), 4),
+                    identifier_specificity_weight=round(float(row[10]), 4),
+                    label_specificity_weight=round(float(row[11]), 4),
+                    alias_form_penalty=round(float(row[12]), 4),
+                ),
+                source_name=str(row[13]),
+                source_id=str(row[14]),
+                entity_id=str(row[15]),
+                label_candidate_count=label_candidate_counts.get(label, 1),
+                non_generated_candidate_count=label_non_generated_counts.get(label, 0),
+            )
+            for row in label_specific_rows
+        ]
+        best_by_label[label] = _select_best_cluster_candidate(
+            alias_key=alias_key,
+            candidates=cluster_candidates,
         )
     return list(best_by_label.values())
+
+
+def _select_best_cluster_candidate(
+    *,
+    alias_key: str,
+    candidates: list[AliasClusterCandidate],
+) -> AliasClusterCandidate:
+    if not candidates:
+        raise ValueError("Cluster candidate selection requires at least one candidate.")
+
+    preferred_expansion = _select_preferred_acronym_expansion_candidate(
+        alias_key=alias_key,
+        candidates=candidates,
+    )
+    if preferred_expansion is not None:
+        return preferred_expansion
+
+    best_candidate = candidates[0]
+    best_rank = _cluster_candidate_rank(alias_key=alias_key, candidate=best_candidate)
+    for candidate in candidates[1:]:
+        rank = _cluster_candidate_rank(alias_key=alias_key, candidate=candidate)
+        if rank > best_rank:
+            best_candidate = candidate
+            best_rank = rank
+            continue
+        if rank == best_rank and (
+            candidate.canonical_text.casefold(),
+            candidate.canonical_text,
+            candidate.entity_id,
+        ) < (
+            best_candidate.canonical_text.casefold(),
+            best_candidate.canonical_text,
+            best_candidate.entity_id,
+        ):
+            best_candidate = candidate
+            best_rank = rank
+    return best_candidate
+
+
+def _select_preferred_acronym_expansion_candidate(
+    *,
+    alias_key: str,
+    candidates: list[AliasClusterCandidate],
+) -> AliasClusterCandidate | None:
+    if not _is_compact_alpha_acronym(alias_key):
+        return None
+    exact_short_candidates = [
+        candidate
+        for candidate in candidates
+        if _is_short_exact_canonical_acronym_candidate(
+            alias_key=alias_key,
+            candidate=candidate,
+        )
+    ]
+    expansion_candidates = [
+        candidate
+        for candidate in candidates
+        if _is_multi_token_acronym_expansion_candidate(
+            alias_key=alias_key,
+            candidate=candidate,
+        )
+    ]
+    if not exact_short_candidates or not expansion_candidates:
+        return None
+    best_exact_short = max(
+        exact_short_candidates,
+        key=lambda candidate: _cluster_candidate_rank(
+            alias_key=alias_key,
+            candidate=candidate,
+        ),
+    )
+    best_expansion = max(
+        expansion_candidates,
+        key=lambda candidate: _cluster_candidate_rank(
+            alias_key=alias_key,
+            candidate=candidate,
+        ),
+    )
+    if _should_prefer_acronym_expansion_candidate(
+        expansion_candidate=best_expansion,
+        exact_short_candidate=best_exact_short,
+    ):
+        return best_expansion
+    return None
+
+
+def _cluster_candidate_rank(
+    *,
+    alias_key: str,
+    candidate: AliasClusterCandidate,
+) -> tuple[float, float, tuple[int, int, int, int], int, float, float, int, int]:
+    exact_canonical = int(
+        candidate.display_text.casefold() == candidate.canonical_text.casefold()
+    )
+    acronym_quality = _acronym_expansion_quality(
+        alias_key=alias_key,
+        candidate=candidate,
+    )
+    return (
+        candidate.score,
+        candidate.features.preferred_name_weight,
+        acronym_quality,
+        exact_canonical,
+        candidate.features.popularity_weight,
+        candidate.features.source_priority,
+        int(not candidate.generated),
+        len(candidate.canonical_text),
+    )
+
+
+def _acronym_expansion_quality(
+    *,
+    alias_key: str,
+    candidate: AliasClusterCandidate,
+) -> tuple[int, int, int, int]:
+    compact = "".join(character for character in alias_key if character.isalnum()).upper()
+    if candidate.label != "organization":
+        return (0, 0, 0, 0)
+    if not candidate.display_text.isupper():
+        return (0, 0, 0, 0)
+    if not (2 <= len(compact) <= 5):
+        return (0, 0, 0, 0)
+    if not compact.isalpha():
+        return (0, 0, 0, 0)
+    tokens = re.findall(r"[A-Za-z]+", candidate.canonical_text)
+    if not tokens:
+        return (0, 0, 0, 0)
+    initials = "".join(token[0].upper() for token in tokens if token[0].isalpha())
+    exact_initials = int(initials == compact)
+    prefix_initials = int(bool(initials) and (initials.startswith(compact) or compact.startswith(initials)))
+    titlecase_initials = int(
+        exact_initials
+        and len(tokens) >= len(compact)
+        and all(token[0].isupper() for token in tokens[: len(compact)])
+    )
+    multi_token = int(len(tokens) >= 2)
+    return (
+        exact_initials,
+        titlecase_initials,
+        prefix_initials,
+        multi_token,
+    )
+
+
+def _is_compact_alpha_acronym(alias_key: str) -> bool:
+    compact = "".join(character for character in alias_key if character.isalnum())
+    return 2 <= len(compact) <= 5 and compact.isalpha()
+
+
+def _is_short_exact_canonical_acronym_candidate(
+    *,
+    alias_key: str,
+    candidate: AliasClusterCandidate,
+) -> bool:
+    compact = "".join(character for character in alias_key if character.isalnum())
+    canonical_compact = "".join(
+        character for character in candidate.canonical_text if character.isalnum()
+    )
+    return (
+        candidate.label == "organization"
+        and candidate.display_text.isupper()
+        and candidate.display_text.casefold() == candidate.canonical_text.casefold()
+        and len(re.findall(r"[A-Za-z]+", candidate.canonical_text)) == 1
+        and canonical_compact.upper() == compact.upper()
+    )
+
+
+def _is_multi_token_acronym_expansion_candidate(
+    *,
+    alias_key: str,
+    candidate: AliasClusterCandidate,
+) -> bool:
+    acronym_quality = _acronym_expansion_quality(
+        alias_key=alias_key,
+        candidate=candidate,
+    )
+    return (
+        candidate.label == "organization"
+        and acronym_quality[0] == 1
+        and acronym_quality[3] == 1
+    )
+
+
+def _should_prefer_acronym_expansion_candidate(
+    *,
+    expansion_candidate: AliasClusterCandidate,
+    exact_short_candidate: AliasClusterCandidate,
+) -> bool:
+    if expansion_candidate.score < exact_short_candidate.score - 0.05:
+        return False
+    if (
+        expansion_candidate.features.popularity_weight >= 0.8
+        and exact_short_candidate.features.popularity_weight < 0.8
+    ):
+        return True
+    if (
+        expansion_candidate.features.popularity_weight
+        >= exact_short_candidate.features.popularity_weight + 0.1
+    ):
+        return True
+    if (
+        expansion_candidate.features.source_priority
+        > exact_short_candidate.features.source_priority + 0.05
+    ):
+        return True
+    return False
+
+
+def _select_short_geopolitical_candidate(
+    *,
+    alias_key: str,
+    candidates: list[AliasClusterCandidate],
+) -> AliasClusterCandidate | None:
+    strong_locations = [
+        candidate
+        for candidate in candidates
+        if _is_strong_short_geopolitical_candidate(
+            alias_key=alias_key,
+            candidate=candidate,
+        )
+        or _is_strong_geopolitical_acronym_candidate(
+            alias_key=alias_key,
+            candidate=candidate,
+        )
+    ]
+    if not strong_locations:
+        return None
+    location_candidate = max(
+        strong_locations,
+        key=lambda candidate: _cluster_candidate_rank(
+            alias_key=alias_key,
+            candidate=candidate,
+        ),
+    )
+    top_candidate = candidates[0]
+    geopolitical_acronym = _is_strong_geopolitical_acronym_candidate(
+        alias_key=alias_key,
+        candidate=location_candidate,
+    )
+    score_gap_limit = 0.05
+    if geopolitical_acronym:
+        score_gap_limit = 0.12
+        if (
+            top_candidate.label != "location"
+            and _is_short_exact_canonical_acronym_candidate(
+                alias_key=alias_key,
+                candidate=top_candidate,
+            )
+        ):
+            score_gap_limit = 0.16
+    if top_candidate.score - location_candidate.score > score_gap_limit:
+        return None
+    if (
+        top_candidate.label != "location"
+        and top_candidate.features.source_priority
+        > location_candidate.features.source_priority + 0.02
+        and top_candidate.score - location_candidate.score > 0.02
+    ):
+        return None
+    return location_candidate
 
 
 def _insert_cluster_decision(
@@ -817,7 +1423,7 @@ def _insert_cluster_decision(
 
 def _insert_retained_aliases(
     connection: sqlite3.Connection,
-    rows: list[tuple[str, str, str, str, int, float, str, str, str, float, float]],
+    rows: list[tuple[str, str, str, str, int, float, str, str, str, float, float, str]],
 ) -> None:
     connection.executemany(
         """
@@ -832,8 +1438,9 @@ def _insert_retained_aliases(
             source_name,
             entity_id,
             source_priority,
-            popularity_weight
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            popularity_weight,
+            runtime_tier
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         rows,
     )
@@ -855,6 +1462,7 @@ def iter_retained_aliases_from_db(path: str | Path) -> Iterator[dict[str, Any]]:
             entity_id,
             source_priority,
             popularity_weight,
+            runtime_tier,
         ) in connection.execute(
             """
             SELECT
@@ -866,7 +1474,8 @@ def iter_retained_aliases_from_db(path: str | Path) -> Iterator[dict[str, Any]]:
                 source_name,
                 entity_id,
                 source_priority,
-                popularity_weight
+                popularity_weight,
+                runtime_tier
             FROM retained_aliases
             ORDER BY
                 display_sort_key ASC,
@@ -885,6 +1494,7 @@ def iter_retained_aliases_from_db(path: str | Path) -> Iterator[dict[str, Any]]:
                 "entity_id": str(entity_id),
                 "source_priority": round(float(source_priority), 4),
                 "popularity_weight": round(float(popularity_weight), 4),
+                "runtime_tier": str(runtime_tier),
             }
     finally:
         connection.close()
@@ -1026,6 +1636,11 @@ def _default_preferred_name_weight(
     exact_display_match: bool,
     normalized_display_match: bool,
 ) -> float:
+    if label == "person" and _is_single_token_alpha(display_text):
+        if exact_display_match:
+            return 0.62
+        if normalized_display_match or display_text.casefold() == canonical_text.casefold():
+            return 0.7
     if label == "location" and _is_single_token_alpha(display_text):
         if exact_display_match:
             return 0.58
@@ -1098,6 +1713,115 @@ def _is_generic_single_token_cluster(candidates: list[AliasClusterCandidate]) ->
     return all(_is_generic_single_token_like(candidate.display_text) for candidate in candidates)
 
 
+def _is_strong_runtime_acronym_candidate(
+    *,
+    alias_key: str,
+    candidate: AliasClusterCandidate,
+) -> bool:
+    compact = "".join(character for character in alias_key if character.isalnum())
+    acronym_quality = _acronym_expansion_quality(
+        alias_key=alias_key,
+        candidate=candidate,
+    )
+    exact_canonical = (
+        candidate.display_text.casefold() == candidate.canonical_text.casefold()
+    )
+    if candidate.label != "organization":
+        return False
+    if not (2 <= len(compact) <= 5):
+        return False
+    if not compact.isalpha():
+        return False
+    if alias_key in _RUNTIME_GENERIC_PHRASE_LEADS:
+        return False
+    if not candidate.display_text.isupper():
+        return False
+    if not exact_canonical and acronym_quality[0] == 0:
+        return False
+    return (
+        candidate.features.source_priority >= 0.8
+        and candidate.score >= 0.55
+        and (
+            (
+                exact_canonical
+                and candidate.non_generated_candidate_count >= 1
+                and candidate.features.popularity_weight >= 0.8
+            )
+            or (
+                acronym_quality[0] == 1
+                and (
+                    candidate.features.popularity_weight >= 0.8
+                    or acronym_quality[1] == 1
+                )
+            )
+        )
+    )
+
+
+def _is_strong_short_geopolitical_candidate(
+    *,
+    alias_key: str,
+    candidate: AliasClusterCandidate,
+) -> bool:
+    if _is_blocklisted_runtime_single_token(alias_key):
+        return False
+    compact = "".join(character for character in alias_key if character.isalnum())
+    if candidate.label != "location":
+        return False
+    if not (2 <= len(compact) <= 4):
+        return False
+    if not _is_single_token_alpha(alias_key):
+        return False
+    if candidate.generated:
+        return False
+    if candidate.display_text.casefold() != candidate.canonical_text.casefold():
+        return False
+    return (
+        candidate.features.source_priority >= 0.8
+        and candidate.features.popularity_weight >= 0.75
+        and candidate.score >= 0.6
+    )
+
+
+def _is_strong_geopolitical_acronym_candidate(
+    *,
+    alias_key: str,
+    candidate: AliasClusterCandidate,
+) -> bool:
+    compact = "".join(character for character in alias_key if character.isalnum()).upper()
+    if candidate.label != "location":
+        return False
+    if not (2 <= len(compact) <= 4):
+        return False
+    if not compact.isalpha():
+        return False
+    if not candidate.display_text.isupper():
+        return False
+    tokens = re.findall(r"[A-Za-z]+", candidate.canonical_text)
+    if len(tokens) < 2:
+        return False
+    initials = "".join(token[0].upper() for token in tokens if token[:1].isalpha())
+    if initials != compact:
+        return False
+    return (
+        candidate.features.source_priority >= 0.8
+        and candidate.features.popularity_weight >= 0.5
+        and candidate.score >= 0.55
+    )
+
+
+def _is_blocklisted_runtime_single_token(alias_key: str) -> bool:
+    normalized_alias = alias_key.strip().casefold()
+    if not normalized_alias or not _is_single_token_alpha(alias_key):
+        return False
+    return (
+        normalized_alias in _RUNTIME_GENERIC_PHRASE_LEADS
+        or normalized_alias in _RUNTIME_AUXILIARY_WORDS
+        or normalized_alias in _RUNTIME_CALENDAR_SINGLE_TOKEN_WORDS
+        or normalized_alias in _RUNTIME_GENERIC_SINGLE_TOKEN_HEADS
+    )
+
+
 def _should_block_single_label_natural_alias(
     *,
     alias_key: str,
@@ -1105,22 +1829,238 @@ def _should_block_single_label_natural_alias(
 ) -> bool:
     if candidate.lane != "natural":
         return False
+    if _is_strong_runtime_acronym_candidate(alias_key=alias_key, candidate=candidate):
+        return False
+    if _is_strong_short_geopolitical_candidate(
+        alias_key=alias_key,
+        candidate=candidate,
+    ):
+        return False
+    if _is_strong_geopolitical_acronym_candidate(
+        alias_key=alias_key,
+        candidate=candidate,
+    ):
+        return False
+    if _is_blocklisted_runtime_single_token(alias_key):
+        return True
     if _is_single_token_alpha(alias_key):
+        if candidate.label == "person":
+            return True
         if (
             candidate.label in {"person", "location"}
             and candidate.display_text.casefold() != candidate.canonical_text.casefold()
         ):
             return True
         if (
+            candidate.label == "location"
+            and candidate.features.popularity_weight <= 0.3
+        ):
+            return True
+        if (
             candidate.label == "organization"
             and candidate.display_text.casefold() != candidate.canonical_text.casefold()
             and not candidate.display_text.isupper()
-            and _single_token_compact_length(alias_key) < 6
         ):
-            return True
+            return candidate.score < 0.7
     if not _is_short_token_like(alias_key):
         return False
     return candidate.score < 0.7
+
+
+def _select_family_preferred_location_candidate(
+    *,
+    alias_key: str,
+    candidates: list[AliasClusterCandidate],
+) -> AliasClusterCandidate | None:
+    if _is_blocklisted_runtime_single_token(alias_key):
+        return None
+    location_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate.label == "location"
+        and not candidate.generated
+        and candidate.display_text.casefold() == candidate.canonical_text.casefold()
+    ]
+    if not location_candidates:
+        return None
+    location_candidate = max(
+        location_candidates,
+        key=lambda candidate: _cluster_candidate_rank(
+            alias_key=alias_key,
+            candidate=candidate,
+        ),
+    )
+    top_candidate = candidates[0]
+    if top_candidate.label == "location":
+        return None
+    if location_candidate.features.popularity_weight < 0.78:
+        return None
+    if location_candidate.features.source_priority + 0.05 < top_candidate.features.source_priority:
+        return None
+    score_gap_limit = 0.06
+    if (
+        _is_single_token_alpha(alias_key)
+        and location_candidate.features.popularity_weight >= 0.9
+        and location_candidate.display_text.casefold()
+        == location_candidate.canonical_text.casefold()
+    ):
+        score_gap_limit = 0.12
+    if top_candidate.score - location_candidate.score > score_gap_limit:
+        return None
+    if (
+        top_candidate.label == "organization"
+        and top_candidate.features.popularity_weight
+        > location_candidate.features.popularity_weight + 0.08
+        and top_candidate.score > location_candidate.score + 0.02
+    ):
+        return None
+    return location_candidate
+
+
+def _resolve_runtime_tier(
+    *,
+    alias_key: str,
+    candidate: AliasClusterCandidate,
+) -> str:
+    tokens = [
+        token
+        for token in re.split(r"[\s\-_./]+", alias_key.strip())
+        if token
+    ]
+    if not tokens:
+        return "search_only"
+    if candidate.lane == "exact":
+        if (
+            candidate.label == "person"
+            and len(tokens) >= 2
+            and (
+                tokens[0] in _RUNTIME_GENERIC_PHRASE_LEADS
+                or any(
+                    token in _RUNTIME_AUXILIARY_WORDS
+                    or (
+                        token in _RUNTIME_FUNCTION_WORDS
+                        and token not in _RUNTIME_PERSON_PARTICLES
+                    )
+                    for token in tokens[1:]
+                )
+            )
+        ):
+            return "search_only"
+        if (
+            candidate.label in {"organization", "location"}
+            and tokens[0] in _RUNTIME_GENERIC_PHRASE_LEADS
+            and any(
+                token in _RUNTIME_AUXILIARY_WORDS or token in _RUNTIME_FUNCTION_WORDS
+                for token in tokens[1:]
+            )
+        ):
+            return "search_only"
+        if (
+            _is_single_token_alpha(alias_key)
+            and _is_blocklisted_runtime_single_token(alias_key)
+        ):
+            return "search_only"
+        return "runtime_exact_high_precision"
+    if _is_strong_runtime_acronym_candidate(alias_key=alias_key, candidate=candidate):
+        return "runtime_exact_acronym_high_precision"
+    if _is_strong_short_geopolitical_candidate(
+        alias_key=alias_key,
+        candidate=candidate,
+    ):
+        return "runtime_exact_geopolitical_high_precision"
+    if _is_strong_geopolitical_acronym_candidate(
+        alias_key=alias_key,
+        candidate=candidate,
+    ):
+        return "runtime_exact_geopolitical_high_precision"
+    if candidate.label == "person" and len(tokens) < 2:
+        return "search_only"
+    if candidate.label == "person":
+        if tokens[0] in _RUNTIME_GENERIC_PHRASE_LEADS:
+            return "search_only"
+        if any(
+            token in _RUNTIME_AUXILIARY_WORDS
+            or (
+                token in _RUNTIME_FUNCTION_WORDS
+                and token not in _RUNTIME_PERSON_PARTICLES
+            )
+            for token in tokens[1:]
+        ):
+            return "search_only"
+        return "runtime_exact_high_precision"
+    if tokens[0] in _RUNTIME_GENERIC_PHRASE_LEADS:
+        if (
+            candidate.label == "location"
+            and candidate.features.popularity_weight >= 0.9
+            and candidate.score >= 0.9
+            and not any(token in _RUNTIME_AUXILIARY_WORDS for token in tokens[1:])
+        ):
+            return "runtime_exact_high_precision"
+        return "search_only"
+    if _is_single_token_alpha(alias_key):
+        if _is_blocklisted_runtime_single_token(alias_key):
+            return "search_only"
+        if candidate.label == "location":
+            if candidate.generated or candidate.features.popularity_weight < 0.8:
+                return "search_only"
+            return "runtime_exact_high_precision"
+        if candidate.label == "organization":
+            exact_canonical = (
+                candidate.display_text.casefold() == candidate.canonical_text.casefold()
+            )
+            strong_exact_single_token_org = (
+                exact_canonical
+                and candidate.features.preferred_name_weight >= 0.95
+                and candidate.features.popularity_weight >= 0.8
+                and candidate.score >= 0.74
+            )
+            strong_fragment_single_token_org = (
+                not exact_canonical
+                and candidate.features.source_priority >= 0.88
+                and candidate.features.popularity_weight >= 0.9
+                and candidate.score >= 0.7
+            )
+            if _is_generic_single_token_like(alias_key) and not (
+                strong_exact_single_token_org or strong_fragment_single_token_org
+            ):
+                return "search_only"
+            if (
+                not exact_canonical
+                and not candidate.display_text.isupper()
+                and not strong_fragment_single_token_org
+            ):
+                return "search_only"
+            if candidate.score < 0.62:
+                return "search_only"
+            return "runtime_exact_high_precision"
+        if candidate.score < 0.62:
+            return "search_only"
+        return "runtime_exact_high_precision"
+    if (
+        candidate.label == "location"
+        and tokens[-1] in _RUNTIME_GENERIC_LOCATION_HEADS
+        and candidate.features.popularity_weight < 0.9
+    ):
+        return "search_only"
+    if (
+        candidate.label in {"organization", "person"}
+        and tokens[-1] in _RUNTIME_GENERIC_ENTITY_HEADS
+        and candidate.score < 0.9
+    ):
+        return "search_only"
+    if (
+        candidate.label == "organization"
+        and len(tokens) >= 2
+        and not candidate.generated
+        and candidate.features.source_priority >= 0.8
+        and candidate.score >= 0.6
+        and tokens[0] not in _RUNTIME_GENERIC_PHRASE_LEADS
+        and tokens[-1] not in _RUNTIME_FUNCTION_WORDS
+    ):
+        return "runtime_exact_high_precision"
+    if candidate.label in {"organization", "location"} and candidate.score < 0.62:
+        return "search_only"
+    return "runtime_exact_high_precision"
 
 
 def _should_keep_dominant_location_alias(
@@ -1138,6 +2078,36 @@ def _should_keep_dominant_location_alias(
         top_candidate.features.popularity_weight + 0.02
         >= runner_up_candidate.features.popularity_weight
     )
+
+
+def _select_supported_location_candidate(
+    candidates: list[AliasClusterCandidate],
+) -> AliasClusterCandidate | None:
+    if not candidates:
+        return None
+    location_candidate = next(
+        (candidate for candidate in candidates if candidate.label == "location"),
+        None,
+    )
+    if location_candidate is None:
+        return None
+    if location_candidate.generated:
+        return None
+    if location_candidate.non_generated_candidate_count < 2:
+        return None
+    if location_candidate.score < 0.62:
+        return None
+    if any(
+        candidate.label != "location" and candidate.non_generated_candidate_count > 0
+        for candidate in candidates
+    ):
+        return None
+    top_candidate = candidates[0]
+    if top_candidate.label == "location":
+        return None
+    if top_candidate.score - location_candidate.score > 0.06:
+        return None
+    return location_candidate
 
 
 def _is_single_token_alpha(alias_key: str) -> bool:

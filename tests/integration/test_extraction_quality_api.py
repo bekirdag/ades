@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from ades import (
+    benchmark_matcher_backends,
     benchmark_runtime,
     compare_extraction_quality_reports,
     diff_pack_versions,
@@ -13,6 +14,7 @@ from ades.extraction_quality import (
     GoldenDocument,
     GoldenEntity,
     GoldenSet,
+    load_golden_set,
     load_quality_report,
     write_golden_set,
     write_quality_report,
@@ -230,3 +232,49 @@ def test_public_api_can_benchmark_runtime(tmp_path: Path) -> None:
     assert benchmark.quality_report.recall == 1.0
     if benchmark.disk_usage.matcher_total_bytes == 0:
         assert "matcher_not_available:finance-en" in benchmark.warnings
+
+
+def test_public_api_can_benchmark_matcher_backends(tmp_path: Path) -> None:
+    storage_root = tmp_path / "storage"
+    PackInstaller(storage_root).install("finance-en")
+    golden_set_path = write_golden_set(
+        tmp_path / "golden" / "finance-en.json",
+        GoldenSet(
+            pack_id="finance-en",
+            documents=(
+                GoldenDocument(
+                    name="finance-smoke",
+                    text="TICKA traded on EXCHX after USD 12.5 guidance.",
+                    expected_entities=(
+                        GoldenEntity(text="TICKA", label="ticker"),
+                        GoldenEntity(text="EXCHX", label="exchange"),
+                        GoldenEntity(text="USD 12.5", label="currency_amount"),
+                    ),
+                ),
+            ),
+        ),
+    )
+    report_path = tmp_path / "reports" / "finance-matcher-backends.json"
+
+    benchmark = benchmark_matcher_backends(
+        "finance-en",
+        storage_root=storage_root,
+        golden_set_path=golden_set_path,
+        alias_limit=25,
+        scan_limit=100,
+        min_alias_score=0.0,
+        exact_tier_min_token_count=1,
+        query_runs=2,
+        report_path=report_path,
+        output_root=tmp_path / "matcher-spike",
+    )
+
+    assert benchmark.pack_id == "finance-en"
+    assert benchmark.report_path == str(report_path.resolve())
+    assert benchmark.query_runs == 2
+    assert {candidate.backend for candidate in benchmark.candidates} == {
+        "current_json_aho",
+        "token_trie_v1",
+    }
+    assert all(candidate.artifact_bytes > 0 for candidate in benchmark.candidates)
+    assert benchmark.recommended_backend in {"current_json_aho", "token_trie_v1"}

@@ -11,6 +11,11 @@ import sqlite3
 from statistics import quantiles
 import time
 
+from .matcher_benchmark import (
+    MatcherBenchmarkSpikeReport,
+    benchmark_matcher_backends as run_benchmark_matcher_backends,
+    write_matcher_benchmark_spike_report,
+)
 from .pipeline.tagger import tag_text
 from .service.models import TagResponse
 from .text_processing import normalize_lookup_text
@@ -222,6 +227,21 @@ def benchmark_report_path(
         filename = f"{pack_id}.{mode}.benchmark.json"
     else:
         filename = f"{pack_id}.{profile}.{mode}.benchmark.json"
+    return root / "reports" / filename
+
+
+def matcher_benchmark_spike_report_path(
+    pack_id: str,
+    *,
+    root: Path = DEFAULT_EXTRACTION_QUALITY_ROOT,
+    profile: str = "default",
+) -> Path:
+    """Return the default on-disk path for one matcher backend spike report."""
+
+    if profile == "default":
+        filename = f"{pack_id}.matcher-backends.json"
+    else:
+        filename = f"{pack_id}.{profile}.matcher-backends.json"
     return root / "reports" / filename
 
 
@@ -581,6 +601,47 @@ def benchmark_runtime_pack(
     )
 
 
+def benchmark_matcher_backends_for_pack(
+    pack_id: str,
+    *,
+    storage_root: str | Path,
+    golden_set: GoldenSet,
+    alias_limit: int = 10000,
+    scan_limit: int = 50000,
+    min_alias_score: float = 0.8,
+    exact_tier_min_token_count: int = 2,
+    query_runs: int = 3,
+    output_root: str | Path | None = None,
+) -> MatcherBenchmarkSpikeReport:
+    """Benchmark candidate matcher backends on one bounded installed-pack alias slice."""
+
+    from .packs.registry import PackRegistry
+
+    storage_path = Path(storage_root).expanduser().resolve()
+    registry = PackRegistry(storage_path)
+    aliases_path = registry.layout.packs_dir / pack_id / "aliases.json"
+    if not aliases_path.exists():
+        raise FileNotFoundError(f"Installed pack aliases.json not found: {aliases_path}")
+    resolved_output_root = (
+        Path(output_root).expanduser().resolve()
+        if output_root is not None
+        else DEFAULT_EXTRACTION_QUALITY_ROOT / "matcher_spikes" / pack_id / golden_set.profile
+    )
+    query_texts = [document.text for document in golden_set.documents]
+    return run_benchmark_matcher_backends(
+        pack_id=pack_id,
+        profile=golden_set.profile,
+        aliases_path=aliases_path,
+        query_texts=query_texts,
+        output_dir=resolved_output_root,
+        alias_limit=alias_limit,
+        scan_limit=scan_limit,
+        min_alias_score=min_alias_score,
+        exact_tier_min_token_count=exact_tier_min_token_count,
+        query_runs=query_runs,
+    )
+
+
 def compare_quality_reports(
     baseline: ExtractionQualityReport,
     candidate: ExtractionQualityReport,
@@ -922,6 +983,44 @@ def _runtime_benchmark_report_to_dict(report: RuntimeBenchmarkReport) -> dict[st
             "metadata_store_bytes": report.disk_usage.metadata_store_bytes,
         },
         "quality_report": _quality_report_to_dict(report.quality_report),
+        "warnings": list(report.warnings),
+    }
+
+
+def _matcher_benchmark_spike_report_to_dict(
+    report: MatcherBenchmarkSpikeReport,
+) -> dict[str, object]:
+    return {
+        "pack_id": report.pack_id,
+        "profile": report.profile,
+        "aliases_path": report.aliases_path,
+        "scanned_alias_count": report.scanned_alias_count,
+        "retained_alias_count": report.retained_alias_count,
+        "unique_pattern_count": report.unique_pattern_count,
+        "query_count": report.query_count,
+        "query_runs": report.query_runs,
+        "min_alias_score": report.min_alias_score,
+        "alias_limit": report.alias_limit,
+        "scan_limit": report.scan_limit,
+        "exact_tier_min_token_count": report.exact_tier_min_token_count,
+        "candidates": [
+            {
+                "backend": candidate.backend,
+                "available": candidate.available,
+                "alias_count": candidate.alias_count,
+                "unique_pattern_count": candidate.unique_pattern_count,
+                "build_ms": candidate.build_ms,
+                "cold_load_ms": candidate.cold_load_ms,
+                "warm_query_p50_ms": candidate.warm_query_p50_ms,
+                "warm_query_p95_ms": candidate.warm_query_p95_ms,
+                "artifact_bytes": candidate.artifact_bytes,
+                "state_count": candidate.state_count,
+                "token_vocab_count": candidate.token_vocab_count,
+                "notes": list(candidate.notes),
+            }
+            for candidate in report.candidates
+        ],
+        "recommended_backend": report.recommended_backend,
         "warnings": list(report.warnings),
     }
 

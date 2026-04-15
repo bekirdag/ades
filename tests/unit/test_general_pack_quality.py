@@ -21,26 +21,26 @@ def test_validate_general_pack_quality_reports_passing_fixture_metrics(tmp_path:
 
     assert report.pack_id == "general-en"
     assert report.fixture_profile == "benchmark"
-    assert report.fixture_count == 10
-    assert report.passed_case_count == 10
+    assert report.fixture_count == 13
+    assert report.passed_case_count == 13
     assert report.failed_case_count == 0
-    assert report.expected_entity_count == 22
-    assert report.actual_entity_count == 22
-    assert report.matched_expected_entity_count == 22
+    assert report.expected_entity_count == 29
+    assert report.actual_entity_count == 29
+    assert report.matched_expected_entity_count == 29
     assert report.missing_expected_entity_count == 0
     assert report.unexpected_entity_count == 0
     assert report.expected_recall == 1.0
     assert report.precision == 1.0
-    assert report.alias_count == 34
-    assert report.unique_canonical_count == 16
+    assert report.alias_count == 42
+    assert report.unique_canonical_count == 26
     assert report.rule_count == 2
-    assert report.dropped_alias_count == 0
-    assert report.ambiguous_alias_count == 0
-    assert report.dropped_alias_ratio == 0.0
+    assert report.dropped_alias_count == 5
+    assert report.ambiguous_alias_count == 3
+    assert report.dropped_alias_ratio == 0.1064
     assert report.passed is True
     assert report.failures == []
     assert report.warnings == [
-        "general-en structural summary: person=20, organization=7, location=7, total=16"
+        "general-en structural summary: person=8, organization=9, location=10, total=27"
     ]
 
 

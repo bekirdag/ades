@@ -122,6 +122,41 @@ def create_general_generation_bundle(root: Path) -> Path:
     return bundle_dir
 
 
+def create_acronym_general_generation_bundle(root: Path) -> Path:
+    bundle_dir = create_general_generation_bundle(root)
+    entities_path = bundle_dir / "normalized" / "entities.jsonl"
+    records = [
+        json.loads(line)
+        for line in entities_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    records.extend(
+        [
+            {
+                "entity_id": "organization:international-energy-agency",
+                "entity_type": "organization",
+                "canonical_text": "International Energy Agency",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.94,
+            },
+            {
+                "entity_id": "location:united-states",
+                "entity_type": "location",
+                "canonical_text": "United States",
+                "aliases": [],
+                "source_name": "curated-general",
+                "population": 331_000_000,
+            },
+        ]
+    )
+    entities_path.write_text(
+        "".join(json.dumps(item) + "\n" for item in records),
+        encoding="utf-8",
+    )
+    return bundle_dir
+
+
 def create_pre_resolved_general_generation_bundle(root: Path) -> Path:
     bundle_dir = root / "general-bundle-pre-resolved"
     normalized_dir = bundle_dir / "normalized"
@@ -260,7 +295,7 @@ def create_noisy_general_generation_bundle(root: Path) -> Path:
                 "license_class": "ship-now",
                 "license": "ship-now",
                 "retrieved_at": "2026-04-13T09:00:00Z",
-                "record_count": 9,
+                "record_count": 20,
             }
         ],
     }
@@ -271,10 +306,10 @@ def create_noisy_general_generation_bundle(root: Path) -> Path:
 
     entities = [
         {
-            "entity_id": "person:daniel-loeb",
+            "entity_id": "person:alden-voss",
             "entity_type": "person",
-            "canonical_text": "Daniel Loeb",
-            "aliases": ["Daniel"],
+            "canonical_text": "Alden Voss",
+            "aliases": ["Alden"],
             "source_name": "curated-general",
             "popularity": 0.9,
         },
@@ -295,12 +330,60 @@ def create_noisy_general_generation_bundle(root: Path) -> Path:
             "popularity": 0.68,
         },
         {
+            "entity_id": "person:april-may",
+            "entity_type": "person",
+            "canonical_text": "April May",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.82,
+        },
+        {
+            "entity_id": "person:yang-an",
+            "entity_type": "person",
+            "canonical_text": "Yang An",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.76,
+        },
+        {
+            "entity_id": "person:the-founder",
+            "entity_type": "person",
+            "canonical_text": "The Founder",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.9,
+        },
+        {
+            "entity_id": "person:the-report",
+            "entity_type": "person",
+            "canonical_text": "The Report",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.88,
+        },
+        {
             "entity_id": "organization:beacon-group",
             "entity_type": "organization",
             "canonical_text": "Beacon Group",
             "aliases": [],
             "source_name": "curated-general",
             "popularity": 0.95,
+        },
+        {
+            "entity_id": "organization:james-cook-university",
+            "entity_type": "organization",
+            "canonical_text": "James Cook University",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.91,
+        },
+        {
+            "entity_id": "organization:james",
+            "entity_type": "organization",
+            "canonical_text": "James",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.89,
         },
         {
             "entity_id": "organization:third-capital",
@@ -311,12 +394,52 @@ def create_noisy_general_generation_bundle(root: Path) -> Path:
             "popularity": 0.61,
         },
         {
+            "entity_id": "organization:we-are",
+            "entity_type": "organization",
+            "canonical_text": "We Are",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.84,
+        },
+        {
             "entity_id": "organization:real-estate-band",
             "entity_type": "organization",
             "canonical_text": "Real Estate",
             "aliases": [],
             "source_name": "curated-general",
             "popularity": 0.82,
+        },
+        {
+            "entity_id": "organization:meridia",
+            "entity_type": "organization",
+            "canonical_text": "Meridia",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.88,
+        },
+        {
+            "entity_id": "organization:europe-collective",
+            "entity_type": "organization",
+            "canonical_text": "Europe",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.84,
+        },
+        {
+            "entity_id": "organization:harborview-capital",
+            "entity_type": "organization",
+            "canonical_text": "Harborview Capital",
+            "aliases": ["Harborview"],
+            "source_name": "curated-general",
+            "popularity": 0.9,
+        },
+        {
+            "entity_id": "organization:harborview-records",
+            "entity_type": "organization",
+            "canonical_text": "Harborview Records",
+            "aliases": ["Harborview"],
+            "source_name": "curated-general",
+            "popularity": 0.86,
         },
         {
             "entity_id": "location:letter",
@@ -327,10 +450,66 @@ def create_noisy_general_generation_bundle(root: Path) -> Path:
             "popularity": 0.15,
         },
         {
-            "entity_id": "location:yorkshire",
+            "entity_id": "location:university",
             "entity_type": "location",
-            "canonical_text": "Yorkshire",
-            "aliases": ["York"],
+            "canonical_text": "University",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.95,
+        },
+        {
+            "entity_id": "location:this",
+            "entity_type": "location",
+            "canonical_text": "This",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.95,
+        },
+        {
+            "entity_id": "location:march",
+            "entity_type": "location",
+            "canonical_text": "March",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.95,
+        },
+        {
+            "entity_id": "location:stock",
+            "entity_type": "location",
+            "canonical_text": "Stock",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.95,
+        },
+        {
+            "entity_id": "location:europe",
+            "entity_type": "location",
+            "canonical_text": "Europe",
+            "aliases": [],
+            "source_name": "curated-general",
+            "population": 740_000_000,
+        },
+        {
+            "entity_id": "location:talora",
+            "entity_type": "location",
+            "canonical_text": "Talora",
+            "aliases": [],
+            "source_name": "curated-general",
+            "population": 9_100_000,
+        },
+        {
+            "entity_id": "location:strait-of-talora",
+            "entity_type": "location",
+            "canonical_text": "Strait of Talora",
+            "aliases": [],
+            "source_name": "curated-general",
+            "population": 9_200_000,
+        },
+        {
+            "entity_id": "location:north-vale",
+            "entity_type": "location",
+            "canonical_text": "North Vale",
+            "aliases": ["Vale"],
             "source_name": "curated-general",
             "popularity": 0.55,
         },
@@ -341,6 +520,38 @@ def create_noisy_general_generation_bundle(root: Path) -> Path:
             "aliases": [],
             "source_name": "curated-general",
             "popularity": 0.5,
+        },
+        {
+            "entity_id": "location:harborview-city",
+            "entity_type": "location",
+            "canonical_text": "Harborview",
+            "aliases": [],
+            "source_name": "curated-general",
+            "population": 8_800_000,
+        },
+        {
+            "entity_id": "location:harborview-metro",
+            "entity_type": "location",
+            "canonical_text": "Harborview",
+            "aliases": [],
+            "source_name": "curated-general",
+            "population": 8_900_000,
+        },
+        {
+            "entity_id": "organization:bank-of-talora",
+            "entity_type": "organization",
+            "canonical_text": "Bank of Talora",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.83,
+        },
+        {
+            "entity_id": "organization:national-bank-of-talora",
+            "entity_type": "organization",
+            "canonical_text": "National Bank of Talora",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.9,
         },
     ]
     (normalized_dir / "entities.jsonl").write_text(

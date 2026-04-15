@@ -12,6 +12,7 @@ from typer.main import get_command
 
 from .api import activate_pack as api_activate_pack
 from .api import benchmark_runtime as api_benchmark_runtime
+from .api import benchmark_matcher_backends as api_benchmark_matcher_backends
 from .api import build_finance_source_bundle as api_build_finance_source_bundle
 from .api import build_general_source_bundle as api_build_general_source_bundle
 from .api import build_medical_source_bundle as api_build_medical_source_bundle
@@ -52,6 +53,14 @@ from .api import write_release_manifest as api_write_release_manifest
 from .config import InvalidConfigurationError, get_settings
 from .packs.installer import InstallResult, PackInstaller
 from .packs.quality_defaults import DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES
+from .service.client import (
+    LocalServiceRequestError,
+    LocalServiceUnavailableError,
+    should_use_local_service,
+    tag_file_via_local_service,
+    tag_files_via_local_service,
+    tag_via_local_service,
+)
 from .storage import UnsupportedRuntimeConfigurationError
 from .storage.paths import build_storage_layout, ensure_storage_layout
 
@@ -421,6 +430,150 @@ def _resolve_tag_pack_or_exit(
             )
         )
     return resolved_pack
+
+
+def _tag_text_response(
+    text: str,
+    *,
+    pack: str,
+    content_type: str,
+    output_path: Path | None,
+    output_dir: Path | None,
+    pretty_output: bool,
+):
+    """Run one inline tag request through the preferred runtime path."""
+
+    settings = get_settings()
+    if should_use_local_service(settings):
+        try:
+            return tag_via_local_service(
+                text,
+                pack=pack,
+                content_type=content_type,
+                output_path=output_path,
+                output_dir=output_dir,
+                pretty_output=pretty_output,
+                settings=settings,
+            )
+        except LocalServiceUnavailableError:
+            pass
+    return api_tag(
+        text,
+        pack=pack,
+        content_type=content_type,
+        output_path=output_path,
+        output_dir=output_dir,
+        pretty_output=pretty_output,
+    )
+
+
+def _tag_file_response(
+    path: Path,
+    *,
+    pack: str,
+    content_type: str | None,
+    output_path: Path | None,
+    output_dir: Path | None,
+    pretty_output: bool,
+):
+    """Run one file tag request through the preferred runtime path."""
+
+    settings = get_settings()
+    if should_use_local_service(settings):
+        try:
+            return tag_file_via_local_service(
+                path,
+                pack=pack,
+                content_type=content_type,
+                output_path=output_path,
+                output_dir=output_dir,
+                pretty_output=pretty_output,
+                settings=settings,
+            )
+        except LocalServiceUnavailableError:
+            pass
+    return api_tag_file(
+        path,
+        pack=pack,
+        content_type=content_type,
+        output_path=output_path,
+        output_dir=output_dir,
+        pretty_output=pretty_output,
+    )
+
+
+def _tag_files_response(
+    files: list[Path],
+    *,
+    pack: str | None,
+    content_type: str | None,
+    output_dir: Path | None,
+    pretty_output: bool,
+    directories: list[Path],
+    glob_patterns: list[str],
+    manifest_input: Path | None,
+    manifest_mode: str,
+    skip_unchanged: bool,
+    reuse_unchanged_outputs: bool,
+    repair_missing_reused_outputs: bool,
+    recursive: bool,
+    include_patterns: list[str],
+    exclude_patterns: list[str],
+    max_files: int | None,
+    max_input_bytes: int | None,
+    write_manifest: bool,
+    manifest_output: Path | None,
+):
+    """Run one batch tag request through the preferred runtime path."""
+
+    settings = get_settings()
+    if should_use_local_service(settings):
+        try:
+            return tag_files_via_local_service(
+                files,
+                pack=pack,
+                content_type=content_type,
+                output_dir=output_dir,
+                pretty_output=pretty_output,
+                settings=settings,
+                directories=directories,
+                glob_patterns=glob_patterns,
+                manifest_input_path=manifest_input,
+                manifest_replay_mode=manifest_mode,
+                skip_unchanged=skip_unchanged,
+                reuse_unchanged_outputs=reuse_unchanged_outputs,
+                repair_missing_reused_outputs=repair_missing_reused_outputs,
+                recursive=recursive,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns,
+                max_files=max_files,
+                max_input_bytes=max_input_bytes,
+                write_manifest=write_manifest,
+                manifest_output_path=manifest_output,
+            )
+        except LocalServiceUnavailableError:
+            pass
+    return api_tag_files(
+        files,
+        pack=pack,
+        content_type=content_type,
+        output_dir=output_dir,
+        pretty_output=pretty_output,
+        directories=directories,
+        glob_patterns=glob_patterns,
+        manifest_input_path=manifest_input,
+        manifest_replay_mode=manifest_mode,
+        skip_unchanged=skip_unchanged,
+        reuse_unchanged_outputs=reuse_unchanged_outputs,
+        repair_missing_reused_outputs=repair_missing_reused_outputs,
+        recursive=recursive,
+        include_patterns=include_patterns,
+        exclude_patterns=exclude_patterns,
+        max_files=max_files,
+        max_input_bytes=max_input_bytes,
+        write_manifest=write_manifest,
+        manifest_output_path=manifest_output,
+    )
 
 
 @app.command()
@@ -1239,6 +1392,91 @@ def registry_benchmark_runtime(
     _echo_json(response.model_dump(mode="json"))
 
 
+@registry_app.command("benchmark-matcher-backends")
+def registry_benchmark_matcher_backends(
+    pack_id: str = typer.Argument(..., help="Installed pack id to benchmark."),
+    golden_set_path: Path | None = typer.Option(
+        None,
+        "--golden-set-path",
+        help="Optional explicit golden set JSON path. Defaults to the /mnt quality root.",
+    ),
+    profile: str = typer.Option(
+        "default",
+        "--profile",
+        help="Golden set profile to use when --golden-set-path is omitted.",
+    ),
+    alias_limit: int = typer.Option(
+        10000,
+        "--alias-limit",
+        min=1,
+        max=500000,
+        help="Maximum retained aliases in the bounded benchmark slice.",
+    ),
+    scan_limit: int = typer.Option(
+        50000,
+        "--scan-limit",
+        min=1,
+        max=1000000,
+        help="Maximum raw aliases to scan before slice selection stops.",
+    ),
+    min_alias_score: float = typer.Option(
+        0.8,
+        "--min-alias-score",
+        min=0.0,
+        max=1.0,
+        help="Minimum alias score for the bounded exact-tier slice.",
+    ),
+    exact_tier_min_token_count: int = typer.Option(
+        2,
+        "--exact-tier-min-token-count",
+        min=1,
+        max=16,
+        help="Minimum normalized token count for aliases retained in the benchmark slice.",
+    ),
+    query_runs: int = typer.Option(
+        3,
+        "--query-runs",
+        min=1,
+        max=25,
+        help="Number of repeated query passes per golden document for each candidate backend.",
+    ),
+    write_report: bool = typer.Option(
+        True,
+        "--write-report/--no-write-report",
+        help="Persist the matcher backend benchmark report to disk.",
+    ),
+    report_path: Path | None = typer.Option(
+        None,
+        "--report-path",
+        help="Optional explicit JSON path for the persisted matcher backend report.",
+    ),
+    output_root: Path | None = typer.Option(
+        None,
+        "--output-root",
+        help="Optional explicit working directory for benchmark artifacts.",
+    ),
+) -> None:
+    """Benchmark candidate matcher backends on a bounded installed-pack alias slice."""
+
+    try:
+        response = api_benchmark_matcher_backends(
+            pack_id,
+            golden_set_path=golden_set_path,
+            profile=profile,
+            alias_limit=alias_limit,
+            scan_limit=scan_limit,
+            min_alias_score=min_alias_score,
+            exact_tier_min_token_count=exact_tier_min_token_count,
+            query_runs=query_runs,
+            write_report=write_report,
+            report_path=report_path,
+            output_root=output_root,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
 @registry_app.command("compare-extraction-quality")
 def registry_compare_extraction_quality(
     baseline_report_path: Path = typer.Option(
@@ -1975,25 +2213,34 @@ def tag(
     if output is not None and output_dir is not None:
         raise typer.BadParameter("Use --output or --output-dir, not both.")
     resolved_pack = _resolve_tag_pack_or_exit(pack)
-
-    if file is not None:
-        response = api_tag_file(
-            file,
-            pack=resolved_pack,
-            content_type=content_type,
-            output_path=output,
-            output_dir=output_dir,
-            pretty_output=not compact_output,
-        )
-    else:
-        response = api_tag(
-            text,
-            pack=resolved_pack,
-            content_type=content_type or "text/plain",
-            output_path=output,
-            output_dir=output_dir,
-            pretty_output=not compact_output,
-        )
+    try:
+        if file is not None:
+            response = _tag_file_response(
+                file,
+                pack=resolved_pack,
+                content_type=content_type,
+                output_path=output,
+                output_dir=output_dir,
+                pretty_output=not compact_output,
+            )
+        else:
+            response = _tag_text_response(
+                text,
+                pack=resolved_pack,
+                content_type=content_type or "text/plain",
+                output_path=output,
+                output_dir=output_dir,
+                pretty_output=not compact_output,
+            )
+    except FileNotFoundError as exc:
+        _exit_with_cli_error(exc)
+    except (
+        InvalidConfigurationError,
+        LocalServiceRequestError,
+        UnsupportedRuntimeConfigurationError,
+        ValueError,
+    ) as exc:
+        _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
 
@@ -2104,27 +2351,37 @@ def tag_files(
     if (write_manifest or manifest_output is not None) and output_dir is None:
         raise typer.BadParameter("Use --output-dir when writing a batch manifest.")
     resolved_pack = _resolve_tag_pack_or_exit(pack, manifest_input=manifest_input)
-    response = api_tag_files(
-        files or [],
-        pack=resolved_pack,
-        content_type=content_type,
-        output_dir=output_dir,
-        pretty_output=not compact_output,
-        directories=directories or [],
-        glob_patterns=glob_patterns or [],
-        manifest_input_path=manifest_input,
-        manifest_replay_mode=manifest_mode,
-        skip_unchanged=skip_unchanged,
-        reuse_unchanged_outputs=reuse_unchanged_outputs,
-        repair_missing_reused_outputs=repair_missing_reused_outputs,
-        recursive=not non_recursive,
-        include_patterns=include_patterns or [],
-        exclude_patterns=exclude_patterns or [],
-        max_files=max_files,
-        max_input_bytes=max_input_bytes,
-        write_manifest=write_manifest,
-        manifest_output_path=manifest_output,
-    )
+    try:
+        response = _tag_files_response(
+            files or [],
+            pack=resolved_pack,
+            content_type=content_type,
+            output_dir=output_dir,
+            pretty_output=not compact_output,
+            directories=directories or [],
+            glob_patterns=glob_patterns or [],
+            manifest_input=manifest_input,
+            manifest_mode=manifest_mode,
+            skip_unchanged=skip_unchanged,
+            reuse_unchanged_outputs=reuse_unchanged_outputs,
+            repair_missing_reused_outputs=repair_missing_reused_outputs,
+            recursive=not non_recursive,
+            include_patterns=include_patterns or [],
+            exclude_patterns=exclude_patterns or [],
+            max_files=max_files,
+            max_input_bytes=max_input_bytes,
+            write_manifest=write_manifest,
+            manifest_output=manifest_output,
+        )
+    except FileNotFoundError as exc:
+        _exit_with_cli_error(exc)
+    except (
+        InvalidConfigurationError,
+        LocalServiceRequestError,
+        UnsupportedRuntimeConfigurationError,
+        ValueError,
+    ) as exc:
+        _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
 

@@ -7,6 +7,7 @@ from ades.packs.generation import generate_pack_source
 from ades.packs.installer import PackInstaller
 from ades.service.app import create_app
 from tests.pack_generation_helpers import (
+    create_acronym_general_generation_bundle,
     create_general_generation_bundle,
     create_noisy_general_generation_bundle,
 )
@@ -110,7 +111,63 @@ def test_tag_endpoint_suppresses_noisy_general_aliases_in_generic_prose(
     response = client.post(
         "/v0/tag",
         json={
-            "text": "Daniel Loeb said Beacon expanded after the letter about real estate.",
+            "text": (
+                "Meridia said Harborview opened lower after Alden Voss said Beacon expanded. "
+                "Jiajia Yang, an associate professor at James Cook University, said the letter "
+                "about real estate was overblown. The founder filed the report in April may still "
+                "bring changes. We are near the University. This downgrade arrived in March. "
+                "Lindsay James said Stock markets in Europe were volatile."
+            ),
+            "pack": "general-en",
+            "content_type": "text/plain",
+        },
+    )
+
+    assert response.status_code == 200
+    pairs = {(entity["text"], entity["label"]) for entity in response.json()["entities"]}
+    lowered = {entity["text"].casefold() for entity in response.json()["entities"]}
+
+    assert ("Meridia", "organization") in pairs
+    assert ("Harborview", "location") in pairs
+    assert ("Alden Voss", "person") in pairs
+    assert ("Beacon", "organization") in pairs
+    assert ("James Cook University", "organization") in pairs
+    assert ("Europe", "location") in pairs
+    assert ("Alden", "person") not in pairs
+    assert ("Europe", "organization") not in pairs
+    assert ("James", "organization") not in pairs
+    assert ("letter", "location") not in pairs
+    assert ("This", "location") not in pairs
+    assert ("March", "location") not in pairs
+    assert ("Stock", "location") not in pairs
+    assert ("real estate", "organization") not in pairs
+    assert "yang, an" not in lowered
+    assert "the founder" not in lowered
+    assert "the report" not in lowered
+    assert "april may" not in lowered
+    assert "we are" not in lowered
+    assert "university" not in lowered
+
+
+def test_tag_endpoint_backfills_document_defined_acronyms(tmp_path: Path) -> None:
+    bundle_dir = create_acronym_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    client = TestClient(create_app(storage_root=tmp_path))
+    response = client.post(
+        "/v0/tag",
+        json={
+            "text": (
+                "International Energy Agency (IEA) officials met delegates from the "
+                "United States (US). Later, the IEA said the US would respond."
+            ),
             "pack": "general-en",
             "content_type": "text/plain",
         },
@@ -119,8 +176,42 @@ def test_tag_endpoint_suppresses_noisy_general_aliases_in_generic_prose(
     assert response.status_code == 200
     pairs = {(entity["text"], entity["label"]) for entity in response.json()["entities"]}
 
-    assert ("Daniel Loeb", "person") in pairs
-    assert ("Beacon", "organization") in pairs
-    assert ("Daniel", "person") not in pairs
-    assert ("letter", "location") not in pairs
-    assert ("real estate", "organization") not in pairs
+    assert ("International Energy Agency", "organization") in pairs
+    assert ("United States", "location") in pairs
+    assert ("IEA", "organization") in pairs
+    assert ("US", "location") in pairs
+
+
+def test_tag_endpoint_prefers_longer_valid_spans_over_embedded_fragments(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_noisy_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    client = TestClient(create_app(storage_root=tmp_path))
+    response = client.post(
+        "/v0/tag",
+        json={
+            "text": (
+                "The Strait of Talora reopened after the National Bank of Talora "
+                "published new guidance."
+            ),
+            "pack": "general-en",
+            "content_type": "text/plain",
+        },
+    )
+
+    assert response.status_code == 200
+    pairs = {(entity["text"], entity["label"]) for entity in response.json()["entities"]}
+
+    assert ("Strait of Talora", "location") in pairs
+    assert ("Talora", "location") not in pairs
+    assert ("National Bank of Talora", "organization") in pairs
+    assert ("Bank of Talora", "organization") not in pairs

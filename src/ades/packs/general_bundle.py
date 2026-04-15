@@ -62,6 +62,7 @@ _GENERAL_REAL_SUPPORT_MIN_ALIAS_COUNT_BY_TYPE = {
     "organization": 1,
     "location": 1,
 }
+_GENERAL_REAL_SUPPORT_MIN_SHORT_WIKIDATA_LOCATION_SITELINKS = 10
 
 
 @dataclass(frozen=True)
@@ -527,11 +528,17 @@ def _normalize_wikidata_general_entity(item: dict[str, Any]) -> dict[str, Any] |
     source_features = item.get("source_features")
     if not isinstance(source_features, dict):
         source_features = None
+    sitelink_support = (
+        _coerce_int(source_features.get("sitelink_count"))
+        if isinstance(source_features, dict)
+        else None
+    ) or popularity
     pruned_aliases = _prune_general_aliases(
         entity_type=entity_type,
         canonical_text=canonical_text,
         aliases=aliases,
-        popularity=popularity,
+        popularity=popularity if source_features is None else None,
+        support_count=sitelink_support if source_features is not None else None,
     )
     if not _should_keep_general_wikidata_entity(
         entity_type=entity_type,
@@ -635,6 +642,7 @@ def _prune_general_aliases(
     canonical_text: str,
     aliases: list[object],
     popularity: int | None = None,
+    support_count: int | None = None,
 ) -> list[str]:
     normalized_aliases: list[str] = []
     canonical_token_count = len(canonical_text.split())
@@ -646,7 +654,11 @@ def _prune_general_aliases(
             continue
         if (
             entity_type == "location"
-            and not _should_keep_general_location_text(cleaned, population=popularity)
+            and not _should_keep_general_location_text(
+                cleaned,
+                population=popularity,
+                support_count=support_count,
+            )
         ):
             continue
         if (
@@ -706,7 +718,7 @@ def _should_keep_general_wikidata_entity(
     popularity_signal = _clean_text(source_features.get("popularity_signal")) or ""
     if entity_type == "location" and not _should_keep_general_location_text(
         canonical_text,
-        population=popularity,
+        support_count=sitelink_count,
     ):
         return False
     if (
@@ -742,7 +754,8 @@ def _should_keep_general_wikidata_entity(
 def _should_keep_general_location_text(
     value: str,
     *,
-    population: int | None,
+    population: int | None = None,
+    support_count: int | None = None,
 ) -> bool:
     cleaned = _clean_text(value)
     if not cleaned:
@@ -758,6 +771,12 @@ def _should_keep_general_location_text(
     population_value = population or 0
     if len(cleaned) <= 3:
         return False
+    if (
+        len(cleaned) <= 5
+        and support_count is not None
+        and support_count >= _GENERAL_REAL_SUPPORT_MIN_SHORT_WIKIDATA_LOCATION_SITELINKS
+    ):
+        return True
     if (
         len(cleaned) <= 5
         and population_value < _GENERAL_LOCATION_MIN_POPULATION_FOR_SHORT_ASCII

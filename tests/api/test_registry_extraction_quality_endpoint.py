@@ -268,3 +268,54 @@ def test_registry_benchmark_runtime_endpoint(tmp_path: Path) -> None:
     assert payload["quality_report"]["recall"] == 1.0
     if payload["disk_usage"]["matcher_total_bytes"] == 0:
         assert "matcher_not_available:finance-en" in payload["warnings"]
+
+
+def test_registry_benchmark_matcher_backends_endpoint(tmp_path: Path) -> None:
+    storage_root = tmp_path / "storage"
+    PackInstaller(storage_root).install("finance-en")
+    golden_set_path = write_golden_set(
+        tmp_path / "golden" / "finance-en.json",
+        GoldenSet(
+            pack_id="finance-en",
+            documents=(
+                GoldenDocument(
+                    name="finance-smoke",
+                    text="TICKA traded on EXCHX after USD 12.5 guidance.",
+                    expected_entities=(
+                        GoldenEntity(text="TICKA", label="ticker"),
+                        GoldenEntity(text="EXCHX", label="exchange"),
+                        GoldenEntity(text="USD 12.5", label="currency_amount"),
+                    ),
+                ),
+            ),
+        ),
+    )
+    report_path = tmp_path / "reports" / "finance-matcher-backends.json"
+    client = TestClient(create_app(storage_root=storage_root))
+
+    response = client.post(
+        "/v0/registry/benchmark-matcher-backends",
+        json={
+            "pack_id": "finance-en",
+            "golden_set_path": str(golden_set_path),
+            "alias_limit": 25,
+            "scan_limit": 100,
+            "min_alias_score": 0.0,
+            "exact_tier_min_token_count": 1,
+            "query_runs": 2,
+            "report_path": str(report_path),
+            "output_root": str(tmp_path / "matcher-spike"),
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["pack_id"] == "finance-en"
+    assert payload["report_path"] == str(report_path.resolve())
+    assert payload["query_runs"] == 2
+    assert {item["backend"] for item in payload["candidates"]} == {
+        "current_json_aho",
+        "token_trie_v1",
+    }
+    assert all(item["artifact_bytes"] > 0 for item in payload["candidates"])
+    assert payload["recommended_backend"] in {"current_json_aho", "token_trie_v1"}

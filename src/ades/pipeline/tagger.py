@@ -13,7 +13,11 @@ from time import perf_counter
 from ..packs.registry import PackRegistry
 from ..packs.runtime import PackRuntime, RuleDefinition, load_pack_runtime
 from .hybrid import ProposalProvider, ProposalSpan, get_proposal_spans
-from ..runtime_matcher import find_exact_match_spans, load_runtime_matcher
+from ..runtime_matcher import (
+    MatcherEntryPayload,
+    find_exact_match_candidates,
+    load_runtime_matcher,
+)
 from ..service.models import (
     EntityLink,
     EntityMatch,
@@ -55,10 +59,130 @@ _CALENDAR_SINGLE_TOKEN_WORDS = {
     "tuesday",
     "wednesday",
 }
+_GENERIC_PHRASE_LEADS = {
+    "a",
+    "an",
+    "any",
+    "each",
+    "every",
+    "he",
+    "her",
+    "his",
+    "i",
+    "it",
+    "its",
+    "my",
+    "our",
+    "she",
+    "some",
+    "that",
+    "the",
+    "their",
+    "these",
+    "they",
+    "this",
+    "those",
+    "we",
+    "you",
+    "your",
+}
+_AUXILIARY_LOOKUP_TOKENS = {
+    "am",
+    "are",
+    "be",
+    "been",
+    "being",
+    "can",
+    "could",
+    "did",
+    "do",
+    "does",
+    "had",
+    "has",
+    "have",
+    "is",
+    "may",
+    "might",
+    "must",
+    "shall",
+    "should",
+    "was",
+    "were",
+    "will",
+    "would",
+}
+_PERSON_NAME_PARTICLES = {
+    "al",
+    "ap",
+    "ben",
+    "bin",
+    "da",
+    "dal",
+    "de",
+    "del",
+    "della",
+    "der",
+    "di",
+    "do",
+    "dos",
+    "du",
+    "el",
+    "ibn",
+    "la",
+    "le",
+    "st",
+    "van",
+    "von",
+}
+_TRAILING_FUNCTION_WORDS = _GENERIC_PHRASE_LEADS | {
+    "about",
+    "at",
+    "by",
+    "for",
+    "from",
+    "in",
+    "of",
+    "on",
+    "to",
+    "with",
+}
+_GENERIC_SINGLE_TOKEN_HEADS = {
+    "bank",
+    "city",
+    "company",
+    "department",
+    "founder",
+    "fund",
+    "market",
+    "product",
+    "report",
+    "stock",
+    "university",
+    "world",
+}
+_ACRONYM_CONNECTOR_WORDS = {
+    "a",
+    "an",
+    "and",
+    "at",
+    "by",
+    "for",
+    "from",
+    "in",
+    "of",
+    "on",
+    "the",
+    "to",
+    "with",
+}
+_ACRONYM_AFTER_ENTITY_RE = re.compile(r"^\s*\((?P<acronym>[A-Z][A-Z0-9.&/-]{1,9})\)")
+_ACRONYM_BEFORE_ENTITY_RE = re.compile(r"(?P<acronym>[A-Z][A-Z0-9.&/-]{1,9})\s*\(\s*$")
+_MAX_ACRONYM_DEFINITION_WINDOW = 16
 
 _LANE_PRIORITY = {
     "deterministic_rule": 3,
     "deterministic_alias": 2,
+    "document_acronym_backfill": 2,
     "proposal_linked": 1,
 }
 
@@ -82,6 +206,16 @@ class DocumentContextSignals:
     pack_counts: Counter[str]
     domain_counts: Counter[str]
     label_counts: Counter[str]
+
+
+@dataclass(frozen=True)
+class DocumentAcronymDefinition:
+    acronym_text: str
+    normalized_acronym: str
+    label: str
+    start: int
+    end: int
+    anchor: ExtractedCandidate
 
 
 def _language_from_pack(pack: str) -> str:
@@ -277,10 +411,32 @@ def _extract_lookup_alias_entities_with_matchers(
             matcher.artifact_path,
             matcher.entries_path,
         )
-        for start, end in find_exact_match_spans(segment_text_value, compiled_matcher):
+        for candidate in find_exact_match_candidates(segment_text_value, compiled_matcher):
+            start = candidate.start
+            end = candidate.end
             if not _is_token_window_span(start, end, token_starts=token_starts, token_ends=token_ends):
                 continue
             candidate_text = segment_text_value[start:end]
+            if compiled_matcher.entry_payloads and candidate.entry_indices:
+                entry_payloads = [
+                    compiled_matcher.entry_payloads[index]
+                    for index in candidate.entry_indices
+                    if 0 <= index < len(compiled_matcher.entry_payloads)
+                ]
+                extracted.extend(
+                    _build_lookup_alias_entities_from_matcher_entries(
+                        entries=entry_payloads,
+                        pack_id=matcher.pack_id,
+                        runtime_domain=runtime.domain,
+                        segment_text_value=segment_text_value,
+                        matched_text=candidate_text,
+                        start=start,
+                        end=end,
+                        segment_start=segment_start,
+                        normalized_input=normalized_input,
+                    )
+                )
+                continue
             candidates = _lookup_exact_alias_candidates(
                 registry=registry,
                 pack_id=matcher.pack_id,
@@ -298,6 +454,76 @@ def _extract_lookup_alias_entities_with_matchers(
                     normalized_input=normalized_input,
                 )
             )
+    return extracted
+
+
+def _build_lookup_alias_entities_from_matcher_entries(
+    *,
+    entries: list[MatcherEntryPayload],
+    pack_id: str,
+    runtime_domain: str,
+    segment_text_value: str,
+    matched_text: str,
+    start: int,
+    end: int,
+    segment_start: int,
+    normalized_input: NormalizedText,
+) -> list[ExtractedCandidate]:
+    extracted: list[ExtractedCandidate] = []
+    for entry in entries:
+        entry_domain = entry.source_domain or runtime_domain
+        if _should_skip_single_token_lookup_candidate(
+            matched_text=matched_text,
+            candidate_value=entry.text,
+            canonical_text=entry.canonical_text,
+            candidate_label=entry.label,
+            candidate_domain=entry_domain,
+            segment_text=segment_text_value,
+            start=start,
+            end=end,
+        ):
+            continue
+        if _should_skip_multi_token_lookup_candidate(
+            matched_text=matched_text,
+            candidate_value=entry.text,
+            canonical_text=entry.canonical_text,
+            candidate_label=entry.label,
+            candidate_domain=entry_domain,
+        ):
+            continue
+        normalized_start = segment_start + start
+        normalized_end = segment_start + end
+        raw_start, raw_end = normalized_input.raw_span(normalized_start, normalized_end)
+        extracted.append(
+            ExtractedCandidate(
+                entity=EntityMatch(
+                    text=matched_text,
+                    label=entry.label,
+                    start=raw_start,
+                    end=raw_end,
+                    confidence=entry.alias_score,
+                    provenance=_build_provenance(
+                        match_kind="alias",
+                        match_path="lookup.alias.exact",
+                        match_source=entry.text,
+                        source_pack=pack_id,
+                        source_domain=entry_domain,
+                        lane="deterministic_alias",
+                    ),
+                    link=_build_entity_link(
+                        provider="lookup.alias.exact",
+                        pack_id=pack_id,
+                        label=entry.label,
+                        canonical_text=entry.canonical_text,
+                        entity_id=entry.entity_id or None,
+                    ),
+                ),
+                domain=entry_domain,
+                lane="deterministic_alias",
+                normalized_start=normalized_start,
+                normalized_end=normalized_end,
+            )
+        )
     return extracted
 
 
@@ -412,9 +638,11 @@ def _build_lookup_alias_entities(
         candidate_label = str(candidate["label"])
         candidate_pack_id = str(candidate["pack_id"])
         candidate_domain = str(candidate["domain"])
+        canonical_text = str(candidate.get("canonical_text") or candidate_value)
         if _should_skip_single_token_lookup_candidate(
             matched_text=matched_text,
             candidate_value=candidate_value,
+            canonical_text=canonical_text,
             candidate_label=candidate_label,
             candidate_domain=candidate_domain,
             segment_text=segment_text_value,
@@ -422,7 +650,14 @@ def _build_lookup_alias_entities(
             end=end,
         ):
             continue
-        canonical_text = str(candidate.get("canonical_text") or candidate_value)
+        if _should_skip_multi_token_lookup_candidate(
+            matched_text=matched_text,
+            candidate_value=candidate_value,
+            canonical_text=canonical_text,
+            candidate_label=candidate_label,
+            candidate_domain=candidate_domain,
+        ):
+            continue
         normalized_start = segment_start + start
         normalized_end = segment_start + end
         raw_start, raw_end = normalized_input.raw_span(normalized_start, normalized_end)
@@ -463,6 +698,7 @@ def _should_skip_single_token_lookup_candidate(
     *,
     matched_text: str,
     candidate_value: str,
+    canonical_text: str | None = None,
     candidate_label: str,
     candidate_domain: str | None = None,
     segment_text: str | None = None,
@@ -470,6 +706,9 @@ def _should_skip_single_token_lookup_candidate(
     end: int | None = None,
 ) -> bool:
     label_key = candidate_label.casefold()
+    canonical_text = canonical_text or candidate_value
+    normalized_candidate_value = normalize_lookup_text(candidate_value)
+    normalized_canonical_text = normalize_lookup_text(canonical_text)
     if label_key not in {"organization", "person", "location"}:
         return False
     if (
@@ -479,18 +718,116 @@ def _should_skip_single_token_lookup_candidate(
         and _is_alpha_phrase(matched_text)
     ):
         return True
+    if candidate_domain == "general" and not any(character.isalpha() for character in matched_text):
+        return True
     if not _is_single_token_alpha(matched_text):
         return False
     if matched_text.islower():
         return True
-    if label_key in {"organization", "person"} and normalize_lookup_text(candidate_value) in _CALENDAR_SINGLE_TOKEN_WORDS:
+    normalized_matched_text = normalize_lookup_text(matched_text)
+    generic_single_token_blocklist = (
+        _GENERIC_SINGLE_TOKEN_HEADS | _GENERIC_PHRASE_LEADS | _CALENDAR_SINGLE_TOKEN_WORDS
+    )
+    if (
+        normalized_matched_text in generic_single_token_blocklist
+        or normalized_candidate_value in generic_single_token_blocklist
+        or normalized_canonical_text in generic_single_token_blocklist
+    ):
+        return True
+    if (
+        candidate_domain == "general"
+        and label_key in {"organization", "person", "location"}
+        and segment_text is not None
+        and start is not None
+        and end is not None
+        and not _is_exact_expansion_acronym_alias(
+            matched_text=matched_text,
+            candidate_value=candidate_value,
+            canonical_text=canonical_text,
+        )
+        and not _is_single_token_all_caps(candidate_value)
+        and _has_whitespace_adjacent_titleish_token(segment_text, start=start, end=end)
+    ):
+        return True
+    if (
+        candidate_domain == "general"
+        and label_key in {"organization", "person"}
+        and _is_single_token_all_caps(candidate_value)
+        and not _is_single_token_all_caps(matched_text)
+    ):
         return True
     if (
         candidate_domain == "general"
         and segment_text is not None
         and start is not None
         and end is not None
+        and normalized_candidate_value != normalized_canonical_text
+        and not _is_exact_expansion_acronym_alias(
+            matched_text=matched_text,
+            candidate_value=candidate_value,
+            canonical_text=canonical_text,
+        )
         and _has_adjacent_titleish_token(segment_text, start=start, end=end)
+    ):
+        return True
+    return False
+
+
+def _should_skip_multi_token_lookup_candidate(
+    *,
+    matched_text: str,
+    candidate_value: str,
+    canonical_text: str | None = None,
+    candidate_label: str,
+    candidate_domain: str | None = None,
+) -> bool:
+    if candidate_domain != "general":
+        return False
+    label_key = candidate_label.casefold()
+    if label_key not in {"organization", "person", "location"}:
+        return False
+    tokens = TOKEN_RE.findall(matched_text)
+    if len(tokens) < 2:
+        return False
+    lowered_tokens = [normalize_lookup_text(token) for token in tokens]
+    if label_key == "person":
+        if lowered_tokens[0] in _GENERIC_PHRASE_LEADS:
+            return True
+        if "," in matched_text:
+            trailing_segment = matched_text.split(",", 1)[1].lstrip()
+            trailing_tokens = TOKEN_RE.findall(trailing_segment)
+            if trailing_tokens:
+                trailing_first = trailing_tokens[0]
+                trailing_lower = normalize_lookup_text(trailing_first)
+                if (
+                    trailing_first.islower()
+                    or trailing_lower in _AUXILIARY_LOOKUP_TOKENS
+                    or trailing_lower in _GENERIC_PHRASE_LEADS
+                ):
+                    return True
+        for raw_token, lowered_token in zip(tokens[1:], lowered_tokens[1:]):
+            if lowered_token in _AUXILIARY_LOOKUP_TOKENS:
+                return True
+            if raw_token.islower() and lowered_token not in _PERSON_NAME_PARTICLES:
+                return True
+        return False
+    if "," in matched_text:
+        trailing_segment = matched_text.split(",", 1)[1].lstrip()
+        trailing_tokens = TOKEN_RE.findall(trailing_segment)
+        if trailing_tokens:
+            trailing_first = trailing_tokens[0]
+            trailing_lower = normalize_lookup_text(trailing_first)
+            if (
+                trailing_first.islower()
+                or trailing_lower in _AUXILIARY_LOOKUP_TOKENS
+                or trailing_lower in _GENERIC_PHRASE_LEADS
+            ):
+                return True
+    if lowered_tokens[-1] in _TRAILING_FUNCTION_WORDS:
+        return True
+    if lowered_tokens[0] in _GENERIC_PHRASE_LEADS and any(
+        raw_token.islower() or lowered_token in _AUXILIARY_LOOKUP_TOKENS
+        for raw_token, lowered_token in zip(tokens[1:], lowered_tokens[1:])
     ):
         return True
     return False
@@ -504,6 +841,47 @@ def _is_single_token_alpha(value: str) -> bool:
 def _is_alpha_phrase(value: str) -> bool:
     tokens = [token for token in re.split(r"[\s\-_./]+", value.strip()) if token]
     return bool(tokens) and all(token.isalpha() for token in tokens)
+
+
+def _is_single_token_all_caps(value: str) -> bool:
+    tokens = [token for token in re.split(r"[\s\-_./]+", value.strip()) if token]
+    if len(tokens) != 1:
+        return False
+    compact = "".join(character for character in tokens[0] if character.isalpha())
+    return bool(compact) and compact.isupper()
+
+
+def _is_exact_expansion_acronym_alias(
+    *,
+    matched_text: str,
+    candidate_value: str,
+    canonical_text: str,
+) -> bool:
+    normalized_matched_text = normalize_lookup_text(matched_text)
+    normalized_candidate_value = normalize_lookup_text(candidate_value)
+    normalized_canonical_text = normalize_lookup_text(canonical_text)
+    if normalized_matched_text != normalized_candidate_value:
+        return False
+    if normalized_candidate_value == normalized_canonical_text:
+        return False
+    if not _is_single_token_all_caps(matched_text):
+        return False
+    if not _is_single_token_all_caps(candidate_value):
+        return False
+    compact = "".join(character for character in matched_text if character.isalpha())
+    if len(compact) < 2 or len(compact) > 8:
+        return False
+    return _span_token_count(canonical_text) >= 2
+
+
+def _has_whitespace_adjacent_titleish_token(text: str, *, start: int, end: int) -> bool:
+    has_left = start > 0 and text[start - 1].isspace() and _is_titleish_token(
+        _previous_token(text, start)
+    )
+    has_right = end < len(text) and text[end].isspace() and _is_titleish_token(
+        _next_token(text, end)
+    )
+    return has_left or has_right
 
 
 def _has_adjacent_titleish_token(text: str, *, start: int, end: int) -> bool:
@@ -529,6 +907,171 @@ def _is_titleish_token(token: str) -> bool:
     if not compact:
         return False
     return compact.isupper() or compact[:1].isupper()
+
+
+def _normalize_acronym_text(value: str) -> str:
+    return "".join(character for character in value if character.isalnum()).upper()
+
+
+def _derive_initialism(value: str) -> str:
+    letters: list[str] = []
+    for token in TOKEN_RE.findall(value):
+        normalized = normalize_lookup_text(token)
+        if normalized in _ACRONYM_CONNECTOR_WORDS:
+            continue
+        compact = "".join(character for character in token if character.isalpha())
+        if not compact:
+            continue
+        letters.append(compact[0].upper())
+    if len(letters) < 2:
+        return ""
+    return "".join(letters)
+
+
+def _find_document_acronym_definition(
+    candidate: ExtractedCandidate,
+    *,
+    text: str,
+) -> DocumentAcronymDefinition | None:
+    entity = candidate.entity
+    label_key = entity.label.casefold()
+    if label_key not in {"organization", "location"}:
+        return None
+    if _span_token_count(entity.text) < 2:
+        return None
+
+    candidate_initialisms = {
+        initialism
+        for initialism in {
+            _derive_initialism(entity.text),
+            _derive_initialism(entity.link.canonical_text) if entity.link is not None else "",
+        }
+        if initialism
+    }
+    if not candidate_initialisms:
+        return None
+
+    after_slice = text[
+        candidate.normalized_end : candidate.normalized_end + _MAX_ACRONYM_DEFINITION_WINDOW
+    ]
+    after_match = _ACRONYM_AFTER_ENTITY_RE.match(after_slice)
+    if after_match is not None:
+        normalized_acronym = _normalize_acronym_text(after_match.group("acronym"))
+        if normalized_acronym in candidate_initialisms:
+            return DocumentAcronymDefinition(
+                acronym_text=after_match.group("acronym"),
+                normalized_acronym=normalized_acronym,
+                label=entity.label,
+                start=candidate.normalized_end + after_match.start("acronym"),
+                end=candidate.normalized_end + after_match.end("acronym"),
+                anchor=candidate,
+            )
+
+    before_window_start = max(0, candidate.normalized_start - _MAX_ACRONYM_DEFINITION_WINDOW)
+    before_slice = text[before_window_start : candidate.normalized_start]
+    before_match = _ACRONYM_BEFORE_ENTITY_RE.search(before_slice)
+    if before_match is not None:
+        normalized_acronym = _normalize_acronym_text(before_match.group("acronym"))
+        if normalized_acronym in candidate_initialisms:
+            return DocumentAcronymDefinition(
+                acronym_text=before_match.group("acronym"),
+                normalized_acronym=normalized_acronym,
+                label=entity.label,
+                start=before_window_start + before_match.start("acronym"),
+                end=before_window_start + before_match.end("acronym"),
+                anchor=candidate,
+            )
+    return None
+
+
+def _collect_document_acronym_definitions(
+    extracted: list[ExtractedCandidate],
+    *,
+    text: str,
+) -> list[DocumentAcronymDefinition]:
+    kept: dict[tuple[str, str], DocumentAcronymDefinition] = {}
+    ambiguous_keys: set[tuple[str, str]] = set()
+    for candidate in extracted:
+        definition = _find_document_acronym_definition(candidate, text=text)
+        if definition is None:
+            continue
+        key = (definition.normalized_acronym, definition.label.casefold())
+        current = kept.get(key)
+        if current is None:
+            kept[key] = definition
+            continue
+        current_anchor = current.anchor.entity.link.entity_id if current.anchor.entity.link else None
+        new_anchor = definition.anchor.entity.link.entity_id if definition.anchor.entity.link else None
+        if current_anchor == new_anchor:
+            if _candidate_rank_key(definition.anchor) > _candidate_rank_key(current.anchor):
+                kept[key] = definition
+            continue
+        ambiguous_keys.add(key)
+    for key in ambiguous_keys:
+        kept.pop(key, None)
+    return sorted(kept.values(), key=lambda item: (item.start, item.end, item.label.casefold()))
+
+
+def _backfill_document_acronym_entities(
+    extracted: list[ExtractedCandidate],
+    *,
+    normalized_input: NormalizedText,
+) -> list[ExtractedCandidate]:
+    definitions = _collect_document_acronym_definitions(extracted, text=normalized_input.text)
+    if not definitions:
+        return extracted
+
+    existing_spans = {
+        (candidate.normalized_start, candidate.normalized_end, candidate.entity.label.casefold())
+        for candidate in extracted
+    }
+    definition_by_key = {
+        (definition.normalized_acronym, definition.label.casefold()): definition
+        for definition in definitions
+    }
+    augmented = list(extracted)
+
+    for start, end in _iter_token_spans(normalized_input.text):
+        token_text = normalized_input.text[start:end]
+        normalized_acronym = _normalize_acronym_text(token_text)
+        if len(normalized_acronym) < 2 or not normalized_acronym.isupper():
+            continue
+        for label_key in ("organization", "location"):
+            definition = definition_by_key.get((normalized_acronym, label_key))
+            if definition is None or start < definition.start:
+                continue
+            span_key = (start, end, definition.label.casefold())
+            if span_key in existing_spans:
+                continue
+            anchor_entity = definition.anchor.entity
+            if anchor_entity.link is None or anchor_entity.provenance is None:
+                continue
+            raw_start, raw_end = normalized_input.raw_span(start, end)
+            augmented.append(
+                ExtractedCandidate(
+                    entity=EntityMatch(
+                        text=normalized_input.raw_text[raw_start:raw_end],
+                        label=anchor_entity.label,
+                        start=raw_start,
+                        end=raw_end,
+                        confidence=_clamp_score(max(anchor_entity.confidence or 0.0, 0.72)),
+                        provenance=anchor_entity.provenance.model_copy(
+                            update={
+                                "match_path": "lookup.alias.document_acronym",
+                                "match_source": token_text,
+                                "lane": "document_acronym_backfill",
+                            }
+                        ),
+                        link=anchor_entity.link,
+                    ),
+                    domain=definition.anchor.domain,
+                    lane="document_acronym_backfill",
+                    normalized_start=start,
+                    normalized_end=end,
+                )
+            )
+            existing_spans.add(span_key)
+    return augmented
 
 
 def _normalized_label_set(runtime: PackRuntime) -> set[str]:
@@ -1232,15 +1775,22 @@ def tag_text(
 
     deduped, duplicate_discards = _dedupe_exact_candidates(extracted)
     coherent = _apply_repeated_surface_consistency(deduped)
+    acronym_backfilled = _backfill_document_acronym_entities(
+        coherent,
+        normalized_input=normalized_input,
+    )
+    acronym_deduped, acronym_duplicate_discards = _dedupe_exact_candidates(acronym_backfilled)
+    coherent = _apply_repeated_surface_consistency(acronym_deduped)
     scored = _apply_entity_relevance(runtime, text=normalized_input.text, extracted=coherent)
     resolved, debug_payload, overlap_drop_count = _resolve_overlaps(
         scored,
         debug_enabled=debug or os.getenv("ADES_TAG_DEBUG") == "1",
     )
 
-    if debug_payload is not None and duplicate_discards:
+    total_duplicate_discards = duplicate_discards + acronym_duplicate_discards
+    if debug_payload is not None and total_duplicate_discards:
         span_decisions = list(debug_payload.span_decisions)
-        for item in duplicate_discards:
+        for item in total_duplicate_discards:
             span_decisions.append(
                 TagSpanDecision(
                     text=item.entity.text,
@@ -1254,7 +1804,7 @@ def tag_text(
             )
         debug_payload = TagDebug(
             kept_span_count=debug_payload.kept_span_count,
-            discarded_span_count=debug_payload.discarded_span_count + len(duplicate_discards),
+            discarded_span_count=debug_payload.discarded_span_count + len(total_duplicate_discards),
             span_decisions=span_decisions,
         )
 
@@ -1263,7 +1813,7 @@ def tag_text(
         normalized_input=normalized_input,
         extracted=resolved,
         segment_count=len(segments),
-        overlap_drop_count=overlap_drop_count + len(duplicate_discards),
+        overlap_drop_count=overlap_drop_count + len(total_duplicate_discards),
     )
     _apply_density_warning(runtime=runtime, metrics=metrics, warnings=warnings)
 

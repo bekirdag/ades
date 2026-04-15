@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Query
 from ..api import (
     activate_pack,
     benchmark_runtime,
+    benchmark_matcher_backends,
     build_finance_source_bundle,
     fetch_finance_source_snapshot,
     build_general_source_bundle,
@@ -86,6 +87,8 @@ from .models import (
     RegistryBuildResponse,
     RegistryBenchmarkRuntimeRequest,
     RegistryBenchmarkRuntimeResponse,
+    RegistryBenchmarkMatcherBackendsRequest,
+    RegistryBenchmarkMatcherBackendsResponse,
     RegistryCompareExtractionQualityRequest,
     RegistryCompareExtractionQualityResponse,
     RegistryDiffPackRequest,
@@ -701,6 +704,35 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 lookup_limit=request.lookup_limit,
                 write_report=request.write_report,
                 report_path=request.report_path,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/benchmark-matcher-backends",
+        response_model=RegistryBenchmarkMatcherBackendsResponse,
+    )
+    def runtime_benchmark_matcher_backends(
+        request: RegistryBenchmarkMatcherBackendsRequest,
+    ) -> RegistryBenchmarkMatcherBackendsResponse:
+        """Benchmark candidate matcher backends on a bounded installed-pack alias slice."""
+
+        try:
+            return benchmark_matcher_backends(
+                request.pack_id,
+                storage_root=storage_root,
+                golden_set_path=request.golden_set_path,
+                profile=request.profile,
+                alias_limit=request.alias_limit,
+                scan_limit=request.scan_limit,
+                min_alias_score=request.min_alias_score,
+                exact_tier_min_token_count=request.exact_tier_min_token_count,
+                query_runs=request.query_runs,
+                write_report=request.write_report,
+                report_path=request.report_path,
+                output_root=request.output_root,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -626,6 +626,65 @@ class RegistryBenchmarkRuntimeResponse(RuntimeBenchmarkReportResponse):
     report_path: str | None = None
 
 
+class MatcherBackendCandidateResponse(BaseModel):
+    """One candidate matcher backend benchmark result."""
+
+    backend: str
+    available: bool
+    alias_count: int
+    unique_pattern_count: int
+    build_ms: int
+    cold_load_ms: int
+    warm_query_p50_ms: int
+    warm_query_p95_ms: int
+    artifact_bytes: int
+    state_count: int = 0
+    token_vocab_count: int = 0
+    notes: list[str] = Field(default_factory=list)
+
+
+class MatcherBenchmarkSpikeReportResponse(BaseModel):
+    """Candidate matcher benchmark spike report."""
+
+    pack_id: str
+    profile: str
+    aliases_path: str
+    scanned_alias_count: int
+    retained_alias_count: int
+    unique_pattern_count: int
+    query_count: int
+    query_runs: int
+    min_alias_score: float
+    alias_limit: int
+    scan_limit: int
+    exact_tier_min_token_count: int
+    candidates: list[MatcherBackendCandidateResponse] = Field(default_factory=list)
+    recommended_backend: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegistryBenchmarkMatcherBackendsRequest(BaseModel):
+    """Request body for the Phase-0 matcher backend benchmark spike."""
+
+    pack_id: str
+    golden_set_path: str | None = None
+    profile: str = "default"
+    alias_limit: int = Field(10000, ge=1, le=500000)
+    scan_limit: int = Field(50000, ge=1, le=1000000)
+    min_alias_score: float = Field(0.8, ge=0.0, le=1.0)
+    exact_tier_min_token_count: int = Field(2, ge=1, le=16)
+    query_runs: int = Field(3, ge=1, le=25)
+    write_report: bool = True
+    report_path: str | None = None
+    output_root: str | None = None
+
+
+class RegistryBenchmarkMatcherBackendsResponse(MatcherBenchmarkSpikeReportResponse):
+    """Matcher benchmark spike report plus optional persisted report path."""
+
+    report_path: str | None = None
+
+
 class LabelQualityDeltaResponse(BaseModel):
     """Per-label recall delta between two quality reports."""
 

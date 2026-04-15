@@ -56,6 +56,7 @@ DEFAULT_WIKIDATA_ALLOWED_TYPE_ROOTS: dict[str, str] = {
     "Q4438121": "organization",
     "Q7210356": "organization",
     "Q7278": "organization",
+    "Q1126006": "organization",
     "Q1331793": "organization",
 }
 _GENERAL_ALLOWED_ENTITY_TYPES = frozenset({"person", "organization", "location"})

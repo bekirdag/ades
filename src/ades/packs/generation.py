@@ -16,6 +16,7 @@ from ..text_processing import canonicalize_text, normalize_lookup_text
 from .alias_analysis import (
     AliasAnalysisResult,
     analyze_alias_candidates,
+    analyze_alias_candidates_from_db,
     build_alias_candidate,
     iter_retained_aliases_from_db,
     write_alias_analysis_report,
@@ -548,7 +549,11 @@ def generate_pack_source(
                 "Alias analysis database is required when retained aliases are not materialized."
             )
         aliases_payload = None
-        _write_aliases_json_from_analysis_db(aliases_path, analysis_db_path)
+        _write_aliases_json_from_analysis_db(
+            aliases_path,
+            analysis_db_path,
+            source_domain=bundle.domain,
+        )
     rules_path.write_text(
         json.dumps({"patterns": patterns_payload}, indent=2) + "\n",
         encoding="utf-8",
@@ -556,6 +561,11 @@ def generate_pack_source(
     matcher_artifact = build_matcher_artifact_from_aliases_json(
         aliases_path,
         output_dir=matcher_dir,
+        include_runtime_tiers={
+            "runtime_exact_acronym_high_precision",
+            "runtime_exact_geopolitical_high_precision",
+            "runtime_exact_high_precision",
+        },
     )
 
     manifest = PackManifest(
@@ -585,8 +595,12 @@ def generate_pack_source(
             schema_version=1,
             algorithm=matcher_artifact.algorithm,
             normalization=matcher_artifact.normalization,
-            artifact_path=str(matcher_dir.name + "/automaton.json"),
-            entries_path=str(matcher_dir.name + "/entries.jsonl"),
+            artifact_path=(
+                Path(matcher_dir.name) / Path(matcher_artifact.artifact_path).name
+            ).as_posix(),
+            entries_path=(
+                Path(matcher_dir.name) / Path(matcher_artifact.entries_path).name
+            ).as_posix(),
             entry_count=matcher_artifact.entry_count,
             state_count=matcher_artifact.state_count,
             max_alias_length=matcher_artifact.max_alias_length,
@@ -726,6 +740,267 @@ def generate_pack_source(
         ambiguous_alias_count=ambiguous_alias_count,
         source_license_classes=source_governance.source_license_classes,
         entity_label_distribution=entity_label_distribution,
+        label_distribution=label_distribution,
+        warnings=warnings,
+    )
+
+
+def refresh_pack_from_analysis_db(
+    source_pack_dir: str | Path,
+    *,
+    output_dir: str | Path,
+    version: str | None = None,
+    include_build_metadata: bool = True,
+) -> GeneratedPackSourceResult:
+    """Refresh a generated pack by re-resolving aliases from an existing analysis DB."""
+
+    resolved_source_pack_dir = Path(source_pack_dir).expanduser().resolve()
+    if not resolved_source_pack_dir.exists():
+        raise FileNotFoundError(f"Pack directory not found: {resolved_source_pack_dir}")
+    if not resolved_source_pack_dir.is_dir():
+        raise NotADirectoryError(
+            f"Pack directory is not a directory: {resolved_source_pack_dir}"
+        )
+
+    manifest_path = resolved_source_pack_dir / "manifest.json"
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Pack manifest not found: {manifest_path}")
+    source_analysis_db_path = resolved_source_pack_dir / "analysis.sqlite"
+    if not source_analysis_db_path.exists():
+        raise FileNotFoundError(
+            f"Pack analysis database not found: {source_analysis_db_path}"
+        )
+
+    source_manifest = PackManifest.load(manifest_path)
+    build_metadata_path = resolved_source_pack_dir / "build.json"
+    build_metadata = (
+        json.loads(build_metadata_path.read_text(encoding="utf-8"))
+        if build_metadata_path.exists()
+        else {}
+    )
+    sources_metadata_path = resolved_source_pack_dir / "sources.json"
+    sources_metadata = (
+        json.loads(sources_metadata_path.read_text(encoding="utf-8"))
+        if sources_metadata_path.exists()
+        else {}
+    )
+    bundle_manifest_path = (
+        Path(str(build_metadata["bundle_manifest_path"])).expanduser().resolve()
+        if build_metadata.get("bundle_manifest_path")
+        else None
+    )
+    allowed_ambiguous_aliases: set[str] = set()
+    if bundle_manifest_path is not None and bundle_manifest_path.exists():
+        bundle_manifest = SourceBundleManifest.from_path(bundle_manifest_path)
+        allowed_ambiguous_aliases = {
+            _normalized_key(item)
+            for item in bundle_manifest.allowed_ambiguous_aliases
+            if _normalized_key(item)
+        }
+
+    resolved_output_dir = Path(output_dir).expanduser().resolve()
+    resolved_output_dir.mkdir(parents=True, exist_ok=True)
+    pack_version = version or source_manifest.version
+    generated_at = _utc_timestamp()
+    pack_dir = resolved_output_dir / source_manifest.pack_id
+    if pack_dir.exists():
+        shutil.rmtree(pack_dir)
+    pack_dir.mkdir(parents=True, exist_ok=True)
+
+    labels_path = pack_dir / "labels.json"
+    aliases_path = pack_dir / "aliases.json"
+    rules_path = pack_dir / "rules.json"
+    manifest_output_path = pack_dir / "manifest.json"
+    matcher_dir = pack_dir / "matcher"
+    sources_path = pack_dir / "sources.json" if include_build_metadata else None
+    build_path = pack_dir / "build.json" if include_build_metadata else None
+    alias_analysis_path = pack_dir / "alias-analysis.json" if include_build_metadata else None
+    analysis_db_path = pack_dir / "analysis.sqlite" if include_build_metadata else None
+
+    shutil.copy2(resolved_source_pack_dir / "labels.json", labels_path)
+    if (resolved_source_pack_dir / "rules.json").exists():
+        shutil.copy2(resolved_source_pack_dir / "rules.json", rules_path)
+    else:
+        rules_path.write_text(json.dumps({"patterns": []}, indent=2) + "\n", encoding="utf-8")
+
+    alias_analysis = analyze_alias_candidates_from_db(
+        source_analysis_db_path,
+        allowed_ambiguous_aliases=allowed_ambiguous_aliases,
+        analysis_db_path=analysis_db_path,
+        materialize_retained_aliases=analysis_db_path is None,
+    )
+    if alias_analysis_path is not None:
+        write_alias_analysis_report(alias_analysis_path, alias_analysis)
+    if alias_analysis.retained_aliases_materialized:
+        _write_aliases_json(
+            aliases_path,
+            sorted(
+                alias_analysis.retained_aliases,
+                key=lambda item: (
+                    _stable_sort_key(item["text"]),
+                    _stable_sort_key(item["label"]),
+                ),
+            ),
+        )
+    else:
+        if analysis_db_path is None:
+            raise ValueError("analysis_db_path is required for DB-backed alias refresh.")
+        _write_aliases_json_from_analysis_db(
+            aliases_path,
+            analysis_db_path,
+            source_domain=source_manifest.domain,
+        )
+
+    matcher_artifact = build_matcher_artifact_from_aliases_json(
+        aliases_path,
+        output_dir=matcher_dir,
+        include_runtime_tiers={
+            "runtime_exact_acronym_high_precision",
+            "runtime_exact_geopolitical_high_precision",
+            "runtime_exact_high_precision",
+        },
+    )
+
+    artifact_url = f"../../artifacts/{source_manifest.pack_id}-{pack_version}.tar.zst"
+    refreshed_manifest = PackManifest(
+        schema_version=source_manifest.schema_version,
+        pack_id=source_manifest.pack_id,
+        version=pack_version,
+        language=source_manifest.language,
+        domain=source_manifest.domain,
+        tier=source_manifest.tier,
+        description=source_manifest.description,
+        tags=list(source_manifest.tags),
+        dependencies=list(source_manifest.dependencies),
+        artifacts=[
+            PackArtifact(
+                name="pack",
+                url=artifact_url,
+                sha256="source-placeholder",
+            )
+        ],
+        models=list(source_manifest.models),
+        rules=list(source_manifest.rules),
+        labels=list(source_manifest.labels),
+        matcher=PackMatcher(
+            schema_version=1,
+            algorithm=matcher_artifact.algorithm,
+            normalization=matcher_artifact.normalization,
+            artifact_path=(Path(matcher_dir.name) / Path(matcher_artifact.artifact_path).name).as_posix(),
+            entries_path=(Path(matcher_dir.name) / Path(matcher_artifact.entries_path).name).as_posix(),
+            entry_count=matcher_artifact.entry_count,
+            state_count=matcher_artifact.state_count,
+            max_alias_length=matcher_artifact.max_alias_length,
+            artifact_sha256=matcher_artifact.artifact_sha256,
+            entries_sha256=matcher_artifact.entries_sha256,
+        ),
+        min_ades_version=source_manifest.min_ades_version,
+        min_entities_per_100_tokens_warning=source_manifest.min_entities_per_100_tokens_warning,
+    )
+    manifest_output_path.write_text(
+        json.dumps(refreshed_manifest.to_dict(), indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    if sources_path is not None:
+        refreshed_sources = dict(sources_metadata)
+        if refreshed_sources:
+            refreshed_sources["version"] = pack_version
+            refreshed_sources["pack_id"] = source_manifest.pack_id
+        sources_path.write_text(
+            json.dumps(refreshed_sources, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    labels_payload = json.loads(labels_path.read_text(encoding="utf-8"))
+    rules_payload = json.loads(rules_path.read_text(encoding="utf-8")).get("patterns", [])
+    label_distribution = _build_label_distribution(
+        alias_analysis.retained_label_counts,
+        rules_payload,
+    )
+    if build_path is not None:
+        refreshed_build_metadata = dict(build_metadata)
+        refreshed_build_metadata.update(
+            {
+                "schema_version": 1,
+                "generated_at": generated_at,
+                "analysis_backend": alias_analysis.backend,
+                "analysis_db_path": str(analysis_db_path) if analysis_db_path is not None else None,
+                "analysis_seed_db_path": str(source_analysis_db_path),
+                "alias_analysis_report_path": (
+                    str(alias_analysis_path) if alias_analysis_path is not None else None
+                ),
+                "candidate_alias_count": alias_analysis.candidate_alias_count,
+                "retained_alias_count": alias_analysis.retained_alias_count,
+                "collision_blocked_alias_count": alias_analysis.blocked_alias_count,
+                "ambiguous_alias_count": alias_analysis.ambiguous_alias_count,
+                "exact_identifier_alias_count": alias_analysis.exact_identifier_alias_count,
+                "natural_language_alias_count": alias_analysis.natural_language_alias_count,
+                "blocked_reason_counts": alias_analysis.blocked_reason_counts,
+                "retained_label_counts": alias_analysis.retained_label_counts,
+                "alias_count": alias_analysis.retained_alias_count,
+                "label_count": len(labels_payload),
+                "rule_count": len(rules_payload),
+                "matcher": {
+                    "algorithm": matcher_artifact.algorithm,
+                    "normalization": matcher_artifact.normalization,
+                    "artifact_path": str(Path(matcher_artifact.artifact_path)),
+                    "entries_path": str(Path(matcher_artifact.entries_path)),
+                    "entry_count": matcher_artifact.entry_count,
+                    "state_count": matcher_artifact.state_count,
+                    "max_alias_length": matcher_artifact.max_alias_length,
+                    "artifact_sha256": matcher_artifact.artifact_sha256,
+                    "entries_sha256": matcher_artifact.entries_sha256,
+                },
+                "label_distribution": label_distribution,
+            }
+        )
+        build_path.write_text(
+            json.dumps(refreshed_build_metadata, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    warnings: list[str] = []
+    if alias_analysis.retained_alias_count == 0:
+        warnings.append("Generated pack does not include any aliases.")
+    if not rules_payload:
+        warnings.append("Generated pack does not include any rules.")
+
+    return GeneratedPackSourceResult(
+        pack_id=source_manifest.pack_id,
+        version=pack_version,
+        bundle_dir=str(build_metadata.get("bundle_dir") or resolved_source_pack_dir),
+        output_dir=str(resolved_output_dir),
+        pack_dir=str(pack_dir),
+        manifest_path=str(manifest_output_path),
+        labels_path=str(labels_path),
+        aliases_path=str(aliases_path),
+        rules_path=str(rules_path),
+        matcher_artifact_path=matcher_artifact.artifact_path,
+        matcher_entries_path=matcher_artifact.entries_path,
+        matcher_algorithm=matcher_artifact.algorithm,
+        matcher_entry_count=matcher_artifact.entry_count,
+        matcher_state_count=matcher_artifact.state_count,
+        matcher_max_alias_length=matcher_artifact.max_alias_length,
+        matcher_artifact_sha256=matcher_artifact.artifact_sha256,
+        matcher_entries_sha256=matcher_artifact.entries_sha256,
+        sources_path=str(sources_path) if sources_path is not None else None,
+        build_path=str(build_path) if build_path is not None else None,
+        generated_at=generated_at,
+        label_count=len(labels_payload),
+        alias_count=alias_analysis.retained_alias_count,
+        rule_count=len(rules_payload),
+        source_count=int(build_metadata.get("source_count", len(sources_metadata.get("sources", [])))),
+        publishable_source_count=int(build_metadata.get("publishable_source_count", 0)),
+        restricted_source_count=int(build_metadata.get("restricted_source_count", 0)),
+        publishable_sources_only=bool(build_metadata.get("publishable_sources_only", False)),
+        included_entity_count=int(build_metadata.get("included_entity_count", 0)),
+        included_rule_count=int(build_metadata.get("included_rule_count", len(rules_payload))),
+        dropped_record_count=int(build_metadata.get("dropped_record_count", 0)),
+        dropped_alias_count=int(build_metadata.get("dropped_alias_count", 0)),
+        ambiguous_alias_count=alias_analysis.ambiguous_alias_count,
+        source_license_classes=dict(build_metadata.get("source_license_classes", {})),
+        entity_label_distribution=dict(build_metadata.get("entity_label_distribution", {})),
         label_distribution=label_distribution,
         warnings=warnings,
     )
@@ -912,11 +1187,21 @@ def _write_aliases_json(path: Path, aliases: list[dict[str, Any]]) -> None:
     )
 
 
-def _write_aliases_json_from_analysis_db(path: Path, analysis_db_path: Path) -> None:
+def _write_aliases_json_from_analysis_db(
+    path: Path,
+    analysis_db_path: Path,
+    *,
+    source_domain: str,
+) -> None:
     with path.open("w", encoding="utf-8") as handle:
         handle.write('{\n  "aliases": [\n')
         first = True
         for item in iter_retained_aliases_from_db(analysis_db_path):
+            item = {
+                **item,
+                "alias_score": round(float(item.get("alias_score", item["score"])), 4),
+                "source_domain": str(item.get("source_domain") or source_domain),
+            }
             if not first:
                 handle.write(",\n")
             handle.write(f"    {json.dumps(item, sort_keys=True)}")
@@ -1011,11 +1296,10 @@ def _iter_entity_alias_candidates(
     if not isinstance(raw_aliases, list):
         raise ValueError("Normalized entity aliases must be a list.")
     explicit_values = [canonical_text, *raw_aliases]
-    for raw_index, raw_value in enumerate(explicit_values):
+    for raw_value in explicit_values:
         cleaned = _clean_text(raw_value)
         if not cleaned:
             continue
-        is_generated_base = raw_index != 0
         for variant, generated in _expand_alias_variants(
             cleaned,
             label,
@@ -1023,7 +1307,7 @@ def _iter_entity_alias_candidates(
         ):
             if variant not in seen:
                 seen.add(variant)
-                candidates.append((variant, generated or is_generated_base))
+                candidates.append((variant, generated))
     return candidates
 
 
@@ -1062,6 +1346,7 @@ def _serialize_alias_payload(candidate: Any, *, source_domain: str) -> dict[str,
         "source_priority": round(float(candidate.features.source_priority), 4),
         "popularity_weight": round(float(candidate.features.popularity_weight), 4),
         "source_domain": str(source_domain),
+        "runtime_tier": "runtime_exact_high_precision",
     }
 
 
@@ -1086,6 +1371,12 @@ def _expand_alias_variants(
     compact = _clean_text(re.sub(r"\s*[-/]\s*", " ", text))
     if compact and compact != text:
         variants.append((compact, True))
+    compact_acronym = _build_compact_acronym_variant(text)
+    if compact_acronym and compact_acronym != text:
+        variants.append((compact_acronym, True))
+    article_stripped_acronym = _build_article_stripped_acronym_variant(text)
+    if article_stripped_acronym and article_stripped_acronym != text:
+        variants.append((article_stripped_acronym, True))
     return variants
 
 
@@ -1121,6 +1412,43 @@ def _build_person_first_last_variant(text: str) -> str:
     if not middle_tokens or not all(_looks_like_middle_name_token(token) for token in middle_tokens):
         return ""
     return _clean_text(f"{tokens[0]} {tokens[-1]}")
+
+
+def _build_compact_acronym_variant(text: str) -> str:
+    compact = "".join(character for character in text if character.isalnum())
+    if not (2 <= len(compact) <= 5):
+        return ""
+    if not compact.isalpha():
+        return ""
+    if compact == text:
+        return ""
+    if not any(character in text for character in ". "):
+        return ""
+    tokens = [token for token in re.split(r"[\s\-./]+", text.strip()) if token]
+    if not tokens:
+        return ""
+    if not all(token.isalpha() for token in tokens):
+        return ""
+    if not all(token.isupper() or len(token) == 1 for token in tokens):
+        return ""
+    return compact.upper()
+
+
+def _build_article_stripped_acronym_variant(text: str) -> str:
+    tokens = text.split()
+    if len(tokens) < 2:
+        return ""
+    if tokens[0].casefold() not in {"a", "an", "the"}:
+        return ""
+    remainder = _clean_text(" ".join(tokens[1:]))
+    if not remainder:
+        return ""
+    compact_remainder = _build_compact_acronym_variant(remainder)
+    if compact_remainder:
+        return compact_remainder
+    if remainder.isupper() and remainder.isalpha() and 2 <= len(remainder) <= 5:
+        return remainder
+    return ""
 
 
 def _looks_like_name_edge_token(token: str) -> bool:

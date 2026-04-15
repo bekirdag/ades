@@ -61,6 +61,7 @@ from .packs.medical_sources import (
 )
 from .extraction_quality import (
     benchmark_report_path as default_benchmark_report_path,
+    benchmark_matcher_backends_for_pack as run_benchmark_matcher_backends_for_pack,
     benchmark_runtime_pack as run_benchmark_runtime_pack,
     compare_quality_reports,
     evaluate_golden_set,
@@ -68,8 +69,10 @@ from .extraction_quality import (
     golden_set_path as default_golden_set_path,
     load_golden_set,
     load_quality_report,
+    matcher_benchmark_spike_report_path as default_matcher_benchmark_spike_report_path,
     record_tag_observation,
     quality_report_path as default_quality_report_path,
+    write_matcher_benchmark_spike_report,
     write_runtime_benchmark_report,
     write_quality_report,
 )
@@ -131,6 +134,10 @@ from .service.models import (
     ExtractionQualityDeltaResponse,
     ExtractionQualityReportResponse,
     LabelQualityDeltaResponse,
+    MatcherBackendCandidateResponse,
+    MatcherBenchmarkSpikeReportResponse,
+    RegistryBenchmarkMatcherBackendsResponse,
+    RegistryBenchmarkMatcherBackendsRequest,
     RegistryBenchmarkRuntimeResponse,
     RuntimeDiskBenchmarkResponse,
     RuntimeLatencyBenchmarkResponse,
@@ -1459,6 +1466,55 @@ def _runtime_benchmark_response(
     )
 
 
+def _matcher_backend_candidate_response(candidate: object) -> MatcherBackendCandidateResponse:
+    return MatcherBackendCandidateResponse(
+        backend=str(getattr(candidate, "backend")),
+        available=bool(getattr(candidate, "available")),
+        alias_count=int(getattr(candidate, "alias_count")),
+        unique_pattern_count=int(getattr(candidate, "unique_pattern_count")),
+        build_ms=int(getattr(candidate, "build_ms")),
+        cold_load_ms=int(getattr(candidate, "cold_load_ms")),
+        warm_query_p50_ms=int(getattr(candidate, "warm_query_p50_ms")),
+        warm_query_p95_ms=int(getattr(candidate, "warm_query_p95_ms")),
+        artifact_bytes=int(getattr(candidate, "artifact_bytes")),
+        state_count=int(getattr(candidate, "state_count")),
+        token_vocab_count=int(getattr(candidate, "token_vocab_count")),
+        notes=[str(item) for item in getattr(candidate, "notes")],
+    )
+
+
+def _matcher_benchmark_spike_response(
+    report: object,
+    *,
+    report_path: str | None = None,
+) -> RegistryBenchmarkMatcherBackendsResponse:
+    return RegistryBenchmarkMatcherBackendsResponse(
+        report_path=report_path,
+        pack_id=str(getattr(report, "pack_id")),
+        profile=str(getattr(report, "profile")),
+        aliases_path=str(getattr(report, "aliases_path")),
+        scanned_alias_count=int(getattr(report, "scanned_alias_count")),
+        retained_alias_count=int(getattr(report, "retained_alias_count")),
+        unique_pattern_count=int(getattr(report, "unique_pattern_count")),
+        query_count=int(getattr(report, "query_count")),
+        query_runs=int(getattr(report, "query_runs")),
+        min_alias_score=float(getattr(report, "min_alias_score")),
+        alias_limit=int(getattr(report, "alias_limit")),
+        scan_limit=int(getattr(report, "scan_limit")),
+        exact_tier_min_token_count=int(getattr(report, "exact_tier_min_token_count")),
+        candidates=[
+            _matcher_backend_candidate_response(candidate)
+            for candidate in getattr(report, "candidates")
+        ],
+        recommended_backend=(
+            str(getattr(report, "recommended_backend"))
+            if getattr(report, "recommended_backend") is not None
+            else None
+        ),
+        warnings=[str(item) for item in getattr(report, "warnings")],
+    )
+
+
 def _quality_delta_response(delta: object) -> ExtractionQualityDeltaResponse:
     return ExtractionQualityDeltaResponse(
         pack_id=str(getattr(delta, "pack_id")),
@@ -1598,6 +1654,67 @@ def benchmark_runtime(
         )
         persisted_report_path = str(write_runtime_benchmark_report(destination, benchmark))
     return _runtime_benchmark_response(benchmark, report_path=persisted_report_path)
+
+
+def benchmark_matcher_backends(
+    pack_id: str,
+    *,
+    storage_root: str | Path | None = None,
+    golden_set_path: str | Path | None = None,
+    profile: str = "default",
+    alias_limit: int = 10000,
+    scan_limit: int = 50000,
+    min_alias_score: float = 0.8,
+    exact_tier_min_token_count: int = 2,
+    query_runs: int = 3,
+    write_report: bool = True,
+    report_path: str | Path | None = None,
+    output_root: str | Path | None = None,
+) -> RegistryBenchmarkMatcherBackendsResponse:
+    """Run the Phase-0 matcher backend benchmark spike on one installed pack."""
+
+    settings = _resolve_settings(storage_root=storage_root)
+    if not write_report and report_path is not None:
+        raise ValueError("report_path requires write_report=True.")
+    resolved_golden_set_path = (
+        Path(golden_set_path).expanduser().resolve()
+        if golden_set_path is not None
+        else default_golden_set_path(pack_id, profile=profile)
+    )
+    golden_set = load_golden_set(resolved_golden_set_path)
+    if golden_set.pack_id != pack_id:
+        raise ValueError(
+            "Golden set pack_id does not match requested pack_id: "
+            f"{golden_set.pack_id} != {pack_id}"
+        )
+    benchmark = run_benchmark_matcher_backends_for_pack(
+        pack_id,
+        storage_root=settings.storage_root,
+        golden_set=golden_set,
+        alias_limit=alias_limit,
+        scan_limit=scan_limit,
+        min_alias_score=min_alias_score,
+        exact_tier_min_token_count=exact_tier_min_token_count,
+        query_runs=query_runs,
+        output_root=output_root,
+    )
+    persisted_report_path: str | None = None
+    if write_report:
+        destination = (
+            Path(report_path).expanduser().resolve()
+            if report_path is not None
+            else default_matcher_benchmark_spike_report_path(
+                pack_id,
+                profile=golden_set.profile,
+            )
+        )
+        persisted_report_path = str(
+            write_matcher_benchmark_spike_report(destination, benchmark)
+        )
+    return _matcher_benchmark_spike_response(
+        benchmark,
+        report_path=persisted_report_path,
+    )
 
 
 def compare_extraction_quality_reports(

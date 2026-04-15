@@ -1,10 +1,14 @@
+import json
 from pathlib import Path
 import shutil
+
+import pytest
 
 from ades.packs.generation import generate_pack_source
 from ades.packs.installer import PackInstaller
 from ades.pipeline.tagger import tag_text
 from tests.pack_generation_helpers import (
+    create_acronym_general_generation_bundle,
     create_bundle_backed_general_pack_source,
     create_bundle_backed_general_pack_source_with_alias_collision,
     create_general_generation_bundle,
@@ -66,6 +70,46 @@ def test_tagger_uses_generated_general_pack_variants(
         lambda _value: (_ for _ in ()).throw(
             AssertionError("matcher-enabled packs should not fall back to window lookup")
         ),
+    )
+
+    response = tag_text(
+        text="Jordan Vale from North Harbor said Beacon expanded.",
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Jordan Vale", "person") in pairs
+    assert ("North Harbor", "location") in pairs
+    assert ("Beacon", "organization") in pairs
+
+
+def test_tagger_resolves_matcher_entries_without_registry_exact_lookup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    def _fail_lookup(self, candidate_text: str, **kwargs):  # type: ignore[no-untyped-def]
+        if kwargs.get("exact_alias"):
+            raise AssertionError(
+                "matcher-enabled packs should resolve exact matches from matcher payloads"
+            )
+        return []
+
+    monkeypatch.setattr(
+        "ades.packs.registry.PackRegistry.lookup_candidates",
+        _fail_lookup,
     )
 
     response = tag_text(
@@ -182,7 +226,59 @@ def test_tagger_suppresses_noisy_general_aliases_in_generic_prose(tmp_path: Path
     shutil.copytree(pack_dir, install_pack_dir)
 
     response = tag_text(
-        text="Daniel Loeb said Beacon expanded after the letter about real estate.",
+        text=(
+            "Meridia said Harborview opened lower after Alden Voss said Beacon expanded. "
+            "Jiajia Yang, an associate professor at James Cook University, said the letter "
+            "about real estate was overblown. The founder filed the report in April may still "
+            "bring changes. We are near the University. This downgrade arrived in March. "
+            "Lindsay James said Stock markets in Europe were volatile."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+    lowered = {entity.text.casefold() for entity in response.entities}
+
+    assert ("Meridia", "organization") in pairs
+    assert ("Harborview", "location") in pairs
+    assert ("Alden Voss", "person") in pairs
+    assert ("Beacon", "organization") in pairs
+    assert ("James Cook University", "organization") in pairs
+    assert ("Europe", "location") in pairs
+    assert ("Alden", "person") not in pairs
+    assert ("Europe", "organization") not in pairs
+    assert ("James", "organization") not in pairs
+    assert ("letter", "location") not in pairs
+    assert ("This", "location") not in pairs
+    assert ("March", "location") not in pairs
+    assert ("Stock", "location") not in pairs
+    assert ("real estate", "organization") not in pairs
+    assert "yang, an" not in lowered
+    assert "the founder" not in lowered
+    assert "the report" not in lowered
+    assert "april may" not in lowered
+    assert "we are" not in lowered
+    assert "university" not in lowered
+
+
+def test_tagger_backfills_document_defined_acronyms(tmp_path: Path) -> None:
+    bundle_dir = create_acronym_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "International Energy Agency (IEA) officials met delegates from the "
+            "United States (US). Later, the IEA said the US would respond."
+        ),
         pack="general-en",
         content_type="text/plain",
         storage_root=tmp_path,
@@ -190,8 +286,77 @@ def test_tagger_suppresses_noisy_general_aliases_in_generic_prose(tmp_path: Path
 
     pairs = {(entity.text, entity.label) for entity in response.entities}
 
-    assert ("Daniel Loeb", "person") in pairs
-    assert ("Beacon", "organization") in pairs
-    assert ("Daniel", "person") not in pairs
-    assert ("letter", "location") not in pairs
-    assert ("real estate", "organization") not in pairs
+    assert ("International Energy Agency", "organization") in pairs
+    assert ("United States", "location") in pairs
+    assert ("IEA", "organization") in pairs
+    assert ("US", "location") in pairs
+
+
+def test_tagger_prefers_longer_valid_spans_over_embedded_fragments(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_noisy_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "The Strait of Talora reopened after the National Bank of Talora "
+            "published new guidance."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Strait of Talora", "location") in pairs
+    assert ("Talora", "location") not in pairs
+    assert ("National Bank of Talora", "organization") in pairs
+    assert ("Bank of Talora", "organization") not in pairs
+
+
+def test_tagger_keeps_exact_all_caps_expansion_acronyms(tmp_path: Path) -> None:
+    bundle_dir = create_acronym_general_generation_bundle(tmp_path / "bundle")
+    entities_path = bundle_dir / "normalized" / "entities.jsonl"
+    records = [
+        json.loads(line)
+        for line in entities_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    for record in records:
+        if record.get("entity_id") == "organization:international-energy-agency":
+            aliases = list(record.get("aliases") or [])
+            aliases.append("IEA")
+            record["aliases"] = aliases
+            break
+    entities_path.write_text(
+        "".join(json.dumps(item) + "\n" for item in records),
+        encoding="utf-8",
+    )
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text="The IEA said the BP traders were watching Iran.",
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("IEA", "organization") in pairs

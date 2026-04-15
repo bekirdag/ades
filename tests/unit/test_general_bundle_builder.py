@@ -166,6 +166,52 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     } in rule_records
 
 
+def test_iter_wikidata_general_entities_keeps_short_high_support_locations(
+    tmp_path: Path,
+) -> None:
+    wikidata_path = tmp_path / "wikidata_general_entities.jsonl"
+    wikidata_path.write_text(
+        json.dumps(
+            {
+                "id": "Q794",
+                "entity_type": "location",
+                "label": "Iran",
+                "aliases": ["Persia"],
+                "popularity": 369,
+                "source_features": {
+                    "alias_count": 1,
+                    "has_enwiki": True,
+                    "popularity_signal": "sitelinks",
+                    "sitelink_count": 369,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    records = list(_iter_wikidata_general_entities(wikidata_path))
+
+    assert records == [
+        {
+            "aliases": [],
+            "canonical_text": "Iran",
+            "entity_id": "wikidata:Q794",
+            "entity_type": "location",
+            "popularity": 369,
+            "source_features": {
+                "alias_count": 1,
+                "has_enwiki": True,
+                "popularity_signal": "sitelinks",
+                "sitelink_count": 369,
+            },
+            "source_id": "Q794",
+            "source_name": "wikidata-general-entities",
+        }
+    ]
+
+
 def test_build_general_source_bundle_prunes_low_signal_geonames_locations(
     tmp_path: Path,
 ) -> None:

@@ -464,6 +464,55 @@ def test_fetch_general_source_snapshot_keeps_truthy_article_titles_as_aliases(
     ]
 
 
+def test_fetch_general_source_snapshot_keeps_public_broadcasters_as_organizations(
+    tmp_path: Path,
+) -> None:
+    remote_sources = create_general_remote_sources(tmp_path / "remote")
+    truthy_path = tmp_path / "remote" / "wikidata_truthy_public_broadcaster.source.nt"
+    truthy_path.write_text(
+        "\n".join(
+            [
+                "<http://www.wikidata.org/entity/Q9531> <http://www.wikidata.org/prop/direct/P31> <http://www.wikidata.org/entity/Q1126006> .",
+                "<http://www.wikidata.org/entity/Q9531> <http://www.w3.org/2000/01/rdf-schema#label> \"BBC\"@en .",
+                "<https://www.wikidata.org/wiki/Special:EntityData/Q9531> <http://wikiba.se/ontology#sitelinks> \"250\"^^<http://www.w3.org/2001/XMLSchema#integer> .",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = fetch_general_source_snapshot(
+        output_dir=tmp_path / "raw" / "general-en",
+        snapshot="2026-04-10",
+        wikidata_url=None,
+        wikidata_truthy_url=truthy_path.resolve().as_uri(),
+        wikidata_entities_url=None,
+        wikidata_seed_url=None,
+        geonames_places_url=remote_sources["geonames_places_url"],
+    )
+
+    rows = [
+        json.loads(line)
+        for line in Path(result.wikidata_entities_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert rows == [
+        {
+            "id": "Q9531",
+            "entity_type": "organization",
+            "label": "BBC",
+            "aliases": [],
+            "popularity": 250,
+            "source_features": {
+                "sitelink_count": 250,
+                "alias_count": 0,
+                "popularity_signal": "sitelinks",
+            },
+            "type_ids": ["Q1126006"],
+        }
+    ]
+
+
 def test_fetch_general_source_snapshot_keeps_explicit_seed_overlay_below_bulk_threshold(
     tmp_path: Path,
 ) -> None:

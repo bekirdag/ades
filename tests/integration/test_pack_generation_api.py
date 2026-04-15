@@ -4,6 +4,7 @@ import shutil
 from ades import build_registry, generate_pack_source, pull_pack, tag
 from ades import get_pack
 from tests.pack_generation_helpers import (
+    create_acronym_general_generation_bundle,
     create_bundle_backed_general_pack_source,
     create_bundle_backed_general_pack_source_with_alias_collision,
     create_finance_generation_bundle,
@@ -23,7 +24,7 @@ def test_public_api_can_generate_build_install_and_tag_generated_pack(
         bundle_dir,
         output_dir=tmp_path / "generated-packs",
     )
-    assert generated.matcher_algorithm == "aho_corasick"
+    assert generated.matcher_algorithm == "token_trie_v1"
     assert Path(generated.matcher_artifact_path).exists()
     assert Path(generated.matcher_entries_path).exists()
     registry = build_registry(
@@ -54,7 +55,7 @@ def test_public_api_can_generate_build_install_and_tag_generated_pack(
     assert result.installed == ["finance-en"]
     assert installed_pack is not None
     assert installed_pack.matcher_ready is True
-    assert installed_pack.matcher_algorithm == "aho_corasick"
+    assert installed_pack.matcher_algorithm == "token_trie_v1"
     assert ("Issuer Alpha", "organization") in entities
     assert ("TICKA", "ticker") in entities
     assert ("EXCHX", "exchange") in entities
@@ -184,14 +185,106 @@ def test_public_api_generated_general_pack_suppresses_noisy_generic_matches(
         registry_url=registry.index_url,
     )
     response = tag(
-        "Daniel Loeb said Beacon expanded after the letter about real estate.",
+        (
+            "Alden Voss said Beacon expanded. Jiajia Yang, an associate professor at "
+            "James Cook University, said the letter about real estate was overblown. "
+            "The founder filed the report in April may still bring changes. "
+            "We are near the University. This downgrade arrived in March. "
+            "Lindsay James said Stock markets in Europe were volatile."
+        ),
         pack="general-en",
         storage_root=install_root,
     )
 
     entities = {(entity.text, entity.label) for entity in response.entities}
-    assert ("Daniel Loeb", "person") in entities
+    lowered = {entity.text.casefold() for entity in response.entities}
+    assert ("Alden Voss", "person") in entities
     assert ("Beacon", "organization") in entities
-    assert ("Daniel", "person") not in entities
+    assert ("James Cook University", "organization") in entities
+    assert ("Europe", "location") in entities
+    assert ("Alden", "person") not in entities
+    assert ("Europe", "organization") not in entities
+    assert ("James", "organization") not in entities
     assert ("letter", "location") not in entities
+    assert ("This", "location") not in entities
+    assert ("March", "location") not in entities
+    assert ("Stock", "location") not in entities
     assert ("real estate", "organization") not in entities
+    assert "yang, an" not in lowered
+    assert "the founder" not in lowered
+    assert "the report" not in lowered
+    assert "april may" not in lowered
+    assert "we are" not in lowered
+    assert "university" not in lowered
+
+
+def test_public_api_generated_general_pack_prefers_longer_valid_spans(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_noisy_general_generation_bundle(tmp_path / "bundle")
+
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    registry = build_registry(
+        [generated.pack_dir],
+        output_dir=tmp_path / "registry",
+    )
+
+    install_root = tmp_path / "install"
+    pull_pack(
+        "general-en",
+        storage_root=install_root,
+        registry_url=registry.index_url,
+    )
+    response = tag(
+        (
+            "The Strait of Talora reopened after the National Bank of Talora "
+            "published new guidance."
+        ),
+        pack="general-en",
+        storage_root=install_root,
+    )
+
+    entities = {(entity.text, entity.label) for entity in response.entities}
+    assert ("Strait of Talora", "location") in entities
+    assert ("Talora", "location") not in entities
+    assert ("National Bank of Talora", "organization") in entities
+    assert ("Bank of Talora", "organization") not in entities
+
+
+def test_public_api_generated_general_pack_backfills_document_defined_acronyms(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_acronym_general_generation_bundle(tmp_path / "bundle")
+
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    registry = build_registry(
+        [generated.pack_dir],
+        output_dir=tmp_path / "registry",
+    )
+
+    install_root = tmp_path / "install"
+    pull_pack(
+        "general-en",
+        storage_root=install_root,
+        registry_url=registry.index_url,
+    )
+    response = tag(
+        (
+            "International Energy Agency (IEA) officials met delegates from the "
+            "United States (US). Later, the IEA said the US would respond."
+        ),
+        pack="general-en",
+        storage_root=install_root,
+    )
+
+    entities = {(entity.text, entity.label) for entity in response.entities}
+    assert ("International Energy Agency", "organization") in entities
+    assert ("United States", "location") in entities
+    assert ("IEA", "organization") in entities
+    assert ("US", "location") in entities

@@ -2,6 +2,7 @@
 
 from .api import (
     activate_pack,
+    benchmark_matcher_backends,
     benchmark_runtime,
     build_finance_source_bundle,
     build_general_source_bundle,
@@ -52,6 +53,7 @@ __all__ = [
     "MetadataBackend",
     "RuntimeTarget",
     "activate_pack",
+    "benchmark_matcher_backends",
     "benchmark_runtime",
     "build_finance_source_bundle",
     "build_general_source_bundle",

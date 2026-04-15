@@ -31,7 +31,7 @@ def test_registry_generate_pack_endpoint_creates_pack_directory(tmp_path: Path) 
     assert payload["pack_id"] == "finance-en"
     assert payload["alias_count"] >= 3
     assert payload["rule_count"] == 1
-    assert payload["matcher_algorithm"] == "aho_corasick"
+    assert payload["matcher_algorithm"] == "token_trie_v1"
     assert Path(payload["matcher_artifact_path"]).exists()
     assert Path(payload["matcher_entries_path"]).exists()
     assert payload["publishable_sources_only"] is False
@@ -44,7 +44,7 @@ def test_registry_generate_pack_endpoint_creates_pack_directory(tmp_path: Path) 
     pack_response = client.get("/v0/packs/finance-en")
     assert pack_response.status_code == 200
     assert pack_response.json()["matcher_ready"] is True
-    assert pack_response.json()["matcher_algorithm"] == "aho_corasick"
+    assert pack_response.json()["matcher_algorithm"] == "token_trie_v1"
 
 
 def test_registry_generate_pack_endpoint_supports_pre_resolved_general_bundle(
@@ -65,7 +65,7 @@ def test_registry_generate_pack_endpoint_supports_pre_resolved_general_bundle(
     assert response.status_code == 200
     payload = response.json()
     assert payload["pack_id"] == "general-en"
-    assert payload["matcher_algorithm"] == "aho_corasick"
+    assert payload["matcher_algorithm"] == "token_trie_v1"
     build_metadata = json.loads(
         (Path(payload["pack_dir"]) / "build.json").read_text(encoding="utf-8")
     )

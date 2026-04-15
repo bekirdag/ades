@@ -66,30 +66,80 @@ def test_single_token_lookup_filter_skips_low_information_people_and_orgs() -> N
         candidate_label="organization",
     )
     assert not _should_skip_single_token_lookup_candidate(
-        matched_text="Reuters",
-        candidate_value="Reuters",
+        matched_text="Meridia",
+        candidate_value="Meridia",
+        canonical_text="Meridia",
         candidate_label="organization",
     )
 
 
 def test_single_token_lookup_filter_skips_general_titlecase_fragments() -> None:
     assert _should_skip_single_token_lookup_candidate(
-        matched_text="Daniel",
-        candidate_value="Daniel",
+        matched_text="Alden",
+        candidate_value="Alden",
+        canonical_text="Alden Voss",
         candidate_label="person",
         candidate_domain="general",
-        segment_text="Daniel Loeb wrote a letter.",
+        segment_text="Alden Voss wrote a letter.",
         start=0,
-        end=6,
+        end=5,
     )
     assert _should_skip_single_token_lookup_candidate(
-        matched_text="YORK",
-        candidate_value="York",
+        matched_text="VALE",
+        candidate_value="Vale",
+        canonical_text="North Vale",
         candidate_label="location",
         candidate_domain="general",
-        segment_text="NEW YORK opened lower.",
-        start=4,
-        end=8,
+        segment_text="NORTH VALE opened lower.",
+        start=6,
+        end=10,
+    )
+    assert _should_skip_single_token_lookup_candidate(
+        matched_text="Capital",
+        candidate_value="Capital",
+        canonical_text="Capital Group",
+        candidate_label="organization",
+        candidate_domain="general",
+        segment_text="Capital Economics chief economist",
+        start=0,
+        end=7,
+    )
+    assert _should_skip_single_token_lookup_candidate(
+        matched_text="Aurix",
+        candidate_value="AURIX",
+        canonical_text="AURIX",
+        candidate_label="organization",
+        candidate_domain="general",
+    )
+    assert _should_skip_single_token_lookup_candidate(
+        matched_text="Jamie",
+        candidate_value="Jamie",
+        canonical_text="Jamie",
+        candidate_label="person",
+        candidate_domain="general",
+        segment_text="Editing by Jamie Freed and Clarence Fernandez",
+        start=11,
+        end=16,
+    )
+    assert _should_skip_single_token_lookup_candidate(
+        matched_text="Clarence",
+        candidate_value="Clarence",
+        canonical_text="Clarence",
+        candidate_label="location",
+        candidate_domain="general",
+        segment_text="Editing by Jamie Freed and Clarence Fernandez",
+        start=27,
+        end=35,
+    )
+    assert not _should_skip_single_token_lookup_candidate(
+        matched_text="BEIJING",
+        candidate_value="Beijing",
+        canonical_text="Beijing",
+        candidate_label="location",
+        candidate_domain="general",
+        segment_text="BEIJING, April 14",
+        start=0,
+        end=7,
     )
 
 

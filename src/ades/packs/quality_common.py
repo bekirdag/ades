@@ -29,6 +29,7 @@ class PackQualityCase:
     name: str
     text: str
     expected_entities: tuple[PackQualityEntity, ...] = ()
+    normalize_subsumed_hits: bool = True
 
 
 @dataclass(frozen=True)
@@ -150,8 +151,11 @@ def validate_generated_pack_quality(
             content_type="text/plain",
             storage_root=install_root,
         )
-        actual_keys = _normalize_entities(
-            {(entity.text, entity.label) for entity in response.entities}
+        raw_actual_keys = {(entity.text, entity.label) for entity in response.entities}
+        actual_keys = (
+            _normalize_entities(raw_actual_keys)
+            if case.normalize_subsumed_hits
+            else raw_actual_keys
         )
         expected_keys = _normalize_entities(
             {(entity.text, entity.label) for entity in case.expected_entities}

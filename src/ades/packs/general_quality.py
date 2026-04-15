@@ -103,6 +103,41 @@ DEFAULT_GENERAL_BENCHMARK_QUALITY_CASES: tuple[PackQualityCase, ...] = (
             PackQualityEntity(text="Metro Gamma Variant", label="location"),
         ),
     ),
+    PackQualityCase(
+        name="generic-prose-noise-regression",
+        text=(
+            "This market note in March said stock traders in Europe were "
+            "cautious."
+        ),
+        expected_entities=(
+            PackQualityEntity(text="Europe", label="location"),
+        ),
+    ),
+    PackQualityCase(
+        name="document-acronym-backfill",
+        text=(
+            "International Energy Agency (IEA) officials met delegates from "
+            "the United States (US). Later, the IEA said the US would respond."
+        ),
+        expected_entities=(
+            PackQualityEntity(text="International Energy Agency", label="organization"),
+            PackQualityEntity(text="United States", label="location"),
+            PackQualityEntity(text="IEA", label="organization"),
+            PackQualityEntity(text="US", label="location"),
+        ),
+    ),
+    PackQualityCase(
+        name="prefer-longest-valid-span",
+        text=(
+            "The Strait of Talora reopened after the National Bank of Talora "
+            "published guidance."
+        ),
+        expected_entities=(
+            PackQualityEntity(text="Strait of Talora", label="location"),
+            PackQualityEntity(text="National Bank of Talora", label="organization"),
+        ),
+        normalize_subsumed_hits=False,
+    ),
     DEFAULT_GENERAL_SMOKE_QUALITY_CASES[2],
 )
 

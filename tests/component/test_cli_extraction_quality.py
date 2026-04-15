@@ -250,3 +250,70 @@ def test_cli_can_benchmark_runtime_and_write_report(
     if payload["disk_usage"]["matcher_total_bytes"] == 0:
         assert "matcher_not_available:finance-en" in payload["warnings"]
     assert report_path.exists()
+
+
+def test_cli_can_benchmark_matcher_backends_and_write_report(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("ADES_STORAGE_ROOT", str(storage_root))
+    PackInstaller(storage_root).install("finance-en")
+    golden_set_path = write_golden_set(
+        tmp_path / "golden" / "finance-en.json",
+        GoldenSet(
+            pack_id="finance-en",
+            documents=(
+                GoldenDocument(
+                    name="finance-smoke",
+                    text="TICKA traded on EXCHX after USD 12.5 guidance.",
+                    expected_entities=(
+                        GoldenEntity(text="TICKA", label="ticker"),
+                        GoldenEntity(text="EXCHX", label="exchange"),
+                        GoldenEntity(text="USD 12.5", label="currency_amount"),
+                    ),
+                ),
+            ),
+        ),
+    )
+    report_path = tmp_path / "reports" / "finance-matcher-backends.json"
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "registry",
+            "benchmark-matcher-backends",
+            "finance-en",
+            "--golden-set-path",
+            str(golden_set_path),
+            "--alias-limit",
+            "25",
+            "--scan-limit",
+            "100",
+            "--min-alias-score",
+            "0.0",
+            "--exact-tier-min-token-count",
+            "1",
+            "--query-runs",
+            "2",
+            "--report-path",
+            str(report_path),
+            "--output-root",
+            str(tmp_path / "matcher-spike"),
+        ],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["pack_id"] == "finance-en"
+    assert payload["report_path"] == str(report_path.resolve())
+    assert payload["query_runs"] == 2
+    assert {item["backend"] for item in payload["candidates"]} == {
+        "current_json_aho",
+        "token_trie_v1",
+    }
+    assert all(item["artifact_bytes"] > 0 for item in payload["candidates"])
+    assert payload["recommended_backend"] in {"current_json_aho", "token_trie_v1"}
+    assert report_path.exists()
