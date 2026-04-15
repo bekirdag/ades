@@ -24,10 +24,13 @@ _GENERAL_DOMAIN_RE = re.compile(
 )
 _GENERAL_ORG_SUFFIX_TOKENS = {
     "ag",
+    "analytics",
     "bank",
     "capital",
     "co",
     "company",
+    "consultancy",
+    "consulting",
     "corp",
     "corporation",
     "exchange",
@@ -36,17 +39,25 @@ _GENERAL_ORG_SUFFIX_TOKENS = {
     "holding",
     "holdings",
     "inc",
+    "information",
+    "intelligence",
     "issuer",
     "limited",
     "llc",
     "ltd",
     "management",
+    "media",
     "nv",
     "organization",
     "partner",
     "partners",
     "plc",
+    "research",
     "sa",
+    "solutions",
+    "systems",
+    "technologies",
+    "technology",
     "venture",
     "ventures",
 }
@@ -676,7 +687,10 @@ def _prune_general_aliases(
         if (
             entity_type == "organization"
             and cleaned.casefold() != canonical_text.casefold()
-            and _should_drop_general_organization_alias(cleaned)
+            and _should_drop_general_organization_alias(
+                cleaned,
+                canonical_text=canonical_text,
+            )
         ):
             continue
         if entity_type == "organization" and _looks_like_domain_alias(cleaned):
@@ -789,13 +803,40 @@ def _is_single_token_alpha_alias(value: str) -> bool:
     return _GENERAL_SINGLE_TOKEN_ALPHA_RE.fullmatch(value) is not None
 
 
-def _should_drop_general_organization_alias(value: str) -> bool:
+def _should_drop_general_organization_alias(
+    value: str,
+    *,
+    canonical_text: str,
+) -> bool:
     if not _is_single_token_alpha_alias(value):
         return False
     if value.isupper():
         return False
+    if _is_structural_general_organization_fragment_alias(
+        value,
+        canonical_text=canonical_text,
+    ):
+        return True
     compact = "".join(character for character in value if character.isalnum())
     return len(compact) < 6
+
+
+def _is_structural_general_organization_fragment_alias(
+    value: str,
+    *,
+    canonical_text: str,
+) -> bool:
+    canonical_tokens = [
+        token.rstrip(".,").casefold() for token in canonical_text.split() if token.strip()
+    ]
+    if len(canonical_tokens) < 3:
+        return False
+    if canonical_tokens[-1] not in _GENERAL_ORG_SUFFIX_TOKENS:
+        return False
+    normalized_value = value.strip().rstrip(".,").casefold()
+    if not normalized_value:
+        return False
+    return normalized_value in {canonical_tokens[0], canonical_tokens[-1]}
 
 
 def _utc_timestamp() -> str:

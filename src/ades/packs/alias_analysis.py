@@ -118,6 +118,38 @@ _RUNTIME_CALENDAR_SINGLE_TOKEN_WORDS = {
     "tuesday",
     "wednesday",
 }
+_RUNTIME_NUMBER_SINGLE_TOKEN_WORDS = {
+    "eight",
+    "eighteen",
+    "eighty",
+    "eleven",
+    "fifteen",
+    "fifty",
+    "five",
+    "forty",
+    "four",
+    "fourteen",
+    "hundred",
+    "nine",
+    "nineteen",
+    "ninety",
+    "one",
+    "seven",
+    "seventeen",
+    "seventy",
+    "six",
+    "sixteen",
+    "sixty",
+    "ten",
+    "thirteen",
+    "thirty",
+    "thousand",
+    "three",
+    "twelve",
+    "twenty",
+    "two",
+    "zero",
+}
 _RUNTIME_PERSON_PARTICLES = {
     "al",
     "ap",
@@ -1818,6 +1850,7 @@ def _is_blocklisted_runtime_single_token(alias_key: str) -> bool:
         normalized_alias in _RUNTIME_GENERIC_PHRASE_LEADS
         or normalized_alias in _RUNTIME_AUXILIARY_WORDS
         or normalized_alias in _RUNTIME_CALENDAR_SINGLE_TOKEN_WORDS
+        or normalized_alias in _RUNTIME_NUMBER_SINGLE_TOKEN_WORDS
         or normalized_alias in _RUNTIME_GENERIC_SINGLE_TOKEN_HEADS
     )
 

@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 import click
+import httpx
 import typer
 from typer.main import get_command
 
@@ -21,6 +22,7 @@ from .api import compare_extraction_quality_reports as api_compare_extraction_qu
 from .api import deactivate_pack as api_deactivate_pack
 from .api import diff_pack_versions as api_diff_pack_versions
 from .api import evaluate_extraction_quality as api_evaluate_extraction_quality
+from .api import evaluate_live_news_feedback as api_evaluate_live_news_feedback
 from .api import evaluate_extraction_release_thresholds as api_evaluate_extraction_release_thresholds
 from .api import fetch_finance_source_snapshot as api_fetch_finance_source_snapshot
 from .api import fetch_general_source_snapshot as api_fetch_general_source_snapshot
@@ -1327,6 +1329,49 @@ def registry_evaluate_extraction_quality(
             report_path=report_path,
         )
     except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("evaluate-live-news")
+def registry_evaluate_live_news(
+    pack_id: str = typer.Argument(..., help="Installed pack id to evaluate."),
+    article_limit: int = typer.Option(
+        10,
+        "--article-limit",
+        min=1,
+        max=100,
+        help="Maximum number of live articles to evaluate across the configured RSS feeds.",
+    ),
+    per_feed_limit: int = typer.Option(
+        10,
+        "--per-feed-limit",
+        min=1,
+        max=50,
+        help="Maximum number of RSS items to inspect per feed before collecting article samples.",
+    ),
+    write_report: bool = typer.Option(
+        True,
+        "--write-report/--no-write-report",
+        help="Persist the live-news feedback report to disk.",
+    ),
+    report_path: Path | None = typer.Option(
+        None,
+        "--report-path",
+        help="Optional explicit JSON path for the persisted live-news feedback report.",
+    ),
+) -> None:
+    """Fetch live RSS items, tag article text, and summarize generic issue classes."""
+
+    try:
+        response = api_evaluate_live_news_feedback(
+            pack_id,
+            article_limit=article_limit,
+            per_feed_limit=per_feed_limit,
+            write_report=write_report,
+            report_path=report_path,
+        )
+    except (FileNotFoundError, ValueError, httpx.HTTPError) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 

@@ -76,6 +76,11 @@ from .extraction_quality import (
     write_runtime_benchmark_report,
     write_quality_report,
 )
+from .news_feedback import (
+    evaluate_live_news_feedback as run_evaluate_live_news_feedback,
+    live_news_feedback_report_path as default_live_news_feedback_report_path,
+    write_live_news_feedback_report,
+)
 from .packs.refresh import refresh_generated_pack_registry as run_refresh_generated_pack_registry
 from .packs.reporting import report_generated_pack as run_report_generated_pack
 from .packs.publish import (
@@ -136,9 +141,14 @@ from .service.models import (
     LabelQualityDeltaResponse,
     MatcherBackendCandidateResponse,
     MatcherBenchmarkSpikeReportResponse,
+    LiveNewsArticleResultResponse,
+    LiveNewsEntityResponse,
+    LiveNewsFailureResponse,
+    LiveNewsIssueResponse,
     RegistryBenchmarkMatcherBackendsResponse,
     RegistryBenchmarkMatcherBackendsRequest,
     RegistryBenchmarkRuntimeResponse,
+    RegistryEvaluateLiveNewsFeedbackResponse,
     RuntimeDiskBenchmarkResponse,
     RuntimeLatencyBenchmarkResponse,
     RegistryPackQualityCaseResult,
@@ -1416,6 +1426,114 @@ def _extraction_report_response(
     )
 
 
+def _live_news_issue_response(issue: object) -> LiveNewsIssueResponse:
+    return LiveNewsIssueResponse(
+        issue_type=str(getattr(issue, "issue_type")),
+        message=str(getattr(issue, "message")),
+        entity_text=(
+            str(getattr(issue, "entity_text"))
+            if getattr(issue, "entity_text") is not None
+            else None
+        ),
+        label=(
+            str(getattr(issue, "label"))
+            if getattr(issue, "label") is not None
+            else None
+        ),
+        candidate_text=(
+            str(getattr(issue, "candidate_text"))
+            if getattr(issue, "candidate_text") is not None
+            else None
+        ),
+    )
+
+
+def _live_news_entity_response(entity: object) -> LiveNewsEntityResponse:
+    return LiveNewsEntityResponse(
+        text=str(getattr(entity, "text")),
+        label=str(getattr(entity, "label")),
+        start=int(getattr(entity, "start")),
+        end=int(getattr(entity, "end")),
+    )
+
+
+def _live_news_failure_response(failure: object) -> LiveNewsFailureResponse:
+    return LiveNewsFailureResponse(
+        source=str(getattr(failure, "source")),
+        stage=str(getattr(failure, "stage")),
+        url=str(getattr(failure, "url")),
+        message=str(getattr(failure, "message")),
+        title=(
+            str(getattr(failure, "title"))
+            if getattr(failure, "title") is not None
+            else None
+        ),
+    )
+
+
+def _live_news_article_response(article: object) -> LiveNewsArticleResultResponse:
+    return LiveNewsArticleResultResponse(
+        source=str(getattr(article, "source")),
+        title=str(getattr(article, "title")),
+        article_url=str(getattr(article, "article_url")),
+        published_at=(
+            str(getattr(article, "published_at"))
+            if getattr(article, "published_at") is not None
+            else None
+        ),
+        text_source=str(getattr(article, "text_source")),
+        word_count=int(getattr(article, "word_count")),
+        entity_count=int(getattr(article, "entity_count")),
+        timing_ms=int(getattr(article, "timing_ms")),
+        warnings=[str(item) for item in getattr(article, "warnings")],
+        issue_types=[str(item) for item in getattr(article, "issue_types")],
+        issues=[
+            _live_news_issue_response(issue)
+            for issue in getattr(article, "issues")
+        ],
+        entities=[
+            _live_news_entity_response(entity)
+            for entity in getattr(article, "entities")
+        ],
+    )
+
+
+def _live_news_feedback_response(
+    report: object,
+    *,
+    report_path: str | None = None,
+) -> RegistryEvaluateLiveNewsFeedbackResponse:
+    return RegistryEvaluateLiveNewsFeedbackResponse(
+        report_path=report_path,
+        pack_id=str(getattr(report, "pack_id")),
+        generated_at=str(getattr(report, "generated_at")),
+        requested_article_count=int(getattr(report, "requested_article_count")),
+        collected_article_count=int(getattr(report, "collected_article_count")),
+        feed_count=int(getattr(report, "feed_count")),
+        successful_feed_count=int(getattr(report, "successful_feed_count")),
+        p50_latency_ms=int(getattr(report, "p50_latency_ms")),
+        p95_latency_ms=int(getattr(report, "p95_latency_ms")),
+        per_source_article_counts=dict(getattr(report, "per_source_article_counts")),
+        per_issue_counts=dict(getattr(report, "per_issue_counts")),
+        suggested_fix_classes=[
+            str(item) for item in getattr(report, "suggested_fix_classes")
+        ],
+        warnings=[str(item) for item in getattr(report, "warnings")],
+        feed_failures=[
+            _live_news_failure_response(item)
+            for item in getattr(report, "feed_failures")
+        ],
+        article_failures=[
+            _live_news_failure_response(item)
+            for item in getattr(report, "article_failures")
+        ],
+        articles=[
+            _live_news_article_response(item)
+            for item in getattr(report, "articles")
+        ],
+    )
+
+
 def _runtime_latency_response(summary: object) -> RuntimeLatencyBenchmarkResponse:
     return RuntimeLatencyBenchmarkResponse(
         sample_count=int(getattr(summary, "sample_count")),
@@ -1601,6 +1719,39 @@ def evaluate_extraction_quality(
         )
         persisted_report_path = str(write_quality_report(destination, report))
     return _extraction_report_response(report, report_path=persisted_report_path)
+
+
+def evaluate_live_news_feedback(
+    pack_id: str,
+    *,
+    storage_root: str | Path | None = None,
+    article_limit: int = 10,
+    per_feed_limit: int = 10,
+    write_report: bool = True,
+    report_path: str | Path | None = None,
+) -> RegistryEvaluateLiveNewsFeedbackResponse:
+    """Fetch live RSS articles, run tagging, and aggregate generic issue classes."""
+
+    settings = _resolve_settings(storage_root=storage_root)
+    if not write_report and report_path is not None:
+        raise ValueError("report_path requires write_report=True.")
+    report = run_evaluate_live_news_feedback(
+        pack_id,
+        storage_root=settings.storage_root,
+        article_limit=article_limit,
+        per_feed_limit=per_feed_limit,
+    )
+    persisted_report_path: str | None = None
+    if write_report:
+        destination = (
+            Path(report_path).expanduser().resolve()
+            if report_path is not None
+            else default_live_news_feedback_report_path(pack_id)
+        )
+        persisted_report_path = str(
+            write_live_news_feedback_report(destination, report)
+        )
+    return _live_news_feedback_response(report, report_path=persisted_report_path)
 
 
 def benchmark_runtime(

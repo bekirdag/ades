@@ -569,6 +569,73 @@ class RegistryEvaluateExtractionQualityResponse(ExtractionQualityReportResponse)
     report_path: str | None = None
 
 
+class LiveNewsIssueResponse(BaseModel):
+    """One heuristic issue discovered during live-news evaluation."""
+
+    issue_type: str
+    message: str
+    entity_text: str | None = None
+    label: str | None = None
+    candidate_text: str | None = None
+
+
+class LiveNewsEntityResponse(BaseModel):
+    """Condensed extracted entity summary for one live article."""
+
+    text: str
+    label: str
+    start: int
+    end: int
+
+
+class LiveNewsFailureResponse(BaseModel):
+    """One feed/article failure during live-news evaluation."""
+
+    source: str
+    stage: str
+    url: str
+    message: str
+    title: str | None = None
+
+
+class LiveNewsArticleResultResponse(BaseModel):
+    """One evaluated live article result."""
+
+    source: str
+    title: str
+    article_url: str
+    published_at: str | None = None
+    text_source: str
+    word_count: int
+    entity_count: int
+    timing_ms: int
+    warnings: list[str] = Field(default_factory=list)
+    issue_types: list[str] = Field(default_factory=list)
+    issues: list[LiveNewsIssueResponse] = Field(default_factory=list)
+    entities: list[LiveNewsEntityResponse] = Field(default_factory=list)
+
+
+class RegistryEvaluateLiveNewsFeedbackResponse(BaseModel):
+    """Aggregated live-news feedback report plus optional persisted report path."""
+
+    pack_id: str
+    generated_at: str
+    requested_article_count: int
+    collected_article_count: int
+    feed_count: int
+    successful_feed_count: int
+    p50_latency_ms: int
+    p95_latency_ms: int
+    per_source_article_counts: dict[str, int] = Field(default_factory=dict)
+    per_issue_counts: dict[str, int] = Field(default_factory=dict)
+    suggested_fix_classes: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    feed_failures: list[LiveNewsFailureResponse] = Field(default_factory=list)
+    article_failures: list[LiveNewsFailureResponse] = Field(default_factory=list)
+    articles: list[LiveNewsArticleResultResponse] = Field(default_factory=list)
+    report_path: str | None = None
+
+
 class RuntimeLatencyBenchmarkResponse(BaseModel):
     """Latency summary for one runtime benchmark lane."""
 

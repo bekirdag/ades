@@ -65,6 +65,19 @@ _ORG_SUFFIX_TOKENS = {
     "venture",
     "ventures",
 }
+_ORG_FRAGMENT_SUFFIX_TOKENS = _ORG_SUFFIX_TOKENS | {
+    "analytics",
+    "consultancy",
+    "consulting",
+    "information",
+    "intelligence",
+    "media",
+    "research",
+    "solutions",
+    "systems",
+    "technologies",
+    "technology",
+}
 _QUOTE_TRANSLATION = str.maketrans(
     {
         "\u2018": "'",
@@ -1482,6 +1495,14 @@ def _should_drop_alias(
     if not any(character.isalnum() for character in display_value):
         return True
     if pack_domain == "general" and _is_single_token_alpha_alias(display_value):
+        if (
+            label.casefold() in _ORG_LIKE_LABELS
+            and _is_structural_org_fragment_alias(
+                display_value,
+                canonical_text=canonical_text,
+            )
+        ):
+            return True
         if label.casefold() in {"person", "location"}:
             return display_value.casefold() != canonical_text.casefold()
         if (
@@ -1494,6 +1515,20 @@ def _should_drop_alias(
         if generated and label.casefold() in _ORG_LIKE_LABELS and not display_value.isupper():
             return _compact_alnum_length(display_value) < 6
     return False
+
+
+def _is_structural_org_fragment_alias(value: str, *, canonical_text: str) -> bool:
+    canonical_tokens = [
+        token.rstrip(".,").casefold() for token in canonical_text.split() if token.strip()
+    ]
+    if len(canonical_tokens) < 3:
+        return False
+    if canonical_tokens[-1] not in _ORG_FRAGMENT_SUFFIX_TOKENS:
+        return False
+    normalized_value = value.strip().rstrip(".,").casefold()
+    if not normalized_value or not _is_single_token_alpha_alias(value):
+        return False
+    return normalized_value in {canonical_tokens[0], canonical_tokens[-1]}
 
 
 def _require_clean_text(

@@ -25,7 +25,7 @@ def test_public_api_can_validate_generated_general_pack_quality(
     assert report.pack_id == "general-en"
     assert report.fixture_profile == "benchmark"
     assert report.expected_recall == 1.0
-    assert report.expected_entity_count == 29
+    assert report.expected_entity_count == 34
 
 
 def test_public_api_uses_general_pack_default_ambiguity_budget(

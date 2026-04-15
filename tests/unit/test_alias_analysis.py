@@ -159,6 +159,29 @@ def test_alias_analysis_blocks_single_token_person_aliases() -> None:
     assert result.blocked_reason_counts["low_information_single_label_alias"] == 1
 
 
+def test_alias_analysis_blocks_number_word_single_token_aliases() -> None:
+    result = analyze_alias_candidates(
+        [
+            build_alias_candidate(
+                alias_key="four",
+                display_text="Four",
+                label="location",
+                canonical_text="Four",
+                record={
+                    "entity_id": "synthetic:location:four",
+                    "source_name": "geonames-places",
+                    "source_priority": 0.82,
+                    "population": 9_900_000,
+                },
+            )
+        ],
+        allowed_ambiguous_aliases=set(),
+    )
+
+    assert result.retained_alias_count == 0
+    assert result.blocked_reason_counts["low_information_single_label_alias"] == 1
+
+
 def test_alias_analysis_blocks_low_support_single_token_location_aliases() -> None:
     result = analyze_alias_candidates(
         [

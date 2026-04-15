@@ -43,6 +43,19 @@ def test_skip_single_token_calendar_location() -> None:
     )
 
 
+def test_skip_single_token_number_word_location() -> None:
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="Four",
+            candidate_value="Four",
+            canonical_text="Four",
+            candidate_label="location",
+            candidate_domain="general",
+        )
+        is True
+    )
+
+
 def test_skip_single_token_generic_stock_head() -> None:
     assert (
         _should_skip_single_token_lookup_candidate(

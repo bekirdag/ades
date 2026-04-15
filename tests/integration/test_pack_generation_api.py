@@ -288,3 +288,43 @@ def test_public_api_generated_general_pack_backfills_document_defined_acronyms(
     assert ("United States", "location") in entities
     assert ("IEA", "organization") in entities
     assert ("US", "location") in entities
+
+
+def test_public_api_generated_general_pack_recovers_geopolitical_and_structured_org_spans(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_noisy_general_generation_bundle(tmp_path / "bundle")
+
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    registry = build_registry(
+        [generated.pack_dir],
+        output_dir=tmp_path / "registry",
+    )
+
+    install_root = tmp_path / "install"
+    pull_pack(
+        "general-en",
+        storage_root=install_root,
+        registry_url=registry.index_url,
+    )
+    response = tag(
+        (
+            "Four analysts in China said Israel would rely on Shanghai-based "
+            "Northwind Solutions while Harbor China Information reviewed the "
+            "supply outlook."
+        ),
+        pack="general-en",
+        storage_root=install_root,
+    )
+
+    entities = {(entity.text, entity.label) for entity in response.entities}
+    assert ("China", "location") in entities
+    assert ("Israel", "location") in entities
+    assert ("Shanghai", "location") in entities
+    assert ("Northwind Solutions", "organization") in entities
+    assert ("Harbor China Information", "organization") in entities
+    assert ("Four", "location") not in entities
+    assert ("Harbor", "organization") not in entities

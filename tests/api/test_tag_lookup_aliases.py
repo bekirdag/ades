@@ -8,6 +8,7 @@ from ades.packs.installer import PackInstaller
 from ades.service.app import create_app
 from tests.pack_generation_helpers import (
     create_acronym_general_generation_bundle,
+    create_bundle_backed_general_pack_source,
     create_general_generation_bundle,
     create_noisy_general_generation_bundle,
 )
@@ -215,3 +216,67 @@ def test_tag_endpoint_prefers_longer_valid_spans_over_embedded_fragments(
     assert ("Talora", "location") not in pairs
     assert ("National Bank of Talora", "organization") in pairs
     assert ("Bank of Talora", "organization") not in pairs
+
+
+def test_tag_endpoint_recovers_geopolitical_and_structured_org_newswire_spans(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_noisy_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    client = TestClient(create_app(storage_root=tmp_path))
+    response = client.post(
+        "/v0/tag",
+        json={
+            "text": (
+                "Four analysts in China said Israel would rely on Shanghai-based "
+                "Northwind Solutions while Harbor China Information reviewed the "
+                "supply outlook."
+            ),
+            "pack": "general-en",
+            "content_type": "text/plain",
+        },
+    )
+
+    assert response.status_code == 200
+    pairs = {(entity["text"], entity["label"]) for entity in response.json()["entities"]}
+
+    assert ("China", "location") in pairs
+    assert ("Israel", "location") in pairs
+    assert ("Shanghai", "location") in pairs
+    assert ("Northwind Solutions", "organization") in pairs
+    assert ("Harbor China Information", "organization") in pairs
+    assert ("Four", "location") not in pairs
+    assert ("Harbor", "organization") not in pairs
+
+
+def test_tag_endpoint_extends_trailing_structural_org_suffixes(tmp_path: Path) -> None:
+    pack_dir = create_bundle_backed_general_pack_source(tmp_path / "bundle-pack")
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    client = TestClient(create_app(storage_root=tmp_path))
+    response = client.post(
+        "/v0/tag",
+        json={
+            "text": "Signal Harbor Partners LLC said Beacon Group Inc expanded.",
+            "pack": "general-en",
+            "content_type": "text/plain",
+        },
+    )
+
+    assert response.status_code == 200
+    pairs = {(entity["text"], entity["label"]) for entity in response.json()["entities"]}
+
+    assert ("Signal Harbor Partners LLC", "organization") in pairs
+    assert ("Signal Harbor Partners", "organization") not in pairs
+    assert ("Beacon Group Inc", "organization") in pairs
+    assert ("Beacon Group", "organization") not in pairs

@@ -59,6 +59,38 @@ _CALENDAR_SINGLE_TOKEN_WORDS = {
     "tuesday",
     "wednesday",
 }
+_NUMBER_SINGLE_TOKEN_WORDS = {
+    "eight",
+    "eighteen",
+    "eighty",
+    "eleven",
+    "fifteen",
+    "fifty",
+    "five",
+    "forty",
+    "four",
+    "fourteen",
+    "hundred",
+    "nine",
+    "nineteen",
+    "ninety",
+    "one",
+    "seven",
+    "seventeen",
+    "seventy",
+    "six",
+    "sixteen",
+    "sixty",
+    "ten",
+    "thirteen",
+    "thirty",
+    "thousand",
+    "three",
+    "twelve",
+    "twenty",
+    "two",
+    "zero",
+}
 _GENERIC_PHRASE_LEADS = {
     "a",
     "an",
@@ -178,6 +210,75 @@ _ACRONYM_CONNECTOR_WORDS = {
 _ACRONYM_AFTER_ENTITY_RE = re.compile(r"^\s*\((?P<acronym>[A-Z][A-Z0-9.&/-]{1,9})\)")
 _ACRONYM_BEFORE_ENTITY_RE = re.compile(r"(?P<acronym>[A-Z][A-Z0-9.&/-]{1,9})\s*\(\s*$")
 _MAX_ACRONYM_DEFINITION_WINDOW = 16
+_HYPHENATED_ALIAS_BACKFILL_SUFFIXES = {
+    "backed",
+    "based",
+    "centered",
+    "centred",
+    "driven",
+    "focused",
+    "led",
+    "linked",
+    "owned",
+    "related",
+    "run",
+    "sourced",
+    "targeted",
+}
+_STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS = {
+    "agency",
+    "association",
+    "bank",
+    "bureau",
+    "capital",
+    "committee",
+    "company",
+    "corp",
+    "corporation",
+    "council",
+    "foundation",
+    "group",
+    "holding",
+    "holdings",
+    "inc",
+    "institute",
+    "intelligence",
+    "llc",
+    "llp",
+    "ltd",
+    "media",
+    "ministry",
+    "network",
+    "organization",
+    "partners",
+    "plc",
+    "research",
+    "services",
+    "solutions",
+    "systems",
+    "technologies",
+    "technology",
+    "university",
+}
+_STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS = {
+    "agency",
+    "association",
+    "bank",
+    "bureau",
+    "committee",
+    "council",
+    "foundation",
+    "group",
+    "institute",
+    "ministry",
+    "network",
+    "organization",
+    "research",
+    "university",
+}
+_STRUCTURAL_ORG_CONNECTOR_TOKENS = {"for", "of"}
+_MAX_STRUCTURAL_ORG_SUFFIX_TOKENS = 3
+_MAX_STRUCTURAL_ORG_CONNECTOR_TAIL_TOKENS = 3
 
 _LANE_PRIORITY = {
     "deterministic_rule": 3,
@@ -392,6 +493,66 @@ def _extract_lookup_alias_entities(
                 lookup_cache=lookup_cache,
             )
         )
+    extracted.extend(
+        _extract_hyphenated_lookup_alias_entities(
+            segment_text_value,
+            segment_start=segment_start,
+            normalized_input=normalized_input,
+            registry=registry,
+            allowed_pack_ids=allowed_pack_ids,
+            lookup_cache=lookup_cache,
+        )
+    )
+    return extracted
+
+
+def _extract_hyphenated_lookup_alias_entities(
+    segment_text_value: str,
+    *,
+    segment_start: int,
+    normalized_input: NormalizedText,
+    registry: PackRegistry,
+    allowed_pack_ids: set[str],
+    lookup_cache: dict[tuple[str, str], list[dict[str, str | float | bool | None]]],
+) -> list[ExtractedCandidate]:
+    extracted: list[ExtractedCandidate] = []
+    if not allowed_pack_ids:
+        return extracted
+    pack_id_list = sorted(allowed_pack_ids)
+    for start, end, candidate_text in _iter_hyphenated_alias_backfill_windows(segment_text_value):
+        if len(pack_id_list) == 1:
+            candidates = _lookup_exact_alias_candidates(
+                registry=registry,
+                pack_id=pack_id_list[0],
+                candidate_text=candidate_text,
+                lookup_cache=lookup_cache,
+            )
+        else:
+            cache_key = ("", normalize_lookup_text(candidate_text))
+            candidates = lookup_cache.get(cache_key)
+            if candidates is None:
+                candidates = [
+                    candidate
+                    for candidate in registry.lookup_candidates(
+                        candidate_text,
+                        exact_alias=True,
+                        active_only=True,
+                        limit=50,
+                    )
+                    if candidate["kind"] == "alias" and candidate["pack_id"] in allowed_pack_ids
+                ]
+                lookup_cache[cache_key] = candidates
+        extracted.extend(
+            _build_lookup_alias_entities(
+                candidates=candidates,
+                segment_text_value=segment_text_value,
+                matched_text=segment_text_value[start:end],
+                start=start,
+                end=end,
+                segment_start=segment_start,
+                normalized_input=normalized_input,
+            )
+        )
     return extracted
 
 
@@ -586,6 +747,55 @@ def _build_token_boundary_maps(text: str) -> tuple[set[int], set[int]]:
     return token_starts, token_ends
 
 
+def _next_contiguous_token_span(text: str, offset: int) -> tuple[int, int, str] | None:
+    match = TOKEN_RE.search(text, offset)
+    if match is None:
+        return None
+    gap = text[offset : match.start()]
+    if gap and not gap.isspace():
+        return None
+    return match.start(), match.end(), match.group(0)
+
+
+def _iter_hyphenated_alias_backfill_windows(
+    text: str,
+) -> list[tuple[int, int, str]]:
+    windows: list[tuple[int, int, str]] = []
+    seen: set[tuple[int, int]] = set()
+    for start, end in _iter_token_spans(text):
+        token_text = text[start:end]
+        prefix_length = _hyphenated_alias_prefix_length(token_text)
+        if prefix_length is None:
+            continue
+        window = (start, start + prefix_length)
+        if window in seen:
+            continue
+        seen.add(window)
+        windows.append((window[0], window[1], text[window[0] : window[1]]))
+    return windows
+
+
+def _hyphenated_alias_prefix_length(token_text: str) -> int | None:
+    if "-" not in token_text:
+        return None
+    parts = token_text.split("-")
+    if len(parts) < 2:
+        return None
+    prefix = parts[0]
+    suffix_parts = parts[1:]
+    if not prefix or not prefix.isalpha():
+        return None
+    if len(prefix) < 2:
+        return None
+    if not prefix[:1].isupper() and not prefix.isupper():
+        return None
+    if not all(part.isalpha() and part.islower() for part in suffix_parts):
+        return None
+    if not all(part in _HYPHENATED_ALIAS_BACKFILL_SUFFIXES for part in suffix_parts):
+        return None
+    return len(prefix)
+
+
 def _is_token_window_span(
     start: int,
     end: int,
@@ -594,6 +804,100 @@ def _is_token_window_span(
     token_ends: set[int],
 ) -> bool:
     return start in token_starts and end in token_ends and end > start
+
+
+def _extend_structural_entity_spans(
+    candidates: list[ExtractedCandidate],
+    *,
+    normalized_input: NormalizedText,
+) -> list[ExtractedCandidate]:
+    extended: list[ExtractedCandidate] = []
+    for candidate in candidates:
+        normalized_end = candidate.normalized_end
+        if (
+            candidate.lane == "deterministic_alias"
+            and candidate.domain == "general"
+            and candidate.entity.label.casefold() == "organization"
+        ):
+            normalized_end = _extend_structural_organization_end(
+                text=normalized_input.text,
+                start=candidate.normalized_start,
+                end=candidate.normalized_end,
+            )
+        if normalized_end <= candidate.normalized_end:
+            extended.append(candidate)
+            continue
+        raw_start, raw_end = normalized_input.raw_span(candidate.normalized_start, normalized_end)
+        extended.append(
+            ExtractedCandidate(
+                entity=EntityMatch(
+                    text=normalized_input.raw_text[raw_start:raw_end],
+                    label=candidate.entity.label,
+                    start=raw_start,
+                    end=raw_end,
+                    confidence=candidate.entity.confidence,
+                    relevance=candidate.entity.relevance,
+                    provenance=candidate.entity.provenance,
+                    link=candidate.entity.link,
+                ),
+                domain=candidate.domain,
+                lane=candidate.lane,
+                normalized_start=candidate.normalized_start,
+                normalized_end=normalized_end,
+            )
+        )
+    return extended
+
+
+def _extend_structural_organization_end(text: str, *, start: int, end: int) -> int:
+    base_tokens = TOKEN_RE.findall(text[start:end])
+    if not base_tokens:
+        return end
+
+    cursor = end
+    extended_end = end
+    suffix_count = 0
+    while suffix_count < _MAX_STRUCTURAL_ORG_SUFFIX_TOKENS:
+        next_token = _next_contiguous_token_span(text, cursor)
+        if next_token is None:
+            break
+        _, next_end, next_text = next_token
+        if normalize_lookup_text(next_text) not in _STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS:
+            break
+        extended_end = next_end
+        cursor = next_end
+        suffix_count += 1
+    if extended_end != end:
+        return extended_end
+
+    if normalize_lookup_text(base_tokens[-1]) not in _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS:
+        return end
+
+    connector = _next_contiguous_token_span(text, cursor)
+    if connector is None:
+        return end
+    _, connector_end, connector_text = connector
+    if normalize_lookup_text(connector_text) not in _STRUCTURAL_ORG_CONNECTOR_TOKENS:
+        return end
+
+    cursor = connector_end
+    article = _next_contiguous_token_span(text, cursor)
+    if article is not None and normalize_lookup_text(article[2]) == "the":
+        cursor = article[1]
+
+    titleish_count = 0
+    last_titleish_end: int | None = None
+    while titleish_count < _MAX_STRUCTURAL_ORG_CONNECTOR_TAIL_TOKENS:
+        next_token = _next_contiguous_token_span(text, cursor)
+        if next_token is None:
+            break
+        _, next_end, next_text = next_token
+        if not _is_titleish_token(next_text):
+            break
+        last_titleish_end = next_end
+        cursor = next_end
+        titleish_count += 1
+    return last_titleish_end or end
 
 
 def _lookup_exact_alias_candidates(
@@ -726,7 +1030,10 @@ def _should_skip_single_token_lookup_candidate(
         return True
     normalized_matched_text = normalize_lookup_text(matched_text)
     generic_single_token_blocklist = (
-        _GENERIC_SINGLE_TOKEN_HEADS | _GENERIC_PHRASE_LEADS | _CALENDAR_SINGLE_TOKEN_WORDS
+        _GENERIC_SINGLE_TOKEN_HEADS
+        | _GENERIC_PHRASE_LEADS
+        | _CALENDAR_SINGLE_TOKEN_WORDS
+        | _NUMBER_SINGLE_TOKEN_WORDS
     )
     if (
         normalized_matched_text in generic_single_token_blocklist
@@ -1775,6 +2082,12 @@ def tag_text(
 
     deduped, duplicate_discards = _dedupe_exact_candidates(extracted)
     coherent = _apply_repeated_surface_consistency(deduped)
+    extended = _extend_structural_entity_spans(
+        coherent,
+        normalized_input=normalized_input,
+    )
+    extended_deduped, extension_duplicate_discards = _dedupe_exact_candidates(extended)
+    coherent = _apply_repeated_surface_consistency(extended_deduped)
     acronym_backfilled = _backfill_document_acronym_entities(
         coherent,
         normalized_input=normalized_input,
@@ -1787,7 +2100,9 @@ def tag_text(
         debug_enabled=debug or os.getenv("ADES_TAG_DEBUG") == "1",
     )
 
-    total_duplicate_discards = duplicate_discards + acronym_duplicate_discards
+    total_duplicate_discards = (
+        duplicate_discards + extension_duplicate_discards + acronym_duplicate_discards
+    )
     if debug_payload is not None and total_duplicate_discards:
         span_decisions = list(debug_payload.span_decisions)
         for item in total_duplicate_discards:

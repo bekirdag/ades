@@ -138,6 +138,21 @@ DEFAULT_GENERAL_BENCHMARK_QUALITY_CASES: tuple[PackQualityCase, ...] = (
         ),
         normalize_subsumed_hits=False,
     ),
+    PackQualityCase(
+        name="geopolitical-and-structured-organization-recall",
+        text=(
+            "Four analysts in China said Israel would rely on Shanghai-based "
+            "Northwind Solutions while Harbor China Information reviewed the "
+            "supply outlook."
+        ),
+        expected_entities=(
+            PackQualityEntity(text="China", label="location"),
+            PackQualityEntity(text="Israel", label="location"),
+            PackQualityEntity(text="Shanghai", label="location"),
+            PackQualityEntity(text="Northwind Solutions", label="organization"),
+            PackQualityEntity(text="Harbor China Information", label="organization"),
+        ),
+    ),
     DEFAULT_GENERAL_SMOKE_QUALITY_CASES[2],
 )
 

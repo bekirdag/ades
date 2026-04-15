@@ -1,4 +1,7 @@
-from ades.pipeline.tagger import _iter_candidate_windows
+from ades.pipeline.tagger import (
+    _iter_candidate_windows,
+    _iter_hyphenated_alias_backfill_windows,
+)
 
 
 def test_candidate_windows_are_generated_longest_first() -> None:
@@ -8,3 +11,11 @@ def test_candidate_windows_are_generated_longest_first() -> None:
 
     assert values[:3] == ["Person Alpha", "Alpha met", "met Org"]
     assert values[-4:] == ["Alpha", "met", "Org", "Beta"]
+
+
+def test_hyphenated_alias_backfill_windows_expose_titleish_prefixes() -> None:
+    windows = _iter_hyphenated_alias_backfill_windows(
+        "Shanghai-based Northwind Solutions and data-driven systems"
+    )
+
+    assert windows == [(0, 8, "Shanghai")]

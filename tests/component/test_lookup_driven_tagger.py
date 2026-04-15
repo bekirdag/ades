@@ -323,6 +323,41 @@ def test_tagger_prefers_longer_valid_spans_over_embedded_fragments(
     assert ("Bank of Talora", "organization") not in pairs
 
 
+def test_tagger_recovers_geopolitical_and_structured_org_newswire_spans(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_noisy_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "Four analysts in China said Israel would rely on Shanghai-based "
+            "Northwind Solutions while Harbor China Information reviewed the "
+            "supply outlook."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("China", "location") in pairs
+    assert ("Israel", "location") in pairs
+    assert ("Shanghai", "location") in pairs
+    assert ("Northwind Solutions", "organization") in pairs
+    assert ("Harbor China Information", "organization") in pairs
+    assert ("Four", "location") not in pairs
+    assert ("Harbor", "organization") not in pairs
+
+
 def test_tagger_keeps_exact_all_caps_expansion_acronyms(tmp_path: Path) -> None:
     bundle_dir = create_acronym_general_generation_bundle(tmp_path / "bundle")
     entities_path = bundle_dir / "normalized" / "entities.jsonl"
@@ -360,3 +395,24 @@ def test_tagger_keeps_exact_all_caps_expansion_acronyms(tmp_path: Path) -> None:
     pairs = {(entity.text, entity.label) for entity in response.entities}
 
     assert ("IEA", "organization") in pairs
+
+
+def test_tagger_extends_trailing_structural_org_suffixes(tmp_path: Path) -> None:
+    pack_dir = create_bundle_backed_general_pack_source(tmp_path / "bundle-pack")
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text="Signal Harbor Partners LLC said Beacon Group Inc expanded.",
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Signal Harbor Partners LLC", "organization") in pairs
+    assert ("Signal Harbor Partners", "organization") not in pairs
+    assert ("Beacon Group Inc", "organization") in pairs
+    assert ("Beacon Group", "organization") not in pairs

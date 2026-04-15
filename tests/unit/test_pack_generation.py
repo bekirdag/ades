@@ -174,6 +174,23 @@ def test_entity_alias_candidates_generate_plain_geopolitical_acronyms() -> None:
     assert ("US", True) in candidates
 
 
+def test_generate_pack_source_drops_structural_org_fragment_aliases(tmp_path: Path) -> None:
+    bundle_dir = create_noisy_general_generation_bundle(tmp_path / "bundle")
+
+    result = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+
+    aliases = json.loads(
+        (Path(result.pack_dir) / "aliases.json").read_text(encoding="utf-8")
+    )["aliases"]
+    alias_pairs = {(item["text"], item["label"]) for item in aliases}
+
+    assert ("Harbor China Information", "organization") in alias_pairs
+    assert ("Harbor", "organization") not in alias_pairs
+
+
 def test_entity_alias_candidates_do_not_compact_slash_placeholders() -> None:
     candidates = _iter_entity_alias_candidates(
         "Issuer Alpha Holdings",
