@@ -19,3 +19,15 @@ def test_hyphenated_alias_backfill_windows_expose_titleish_prefixes() -> None:
     )
 
     assert windows == [(0, 8, "Shanghai")]
+
+
+def test_hyphenated_alias_backfill_windows_support_listed_and_hit_suffixes() -> None:
+    listed_windows = _iter_hyphenated_alias_backfill_windows(
+        "Shanghai-listed issuers and lower-case noise"
+    )
+    hit_windows = _iter_hyphenated_alias_backfill_windows(
+        "COVID-hit hospitals and lower-case noise"
+    )
+
+    assert listed_windows == [(0, 8, "Shanghai")]
+    assert hit_windows == [(0, 5, "COVID")]

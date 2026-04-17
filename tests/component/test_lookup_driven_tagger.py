@@ -18,6 +18,84 @@ from tests.pack_generation_helpers import (
 from tests.pack_registry_helpers import delete_installed_pack_metadata
 
 
+def _create_structural_general_generation_bundle(root: Path) -> Path:
+    bundle_dir = create_general_generation_bundle(root)
+    entities_path = bundle_dir / "normalized" / "entities.jsonl"
+    records = [
+        json.loads(line)
+        for line in entities_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    records.extend(
+        [
+            {
+                "entity_id": "location:mexico",
+                "entity_type": "location",
+                "canonical_text": "Mexico",
+                "aliases": [],
+                "source_name": "curated-general",
+                "population": 126_000_000,
+            },
+            {
+                "entity_id": "organization:state-attorney",
+                "entity_type": "organization",
+                "canonical_text": "State Attorney",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.61,
+            },
+        ]
+    )
+    entities_path.write_text(
+        "".join(json.dumps(item) + "\n" for item in records),
+        encoding="utf-8",
+    )
+    return bundle_dir
+
+
+def _create_singleton_noise_general_generation_bundle(root: Path) -> Path:
+    bundle_dir = create_general_generation_bundle(root)
+    entities_path = bundle_dir / "normalized" / "entities.jsonl"
+    records = [
+        json.loads(line)
+        for line in entities_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    records.extend(
+        [
+            {
+                "entity_id": "organization:nimbus",
+                "entity_type": "organization",
+                "canonical_text": "Nimbus",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.84,
+            },
+            {
+                "entity_id": "organization:but",
+                "entity_type": "organization",
+                "canonical_text": "But",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.61,
+            },
+            {
+                "entity_id": "organization:riverton",
+                "entity_type": "organization",
+                "canonical_text": "Riverton",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.67,
+            },
+        ]
+    )
+    entities_path.write_text(
+        "".join(json.dumps(item) + "\n" for item in records),
+        encoding="utf-8",
+    )
+    return bundle_dir
+
+
 def test_tagger_uses_lookup_for_multi_token_general_aliases(tmp_path: Path) -> None:
     PackInstaller(tmp_path).install("general-en")
 
@@ -124,6 +202,45 @@ def test_tagger_resolves_matcher_entries_without_registry_exact_lookup(
     assert ("Jordan Vale", "person") in pairs
     assert ("North Harbor", "location") in pairs
     assert ("Beacon", "organization") in pairs
+
+
+def test_tagger_resolves_hyphenated_matcher_entries_without_registry_exact_lookup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    def _fail_lookup(self, candidate_text: str, **kwargs):  # type: ignore[no-untyped-def]
+        if kwargs.get("exact_alias"):
+            raise AssertionError(
+                "matcher-enabled hyphenated recovery should resolve exact matches from matcher payloads"
+            )
+        return []
+
+    monkeypatch.setattr(
+        "ades.packs.registry.PackRegistry.lookup_candidates",
+        _fail_lookup,
+    )
+
+    response = tag_text(
+        text="Beacon-based teams gathered in North Harbor.",
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Beacon", "organization") in pairs
+    assert ("North Harbor", "location") in pairs
 
 
 def test_tagger_uses_pre_resolved_general_pack_aliases(tmp_path: Path) -> None:
@@ -292,6 +409,93 @@ def test_tagger_backfills_document_defined_acronyms(tmp_path: Path) -> None:
     assert ("US", "location") in pairs
 
 
+def test_tagger_backfills_contextual_org_acronyms_and_skips_noise(tmp_path: Path) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "He told CNBC that WWF's centre had expanded. "
+            "Julian Knight MP praised the TV show and backed DACA, the act for students. "
+            "LGBT (lesbian, gay, bisexual and transgender) refugees arrived."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("CNBC", "organization") in pairs
+    assert ("WWF", "organization") in pairs
+    assert ("MP", "organization") not in pairs
+    assert ("TV", "organization") not in pairs
+    assert ("DACA", "organization") not in pairs
+    assert ("LGBT", "organization") not in pairs
+
+
+def test_tagger_backfills_article_led_and_slash_paired_org_acronyms(tmp_path: Path) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "The Court of Arbitration for Sport rejected the appeal. "
+            "The FA has contacted the full-back. "
+            "A BBC/ICM poll found support. "
+            "The NUT/ATL school cuts website tracked updates."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Court of Arbitration for Sport", "organization") in pairs
+    assert ("FA", "organization") in pairs
+    assert ("ICM", "organization") in pairs
+    assert ("ATL", "organization") in pairs
+    assert ("NUT", "organization") not in pairs
+
+
+def test_tagger_extracts_generated_standalone_org_initialisms(tmp_path: Path) -> None:
+    bundle_dir = create_acronym_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text="The IEA said energy markets would respond.",
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("IEA", "organization") in pairs
+
+
 def test_tagger_prefers_longer_valid_spans_over_embedded_fragments(
     tmp_path: Path,
 ) -> None:
@@ -397,6 +601,67 @@ def test_tagger_keeps_exact_all_caps_expansion_acronyms(tmp_path: Path) -> None:
     assert ("IEA", "organization") in pairs
 
 
+def test_tagger_prefers_geopolitical_location_acronyms_over_two_letter_org_noise(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_acronym_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text="US officials said the UK and EU would respond while CI Simpson filed a report.",
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("US", "location") in pairs
+    assert ("UK", "location") in pairs
+    assert ("EU", "location") in pairs
+    assert ("CI", "organization") not in pairs
+
+
+def test_tagger_backfills_heuristic_definition_and_contextual_acronyms(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_acronym_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "Image Source: PTI/ Reuters. The Indian Youth Congress (IYC) said members of the IYC would respond. "
+            "She later received a scholarship from MIT. "
+            "The Local Organising Committee (LOC) said the National Sports Festival (NSF) would continue."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("PTI", "organization") in pairs
+    assert ("IYC", "organization") in pairs
+    assert ("MIT", "organization") in pairs
+    assert ("LOC", "organization") in pairs
+    assert ("NSF", "organization") in pairs
+
+
 def test_tagger_extends_trailing_structural_org_suffixes(tmp_path: Path) -> None:
     pack_dir = create_bundle_backed_general_pack_source(tmp_path / "bundle-pack")
     install_pack_dir = tmp_path / "packs" / "general-en"
@@ -416,3 +681,356 @@ def test_tagger_extends_trailing_structural_org_suffixes(tmp_path: Path) -> None
     assert ("Signal Harbor Partners", "organization") not in pairs
     assert ("Beacon Group Inc", "organization") in pairs
     assert ("Beacon Group", "organization") not in pairs
+
+
+def test_tagger_extends_structural_locations_and_skips_generic_office_titles(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = _create_structural_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text="State Attorney General Douglas Chin said the Gulf of Mexico remained busy.",
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Gulf of Mexico", "location") in pairs
+    assert ("Mexico", "location") not in pairs
+    assert ("State Attorney", "organization") not in pairs
+
+
+def test_tagger_suppresses_singleton_org_noise_while_keeping_repeated_mentions(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = _create_singleton_noise_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text="But this plan failed. I posted on Nimbus. Nimbus users replied from Riverton, North Harbor.",
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Nimbus", "organization") in pairs
+    assert ("But", "organization") not in pairs
+    assert ("Riverton", "organization") not in pairs
+
+
+def test_tagger_backfills_structured_organizations_and_skips_dateline_noise(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "LONDON (Reuters) - Russian Foreign Ministry officials met Columbia University "
+            "and Opinion Research Corporation advisers."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Russian Foreign Ministry", "organization") in pairs
+    assert ("Columbia University", "organization") in pairs
+    assert ("Opinion Research Corporation", "organization") in pairs
+    assert ("LONDON", "organization") not in pairs
+    assert ("LONDON", "location") not in pairs
+
+
+def test_tagger_prefers_structural_org_spans_over_short_alias_fragments(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "Glasgow City Council said it planned to raise council tax. "
+            "In the schoolyard of the Shmisani Institute for Girls, teachers gathered."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Glasgow City Council", "organization") in pairs
+    assert ("Glasgow City", "location") not in pairs
+    assert ("Shmisani Institute for Girls", "organization") in pairs
+    assert ("Girls", "organization") not in pairs
+
+
+def test_tagger_extends_college_spans_and_backfills_unhcr(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    entities_path = bundle_dir / "normalized" / "entities.jsonl"
+    records = [
+        json.loads(line)
+        for line in entities_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    records.append(
+        {
+            "entity_id": "organization:college-of-physicians",
+            "entity_type": "organization",
+            "canonical_text": "College of Physicians",
+            "aliases": [],
+            "source_name": "curated-general",
+            "popularity": 0.63,
+        }
+    )
+    entities_path.write_text(
+        "".join(json.dumps(item) + "\n" for item in records),
+        encoding="utf-8",
+    )
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "The College of Physicians of Philadelphia hosted the exhibit. "
+            "Roads to Goma were crowded with refugees, the UNHCR reported. "
+            "The U.N. High Commissioner for Refugees warned of danger."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("College of Physicians of Philadelphia", "organization") in pairs
+    assert ("College of Physicians", "organization") not in pairs
+    assert ("UNHCR", "organization") in pairs
+
+
+def test_tagger_recovers_connector_head_and_hospital_structural_spans(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            '"Our offices are basically destroyed now, nothing works," UNHCR spokesman '
+            "Ron Redmond said from Geneva. "
+            "WHO Collaborating Centre for pharmacovigilance launched at IPC Ghaziabad. "
+            "Evans told the Society of Editors meeting. "
+            "The 26-year-old commando served with the Special Operations Task Group. "
+            "A patient was taken to Sunshine Coast University Hospital."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("UNHCR", "organization") in pairs
+    assert ("WHO Collaborating Centre for pharmacovigilance", "organization") in pairs
+    assert ("WHO", "organization") not in pairs
+    assert ("Society of Editors", "organization") in pairs
+    assert ("Editors", "organization") not in pairs
+    assert ("Special Operations Task Group", "organization") in pairs
+    assert ("Special Operations", "organization") not in pairs
+    assert ("Sunshine Coast University Hospital", "organization") in pairs
+    assert ("Sunshine Coast", "location") not in pairs
+
+
+def test_tagger_prefers_structural_orgs_over_article_led_generic_overlap_winners(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "City of Edinburgh Council met the National Fire Chiefs Council "
+            "after a safety review."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+    normalized_pairs = {(entity.text.casefold(), entity.label) for entity in response.entities}
+
+    assert ("City of Edinburgh Council", "organization") in pairs
+    assert ("National Fire Chiefs Council", "organization") in pairs
+    assert ("the national", "organization") not in normalized_pairs
+
+
+def test_tagger_recovers_solutions_suffix_locations_and_or_acronym_definitions(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "Dave Ramsey is CEO of Ramsey Solutions. "
+            "The men were held on the island of Nauru. "
+            "Deferred Action for Childhood Arrivals, or DACA, program supporters gathered."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Ramsey Solutions", "organization") in pairs
+    assert ("island of Nauru", "location") in pairs
+    assert ("DACA", "organization") in pairs
+
+
+def test_tagger_recovers_media_suffix_and_parliamentary_house_spans(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "Newsmax Media published the interview after members of the House of Commons met. "
+            "Greek media later repeated the claim."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Newsmax Media", "organization") in pairs
+    assert ("House of Commons", "organization") in pairs
+    assert ("Greek media", "organization") not in pairs
+
+
+def test_tagger_recovers_hyphenated_locations_and_broadcaster_acronyms(
+    tmp_path: Path,
+) -> None:
+    pack_dir = create_bundle_backed_general_pack_source(tmp_path / "bundle-pack")
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "The London-based regulator joined a Vermont-based advocacy group. "
+            "Local broadcaster WISN reported the decision."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("London", "location") in pairs
+    assert ("Vermont", "location") in pairs
+    assert ("WISN", "organization") in pairs
+
+
+def test_tagger_recovers_contextual_archive_acronyms_and_multi_token_hyphenated_locations(
+    tmp_path: Path,
+) -> None:
+    pack_dir = create_bundle_backed_general_pack_source(tmp_path / "bundle-pack")
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "The trade association ABICAB reported new figures while state news agency KCNA "
+            "released a statement. The LGBT community then praised the Networked Quantum "
+            "Information Technologies Hub (NQIT). A Hong Kong-based analyst later commented."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("ABICAB", "organization") in pairs
+    assert ("KCNA", "organization") in pairs
+    assert ("LGBT", "organization") in pairs
+    assert ("NQIT", "organization") in pairs
+    assert ("Hong Kong", "location") in pairs

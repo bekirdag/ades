@@ -1,8 +1,11 @@
 from pathlib import Path
+import sqlite3
 
 from ades.packs.alias_analysis import (
+    AliasAnalysisResult,
     analyze_alias_candidates,
     analyze_alias_candidates_from_db,
+    audit_general_retained_aliases,
     build_alias_candidate,
     iter_retained_aliases_from_db,
 )
@@ -58,6 +61,841 @@ def test_analyze_alias_candidates_persists_file_backed_retained_aliases(
         (item["text"], item["label"]) for item in retained
     }
     assert all(item["runtime_tier"] == "runtime_exact_high_precision" for item in retained)
+
+
+def test_iter_retained_aliases_from_db_supports_legacy_schema_without_runtime_tier(
+    tmp_path: Path,
+) -> None:
+    analysis_db_path = tmp_path / "legacy-analysis.sqlite"
+    connection = sqlite3.connect(str(analysis_db_path))
+    try:
+        connection.execute(
+            """
+            CREATE TABLE retained_aliases (
+                display_text TEXT NOT NULL,
+                label TEXT NOT NULL,
+                display_sort_key TEXT NOT NULL,
+                label_sort_key TEXT NOT NULL,
+                generated INTEGER NOT NULL,
+                score REAL NOT NULL,
+                canonical_text TEXT NOT NULL,
+                source_name TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                source_priority REAL NOT NULL,
+                popularity_weight REAL NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO retained_aliases (
+                display_text,
+                label,
+                display_sort_key,
+                label_sort_key,
+                generated,
+                score,
+                canonical_text,
+                source_name,
+                entity_id,
+                source_priority,
+                popularity_weight
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "Four Ways",
+                "location",
+                "four ways",
+                "location",
+                0,
+                0.91,
+                "Four Ways",
+                "legacy-general",
+                "location:four-ways",
+                0.9,
+                0.95,
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    retained = list(iter_retained_aliases_from_db(analysis_db_path))
+
+    assert retained == [
+        {
+            "text": "Four Ways",
+            "label": "location",
+            "generated": False,
+            "score": 0.91,
+            "canonical_text": "Four Ways",
+            "source_name": "legacy-general",
+            "entity_id": "location:four-ways",
+            "source_priority": 0.9,
+            "popularity_weight": 0.95,
+            "runtime_tier": "runtime_exact_high_precision",
+        }
+    ]
+
+
+def test_audit_general_retained_aliases_removes_generic_words_and_phrases() -> None:
+    result = AliasAnalysisResult(
+        backend="sqlite",
+        database_path=None,
+        candidate_alias_count=3,
+        retained_alias_count=3,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=0,
+        natural_language_alias_count=3,
+        retained_label_counts={"location": 2, "organization": 1},
+        retained_aliases_materialized=True,
+        retained_aliases=[
+            {
+                "text": "Cars",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Cars",
+                "source_name": "curated-general",
+                "entity_id": "organization:cars",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Four Ways",
+                "label": "location",
+                "generated": False,
+                "score": 0.91,
+                "canonical_text": "Four Ways",
+                "source_name": "curated-general",
+                "entity_id": "location:four-ways",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "North Harbor",
+                "label": "location",
+                "generated": False,
+                "score": 0.93,
+                "canonical_text": "North Harbor",
+                "source_name": "curated-general",
+                "entity_id": "location:north-harbor",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+        ],
+    )
+
+    result = audit_general_retained_aliases(result, chunk_size=2)
+
+    assert {(item["text"], item["label"]) for item in result.retained_aliases} == {
+        ("North Harbor", "location")
+    }
+    assert result.retained_alias_count == 1
+    assert result.retained_label_counts == {"location": 1}
+    assert result.retained_alias_audit_scanned_alias_count == 3
+    assert result.retained_alias_audit_removed_alias_count == 2
+    assert result.retained_alias_audit_chunk_size == 2
+    assert result.retained_alias_audit_reason_counts == {
+        "generic_retained_phrase_alias": 1,
+        "generic_retained_single_token_alias": 1,
+    }
+
+
+def test_audit_general_retained_aliases_deterministic_common_english() -> None:
+    result = AliasAnalysisResult(
+        backend="sqlite",
+        database_path=None,
+        candidate_alias_count=5,
+        retained_alias_count=5,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=0,
+        natural_language_alias_count=5,
+        retained_label_counts={"location": 3, "organization": 2},
+        retained_aliases_materialized=True,
+        retained_aliases=[
+            {
+                "text": "Cars",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Cars",
+                "source_name": "curated-general",
+                "entity_id": "organization:cars",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "March",
+                "label": "location",
+                "generated": False,
+                "score": 0.91,
+                "canonical_text": "March",
+                "source_name": "curated-general",
+                "entity_id": "location:march",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "North Harbor",
+                "label": "location",
+                "generated": False,
+                "score": 0.93,
+                "canonical_text": "North Harbor",
+                "source_name": "curated-general",
+                "entity_id": "location:north-harbor",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "1+1 Media Group",
+                "label": "organization",
+                "generated": False,
+                "score": 0.93,
+                "canonical_text": "1+1 Media Group",
+                "source_name": "curated-general",
+                "entity_id": "organization:1plus1-media-group",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Beacon Group",
+                "label": "organization",
+                "generated": False,
+                "score": 0.93,
+                "canonical_text": "Beacon Group",
+                "source_name": "curated-general",
+                "entity_id": "organization:beacon-group",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+        ],
+    )
+
+    result = audit_general_retained_aliases(
+        result,
+        chunk_size=5,
+        review_mode="deterministic_common_english",
+    )
+
+    assert {(item["text"], item["label"]) for item in result.retained_aliases} == {
+        ("1+1 Media Group", "organization"),
+        ("Beacon Group", "organization"),
+        ("North Harbor", "location"),
+    }
+    assert result.retained_alias_count == 3
+    assert result.retained_label_counts == {"location": 1, "organization": 2}
+    assert result.retained_alias_audit_mode == "deterministic_common_english"
+    assert result.retained_alias_audit_reason_counts == {
+        "generic_retained_single_token_alias": 2,
+    }
+
+
+def test_audit_general_retained_aliases_generic_phrase_rule() -> None:
+    result = AliasAnalysisResult(
+        backend="sqlite",
+        database_path=None,
+        candidate_alias_count=3,
+        retained_alias_count=3,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=0,
+        natural_language_alias_count=3,
+        retained_label_counts={"location": 2, "organization": 1},
+        retained_aliases_materialized=True,
+        retained_aliases=[
+            {
+                "text": "Four Ways",
+                "label": "location",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Four Ways",
+                "source_name": "curated-general",
+                "entity_id": "location:four-ways",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "North Harbor",
+                "label": "location",
+                "generated": False,
+                "score": 0.93,
+                "canonical_text": "North Harbor",
+                "source_name": "curated-general",
+                "entity_id": "location:north-harbor",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "1+1 Media Group",
+                "label": "organization",
+                "generated": False,
+                "score": 0.93,
+                "canonical_text": "1+1 Media Group",
+                "source_name": "curated-general",
+                "entity_id": "organization:1plus1-media-group",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+        ],
+    )
+
+    result = audit_general_retained_aliases(
+        result,
+        chunk_size=3,
+        review_mode="deterministic_common_english",
+    )
+
+    assert {(item["text"], item["label"]) for item in result.retained_aliases} == {
+        ("1+1 Media Group", "organization"),
+        ("North Harbor", "location"),
+    }
+    assert result.retained_alias_audit_reason_counts == {
+        "generic_retained_phrase_alias": 1,
+    }
+
+
+def test_audit_general_retained_aliases_keeps_dotted_initial_aliases() -> None:
+    result = AliasAnalysisResult(
+        backend="sqlite",
+        database_path=None,
+        candidate_alias_count=4,
+        retained_alias_count=4,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=0,
+        natural_language_alias_count=4,
+        retained_label_counts={"organization": 2, "location": 2},
+        retained_aliases_materialized=True,
+        retained_aliases=[
+            {
+                "text": "A. T. Cross",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "A. T. Cross",
+                "source_name": "curated-general",
+                "entity_id": "organization:at-cross",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "A. V. Club",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "A. V. Club",
+                "source_name": "curated-general",
+                "entity_id": "organization:av-club",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "A. Point",
+                "label": "location",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "A. Point",
+                "source_name": "curated-general",
+                "entity_id": "location:a-point",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Four Ways",
+                "label": "location",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Four Ways",
+                "source_name": "curated-general",
+                "entity_id": "location:four-ways",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+        ],
+    )
+
+    result = audit_general_retained_aliases(
+        result,
+        chunk_size=4,
+        review_mode="deterministic_common_english",
+    )
+
+    assert {(item["text"], item["label"]) for item in result.retained_aliases} == {
+        ("A. Point", "location"),
+        ("A. T. Cross", "organization"),
+        ("A. V. Club", "organization"),
+    }
+    assert result.retained_alias_audit_reason_counts == {
+        "generic_retained_phrase_alias": 1,
+    }
+
+
+def test_audit_general_retained_aliases_keeps_article_led_and_parenthetical_aliases() -> None:
+    result = AliasAnalysisResult(
+        backend="sqlite",
+        database_path=None,
+        candidate_alias_count=4,
+        retained_alias_count=4,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=0,
+        natural_language_alias_count=4,
+        retained_label_counts={"organization": 2, "person": 1, "location": 1},
+        retained_aliases_materialized=True,
+        retained_aliases=[
+            {
+                "text": "The Truth",
+                "label": "person",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "The Truth",
+                "source_name": "curated-general",
+                "entity_id": "person:the-truth",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "The American University",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "The American University",
+                "source_name": "curated-general",
+                "entity_id": "organization:the-american-university",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Can (band)",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Can (band)",
+                "source_name": "curated-general",
+                "entity_id": "organization:can-band",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "A Day in the Life",
+                "label": "location",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "A Day in the Life",
+                "source_name": "curated-general",
+                "entity_id": "location:a-day-in-the-life",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+        ],
+    )
+
+    result = audit_general_retained_aliases(
+        result,
+        chunk_size=4,
+        review_mode="deterministic_common_english",
+    )
+
+    assert {(item["text"], item["label"]) for item in result.retained_aliases} == {
+        ("A Day in the Life", "location"),
+        ("Can (band)", "organization"),
+        ("The American University", "organization"),
+        ("The Truth", "person"),
+    }
+    assert result.retained_alias_audit_reason_counts == {}
+
+
+def test_audit_general_retained_aliases_keeps_location_singletons_outside_static_blocklist() -> None:
+    result = AliasAnalysisResult(
+        backend="sqlite",
+        database_path=None,
+        candidate_alias_count=2,
+        retained_alias_count=2,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=0,
+        natural_language_alias_count=2,
+        retained_label_counts={"location": 2},
+        retained_aliases_materialized=True,
+        retained_aliases=[
+            {
+                "text": "Europe",
+                "label": "location",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Europe",
+                "source_name": "curated-general",
+                "entity_id": "location:europe",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Five",
+                "label": "location",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Five",
+                "source_name": "curated-general",
+                "entity_id": "location:five",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+        ],
+    )
+
+    result = audit_general_retained_aliases(
+        result,
+        chunk_size=2,
+        review_mode="deterministic_common_english",
+    )
+
+    assert {(item["text"], item["label"]) for item in result.retained_aliases} == {
+        ("Europe", "location"),
+    }
+    assert result.retained_alias_audit_reason_counts == {
+        "generic_retained_single_token_alias": 1,
+    }
+
+
+def test_audit_general_retained_aliases_keeps_non_ascii_alpha_aliases() -> None:
+    result = AliasAnalysisResult(
+        backend="sqlite",
+        database_path=None,
+        candidate_alias_count=2,
+        retained_alias_count=2,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=0,
+        natural_language_alias_count=2,
+        retained_label_counts={"location": 1, "organization": 1},
+        retained_aliases_materialized=True,
+        retained_aliases=[
+            {
+                "text": "Āhim",
+                "label": "location",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Āhim",
+                "source_name": "curated-general",
+                "entity_id": "location:ahim",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Cars",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Cars",
+                "source_name": "curated-general",
+                "entity_id": "organization:cars",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+        ],
+    )
+
+    result = audit_general_retained_aliases(
+        result,
+        chunk_size=2,
+        review_mode="deterministic_common_english",
+    )
+
+    assert {(item["text"], item["label"]) for item in result.retained_aliases} == {
+        ("Āhim", "location"),
+    }
+    assert result.retained_alias_audit_reason_counts == {
+        "generic_retained_single_token_alias": 1,
+    }
+
+
+def test_audit_general_retained_aliases_keeps_branded_and_month_led_aliases() -> None:
+    result = AliasAnalysisResult(
+        backend="sqlite",
+        database_path=None,
+        candidate_alias_count=11,
+        retained_alias_count=11,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=0,
+        natural_language_alias_count=11,
+        retained_label_counts={"location": 4, "organization": 7},
+        retained_aliases_materialized=True,
+        retained_aliases=[
+            {
+                "text": "World Bank",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "World Bank",
+                "source_name": "curated-general",
+                "entity_id": "organization:world-bank",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Capital One",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Capital One",
+                "source_name": "curated-general",
+                "entity_id": "organization:capital-one",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Twitter",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Twitter",
+                "source_name": "curated-general",
+                "entity_id": "organization:twitter",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Chicago",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Chicago",
+                "source_name": "curated-general",
+                "entity_id": "organization:chicago",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "April",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "April",
+                "source_name": "curated-general",
+                "entity_id": "organization:april",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "May City",
+                "label": "location",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "May City",
+                "source_name": "curated-general",
+                "entity_id": "location:may-city",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "May Day",
+                "label": "location",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "May Day",
+                "source_name": "curated-general",
+                "entity_id": "location:may-day",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Seven Eleven",
+                "label": "location",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Seven Eleven",
+                "source_name": "curated-general",
+                "entity_id": "location:seven-eleven",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Four Ways",
+                "label": "location",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Four Ways",
+                "source_name": "curated-general",
+                "entity_id": "location:four-ways",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Cars",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Cars",
+                "source_name": "curated-general",
+                "entity_id": "organization:cars",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "CEO",
+                "label": "organization",
+                "generated": False,
+                "score": 0.94,
+                "canonical_text": "Corporate Europe Observatory",
+                "source_name": "wikidata-general-entities",
+                "entity_id": "wikidata:Q2997673",
+                "source_priority": 0.9,
+                "popularity_weight": 0.95,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+        ],
+    )
+
+    result = audit_general_retained_aliases(
+        result,
+        chunk_size=10,
+        review_mode="deterministic_common_english",
+    )
+
+    assert {(item["text"], item["label"]) for item in result.retained_aliases} == {
+        ("April", "organization"),
+        ("Capital One", "organization"),
+        ("Chicago", "organization"),
+        ("May City", "location"),
+        ("May Day", "location"),
+        ("Seven Eleven", "location"),
+        ("Twitter", "organization"),
+        ("World Bank", "organization"),
+    }
+    assert result.retained_alias_audit_reason_counts == {
+        "generic_retained_phrase_alias": 1,
+        "generic_retained_single_token_alias": 2,
+    }
+
+
+def test_audit_general_retained_aliases_callable_reviewer_scans_each_alias_once(
+    tmp_path: Path,
+) -> None:
+    result = AliasAnalysisResult(
+        backend="sqlite",
+        database_path=None,
+        candidate_alias_count=3,
+        retained_alias_count=3,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=0,
+        natural_language_alias_count=3,
+        retained_label_counts={"location": 2, "organization": 1},
+        retained_aliases_materialized=True,
+        retained_aliases=[
+            {
+                "text": "Cars",
+                "label": "organization",
+                "canonical_text": "Cars",
+                "entity_id": "organization:cars",
+                "source_name": "curated-general",
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Four Ways",
+                "label": "location",
+                "canonical_text": "Four Ways",
+                "entity_id": "location:four-ways",
+                "source_name": "curated-general",
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "North Harbor",
+                "label": "location",
+                "canonical_text": "North Harbor",
+                "entity_id": "location:north-harbor",
+                "source_name": "curated-general",
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+        ],
+    )
+    review_cache_path = tmp_path / "retained-alias-review.sqlite"
+    calls: list[str] = []
+    fail_on_call = False
+
+    def reviewer(alias: dict[str, object]) -> dict[str, str]:
+        if fail_on_call:
+            raise AssertionError(f"unexpected cache miss for {alias['text']}")
+        calls.append(str(alias["text"]))
+        if alias["text"] in {"Cars", "Four Ways"}:
+            return {
+                "decision": "drop",
+                "reason_code": "generic_retained_alias_from_ai_review",
+                "reason": "too generic for general-en runtime",
+            }
+        return {
+            "decision": "keep",
+            "reason_code": "specific_retained_alias",
+            "reason": "specific enough to keep",
+        }
+
+    first = audit_general_retained_aliases(
+        result,
+        reviewer=reviewer,
+        review_cache_path=review_cache_path,
+    )
+
+    assert calls == ["Cars", "Four Ways", "North Harbor"]
+    assert {(item["text"], item["label"]) for item in first.retained_aliases} == {
+        ("North Harbor", "location")
+    }
+    assert first.retained_alias_audit_mode == "callable"
+    assert first.retained_alias_audit_invoked_review_count == 3
+    assert first.retained_alias_audit_cached_review_count == 0
+    assert review_cache_path.exists()
+
+    fail_on_call = True
+
+    second = audit_general_retained_aliases(
+        result,
+        reviewer=reviewer,
+        review_cache_path=review_cache_path,
+    )
+
+    assert {(item["text"], item["label"]) for item in second.retained_aliases} == {
+        ("North Harbor", "location")
+    }
+    assert second.retained_alias_audit_mode == "callable"
+    assert second.retained_alias_audit_invoked_review_count == 0
+    assert second.retained_alias_audit_cached_review_count == 3
+    assert second.retained_alias_audit_review_cache_path == str(review_cache_path)
 
 
 def test_alias_analysis_blocks_low_information_single_label_alias() -> None:
@@ -686,6 +1524,49 @@ def test_alias_analysis_prefers_supported_acronym_expansion_over_weak_exact_shor
     assert (
         result.retained_aliases[0]["canonical_text"]
         == "International Energy Agency"
+    )
+    assert (
+        result.retained_aliases[0]["runtime_tier"]
+        == "runtime_exact_acronym_high_precision"
+    )
+
+
+def test_alias_analysis_matches_acronym_expansions_with_connector_words() -> None:
+    result = analyze_alias_candidates(
+        [
+            build_alias_candidate(
+                alias_key="daera",
+                display_text="DAERA",
+                label="organization",
+                canonical_text="DAERA",
+                record={
+                    "entity_id": "synthetic:organization:daera-short",
+                    "source_name": "wikidata-general-entities",
+                    "source_priority": 0.8,
+                    "popularity": 0.4,
+                },
+            ),
+            build_alias_candidate(
+                alias_key="daera",
+                display_text="DAERA",
+                label="organization",
+                canonical_text="Department of Agriculture, Environment and Rural Affairs",
+                record={
+                    "entity_id": "synthetic:organization:daera-expansion",
+                    "source_name": "curated-general",
+                    "source_priority": 0.9,
+                    "popularity": 0.92,
+                },
+                generated=True,
+            ),
+        ],
+        allowed_ambiguous_aliases=set(),
+    )
+
+    assert result.retained_alias_count == 1
+    assert (
+        result.retained_aliases[0]["canonical_text"]
+        == "Department of Agriculture, Environment and Rural Affairs"
     )
     assert (
         result.retained_aliases[0]["runtime_tier"]

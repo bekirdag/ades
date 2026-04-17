@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import os
 from pathlib import Path
 import re
@@ -32,6 +32,7 @@ from ..text_processing import NormalizedText, normalize_lookup_text, normalize_t
 from ..version import __version__
 
 TOKEN_RE = re.compile(r"\b[\w][\w.+&/-]*\b")
+INITIALISM_TOKEN_RE = re.compile(r"(?:[A-Za-z]\.){2,}|[A-Za-z][A-Za-z'’-]*")
 LINK_VALUE_RE = re.compile(r"[^a-z0-9]+")
 MAX_ALIAS_WINDOW_TOKENS = 8
 MAX_INPUT_BYTES = 1_000_000
@@ -95,6 +96,7 @@ _GENERIC_PHRASE_LEADS = {
     "a",
     "an",
     "any",
+    "but",
     "each",
     "every",
     "he",
@@ -192,6 +194,12 @@ _GENERIC_SINGLE_TOKEN_HEADS = {
     "university",
     "world",
 }
+_ARTICLE_LED_STRUCTURAL_FRAGMENT_TOKENS = {
+    "international",
+    "local",
+    "national",
+    "regional",
+}
 _ACRONYM_CONNECTOR_WORDS = {
     "a",
     "an",
@@ -210,6 +218,92 @@ _ACRONYM_CONNECTOR_WORDS = {
 _ACRONYM_AFTER_ENTITY_RE = re.compile(r"^\s*\((?P<acronym>[A-Z][A-Z0-9.&/-]{1,9})\)")
 _ACRONYM_BEFORE_ENTITY_RE = re.compile(r"(?P<acronym>[A-Z][A-Z0-9.&/-]{1,9})\s*\(\s*$")
 _MAX_ACRONYM_DEFINITION_WINDOW = 16
+_EXPLICIT_ACRONYM_PAREN_RE = re.compile(r"\(\s*(?P<acronym>[A-Z][A-Z0-9.&/-]{2,9})\s*\)")
+_EXPLICIT_ACRONYM_COMMA_RE = re.compile(
+    r",\s*(?:or\s+)?(?P<acronym>[A-Z][A-Z0-9.&/-]{2,9})(?=,)"
+)
+_EXPLICIT_ACRONYM_LONGFORM_RE = re.compile(
+    r"(?P<long>[A-Z][A-Za-z0-9'’-]*(?:\s+(?:(?:[A-Z][A-Za-z0-9'’-]*)|(?:a|an|and|at|by|for|from|in|of|on|the|to|with|da|de|del|du|la|van|von))){1,11})\s*$"
+)
+_MAX_EXPLICIT_ACRONYM_LONGFORM_WINDOW = 120
+_MATCHER_REGISTRY_SHORT_ALIAS_LENGTH_RANGE = range(2, 7)
+_CONTEXTUAL_ORG_ACRONYM_LENGTH_RANGE = range(2, 7)
+_CONTEXTUAL_ORG_ACRONYM_REPORTING_CUES = {
+    "citing",
+    "emailed",
+    "interviewed",
+    "quoted",
+    "reported",
+    "reports",
+    "reporting",
+    "says",
+    "said",
+    "telling",
+    "tells",
+    "told",
+    "tweeted",
+    "tweets",
+    "wrote",
+    "writes",
+}
+_CONTEXTUAL_ORG_ACRONYM_PREPOSITION_CUES = {"at", "by", "for", "from", "of", "with"}
+_CONTEXTUAL_ORG_ACRONYM_CONTEXT_NOUN_CUES = {
+    "agency",
+    "association",
+    "broadcaster",
+    "board",
+    "bureau",
+    "centre",
+    "center",
+    "chair",
+    "chairman",
+    "college",
+    "committee",
+    "commission",
+    "congress",
+    "council",
+    "director",
+    "festival",
+    "group",
+    "institute",
+    "members",
+    "member",
+    "office",
+    "project",
+    "poll",
+    "school",
+    "scholarship",
+    "source",
+    "survey",
+    "team",
+    "university",
+    "union",
+    "unions",
+    "website",
+}
+_CONTEXTUAL_ORG_ACRONYM_FOLLOWING_CUES = _CONTEXTUAL_ORG_ACRONYM_REPORTING_CUES | {
+    "adviser",
+    "advisor",
+    "affiliate",
+    "agency",
+    "community",
+    "official",
+    "officials",
+    "spokesman",
+    "spokesperson",
+    "spokeswoman",
+}
+_HEURISTIC_ACRONYM_LOCATION_SUFFIX_TOKENS = {
+    "city",
+    "county",
+    "islands",
+    "kingdom",
+    "province",
+    "republic",
+    "state",
+    "states",
+    "territory",
+}
 _HYPHENATED_ALIAS_BACKFILL_SUFFIXES = {
     "backed",
     "based",
@@ -217,7 +311,9 @@ _HYPHENATED_ALIAS_BACKFILL_SUFFIXES = {
     "centred",
     "driven",
     "focused",
+    "hit",
     "led",
+    "listed",
     "linked",
     "owned",
     "related",
@@ -225,12 +321,21 @@ _HYPHENATED_ALIAS_BACKFILL_SUFFIXES = {
     "sourced",
     "targeted",
 }
+_HYHENATED_LOCATION_PRECEDING_ARTICLES = {"a", "an", "the"}
+_HEURISTIC_HYPHENATED_LOCATION_SUFFIXES = {
+    "based",
+    "centered",
+    "centred",
+    "listed",
+}
 _STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS = {
     "agency",
     "association",
     "bank",
     "bureau",
+    "center",
     "capital",
+    "centre",
     "committee",
     "company",
     "corp",
@@ -240,6 +345,9 @@ _STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS = {
     "group",
     "holding",
     "holdings",
+    "hospital",
+    "hospitals",
+    "hub",
     "inc",
     "institute",
     "intelligence",
@@ -254,36 +362,190 @@ _STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS = {
     "plc",
     "research",
     "services",
+    "society",
     "solutions",
+    "studies",
     "systems",
     "technologies",
     "technology",
     "university",
 }
+_HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS = {
+    "agency",
+    "association",
+    "bank",
+    "bureau",
+    "center",
+    "centre",
+    "committee",
+    "corporation",
+    "council",
+    "foundation",
+    "group",
+    "hospital",
+    "hospitals",
+    "hub",
+    "institute",
+    "media",
+    "ministry",
+    "network",
+    "organization",
+    "society",
+    "solutions",
+    "university",
+}
+_OPTIONAL_EXPLICIT_ACRONYM_TRAILING_SUFFIX_TOKENS = {"hub"}
 _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS = {
     "agency",
     "association",
     "bank",
     "bureau",
+    "center",
+    "centre",
+    "college",
+    "commission",
     "committee",
     "council",
+    "court",
     "foundation",
     "group",
+    "house",
+    "hospital",
+    "hospitals",
     "institute",
     "ministry",
     "network",
     "organization",
     "research",
+    "society",
+    "study",
     "university",
+}
+_WEAK_HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS = {
+    "media",
+    "systems",
+}
+_GENERIC_STRUCTURAL_ORG_QUANTIFIER_LEADS = {
+    "all",
+    "both",
+    "few",
+    "many",
+    "multiple",
+    "several",
+    "some",
+}
+_PARLIAMENTARY_HOUSE_TAIL_TOKENS = {
+    "assembly",
+    "commons",
+    "lords",
+    "parliament",
+    "representatives",
+}
+_IRREGULAR_DEMONYM_MODIFIER_TOKENS = {
+    "british",
+    "dutch",
+    "english",
+    "french",
+    "greek",
+    "irish",
+    "scottish",
+    "welsh",
 }
 _STRUCTURAL_ORG_CONNECTOR_TOKENS = {"for", "of"}
 _MAX_STRUCTURAL_ORG_SUFFIX_TOKENS = 3
 _MAX_STRUCTURAL_ORG_CONNECTOR_TAIL_TOKENS = 3
+_STRUCTURAL_LOCATION_HEAD_TOKENS = {
+    "bay",
+    "cape",
+    "delta",
+    "gulf",
+    "island",
+    "lake",
+    "mainland",
+    "mount",
+    "mountain",
+    "river",
+    "sea",
+    "strait",
+}
+_STRUCTURAL_LOCATION_CONNECTOR_TOKENS = {"of"}
+_GENERIC_OFFICE_TITLE_TOKENS = {
+    "attorney",
+    "ceo",
+    "chair",
+    "commissioner",
+    "director",
+    "governor",
+    "judge",
+    "leader",
+    "mayor",
+    "member",
+    "minister",
+    "officer",
+    "president",
+    "prosecutor",
+    "secretary",
+    "senator",
+    "spokesperson",
+}
+_GENERIC_STRUCTURED_ORG_QUANTIFIER_LEADS = {
+    "all",
+    "both",
+    "few",
+    "many",
+    "multiple",
+    "several",
+    "some",
+}
+_SINGLETON_ORG_CONTEXT_CUE_TOKENS = {
+    "at",
+    "by",
+    "from",
+    "in",
+    "into",
+    "on",
+    "under",
+    "via",
+    "with",
+}
+_HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS: set[str] = set()
+for _suffix in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS:
+    _HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS.add(re.escape(_suffix))
+    _HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS.add(re.escape(_suffix.title()))
+    _HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS.add(re.escape(_suffix.upper()))
+_STRUCTURAL_ORG_CONNECTOR_HEAD_VARIANTS: set[str] = set()
+for _head in _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS:
+    _STRUCTURAL_ORG_CONNECTOR_HEAD_VARIANTS.add(re.escape(_head))
+    _STRUCTURAL_ORG_CONNECTOR_HEAD_VARIANTS.add(re.escape(_head.title()))
+    _STRUCTURAL_ORG_CONNECTOR_HEAD_VARIANTS.add(re.escape(_head.upper()))
+_STRUCTURAL_LOCATION_HEAD_VARIANTS: set[str] = set()
+for _head in _STRUCTURAL_LOCATION_HEAD_TOKENS:
+    _STRUCTURAL_LOCATION_HEAD_VARIANTS.add(re.escape(_head))
+    _STRUCTURAL_LOCATION_HEAD_VARIANTS.add(re.escape(_head.title()))
+    _STRUCTURAL_LOCATION_HEAD_VARIANTS.add(re.escape(_head.upper()))
+_HEURISTIC_STRUCTURAL_ORG_RE = re.compile(
+    r"\b(?P<org>(?:[A-Z][A-Za-z]*(?:-[A-Z][A-Za-z]*)*)(?:\s+(?:(?:[A-Z][A-Za-z]*(?:-[A-Z][A-Za-z]*)*)|(?:of|for|the))){0,4}\s+(?:"
+    + "|".join(sorted(_HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS))
+    + r"))\b"
+)
+_HEURISTIC_CONNECTOR_STRUCTURAL_ORG_RE = re.compile(
+    r"\b(?P<org>(?:[A-Z][A-Za-z]*(?:-[A-Z][A-Za-z]*)*\s+){0,2}(?:"
+    + "|".join(sorted(_STRUCTURAL_ORG_CONNECTOR_HEAD_VARIANTS))
+    + r")\s+(?:of|for)\s+(?:the\s+)?(?:[A-Z][A-Za-z]*(?:-[A-Z][A-Za-z]*)*|[a-z][A-Za-z-]{4,})(?:\s+(?:(?:of|for|the)|(?:[A-Z][A-Za-z]*(?:-[A-Z][A-Za-z]*)*))){0,3})\b"
+)
+_HEURISTIC_STRUCTURAL_LOCATION_RE = re.compile(
+    r"\b(?P<loc>(?:"
+    + "|".join(sorted(_STRUCTURAL_LOCATION_HEAD_VARIANTS))
+    + r")\s+of\s+(?:the\s+)?(?:[A-Z][A-Za-z]*(?:-[A-Z][A-Za-z]*)*)(?:\s+[A-Z][A-Za-z]*(?:-[A-Z][A-Za-z]*)*){0,2})\b"
+)
 
 _LANE_PRIORITY = {
     "deterministic_rule": 3,
     "deterministic_alias": 2,
     "document_acronym_backfill": 2,
+    "heuristic_definition_acronym_backfill": 2,
+    "heuristic_structured_org_backfill": 2,
+    "heuristic_structured_location_backfill": 2,
     "proposal_linked": 1,
 }
 
@@ -319,6 +581,32 @@ class DocumentAcronymDefinition:
     anchor: ExtractedCandidate
 
 
+@dataclass(frozen=True)
+class HeuristicAcronymDefinition:
+    acronym_text: str
+    normalized_acronym: str
+    label: str
+    long_form: str
+    definition_start: int
+    definition_end: int
+    acronym_start: int
+    acronym_end: int
+
+
+@dataclass(frozen=True)
+class HeuristicStructuredOrganization:
+    text: str
+    start: int
+    end: int
+
+
+@dataclass(frozen=True)
+class HeuristicStructuredLocation:
+    text: str
+    start: int
+    end: int
+
+
 def _language_from_pack(pack: str) -> str:
     if "-" not in pack:
         return "unknown"
@@ -351,6 +639,10 @@ def _iter_candidate_windows(
 def _normalize_link_value(value: str) -> str:
     normalized = LINK_VALUE_RE.sub("-", value.casefold()).strip("-")
     return normalized or "value"
+
+
+def _collapse_whitespace(value: str) -> str:
+    return " ".join(value.split())
 
 
 def _build_entity_link(
@@ -480,6 +772,16 @@ def _extract_lookup_alias_entities(
                 lookup_cache=lookup_cache,
             )
         )
+        extracted.extend(
+            _extract_registry_short_alias_entities_for_matcher_packs(
+                segment_text_value,
+                segment_start=segment_start,
+                normalized_input=normalized_input,
+                registry=registry,
+                allowed_pack_ids=matcher_pack_ids,
+                lookup_cache=lookup_cache,
+            )
+        )
 
     fallback_pack_ids = allowed_pack_ids - matcher_pack_ids
     if fallback_pack_ids:
@@ -493,16 +795,26 @@ def _extract_lookup_alias_entities(
                 lookup_cache=lookup_cache,
             )
         )
-    extracted.extend(
-        _extract_hyphenated_lookup_alias_entities(
-            segment_text_value,
-            segment_start=segment_start,
-            normalized_input=normalized_input,
-            registry=registry,
-            allowed_pack_ids=allowed_pack_ids,
-            lookup_cache=lookup_cache,
+    if runtime.matchers:
+        extracted.extend(
+            _extract_hyphenated_lookup_alias_entities_with_matchers(
+                segment_text_value,
+                segment_start=segment_start,
+                normalized_input=normalized_input,
+                runtime=runtime,
+            )
         )
-    )
+    if fallback_pack_ids:
+        extracted.extend(
+            _extract_hyphenated_lookup_alias_entities(
+                segment_text_value,
+                segment_start=segment_start,
+                normalized_input=normalized_input,
+                registry=registry,
+                allowed_pack_ids=fallback_pack_ids,
+                lookup_cache=lookup_cache,
+            )
+        )
     return extracted
 
 
@@ -552,7 +864,108 @@ def _extract_hyphenated_lookup_alias_entities(
                 segment_start=segment_start,
                 normalized_input=normalized_input,
             )
+    )
+    return extracted
+
+
+def _extract_registry_short_alias_entities_for_matcher_packs(
+    segment_text_value: str,
+    *,
+    segment_start: int,
+    normalized_input: NormalizedText,
+    registry: PackRegistry,
+    allowed_pack_ids: set[str],
+    lookup_cache: dict[tuple[str, str], list[dict[str, str | float | bool | None]]],
+) -> list[ExtractedCandidate]:
+    extracted: list[ExtractedCandidate] = []
+    if not allowed_pack_ids:
+        return extracted
+    pack_id_list = sorted(allowed_pack_ids)
+    for start, end in _iter_token_spans(segment_text_value):
+        candidate_text = segment_text_value[start:end]
+        normalized_acronym = _normalize_acronym_text(candidate_text)
+        if (
+            len(normalized_acronym) not in _MATCHER_REGISTRY_SHORT_ALIAS_LENGTH_RANGE
+            or not _is_single_token_all_caps(candidate_text)
+        ):
+            continue
+        if len(pack_id_list) == 1:
+            candidates = _lookup_exact_alias_candidates(
+                registry=registry,
+                pack_id=pack_id_list[0],
+                candidate_text=candidate_text,
+                lookup_cache=lookup_cache,
+            )
+        else:
+            cache_key = ("", normalize_lookup_text(candidate_text))
+            candidates = lookup_cache.get(cache_key)
+            if candidates is None:
+                candidates = [
+                    candidate
+                    for candidate in registry.lookup_candidates(
+                        candidate_text,
+                        exact_alias=True,
+                        active_only=True,
+                        limit=50,
+                    )
+                    if candidate["kind"] == "alias" and candidate["pack_id"] in allowed_pack_ids
+                ]
+                lookup_cache[cache_key] = candidates
+        if not candidates:
+            continue
+        extracted.extend(
+            _build_lookup_alias_entities(
+                candidates=candidates,
+                segment_text_value=segment_text_value,
+                matched_text=candidate_text,
+                start=start,
+                end=end,
+                segment_start=segment_start,
+                normalized_input=normalized_input,
+            )
         )
+    return extracted
+
+
+def _extract_hyphenated_lookup_alias_entities_with_matchers(
+    segment_text_value: str,
+    *,
+    segment_start: int,
+    normalized_input: NormalizedText,
+    runtime: PackRuntime,
+) -> list[ExtractedCandidate]:
+    extracted: list[ExtractedCandidate] = []
+    windows = _iter_hyphenated_alias_backfill_windows(segment_text_value)
+    if not windows:
+        return extracted
+    matcher_entry_cache: dict[tuple[str, str], tuple[MatcherEntryPayload, ...]] = {}
+    for matcher in runtime.matchers:
+        compiled_matcher = load_runtime_matcher(
+            matcher.artifact_path,
+            matcher.entries_path,
+        )
+        for start, end, candidate_text in windows:
+            entry_payloads = _lookup_exact_matcher_entry_payloads(
+                compiled_matcher=compiled_matcher,
+                pack_id=matcher.pack_id,
+                candidate_text=candidate_text,
+                matcher_entry_cache=matcher_entry_cache,
+            )
+            if not entry_payloads:
+                continue
+            extracted.extend(
+                _build_lookup_alias_entities_from_matcher_entries(
+                    entries=list(entry_payloads),
+                    pack_id=matcher.pack_id,
+                    runtime_domain=runtime.domain,
+                    segment_text_value=segment_text_value,
+                    matched_text=segment_text_value[start:end],
+                    start=start,
+                    end=end,
+                    segment_start=segment_start,
+                    normalized_input=normalized_input,
+                )
+            )
     return extracted
 
 
@@ -616,6 +1029,38 @@ def _extract_lookup_alias_entities_with_matchers(
                 )
             )
     return extracted
+
+
+def _lookup_exact_matcher_entry_payloads(
+    *,
+    compiled_matcher: RuntimeMatcher,
+    pack_id: str,
+    candidate_text: str,
+    matcher_entry_cache: dict[tuple[str, str], tuple[MatcherEntryPayload, ...]],
+) -> tuple[MatcherEntryPayload, ...]:
+    cache_key = (pack_id, normalize_lookup_text(candidate_text))
+    cached = matcher_entry_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    exact_entries: list[MatcherEntryPayload] = []
+    seen_entry_indexes: set[int] = set()
+    for candidate in find_exact_match_candidates(candidate_text, compiled_matcher):
+        if candidate.start != 0 or candidate.end != len(candidate_text):
+            continue
+        if not compiled_matcher.entry_payloads or not candidate.entry_indices:
+            continue
+        for index in candidate.entry_indices:
+            if index in seen_entry_indexes:
+                continue
+            if index < 0 or index >= len(compiled_matcher.entry_payloads):
+                continue
+            seen_entry_indexes.add(index)
+            exact_entries.append(compiled_matcher.entry_payloads[index])
+
+    resolved = tuple(exact_entries)
+    matcher_entry_cache[cache_key] = resolved
+    return resolved
 
 
 def _build_lookup_alias_entities_from_matcher_entries(
@@ -757,6 +1202,20 @@ def _next_contiguous_token_span(text: str, offset: int) -> tuple[int, int, str] 
     return match.start(), match.end(), match.group(0)
 
 
+def _previous_contiguous_token_span(text: str, offset: int) -> tuple[int, int, str] | None:
+    if offset <= 0:
+        return None
+    match: re.Match[str] | None = None
+    for candidate in TOKEN_RE.finditer(text, 0, offset):
+        match = candidate
+    if match is None:
+        return None
+    gap = text[match.end() : offset]
+    if gap and not gap.isspace():
+        return None
+    return match.start(), match.end(), match.group(0)
+
+
 def _iter_hyphenated_alias_backfill_windows(
     text: str,
 ) -> list[tuple[int, int, str]]:
@@ -768,6 +1227,40 @@ def _iter_hyphenated_alias_backfill_windows(
         if prefix_length is None:
             continue
         window = (start, start + prefix_length)
+        if window in seen:
+            continue
+        seen.add(window)
+        windows.append((window[0], window[1], text[window[0] : window[1]]))
+    return windows
+
+
+def _iter_hyphenated_location_backfill_windows(
+    text: str,
+) -> list[tuple[int, int, str]]:
+    windows: list[tuple[int, int, str]] = []
+    seen: set[tuple[int, int]] = set()
+    for start, end in _iter_token_spans(text):
+        token_text = text[start:end]
+        prefix_length = _hyphenated_location_prefix_length(token_text)
+        if prefix_length is None:
+            continue
+        prefix_text = token_text[:prefix_length]
+        if _looks_like_adjectival_location_tail(prefix_text):
+            continue
+        window_start = start
+        previous_inline = _previous_contiguous_token_span(text, window_start)
+        while previous_inline is not None:
+            previous_normalized = normalize_lookup_text(previous_inline[2])
+            if previous_normalized in _HYHENATED_LOCATION_PRECEDING_ARTICLES:
+                break
+            if (
+                not _is_titleish_token(previous_inline[2])
+                or _looks_like_adjectival_location_tail(previous_inline[2])
+            ):
+                break
+            window_start = previous_inline[0]
+            previous_inline = _previous_contiguous_token_span(text, window_start)
+        window = (window_start, start + prefix_length)
         if window in seen:
             continue
         seen.add(window)
@@ -796,6 +1289,27 @@ def _hyphenated_alias_prefix_length(token_text: str) -> int | None:
     return len(prefix)
 
 
+def _hyphenated_location_prefix_length(token_text: str) -> int | None:
+    if "-" not in token_text:
+        return None
+    parts = token_text.split("-")
+    if len(parts) < 2:
+        return None
+    prefix = parts[0]
+    suffix_parts = parts[1:]
+    if not prefix or not prefix.isalpha():
+        return None
+    if len(prefix) < 3:
+        return None
+    if not prefix[:1].isupper() or not prefix[1:].islower():
+        return None
+    if not all(part.isalpha() and part.islower() for part in suffix_parts):
+        return None
+    if not all(part in _HEURISTIC_HYPHENATED_LOCATION_SUFFIXES for part in suffix_parts):
+        return None
+    return len(prefix)
+
+
 def _is_token_window_span(
     start: int,
     end: int,
@@ -813,21 +1327,37 @@ def _extend_structural_entity_spans(
 ) -> list[ExtractedCandidate]:
     extended: list[ExtractedCandidate] = []
     for candidate in candidates:
+        normalized_start = candidate.normalized_start
         normalized_end = candidate.normalized_end
         if (
-            candidate.lane == "deterministic_alias"
+            candidate.lane
+            in {
+                "deterministic_alias",
+                "heuristic_structured_org_backfill",
+                "heuristic_structured_location_backfill",
+            }
             and candidate.domain == "general"
-            and candidate.entity.label.casefold() == "organization"
         ):
-            normalized_end = _extend_structural_organization_end(
-                text=normalized_input.text,
-                start=candidate.normalized_start,
-                end=candidate.normalized_end,
-            )
-        if normalized_end <= candidate.normalized_end:
+            label_key = candidate.entity.label.casefold()
+            if label_key == "organization":
+                normalized_end = _extend_structural_organization_end(
+                    text=normalized_input.text,
+                    start=candidate.normalized_start,
+                    end=candidate.normalized_end,
+                )
+            elif label_key == "location":
+                normalized_start = _extend_structural_location_start(
+                    text=normalized_input.text,
+                    start=candidate.normalized_start,
+                    end=candidate.normalized_end,
+                )
+        if (
+            normalized_start >= candidate.normalized_start
+            and normalized_end <= candidate.normalized_end
+        ):
             extended.append(candidate)
             continue
-        raw_start, raw_end = normalized_input.raw_span(candidate.normalized_start, normalized_end)
+        raw_start, raw_end = normalized_input.raw_span(normalized_start, normalized_end)
         extended.append(
             ExtractedCandidate(
                 entity=EntityMatch(
@@ -842,7 +1372,7 @@ def _extend_structural_entity_spans(
                 ),
                 domain=candidate.domain,
                 lane=candidate.lane,
-                normalized_start=candidate.normalized_start,
+                normalized_start=normalized_start,
                 normalized_end=normalized_end,
             )
         )
@@ -854,6 +1384,7 @@ def _extend_structural_organization_end(text: str, *, start: int, end: int) -> i
     if not base_tokens:
         return end
 
+    normalized_tokens = [normalize_lookup_text(token) for token in base_tokens]
     cursor = end
     extended_end = end
     suffix_count = 0
@@ -869,8 +1400,23 @@ def _extend_structural_organization_end(text: str, *, start: int, end: int) -> i
         suffix_count += 1
     if extended_end != end:
         return extended_end
+    if any(token in _STRUCTURAL_ORG_CONNECTOR_TOKENS for token in normalized_tokens):
+        coordinated_tail_end = _extend_structural_organization_coordination_tail(
+            text,
+            cursor=end,
+        )
+        if coordinated_tail_end is not None:
+            return coordinated_tail_end
 
-    if normalize_lookup_text(base_tokens[-1]) not in _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS:
+    supports_connector_extension = (
+        normalized_tokens[-1] in _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS
+        or (
+            normalized_tokens[0] in _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS
+            and any(token in _STRUCTURAL_ORG_CONNECTOR_TOKENS for token in normalized_tokens[1:])
+        )
+        or _supports_generic_organization_connector_extension(normalized_tokens)
+    )
+    if not supports_connector_extension:
         return end
 
     connector = _next_contiguous_token_span(text, cursor)
@@ -878,6 +1424,8 @@ def _extend_structural_organization_end(text: str, *, start: int, end: int) -> i
         return end
     _, connector_end, connector_text = connector
     if normalize_lookup_text(connector_text) not in _STRUCTURAL_ORG_CONNECTOR_TOKENS:
+        return end
+    if len(normalized_tokens) == 1 and normalize_lookup_text(connector_text) != "of":
         return end
 
     cursor = connector_end
@@ -892,12 +1440,82 @@ def _extend_structural_organization_end(text: str, *, start: int, end: int) -> i
         if next_token is None:
             break
         _, next_end, next_text = next_token
-        if not _is_titleish_token(next_text):
+        if not (
+            _is_titleish_token(next_text)
+            or (titleish_count == 0 and _is_lowercase_structural_org_tail_token(next_text))
+        ):
             break
         last_titleish_end = next_end
         cursor = next_end
         titleish_count += 1
+    if last_titleish_end is not None:
+        coordinated_tail_end = _extend_structural_organization_coordination_tail(
+            text,
+            cursor=last_titleish_end,
+        )
+        if coordinated_tail_end is not None:
+            return coordinated_tail_end
     return last_titleish_end or end
+
+
+def _extend_structural_organization_coordination_tail(
+    text: str,
+    *,
+    cursor: int,
+) -> int | None:
+    connector = _next_contiguous_token_span(text, cursor)
+    if connector is None or normalize_lookup_text(connector[2]) != "and":
+        return None
+    cursor = connector[1]
+    article = _next_contiguous_token_span(text, cursor)
+    if article is not None and normalize_lookup_text(article[2]) == "the":
+        cursor = article[1]
+
+    consumed = 0
+    last_end: int | None = None
+    while consumed < _MAX_STRUCTURAL_ORG_CONNECTOR_TAIL_TOKENS:
+        next_token = _next_contiguous_token_span(text, cursor)
+        if next_token is None:
+            break
+        _, next_end, next_text = next_token
+        if not (
+            _is_titleish_token(next_text)
+            or (consumed == 0 and _is_lowercase_structural_org_tail_token(next_text))
+        ):
+            break
+        last_end = next_end
+        cursor = next_end
+        consumed += 1
+    return last_end
+
+
+def _supports_generic_organization_connector_extension(normalized_tokens: list[str]) -> bool:
+    if not normalized_tokens:
+        return False
+    if normalized_tokens[0] in _GENERIC_PHRASE_LEADS:
+        return False
+    if any(token in _GENERIC_OFFICE_TITLE_TOKENS for token in normalized_tokens):
+        return False
+    if len(normalized_tokens) == 1:
+        return normalized_tokens[0] not in (
+            _GENERIC_SINGLE_TOKEN_HEADS | _ARTICLE_LED_STRUCTURAL_FRAGMENT_TOKENS
+        )
+    return not any(token in _TRAILING_FUNCTION_WORDS for token in normalized_tokens)
+
+
+def _extend_structural_location_start(text: str, *, start: int, end: int) -> int:
+    del end
+    connector = _previous_contiguous_token_span(text, start)
+    if connector is None:
+        return start
+    if normalize_lookup_text(connector[2]) not in _STRUCTURAL_LOCATION_CONNECTOR_TOKENS:
+        return start
+    head = _previous_contiguous_token_span(text, connector[0])
+    if head is None:
+        return start
+    if normalize_lookup_text(head[2]) not in _STRUCTURAL_LOCATION_HEAD_TOKENS:
+        return start
+    return head[0]
 
 
 def _lookup_exact_alias_candidates(
@@ -1058,6 +1676,24 @@ def _should_skip_single_token_lookup_candidate(
         return True
     if (
         candidate_domain == "general"
+        and label_key == "organization"
+        and segment_text is not None
+        and start is not None
+        and end is not None
+        and not _is_single_token_all_caps(matched_text)
+        and normalized_candidate_value == normalized_canonical_text
+    ):
+        if _looks_like_locationish_singleton_context(segment_text, start=start, end=end):
+            return True
+        if _looks_like_sentence_boundary_singleton_org_noise(
+            segment_text,
+            start=start,
+            end=end,
+            matched_text=matched_text,
+        ):
+            return True
+    if (
+        candidate_domain == "general"
         and label_key in {"organization", "person"}
         and _is_single_token_all_caps(candidate_value)
         and not _is_single_token_all_caps(matched_text)
@@ -1075,6 +1711,15 @@ def _should_skip_single_token_lookup_candidate(
             canonical_text=canonical_text,
         )
         and _has_adjacent_titleish_token(segment_text, start=start, end=end)
+    ):
+        return True
+    if (
+        candidate_domain == "general"
+        and segment_text is not None
+        and start is not None
+        and end is not None
+        and _is_single_token_all_caps(matched_text)
+        and _looks_like_all_caps_section_heading_noise(segment_text, start=start, end=end)
     ):
         return True
     return False
@@ -1097,6 +1742,11 @@ def _should_skip_multi_token_lookup_candidate(
     if len(tokens) < 2:
         return False
     lowered_tokens = [normalize_lookup_text(token) for token in tokens]
+    if (
+        label_key == "organization"
+        and _looks_like_generic_office_title_candidate(tokens, lowered_tokens)
+    ):
+        return True
     if label_key == "person":
         if lowered_tokens[0] in _GENERIC_PHRASE_LEADS:
             return True
@@ -1138,6 +1788,51 @@ def _should_skip_multi_token_lookup_candidate(
     ):
         return True
     return False
+
+
+def _looks_like_generic_office_title_candidate(
+    tokens: list[str],
+    lowered_tokens: list[str],
+) -> bool:
+    if not any(token in _GENERIC_OFFICE_TITLE_TOKENS for token in lowered_tokens):
+        return False
+    if any(token in _STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS for token in lowered_tokens):
+        return False
+    return all(
+        raw_token.isupper() or raw_token[:1].isupper()
+        for raw_token in tokens
+    )
+
+
+def _looks_like_locationish_singleton_context(text: str, *, start: int, end: int) -> bool:
+    if re.match(r"^\s*,\s*[A-Z][A-Za-z-]+", text[end:]) is None:
+        return False
+    previous_token = _previous_token(text, start)
+    previous_lower = normalize_lookup_text(previous_token)
+    if previous_lower in _SINGLETON_ORG_CONTEXT_CUE_TOKENS:
+        return True
+    return _is_titleish_token(previous_token)
+
+
+def _looks_like_sentence_boundary_singleton_org_noise(
+    text: str,
+    *,
+    start: int,
+    end: int,
+    matched_text: str,
+) -> bool:
+    if _single_token_occurrence_count(text, matched_text) > 1:
+        return False
+    if re.match(r'^\s*["\')\]]*[.!?]', text[end:]) is None:
+        return False
+    if not _is_titleish_token(_next_token(text, end)):
+        return False
+    previous_lower = normalize_lookup_text(_previous_token(text, start))
+    return previous_lower not in _SINGLETON_ORG_CONTEXT_CUE_TOKENS
+
+
+def _single_token_occurrence_count(text: str, matched_text: str) -> int:
+    return len(re.findall(rf"\b{re.escape(matched_text)}\b", text))
 
 
 def _is_single_token_alpha(value: str) -> bool:
@@ -1197,6 +1892,24 @@ def _has_adjacent_titleish_token(text: str, *, start: int, end: int) -> bool:
     )
 
 
+def _looks_like_all_caps_section_heading_noise(text: str, *, start: int, end: int) -> bool:
+    trailing = text[end:end + 40]
+    if re.match(r"\s*:\s*", trailing) is not None:
+        return True
+    if re.match(
+        r"\s+[A-Z]{2,8}\b(?:\s+[A-Z][A-Za-z'’-]+){0,3}\s*:\s*",
+        trailing,
+    ) is not None:
+        return True
+    leading = text[max(0, start - 16):start]
+    if re.search(r"\b[A-Z]{2,8}\s*$", leading) is None:
+        return False
+    return (
+        re.match(r"\s+[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){0,3}\s*:\s*", trailing)
+        is not None
+    )
+
+
 def _previous_token(text: str, start: int) -> str:
     match = re.search(r"([\w][\w.+&/-]*)\W*$", text[:start])
     return match.group(1) if match is not None else ""
@@ -1222,12 +1935,15 @@ def _normalize_acronym_text(value: str) -> str:
 
 def _derive_initialism(value: str) -> str:
     letters: list[str] = []
-    for token in TOKEN_RE.findall(value):
+    for token in INITIALISM_TOKEN_RE.findall(value):
         normalized = normalize_lookup_text(token)
         if normalized in _ACRONYM_CONNECTOR_WORDS:
             continue
         compact = "".join(character for character in token if character.isalpha())
         if not compact:
+            continue
+        if "." in token:
+            letters.extend(character.upper() for character in compact)
             continue
         letters.append(compact[0].upper())
     if len(letters) < 2:
@@ -1379,6 +2095,872 @@ def _backfill_document_acronym_entities(
             )
             existing_spans.add(span_key)
     return augmented
+
+
+def _backfill_heuristic_definition_acronym_entities(
+    extracted: list[ExtractedCandidate],
+    *,
+    normalized_input: NormalizedText,
+    runtime: PackRuntime,
+) -> list[ExtractedCandidate]:
+    definitions = _collect_heuristic_acronym_definitions(
+        normalized_input.text,
+        allowed_labels=_normalized_label_set(runtime),
+    )
+    if not definitions:
+        return extracted
+
+    existing_spans = {
+        (candidate.normalized_start, candidate.normalized_end, candidate.entity.label.casefold())
+        for candidate in extracted
+    }
+    definitions_by_key = {
+        (definition.normalized_acronym, definition.label.casefold()): definition
+        for definition in definitions
+    }
+    augmented = list(extracted)
+
+    for start, end in _iter_token_spans(normalized_input.text):
+        token_text = normalized_input.text[start:end]
+        normalized_acronym = _normalize_acronym_text(token_text)
+        if len(normalized_acronym) < 2 or not normalized_acronym.isupper():
+            continue
+        for label_key in ("organization", "location"):
+            definition = definitions_by_key.get((normalized_acronym, label_key))
+            if definition is None or start < definition.acronym_start:
+                continue
+            span_key = (start, end, label_key)
+            if span_key in existing_spans:
+                continue
+            raw_start, raw_end = normalized_input.raw_span(start, end)
+            augmented.append(
+                ExtractedCandidate(
+                    entity=EntityMatch(
+                        text=normalized_input.raw_text[raw_start:raw_end],
+                        label=definition.label,
+                        start=raw_start,
+                        end=raw_end,
+                        confidence=0.67,
+                        provenance=_build_provenance(
+                            match_kind="alias",
+                            match_path="heuristic.explicit_definition_acronym",
+                            match_source=f"{definition.long_form} ({token_text})",
+                            source_pack=runtime.pack_id,
+                            source_domain=runtime.domain,
+                            lane="heuristic_definition_acronym_backfill",
+                        ),
+                        link=None,
+                    ),
+                    domain=runtime.domain,
+                    lane="heuristic_definition_acronym_backfill",
+                    normalized_start=start,
+                    normalized_end=end,
+                )
+            )
+            existing_spans.add(span_key)
+    return augmented
+
+
+def _backfill_heuristic_structured_organization_entities(
+    extracted: list[ExtractedCandidate],
+    *,
+    normalized_input: NormalizedText,
+    runtime: PackRuntime,
+) -> list[ExtractedCandidate]:
+    if "organization" not in _normalized_label_set(runtime):
+        return extracted
+
+    existing_spans = {
+        (candidate.normalized_start, candidate.normalized_end, candidate.entity.label.casefold())
+        for candidate in extracted
+    }
+    seen_norms = {
+        normalize_lookup_text(candidate.entity.text)
+        for candidate in extracted
+        if candidate.entity.label.casefold() == "organization"
+    }
+    augmented = list(extracted)
+
+    for candidate in _collect_heuristic_structured_organizations(normalized_input.text):
+        normalized_candidate = normalize_lookup_text(candidate.text)
+        span_key = (candidate.start, candidate.end, "organization")
+        if span_key in existing_spans or normalized_candidate in seen_norms:
+            continue
+        raw_start, raw_end = normalized_input.raw_span(candidate.start, candidate.end)
+        augmented.append(
+            ExtractedCandidate(
+                entity=EntityMatch(
+                    text=normalized_input.raw_text[raw_start:raw_end],
+                    label="organization",
+                    start=raw_start,
+                    end=raw_end,
+                    confidence=0.65,
+                    provenance=_build_provenance(
+                        match_kind="alias",
+                        match_path="heuristic.structural_organization",
+                        match_source=candidate.text,
+                        source_pack=runtime.pack_id,
+                        source_domain=runtime.domain,
+                        lane="heuristic_structured_org_backfill",
+                    ),
+                    link=None,
+                ),
+                domain=runtime.domain,
+                lane="heuristic_structured_org_backfill",
+                normalized_start=candidate.start,
+                normalized_end=candidate.end,
+            )
+        )
+        existing_spans.add(span_key)
+        seen_norms.add(normalized_candidate)
+    return augmented
+
+
+def _backfill_heuristic_structured_location_entities(
+    extracted: list[ExtractedCandidate],
+    *,
+    normalized_input: NormalizedText,
+    runtime: PackRuntime,
+) -> list[ExtractedCandidate]:
+    if "location" not in _normalized_label_set(runtime):
+        return extracted
+
+    existing_spans = {
+        (candidate.normalized_start, candidate.normalized_end, candidate.entity.label.casefold())
+        for candidate in extracted
+    }
+    seen_norms = {
+        normalize_lookup_text(candidate.entity.text)
+        for candidate in extracted
+        if candidate.entity.label.casefold() == "location"
+    }
+    augmented = list(extracted)
+
+    for candidate in _collect_heuristic_structured_locations(normalized_input.text):
+        normalized_candidate = normalize_lookup_text(candidate.text)
+        span_key = (candidate.start, candidate.end, "location")
+        if span_key in existing_spans or normalized_candidate in seen_norms:
+            continue
+        raw_start, raw_end = normalized_input.raw_span(candidate.start, candidate.end)
+        augmented.append(
+            ExtractedCandidate(
+                entity=EntityMatch(
+                    text=normalized_input.raw_text[raw_start:raw_end],
+                    label="location",
+                    start=raw_start,
+                    end=raw_end,
+                    confidence=0.64,
+                    provenance=_build_provenance(
+                        match_kind="alias",
+                        match_path="heuristic.structural_location",
+                        match_source=candidate.text,
+                        source_pack=runtime.pack_id,
+                        source_domain=runtime.domain,
+                        lane="heuristic_structured_location_backfill",
+                    ),
+                    link=None,
+                ),
+                domain=runtime.domain,
+                lane="heuristic_structured_location_backfill",
+                normalized_start=candidate.start,
+                normalized_end=candidate.end,
+            )
+        )
+        existing_spans.add(span_key)
+        seen_norms.add(normalized_candidate)
+    return augmented
+
+
+def _backfill_heuristic_hyphenated_location_entities(
+    extracted: list[ExtractedCandidate],
+    *,
+    normalized_input: NormalizedText,
+    runtime: PackRuntime,
+) -> list[ExtractedCandidate]:
+    if "location" not in _normalized_label_set(runtime):
+        return extracted
+
+    existing_spans = {
+        (candidate.normalized_start, candidate.normalized_end, candidate.entity.label.casefold())
+        for candidate in extracted
+    }
+    seen_norms = {
+        normalize_lookup_text(candidate.entity.text)
+        for candidate in extracted
+        if candidate.entity.label.casefold() == "location"
+    }
+    augmented = list(extracted)
+
+    for start, end, candidate_text in _iter_hyphenated_location_backfill_windows(
+        normalized_input.text
+    ):
+        normalized_candidate = normalize_lookup_text(candidate_text)
+        span_key = (start, end, "location")
+        if span_key in existing_spans or normalized_candidate in seen_norms:
+            continue
+        raw_start, raw_end = normalized_input.raw_span(start, end)
+        augmented.append(
+            ExtractedCandidate(
+                entity=EntityMatch(
+                    text=normalized_input.raw_text[raw_start:raw_end],
+                    label="location",
+                    start=raw_start,
+                    end=raw_end,
+                    confidence=0.62,
+                    provenance=_build_provenance(
+                        match_kind="alias",
+                        match_path="heuristic.hyphenated_location",
+                        match_source=candidate_text,
+                        source_pack=runtime.pack_id,
+                        source_domain=runtime.domain,
+                        lane="heuristic_hyphenated_location_backfill",
+                    ),
+                    link=None,
+                ),
+                domain=runtime.domain,
+                lane="heuristic_hyphenated_location_backfill",
+                normalized_start=start,
+                normalized_end=end,
+            )
+        )
+        existing_spans.add(span_key)
+        seen_norms.add(normalized_candidate)
+    return augmented
+
+
+def _collect_heuristic_structured_organizations(
+    text: str,
+) -> list[HeuristicStructuredOrganization]:
+    kept: dict[str, HeuristicStructuredOrganization] = {}
+
+    for pattern in (_HEURISTIC_STRUCTURAL_ORG_RE, _HEURISTIC_CONNECTOR_STRUCTURAL_ORG_RE):
+        for match in pattern.finditer(text):
+            raw_candidate_text = match.group("org")
+            candidate_start = match.start("org")
+            candidate_end = match.end("org")
+            trimmed_lead = _trim_leading_structural_org_phrase_lead(raw_candidate_text)
+            if trimmed_lead is not None:
+                trimmed_text, offset = trimmed_lead
+                raw_candidate_text = raw_candidate_text[offset:]
+                candidate_start += offset
+                candidate_end = candidate_start + len(raw_candidate_text)
+                candidate_text = trimmed_text
+            else:
+                candidate_text = _collapse_whitespace(raw_candidate_text)
+            trimmed = _trim_leading_structural_org_role_phrase(raw_candidate_text)
+            if trimmed is not None:
+                trimmed_text, offset = trimmed
+                raw_candidate_text = raw_candidate_text[offset:]
+                candidate_start += offset
+                candidate_end = candidate_start + len(raw_candidate_text)
+                candidate_text = trimmed_text
+            if not _is_plausible_heuristic_structured_organization_candidate(candidate_text):
+                continue
+            candidate = HeuristicStructuredOrganization(
+                text=candidate_text,
+                start=candidate_start,
+                end=candidate_end,
+            )
+            key = normalize_lookup_text(candidate_text)
+            current = kept.get(key)
+            if current is None or candidate.start < current.start or (
+                candidate.start == current.start and candidate.end > current.end
+            ):
+                kept[key] = candidate
+    return sorted(kept.values(), key=lambda item: (item.start, item.end))
+
+
+def _is_plausible_heuristic_structured_organization_candidate(candidate: str) -> bool:
+    tokens = TOKEN_RE.findall(candidate)
+    if len(tokens) < 2:
+        return False
+    normalized_tokens = [normalize_lookup_text(token) for token in tokens]
+    if normalized_tokens[0] in _GENERIC_PHRASE_LEADS:
+        return False
+    if normalized_tokens[0] in _GENERIC_OFFICE_TITLE_TOKENS and "of" in normalized_tokens[1:]:
+        return False
+    if normalized_tokens[-1] not in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS:
+        connector_indexes = [
+            index
+            for index, token in enumerate(normalized_tokens[1:], start=1)
+            if token in _STRUCTURAL_ORG_CONNECTOR_TOKENS
+        ]
+        if not connector_indexes:
+            return False
+        connector_index = connector_indexes[0]
+        head_tokens = normalized_tokens[:connector_index]
+        tail_tokens = [
+            token
+            for token in normalized_tokens[connector_index + 1 :]
+            if token not in _STRUCTURAL_ORG_CONNECTOR_TOKENS
+        ]
+        if not head_tokens or head_tokens[-1] not in _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS:
+            return False
+        if not tail_tokens:
+            return False
+        if head_tokens[-1] == "house" and tail_tokens[-1] not in _PARLIAMENTARY_HOUSE_TAIL_TOKENS:
+            return False
+    if (
+        len(tokens) == 2
+        and normalized_tokens[-1] in _WEAK_HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS
+        and (
+            normalized_tokens[0] in _GENERIC_STRUCTURED_ORG_QUANTIFIER_LEADS
+            or normalized_tokens[0] in _IRREGULAR_DEMONYM_MODIFIER_TOKENS
+            or _looks_like_adjectival_location_tail(tokens[0])
+        )
+    ):
+        return False
+    if len(tokens) >= 4 and sum(token.isupper() for token in tokens if token.isalpha()) >= 3:
+        return False
+    return True
+
+
+def _trim_leading_structural_org_phrase_lead(candidate: str) -> tuple[str, int] | None:
+    token_matches = list(TOKEN_RE.finditer(candidate))
+    if len(token_matches) < 2:
+        return None
+    normalized_tokens = [normalize_lookup_text(match.group(0)) for match in token_matches]
+    if normalized_tokens[0] not in _GENERIC_PHRASE_LEADS:
+        return None
+    if normalized_tokens[1] not in (
+        _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS | _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS
+    ):
+        return None
+    offset = token_matches[1].start()
+    return _collapse_whitespace(candidate[offset:]), offset
+
+
+def _trim_leading_structural_org_role_phrase(candidate: str) -> tuple[str, int] | None:
+    token_matches = list(TOKEN_RE.finditer(candidate))
+    if len(token_matches) < 3:
+        return None
+    normalized_tokens = [normalize_lookup_text(match.group(0)) for match in token_matches]
+    if normalized_tokens[0] not in _GENERIC_OFFICE_TITLE_TOKENS:
+        return None
+    connector_index = next(
+        (index for index, token in enumerate(normalized_tokens[1:], start=1) if token in _STRUCTURAL_ORG_CONNECTOR_TOKENS),
+        None,
+    )
+    if connector_index is None or connector_index + 1 >= len(token_matches):
+        return None
+    offset = token_matches[connector_index + 1].start()
+    return _collapse_whitespace(candidate[offset:]), offset
+
+
+def _collect_heuristic_structured_locations(
+    text: str,
+) -> list[HeuristicStructuredLocation]:
+    kept: dict[str, HeuristicStructuredLocation] = {}
+
+    for match in _HEURISTIC_STRUCTURAL_LOCATION_RE.finditer(text):
+        candidate_text = _collapse_whitespace(match.group("loc"))
+        if not _is_plausible_heuristic_structured_location_candidate(candidate_text):
+            continue
+        candidate = HeuristicStructuredLocation(
+            text=candidate_text,
+            start=match.start("loc"),
+            end=match.end("loc"),
+        )
+        key = normalize_lookup_text(candidate_text)
+        current = kept.get(key)
+        if current is None or candidate.start < current.start or (
+            candidate.start == current.start and candidate.end > current.end
+        ):
+            kept[key] = candidate
+    return sorted(kept.values(), key=lambda item: (item.start, item.end))
+
+
+def _is_plausible_heuristic_structured_location_candidate(candidate: str) -> bool:
+    tokens = TOKEN_RE.findall(candidate)
+    if len(tokens) < 3:
+        return False
+    normalized_tokens = [normalize_lookup_text(token) for token in tokens]
+    if normalized_tokens[0] not in _STRUCTURAL_LOCATION_HEAD_TOKENS:
+        return False
+    if normalized_tokens[1] != "of":
+        return False
+    if len(tokens) >= 4 and sum(token.isupper() for token in tokens if token.isalpha()) >= 3:
+        return False
+    return not _looks_like_adjectival_location_tail(tokens[-1])
+
+
+def _collect_heuristic_acronym_definitions(
+    text: str,
+    *,
+    allowed_labels: set[str],
+) -> list[HeuristicAcronymDefinition]:
+    kept: dict[tuple[str, str], HeuristicAcronymDefinition] = {}
+
+    for pattern in (_EXPLICIT_ACRONYM_PAREN_RE, _EXPLICIT_ACRONYM_COMMA_RE):
+        for match in pattern.finditer(text):
+            long_form_match = _match_explicit_acronym_long_form(
+                text,
+                definition_boundary=match.start(),
+            )
+            if long_form_match is None:
+                continue
+            long_form, definition_start = long_form_match
+            normalized_acronym = _normalize_acronym_text(match.group("acronym"))
+            if not _matches_explicit_acronym_initialism(
+                long_form,
+                normalized_acronym,
+            ):
+                continue
+            label = _infer_heuristic_acronym_label(long_form)
+            if label is None or label.casefold() not in allowed_labels:
+                continue
+            definition = HeuristicAcronymDefinition(
+                acronym_text=match.group("acronym"),
+                normalized_acronym=normalized_acronym,
+                label=label,
+                long_form=long_form,
+                definition_start=definition_start,
+                definition_end=match.end(),
+                acronym_start=match.start("acronym"),
+                acronym_end=match.end("acronym"),
+            )
+            key = (definition.normalized_acronym, definition.label.casefold())
+            current = kept.get(key)
+            if current is None or definition.definition_start < current.definition_start:
+                kept[key] = definition
+    return sorted(
+        kept.values(),
+        key=lambda item: (item.acronym_start, item.acronym_end, item.label.casefold()),
+    )
+
+
+def _match_explicit_acronym_long_form(
+    text: str,
+    *,
+    definition_boundary: int,
+) -> tuple[str, int] | None:
+    window_start = max(0, definition_boundary - _MAX_EXPLICIT_ACRONYM_LONGFORM_WINDOW)
+    prefix = text[window_start:definition_boundary]
+    match = _EXPLICIT_ACRONYM_LONGFORM_RE.search(prefix)
+    if match is None:
+        return None
+    long_form = _collapse_whitespace(match.group("long"))
+    if _span_token_count(long_form) < 2:
+        return None
+    return long_form, window_start + match.start("long")
+
+
+def _matches_explicit_acronym_initialism(
+    long_form: str,
+    normalized_acronym: str,
+) -> bool:
+    if _derive_initialism(long_form) == normalized_acronym:
+        return True
+    tokens = TOKEN_RE.findall(long_form)
+    while (
+        len(tokens) >= 3
+        and normalize_lookup_text(tokens[-1])
+        in _OPTIONAL_EXPLICIT_ACRONYM_TRAILING_SUFFIX_TOKENS
+    ):
+        tokens = tokens[:-1]
+        if _derive_initialism(" ".join(tokens)) == normalized_acronym:
+            return True
+    return False
+
+
+def _infer_heuristic_acronym_label(long_form: str) -> str | None:
+    tokens = [normalize_lookup_text(token) for token in TOKEN_RE.findall(long_form)]
+    if len(tokens) < 2:
+        return None
+    if tokens[0] in _STRUCTURAL_LOCATION_HEAD_TOKENS and "of" in tokens[1:]:
+        return "location"
+    if tokens[-1] in _HEURISTIC_ACRONYM_LOCATION_SUFFIX_TOKENS:
+        return "location"
+    if tokens[-1] in _STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS:
+        return "organization"
+    if len(tokens) >= 3:
+        return "organization"
+    return None
+
+
+def _backfill_contextual_org_acronym_entities(
+    extracted: list[ExtractedCandidate],
+    *,
+    normalized_input: NormalizedText,
+    runtime: PackRuntime,
+) -> list[ExtractedCandidate]:
+    existing_spans = {
+        (candidate.normalized_start, candidate.normalized_end) for candidate in extracted
+    }
+    augmented = list(extracted)
+
+    for start, end in _iter_contextual_acronym_spans(normalized_input.text):
+        token_text = normalized_input.text[start:end]
+        normalized_acronym = _normalize_acronym_text(token_text)
+        if (
+            len(normalized_acronym) not in _CONTEXTUAL_ORG_ACRONYM_LENGTH_RANGE
+            or not _is_single_token_all_caps(token_text)
+        ):
+            continue
+        span_key = (start, end)
+        if span_key in existing_spans:
+            continue
+        if not _supports_contextual_org_acronym_backfill(
+            normalized_input.text,
+            start=start,
+            end=end,
+        ):
+            continue
+        raw_start, raw_end = normalized_input.raw_span(start, end)
+        augmented.append(
+            ExtractedCandidate(
+                entity=EntityMatch(
+                    text=normalized_input.raw_text[raw_start:raw_end],
+                    label="organization",
+                    start=raw_start,
+                    end=raw_end,
+                    confidence=0.68,
+                    provenance=_build_provenance(
+                        match_kind="alias",
+                        match_path="heuristic.contextual_acronym",
+                        match_source=token_text,
+                        source_pack=runtime.pack_id,
+                        source_domain=runtime.domain,
+                        lane="contextual_org_acronym_backfill",
+                    ),
+                    link=None,
+                ),
+                domain=runtime.domain,
+                lane="contextual_org_acronym_backfill",
+                normalized_start=start,
+                normalized_end=end,
+            )
+        )
+        existing_spans.add(span_key)
+    return augmented
+
+
+def _iter_contextual_acronym_spans(text: str) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for start, end in _iter_token_spans(text):
+        token_text = text[start:end]
+        candidate_spans = [(start, end)]
+        if "/" in token_text:
+            candidate_spans = []
+            cursor = start
+            for part in token_text.split("/"):
+                part_end = cursor + len(part)
+                if part:
+                    candidate_spans.append((cursor, part_end))
+                cursor = part_end + 1
+        for span in candidate_spans:
+            if span in seen:
+                continue
+            seen.add(span)
+            spans.append(span)
+    return spans
+
+
+def _supports_contextual_org_acronym_backfill(
+    text: str,
+    *,
+    start: int,
+    end: int,
+) -> bool:
+    previous_tokens = _previous_normalized_tokens(text, start, limit=4)
+    previous_lower = previous_tokens[-1] if previous_tokens else ""
+    if previous_lower in _CONTEXTUAL_ORG_ACRONYM_REPORTING_CUES:
+        return True
+    suffix = text[end : end + 2]
+    if suffix in {"'s", "’s"}:
+        return True
+    if _supports_source_attribution_acronym(text, start=start, end=end, previous_tokens=previous_tokens):
+        return True
+    if _supports_preceding_context_noun_contextual_org_acronym(
+        text,
+        start=start,
+        end=end,
+        previous_tokens=previous_tokens,
+    ):
+        return True
+    if _supports_article_led_contextual_org_acronym(
+        text,
+        start=start,
+        end=end,
+        previous_tokens=previous_tokens,
+    ):
+        return True
+    if _supports_slash_paired_contextual_org_acronym(text, start=start, end=end):
+        return True
+    if _supports_prepositional_contextual_org_acronym(previous_tokens):
+        return True
+    if _supports_following_contextual_org_acronym(
+        text,
+        start=start,
+        end=end,
+        previous_tokens=previous_tokens,
+    ):
+        return True
+    return False
+
+
+def _supports_preceding_context_noun_contextual_org_acronym(
+    text: str,
+    *,
+    start: int,
+    end: int,
+    previous_tokens: list[str],
+) -> bool:
+    if not previous_tokens or previous_tokens[-1] not in _CONTEXTUAL_ORG_ACRONYM_CONTEXT_NOUN_CUES:
+        return False
+    next_token_raw = _next_token(text, end).rstrip(".,;:!?)]}”’\"'")
+    next_token = normalize_lookup_text(next_token_raw)
+    if next_token in _CONTEXTUAL_ORG_ACRONYM_FOLLOWING_CUES:
+        return True
+    if previous_tokens[-1] in {"agency", "association", "bureau", "commission"}:
+        return not next_token or bool(re.fullmatch(r"[A-Za-z][A-Za-z'’-]*", next_token_raw))
+    return False
+
+
+def _supports_source_attribution_acronym(
+    text: str,
+    *,
+    start: int,
+    end: int,
+    previous_tokens: list[str],
+) -> bool:
+    if not previous_tokens or previous_tokens[-1] != "source":
+        return False
+    left_slice = text[max(0, start - 4) : start]
+    if ":" not in left_slice:
+        return False
+    return text[end : end + 1] in {"/", ":"} or True
+
+
+def _supports_article_led_contextual_org_acronym(
+    text: str,
+    *,
+    start: int,
+    end: int,
+    previous_tokens: list[str],
+) -> bool:
+    if not previous_tokens or previous_tokens[-1] not in {"a", "an", "the"}:
+        return False
+    next_token = normalize_lookup_text(_next_token(text, end).rstrip(".,;:!?)]}”’\"'"))
+    if not next_token:
+        return False
+    return next_token in (
+        _AUXILIARY_LOOKUP_TOKENS
+        | _CONTEXTUAL_ORG_ACRONYM_CONTEXT_NOUN_CUES
+        | _CONTEXTUAL_ORG_ACRONYM_FOLLOWING_CUES
+    )
+
+
+def _supports_slash_paired_contextual_org_acronym(text: str, *, start: int, end: int) -> bool:
+    paired_token = ""
+    if start > 0 and text[start - 1] == "/":
+        paired_token = _previous_token(text, start - 1)
+    elif end < len(text) and text[end : end + 1] == "/":
+        paired_token = _next_token(text, end + 1)
+    if not _is_single_token_all_caps(paired_token):
+        return False
+    next_token = normalize_lookup_text(_next_token(text, end).rstrip(".,;:!?)]}”’\"'"))
+    return next_token in (
+        _CONTEXTUAL_ORG_ACRONYM_CONTEXT_NOUN_CUES
+        | _CONTEXTUAL_ORG_ACRONYM_FOLLOWING_CUES
+    )
+
+
+def _supports_prepositional_contextual_org_acronym(previous_tokens: list[str]) -> bool:
+    if len(previous_tokens) < 2:
+        return False
+    if previous_tokens[-1] in _CONTEXTUAL_ORG_ACRONYM_PREPOSITION_CUES:
+        return previous_tokens[-2] in _CONTEXTUAL_ORG_ACRONYM_CONTEXT_NOUN_CUES
+    if (
+        len(previous_tokens) >= 3
+        and previous_tokens[-1] in {"a", "an", "the"}
+        and previous_tokens[-2] in _CONTEXTUAL_ORG_ACRONYM_PREPOSITION_CUES
+    ):
+        return previous_tokens[-3] in _CONTEXTUAL_ORG_ACRONYM_CONTEXT_NOUN_CUES
+    return False
+
+
+def _supports_following_contextual_org_acronym(
+    text: str,
+    *,
+    start: int,
+    end: int,
+    previous_tokens: list[str],
+) -> bool:
+    if previous_tokens and previous_tokens[-1] not in {"a", "an", "the"}:
+        if not _has_contextual_acronym_clause_boundary(text, start=start):
+            return False
+    next_token = _next_token(text, end).rstrip(".,;:!?)]}”’\"'")
+    return normalize_lookup_text(next_token) in _CONTEXTUAL_ORG_ACRONYM_FOLLOWING_CUES
+
+
+def _has_contextual_acronym_clause_boundary(text: str, *, start: int) -> bool:
+    boundary_slice = text[max(0, start - 8) : start]
+    return bool(re.search(r"[,:;.!?\-–—\"“”'’)\]]", boundary_slice))
+
+
+def _looks_like_adjectival_location_tail(token_text: str) -> bool:
+    normalized = normalize_lookup_text(token_text)
+    if len(normalized) <= 3:
+        return False
+    return normalized.endswith(("ese", "ian", "ish", "ist", "ite")) or (
+        normalized.endswith("i") and len(normalized) > 4
+    )
+
+
+def _is_lowercase_structural_org_tail_token(token_text: str) -> bool:
+    if not token_text.isalpha() or not token_text.islower():
+        return False
+    normalized = normalize_lookup_text(token_text)
+    if len(normalized) < 5:
+        return False
+    if normalized in _GENERIC_PHRASE_LEADS or normalized in _STRUCTURAL_ORG_CONNECTOR_TOKENS:
+        return False
+    return True
+
+
+def _previous_normalized_tokens(text: str, start: int, *, limit: int) -> list[str]:
+    tokens = [normalize_lookup_text(match.group(0)) for match in TOKEN_RE.finditer(text[:start])]
+    if not tokens:
+        return []
+    return tokens[-limit:]
+
+
+def _structural_fragment_penalty(candidate: ExtractedCandidate, *, text: str) -> float:
+    if candidate.domain != "general" or candidate.lane != "deterministic_alias":
+        return 0.0
+    label_key = candidate.entity.label.casefold()
+    if _looks_like_article_led_structural_org_fragment(
+        text,
+        start=candidate.normalized_start,
+        end=candidate.normalized_end,
+    ):
+        return 0.42 if label_key == "organization" else 0.56
+    if label_key == "organization":
+        if _looks_like_trailing_structural_org_fragment(
+            text,
+            start=candidate.normalized_start,
+            end=candidate.normalized_end,
+        ) or _looks_like_leading_structural_org_fragment(
+            text,
+            start=candidate.normalized_start,
+            end=candidate.normalized_end,
+        ):
+            return 0.28
+    if label_key == "location" and _looks_like_leading_structural_org_fragment(
+        text,
+        start=candidate.normalized_start,
+        end=candidate.normalized_end,
+    ):
+        return 0.42
+    return 0.0
+
+
+def _structural_location_label_penalty(candidate: ExtractedCandidate) -> float:
+    if candidate.domain != "general" or candidate.lane != "deterministic_alias":
+        return 0.0
+    if candidate.entity.label.casefold() != "location":
+        return 0.0
+    if not _is_plausible_heuristic_structured_organization_candidate(candidate.entity.text):
+        return 0.0
+    return 0.18
+
+
+def _looks_like_trailing_structural_org_fragment(text: str, *, start: int, end: int) -> bool:
+    connector = _previous_contiguous_token_span(text, start)
+    if connector is not None and normalize_lookup_text(connector[2]) in _STRUCTURAL_ORG_CONNECTOR_TOKENS:
+        previous = _previous_contiguous_token_span(text, connector[0])
+        if previous is not None and _is_titleish_token(previous[2]):
+            return True
+    connector = _next_contiguous_token_span(text, end)
+    if connector is None or normalize_lookup_text(connector[2]) not in _STRUCTURAL_ORG_CONNECTOR_TOKENS:
+        return False
+    following = _next_contiguous_token_span(text, connector[1])
+    if following is None:
+        return False
+    if normalize_lookup_text(following[2]) == "the":
+        following = _next_contiguous_token_span(text, following[1])
+    return following is not None and _is_titleish_token(following[2])
+
+
+def _looks_like_leading_structural_org_fragment(text: str, *, start: int, end: int) -> bool:
+    span_tokens = TOKEN_RE.findall(text[start:end])
+    normalized_tokens = [normalize_lookup_text(token) for token in span_tokens]
+    if not normalized_tokens:
+        return False
+    previous = _previous_contiguous_token_span(text, start)
+    if (
+        previous is not None
+        and _is_titleish_token(previous[2])
+        and normalized_tokens[-1] in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS
+    ):
+        return True
+    next_token = _next_contiguous_token_span(text, end)
+    if next_token is not None and normalize_lookup_text(next_token[2]) in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS:
+        return True
+    if next_token is not None and (
+        _is_titleish_token(next_token[2]) or _is_lowercase_structural_org_tail_token(next_token[2])
+    ):
+        next_next = _next_contiguous_token_span(text, next_token[1])
+        if next_next is not None and normalize_lookup_text(next_next[2]) in (
+            _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS | _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS
+        ):
+            return True
+    if len(normalized_tokens) == 1 and normalized_tokens[0] in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS:
+        return previous is not None and _is_titleish_token(previous[2])
+    return False
+
+
+def _looks_like_article_led_structural_org_fragment(
+    text: str,
+    *,
+    start: int,
+    end: int,
+) -> bool:
+    span_tokens = TOKEN_RE.findall(text[start:end])
+    normalized_tokens = [normalize_lookup_text(token) for token in span_tokens]
+    if len(normalized_tokens) != 2 or normalized_tokens[0] not in _GENERIC_PHRASE_LEADS:
+        return False
+    if normalized_tokens[1] not in (
+        _GENERIC_SINGLE_TOKEN_HEADS | _ARTICLE_LED_STRUCTURAL_FRAGMENT_TOKENS
+    ):
+        return False
+    current = _next_contiguous_token_span(text, end)
+    if current is None:
+        return False
+    if normalize_lookup_text(current[2]) in _STRUCTURAL_ORG_CONNECTOR_TOKENS:
+        current = _next_contiguous_token_span(text, current[1])
+        if current is not None and normalize_lookup_text(current[2]) == "the":
+            current = _next_contiguous_token_span(text, current[1])
+    if current is None or not _is_titleish_token(current[2]):
+        return False
+    for _ in range(3):
+        following = _next_contiguous_token_span(text, current[1])
+        if following is None:
+            return False
+        normalized_following = normalize_lookup_text(following[2])
+        if normalized_following in (
+            _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS | _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS
+        ):
+            return True
+        if normalized_following in _STRUCTURAL_ORG_CONNECTOR_TOKENS:
+            current = _next_contiguous_token_span(text, following[1])
+            if current is None:
+                return False
+            if normalize_lookup_text(current[2]) == "the":
+                current = _next_contiguous_token_span(text, current[1])
+                if current is None:
+                    return False
+            if not _is_titleish_token(current[2]):
+                return False
+            continue
+        if not (
+            _is_titleish_token(following[2]) or _is_lowercase_structural_org_tail_token(following[2])
+        ):
+            return False
+        current = following
+    return False
 
 
 def _normalized_label_set(runtime: PackRuntime) -> set[str]:
@@ -1629,6 +3211,24 @@ def _span_token_count(value: str) -> int:
     return max(1, len(TOKEN_RE.findall(value)))
 
 
+def _relevance_occurrence_text(candidate: ExtractedCandidate) -> str:
+    canonical_text = (
+        candidate.entity.link.canonical_text
+        if candidate.entity.link is not None
+        else candidate.entity.text
+    )
+    if (
+        candidate.lane == "deterministic_alias"
+        and _is_exact_expansion_acronym_alias(
+            matched_text=candidate.entity.text,
+            candidate_value=candidate.entity.text,
+            canonical_text=canonical_text,
+        )
+    ):
+        return candidate.entity.text
+    return canonical_text
+
+
 def _score_entity_relevance(
     candidate: ExtractedCandidate,
     *,
@@ -1639,11 +3239,13 @@ def _score_entity_relevance(
     confidence = entity.confidence or 0.0
     position_score = 1.0 - min(1.0, candidate.normalized_start / max(1, len(text)))
     span_bonus = min(0.08, max(0, _span_token_count(entity.text) - 1) * 0.03)
-    canonical_text = entity.link.canonical_text if entity.link is not None else entity.text
-    occurrence_bonus = min(0.12, max(0, _count_occurrences(text, canonical_text) - 1) * 0.05)
+    occurrence_text = _relevance_occurrence_text(candidate)
+    occurrence_bonus = min(0.12, max(0, _count_occurrences(text, occurrence_text) - 1) * 0.05)
     lane_bonus = {
         "deterministic_rule": 0.18,
         "deterministic_alias": 0.12,
+        "heuristic_structured_org_backfill": 0.14,
+        "heuristic_structured_location_backfill": 0.14,
         "proposal_linked": 0.08,
     }.get(candidate.lane, 0.08)
 
@@ -1656,6 +3258,9 @@ def _score_entity_relevance(
     else:
         domain_bonus = 0.1
 
+    fragment_penalty = _structural_fragment_penalty(candidate, text=text)
+    label_conflict_penalty = _structural_location_label_penalty(candidate)
+
     return _clamp_score(
         (confidence * 0.38)
         + (position_score * 0.14)
@@ -1663,6 +3268,8 @@ def _score_entity_relevance(
         + domain_bonus
         + span_bonus
         + occurrence_bonus
+        - fragment_penalty
+        - label_conflict_penalty
     )
 
 
@@ -1892,6 +3499,60 @@ def _topic_score(entities: list[EntityMatch], *, multiplier: float = 1.0) -> flo
     return _clamp_score(((average_weight * 0.8) + count_bonus) * multiplier)
 
 
+def _merge_linked_entity_candidates(
+    candidates: list[ExtractedCandidate],
+) -> tuple[list[ExtractedCandidate], list[ExtractedCandidate]]:
+    merged: list[ExtractedCandidate] = []
+    merged_discards: list[ExtractedCandidate] = []
+    groups: dict[str, list[ExtractedCandidate]] = {}
+    ordered_keys: list[str] = []
+
+    for candidate in candidates:
+        link = candidate.entity.link
+        entity_id = link.entity_id.strip() if link is not None else ""
+        if not entity_id:
+            merged.append(candidate)
+            continue
+        if entity_id not in groups:
+            ordered_keys.append(entity_id)
+            groups[entity_id] = []
+        groups[entity_id].append(candidate)
+
+    for entity_id in ordered_keys:
+        group = groups[entity_id]
+        representative = group[0]
+        if len(group) == 1:
+            merged.append(representative)
+            continue
+        merged_discards.extend(group[1:])
+        alias_values: list[str] = []
+        seen_aliases: set[str] = set()
+        for item in group:
+            values = item.entity.aliases or [item.entity.text]
+            for value in values:
+                normalized = value.casefold()
+                if not value or normalized in seen_aliases:
+                    continue
+                seen_aliases.add(normalized)
+                alias_values.append(value)
+        confidence_values = [
+            item.entity.confidence for item in group if item.entity.confidence is not None
+        ]
+        relevance_values = [
+            item.entity.relevance for item in group if item.entity.relevance is not None
+        ]
+        merged_entity = representative.entity.model_copy(
+            update={
+                "aliases": alias_values,
+                "confidence": max(confidence_values) if confidence_values else None,
+                "relevance": max(relevance_values) if relevance_values else None,
+            }
+        )
+        merged.append(replace(representative, entity=merged_entity))
+
+    return merged, merged_discards
+
+
 def _build_topic_match(
     *,
     label: str,
@@ -2082,12 +3743,48 @@ def tag_text(
 
     deduped, duplicate_discards = _dedupe_exact_candidates(extracted)
     coherent = _apply_repeated_surface_consistency(deduped)
+    heuristic_structured_org_backfilled = _backfill_heuristic_structured_organization_entities(
+        coherent,
+        normalized_input=normalized_input,
+        runtime=runtime,
+    )
+    heuristic_structured_org_deduped, heuristic_structured_org_duplicate_discards = (
+        _dedupe_exact_candidates(heuristic_structured_org_backfilled)
+    )
+    coherent = _apply_repeated_surface_consistency(heuristic_structured_org_deduped)
+    heuristic_structured_location_backfilled = _backfill_heuristic_structured_location_entities(
+        coherent,
+        normalized_input=normalized_input,
+        runtime=runtime,
+    )
+    heuristic_structured_location_deduped, heuristic_structured_location_duplicate_discards = (
+        _dedupe_exact_candidates(heuristic_structured_location_backfilled)
+    )
+    coherent = _apply_repeated_surface_consistency(heuristic_structured_location_deduped)
+    heuristic_hyphenated_location_backfilled = _backfill_heuristic_hyphenated_location_entities(
+        coherent,
+        normalized_input=normalized_input,
+        runtime=runtime,
+    )
+    heuristic_hyphenated_location_deduped, heuristic_hyphenated_location_duplicate_discards = (
+        _dedupe_exact_candidates(heuristic_hyphenated_location_backfilled)
+    )
+    coherent = _apply_repeated_surface_consistency(heuristic_hyphenated_location_deduped)
     extended = _extend_structural_entity_spans(
         coherent,
         normalized_input=normalized_input,
     )
     extended_deduped, extension_duplicate_discards = _dedupe_exact_candidates(extended)
     coherent = _apply_repeated_surface_consistency(extended_deduped)
+    heuristic_definition_backfilled = _backfill_heuristic_definition_acronym_entities(
+        coherent,
+        normalized_input=normalized_input,
+        runtime=runtime,
+    )
+    heuristic_definition_deduped, heuristic_definition_duplicate_discards = _dedupe_exact_candidates(
+        heuristic_definition_backfilled
+    )
+    coherent = _apply_repeated_surface_consistency(heuristic_definition_deduped)
     acronym_backfilled = _backfill_document_acronym_entities(
         coherent,
         normalized_input=normalized_input,
@@ -2099,9 +3796,21 @@ def tag_text(
         scored,
         debug_enabled=debug or os.getenv("ADES_TAG_DEBUG") == "1",
     )
+    resolved = _backfill_contextual_org_acronym_entities(
+        resolved,
+        normalized_input=normalized_input,
+        runtime=runtime,
+    )
+    resolved, merged_entity_discards = _merge_linked_entity_candidates(resolved)
 
     total_duplicate_discards = (
-        duplicate_discards + extension_duplicate_discards + acronym_duplicate_discards
+        duplicate_discards
+        + heuristic_structured_org_duplicate_discards
+        + heuristic_structured_location_duplicate_discards
+        + heuristic_hyphenated_location_duplicate_discards
+        + extension_duplicate_discards
+        + heuristic_definition_duplicate_discards
+        + acronym_duplicate_discards
     )
     if debug_payload is not None and total_duplicate_discards:
         span_decisions = list(debug_payload.span_decisions)
@@ -2120,6 +3829,25 @@ def tag_text(
         debug_payload = TagDebug(
             kept_span_count=debug_payload.kept_span_count,
             discarded_span_count=debug_payload.discarded_span_count + len(total_duplicate_discards),
+            span_decisions=span_decisions,
+        )
+    if debug_payload is not None and merged_entity_discards:
+        span_decisions = list(debug_payload.span_decisions)
+        for item in merged_entity_discards:
+            span_decisions.append(
+                TagSpanDecision(
+                    text=item.entity.text,
+                    label=item.entity.label,
+                    start=item.entity.start,
+                    end=item.entity.end,
+                    lane=item.lane,
+                    kept=False,
+                    reason="entity_link_merged",
+                )
+            )
+        debug_payload = TagDebug(
+            kept_span_count=debug_payload.kept_span_count,
+            discarded_span_count=debug_payload.discarded_span_count + len(merged_entity_discards),
             span_decisions=span_decisions,
         )
 

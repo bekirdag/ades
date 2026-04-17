@@ -15,6 +15,9 @@ from ..runtime_matcher import build_matcher_artifact_from_aliases_json
 from ..text_processing import canonicalize_text, normalize_lookup_text
 from .alias_analysis import (
     AliasAnalysisResult,
+    DEFAULT_GENERAL_RETAINED_ALIAS_EXCLUSIONS_FILENAME,
+    apply_general_retained_alias_exclusions,
+    audit_general_retained_aliases,
     analyze_alias_candidates,
     analyze_alias_candidates_from_db,
     build_alias_candidate,
@@ -77,6 +80,34 @@ _ORG_FRAGMENT_SUFFIX_TOKENS = _ORG_SUFFIX_TOKENS | {
     "systems",
     "technologies",
     "technology",
+}
+_ACRONYM_CONNECTOR_TOKENS = {
+    "a",
+    "an",
+    "and",
+    "at",
+    "by",
+    "for",
+    "from",
+    "in",
+    "of",
+    "on",
+    "the",
+    "to",
+    "with",
+}
+_GEOPOLITICAL_ACRONYM_TOKENS = {
+    "arab",
+    "democratic",
+    "emirates",
+    "european",
+    "federal",
+    "kingdom",
+    "republic",
+    "state",
+    "states",
+    "union",
+    "united",
 }
 _QUOTE_TRANSLATION = str.maketrans(
     {
@@ -300,6 +331,18 @@ class GeneratedPackSourceResult:
     warnings: list[str] = field(default_factory=list)
 
 
+def _should_audit_general_retained_aliases(*, domain: str, language: str) -> bool:
+    return domain.casefold() == "general" and language.casefold() == "en"
+
+
+def _default_general_retained_alias_review_cache_path(root: Path) -> Path:
+    return root / "general-retained-alias-review.sqlite"
+
+
+def _default_general_retained_alias_exclusions_path(root: Path) -> Path:
+    return root / DEFAULT_GENERAL_RETAINED_ALIAS_EXCLUSIONS_FILENAME
+
+
 def generate_pack_source(
     bundle_dir: str | Path,
     *,
@@ -307,6 +350,10 @@ def generate_pack_source(
     version: str | None = None,
     include_build_metadata: bool = True,
     include_build_only: bool = False,
+    general_retained_alias_review_mode: str | None = None,
+    general_retained_alias_reviewer: Any | None = None,
+    general_retained_alias_review_cache_path: str | Path | None = None,
+    general_retained_alias_exclusions_path: str | Path | None = None,
 ) -> GeneratedPackSourceResult:
     """Generate a runtime-compatible pack directory from a normalized source bundle."""
 
@@ -515,10 +562,40 @@ def generate_pack_source(
             analysis_db_path=analysis_db_path,
             materialize_retained_aliases=analysis_db_path is None,
         )
+        if _should_audit_general_retained_aliases(
+            domain=bundle.domain,
+            language=bundle.language,
+        ):
+            alias_analysis = audit_general_retained_aliases(
+                alias_analysis,
+                review_mode=general_retained_alias_review_mode,
+                reviewer=general_retained_alias_reviewer,
+                review_cache_path=(
+                    general_retained_alias_review_cache_path
+                    if general_retained_alias_review_cache_path is not None
+                    else _default_general_retained_alias_review_cache_path(
+                        resolved_bundle_dir
+                    )
+                ),
+            )
+            resolved_exclusions_path = (
+                Path(general_retained_alias_exclusions_path).expanduser().resolve()
+                if general_retained_alias_exclusions_path is not None
+                else _default_general_retained_alias_exclusions_path(resolved_bundle_dir)
+            )
+            if resolved_exclusions_path.exists():
+                alias_analysis = apply_general_retained_alias_exclusions(
+                    alias_analysis,
+                    exclusions_path=resolved_exclusions_path,
+                )
     if alias_analysis_path is not None:
         write_alias_analysis_report(alias_analysis_path, alias_analysis)
     ambiguous_alias_count = alias_analysis.ambiguous_alias_count
-    dropped_alias_count += alias_analysis.blocked_alias_count
+    dropped_alias_count += (
+        alias_analysis.blocked_alias_count
+        + alias_analysis.retained_alias_audit_removed_alias_count
+        + alias_analysis.retained_alias_exclusion_removed_alias_count
+    )
 
     labels_payload = sorted(labels, key=_stable_sort_key)
     patterns_payload = sorted(
@@ -680,6 +757,17 @@ def generate_pack_source(
                     "candidate_alias_count": alias_analysis.candidate_alias_count,
                     "retained_alias_count": alias_analysis.retained_alias_count,
                     "collision_blocked_alias_count": alias_analysis.blocked_alias_count,
+                    "retained_alias_audit_scanned_alias_count": alias_analysis.retained_alias_audit_scanned_alias_count,
+                    "retained_alias_audit_removed_alias_count": alias_analysis.retained_alias_audit_removed_alias_count,
+                    "retained_alias_audit_chunk_size": alias_analysis.retained_alias_audit_chunk_size,
+                    "retained_alias_audit_reason_counts": alias_analysis.retained_alias_audit_reason_counts,
+                    "retained_alias_audit_mode": alias_analysis.retained_alias_audit_mode,
+                "retained_alias_audit_reviewer_name": alias_analysis.retained_alias_audit_reviewer_name,
+                "retained_alias_audit_review_cache_path": alias_analysis.retained_alias_audit_review_cache_path,
+                "retained_alias_audit_invoked_review_count": alias_analysis.retained_alias_audit_invoked_review_count,
+                "retained_alias_audit_cached_review_count": alias_analysis.retained_alias_audit_cached_review_count,
+                "retained_alias_exclusion_removed_alias_count": alias_analysis.retained_alias_exclusion_removed_alias_count,
+                "retained_alias_exclusion_source_path": alias_analysis.retained_alias_exclusion_source_path,
                     "exact_identifier_alias_count": alias_analysis.exact_identifier_alias_count,
                     "natural_language_alias_count": alias_analysis.natural_language_alias_count,
                     "blocked_reason_counts": alias_analysis.blocked_reason_counts,
@@ -764,6 +852,10 @@ def refresh_pack_from_analysis_db(
     output_dir: str | Path,
     version: str | None = None,
     include_build_metadata: bool = True,
+    general_retained_alias_review_mode: str | None = None,
+    general_retained_alias_reviewer: Any | None = None,
+    general_retained_alias_review_cache_path: str | Path | None = None,
+    general_retained_alias_exclusions_path: str | Path | None = None,
 ) -> GeneratedPackSourceResult:
     """Refresh a generated pack by re-resolving aliases from an existing analysis DB."""
 
@@ -842,6 +934,35 @@ def refresh_pack_from_analysis_db(
         analysis_db_path=analysis_db_path,
         materialize_retained_aliases=analysis_db_path is None,
     )
+    if _should_audit_general_retained_aliases(
+        domain=source_manifest.domain,
+        language=source_manifest.language,
+    ):
+        review_cache_root = (
+            bundle_manifest_path.parent
+            if bundle_manifest_path is not None
+            else resolved_source_pack_dir
+        )
+        alias_analysis = audit_general_retained_aliases(
+            alias_analysis,
+            review_mode=general_retained_alias_review_mode,
+            reviewer=general_retained_alias_reviewer,
+            review_cache_path=(
+                general_retained_alias_review_cache_path
+                if general_retained_alias_review_cache_path is not None
+                else _default_general_retained_alias_review_cache_path(review_cache_root)
+            ),
+        )
+        resolved_exclusions_path = (
+            Path(general_retained_alias_exclusions_path).expanduser().resolve()
+            if general_retained_alias_exclusions_path is not None
+            else _default_general_retained_alias_exclusions_path(review_cache_root)
+        )
+        if resolved_exclusions_path.exists():
+            alias_analysis = apply_general_retained_alias_exclusions(
+                alias_analysis,
+                exclusions_path=resolved_exclusions_path,
+            )
     if alias_analysis_path is not None:
         write_alias_analysis_report(alias_analysis_path, alias_analysis)
     if alias_analysis.retained_aliases_materialized:
@@ -943,9 +1064,23 @@ def refresh_pack_from_analysis_db(
                 "alias_analysis_report_path": (
                     str(alias_analysis_path) if alias_analysis_path is not None else None
                 ),
+                "dropped_alias_count": int(build_metadata.get("dropped_alias_count", 0))
+                + alias_analysis.retained_alias_audit_removed_alias_count
+                + alias_analysis.retained_alias_exclusion_removed_alias_count,
                 "candidate_alias_count": alias_analysis.candidate_alias_count,
                 "retained_alias_count": alias_analysis.retained_alias_count,
                 "collision_blocked_alias_count": alias_analysis.blocked_alias_count,
+                "retained_alias_audit_scanned_alias_count": alias_analysis.retained_alias_audit_scanned_alias_count,
+                "retained_alias_audit_removed_alias_count": alias_analysis.retained_alias_audit_removed_alias_count,
+                "retained_alias_audit_chunk_size": alias_analysis.retained_alias_audit_chunk_size,
+                "retained_alias_audit_reason_counts": alias_analysis.retained_alias_audit_reason_counts,
+                "retained_alias_audit_mode": alias_analysis.retained_alias_audit_mode,
+                "retained_alias_audit_reviewer_name": alias_analysis.retained_alias_audit_reviewer_name,
+                "retained_alias_audit_review_cache_path": alias_analysis.retained_alias_audit_review_cache_path,
+                "retained_alias_audit_invoked_review_count": alias_analysis.retained_alias_audit_invoked_review_count,
+                "retained_alias_audit_cached_review_count": alias_analysis.retained_alias_audit_cached_review_count,
+                "retained_alias_exclusion_removed_alias_count": alias_analysis.retained_alias_exclusion_removed_alias_count,
+                "retained_alias_exclusion_source_path": alias_analysis.retained_alias_exclusion_source_path,
                 "ambiguous_alias_count": alias_analysis.ambiguous_alias_count,
                 "exact_identifier_alias_count": alias_analysis.exact_identifier_alias_count,
                 "natural_language_alias_count": alias_analysis.natural_language_alias_count,
@@ -1010,7 +1145,8 @@ def refresh_pack_from_analysis_db(
         included_entity_count=int(build_metadata.get("included_entity_count", 0)),
         included_rule_count=int(build_metadata.get("included_rule_count", len(rules_payload))),
         dropped_record_count=int(build_metadata.get("dropped_record_count", 0)),
-        dropped_alias_count=int(build_metadata.get("dropped_alias_count", 0)),
+        dropped_alias_count=int(build_metadata.get("dropped_alias_count", 0))
+        + alias_analysis.retained_alias_audit_removed_alias_count,
         ambiguous_alias_count=alias_analysis.ambiguous_alias_count,
         source_license_classes=dict(build_metadata.get("source_license_classes", {})),
         entity_label_distribution=dict(build_metadata.get("entity_label_distribution", {})),
@@ -1384,6 +1520,9 @@ def _expand_alias_variants(
     compact = _clean_text(re.sub(r"\s*[-/]\s*", " ", text))
     if compact and compact != text:
         variants.append((compact, True))
+    initialism_acronym = _build_initialism_acronym_variant(text, label=label)
+    if initialism_acronym and initialism_acronym != text:
+        variants.append((initialism_acronym, True))
     compact_acronym = _build_compact_acronym_variant(text)
     if compact_acronym and compact_acronym != text:
         variants.append((compact_acronym, True))
@@ -1429,7 +1568,7 @@ def _build_person_first_last_variant(text: str) -> str:
 
 def _build_compact_acronym_variant(text: str) -> str:
     compact = "".join(character for character in text if character.isalnum())
-    if not (2 <= len(compact) <= 5):
+    if not (2 <= len(compact) <= 6):
         return ""
     if not compact.isalpha():
         return ""
@@ -1447,6 +1586,36 @@ def _build_compact_acronym_variant(text: str) -> str:
     return compact.upper()
 
 
+def _build_initialism_acronym_variant(text: str, *, label: str) -> str:
+    tokens = [
+        token
+        for token in re.findall(r"[A-Za-z]+", text)
+        if token.casefold() not in _ACRONYM_CONNECTOR_TOKENS
+    ]
+    normalized_label = label.casefold()
+    if normalized_label in _ORG_LIKE_LABELS:
+        if not (3 <= len(tokens) <= 6):
+            return ""
+        if not all(token.isupper() or token[:1].isupper() for token in tokens):
+            return ""
+        acronym = "".join(token[0].upper() for token in tokens if token[:1].isalpha())
+        if not (3 <= len(acronym) <= 6):
+            return ""
+        return acronym
+    if normalized_label != "location":
+        return ""
+    if not all(token.isupper() or token[:1].isupper() for token in tokens):
+        return ""
+    acronym = "".join(token[0].upper() for token in tokens if token[:1].isalpha())
+    if not (2 <= len(tokens) <= 4):
+        return ""
+    if not (2 <= len(acronym) <= 4):
+        return ""
+    if _GEOPOLITICAL_ACRONYM_TOKENS.isdisjoint(token.casefold() for token in tokens):
+        return ""
+    return acronym
+
+
 def _build_article_stripped_acronym_variant(text: str) -> str:
     tokens = text.split()
     if len(tokens) < 2:
@@ -1459,7 +1628,7 @@ def _build_article_stripped_acronym_variant(text: str) -> str:
     compact_remainder = _build_compact_acronym_variant(remainder)
     if compact_remainder:
         return compact_remainder
-    if remainder.isupper() and remainder.isalpha() and 2 <= len(remainder) <= 5:
+    if remainder.isupper() and remainder.isalpha() and 2 <= len(remainder) <= 6:
         return remainder
     return ""
 
@@ -1504,6 +1673,17 @@ def _should_drop_alias(
         ):
             return True
         if label.casefold() in {"person", "location"}:
+            if (
+                label.casefold() == "location"
+                and generated
+                and display_value.isupper()
+                and _build_initialism_acronym_variant(
+                    canonical_text,
+                    label=label,
+                )
+                == display_value
+            ):
+                return False
             return display_value.casefold() != canonical_text.casefold()
         if (
             label.casefold() in _ORG_LIKE_LABELS

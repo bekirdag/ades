@@ -3,6 +3,7 @@ from ades.pipeline.tagger import (
     _apply_repeated_surface_consistency,
     _build_entity_link,
     _build_provenance,
+    _merge_linked_entity_candidates,
     _resolve_overlaps,
 )
 from ades.service.models import EntityMatch
@@ -112,3 +113,35 @@ def test_repeated_surface_consistency_prefers_anchor_entity() -> None:
         item.entity.link is not None and item.entity.link.entity_id == "entity-alpha-holdings"
         for item in rewritten
     )
+
+
+def test_linked_entity_merge_returns_unique_entity_with_aliases() -> None:
+    primary = _candidate(
+        text="Org Beta",
+        label="organization",
+        start=0,
+        end=8,
+        relevance=0.9,
+        lane="deterministic_alias",
+        canonical_text="Organization Beta",
+        entity_id="wikidata:Q123",
+    )
+    alternate = _candidate(
+        text="Beta Org",
+        label="organization",
+        start=15,
+        end=23,
+        relevance=0.6,
+        lane="deterministic_alias",
+        canonical_text="Organization Beta",
+        entity_id="wikidata:Q123",
+    )
+    unique, discarded = _merge_linked_entity_candidates([primary, alternate])
+
+    assert len(unique) == 1
+    assert [item.entity.text for item in unique] == ["Org Beta"]
+    assert unique[0].entity.aliases == ["Org Beta", "Beta Org"]
+    assert unique[0].entity.link is not None
+    assert unique[0].entity.link.entity_id == "wikidata:Q123"
+    assert len(discarded) == 1
+    assert discarded[0].entity.text == "Beta Org"

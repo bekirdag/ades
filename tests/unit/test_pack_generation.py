@@ -3,14 +3,17 @@ from pathlib import Path
 
 import pytest
 
+from ades.packs.alias_analysis import build_retained_alias_review_key
 from ades.packs.generation import (
     _iter_entity_alias_candidates,
     generate_pack_source,
     refresh_pack_from_analysis_db,
 )
 from tests.pack_generation_helpers import (
+    create_acronym_general_generation_bundle,
     create_finance_generation_bundle,
     create_general_generation_bundle,
+    create_generic_audit_general_generation_bundle,
     create_noisy_general_generation_bundle,
     create_pre_resolved_general_generation_bundle,
 )
@@ -174,6 +177,17 @@ def test_entity_alias_candidates_generate_plain_geopolitical_acronyms() -> None:
     assert ("US", True) in candidates
 
 
+def test_entity_alias_candidates_generate_initialism_acronyms_for_structured_orgs() -> None:
+    candidates = _iter_entity_alias_candidates(
+        "International Energy Agency",
+        {"aliases": []},
+        "organization",
+        pack_domain="general",
+    )
+
+    assert ("IEA", True) in candidates
+
+
 def test_generate_pack_source_drops_structural_org_fragment_aliases(tmp_path: Path) -> None:
     bundle_dir = create_noisy_general_generation_bundle(tmp_path / "bundle")
 
@@ -189,6 +203,159 @@ def test_generate_pack_source_drops_structural_org_fragment_aliases(tmp_path: Pa
 
     assert ("Harbor China Information", "organization") in alias_pairs
     assert ("Harbor", "organization") not in alias_pairs
+
+
+def test_generate_pack_source_audits_generic_general_retained_aliases(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_generic_audit_general_generation_bundle(tmp_path / "bundle")
+
+    result = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+
+    pack_dir = Path(result.pack_dir)
+    aliases = json.loads((pack_dir / "aliases.json").read_text(encoding="utf-8"))["aliases"]
+    alias_pairs = {(item["text"], item["label"]) for item in aliases}
+    build_metadata = json.loads((pack_dir / "build.json").read_text(encoding="utf-8"))
+    alias_analysis = json.loads(
+        (pack_dir / "alias-analysis.json").read_text(encoding="utf-8")
+    )
+
+    assert ("North Harbor", "location") in alias_pairs
+    assert ("Beacon Group", "organization") in alias_pairs
+    assert ("March", "location") not in alias_pairs
+    assert ("Can", "organization") not in alias_pairs
+    assert ("Five", "location") not in alias_pairs
+    assert ("Cars", "organization") not in alias_pairs
+    assert ("Four Ways", "location") not in alias_pairs
+    assert build_metadata["retained_alias_audit_scanned_alias_count"] == result.alias_count + 2
+    assert build_metadata["retained_alias_audit_removed_alias_count"] == 2
+    assert build_metadata["retained_alias_audit_chunk_size"] == 1000
+    assert build_metadata["retained_alias_audit_reason_counts"] == {
+        "generic_retained_phrase_alias": 1,
+        "generic_retained_single_token_alias": 1,
+    }
+    assert alias_analysis["retained_alias_audit_removed_alias_count"] == 2
+    assert alias_analysis["retained_alias_audit_reason_counts"] == {
+        "generic_retained_phrase_alias": 1,
+        "generic_retained_single_token_alias": 1,
+    }
+
+
+def test_generate_pack_source_applies_curated_general_exclusion_file(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    exclusion_path = bundle_dir / "general-retained-alias-exclusions.jsonl"
+    exclusion_payload = {
+        "review_key": build_retained_alias_review_key(
+            {
+                "text": "Beacon Group",
+                "label": "organization",
+                "canonical_text": "Beacon Group",
+                "entity_id": "organization:beacon-group",
+                "source_name": "curated-general",
+            }
+        ),
+        "text": "Beacon Group",
+        "label": "organization",
+        "canonical_text": "Beacon Group",
+        "entity_id": "organization:beacon-group",
+        "source_name": "curated-general",
+        "decision": "drop",
+        "reason_code": "approved_generic_retained_alias",
+        "reason": "approved for removal from general-en",
+    }
+    exclusion_path.write_text(
+        json.dumps(exclusion_payload, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    result = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+
+    pack_dir = Path(result.pack_dir)
+    aliases = json.loads((pack_dir / "aliases.json").read_text(encoding="utf-8"))["aliases"]
+    alias_pairs = {(item["text"], item["label"]) for item in aliases}
+    build_metadata = json.loads((pack_dir / "build.json").read_text(encoding="utf-8"))
+    alias_analysis = json.loads(
+        (pack_dir / "alias-analysis.json").read_text(encoding="utf-8")
+    )
+
+    assert ("Beacon Group", "organization") not in alias_pairs
+    assert ("North Harbor", "location") in alias_pairs
+    assert build_metadata["retained_alias_exclusion_removed_alias_count"] == 1
+    assert build_metadata["retained_alias_exclusion_source_path"] == str(exclusion_path)
+    assert alias_analysis["retained_alias_exclusion_removed_alias_count"] == 1
+    assert alias_analysis["retained_alias_exclusion_source_path"] == str(exclusion_path)
+
+
+def test_generate_pack_source_can_use_callable_general_retained_alias_reviewer(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_generic_audit_general_generation_bundle(tmp_path / "bundle")
+    calls: list[str] = []
+    fail_on_call = False
+
+    def reviewer(alias: dict[str, object]) -> dict[str, str]:
+        if fail_on_call:
+            raise AssertionError(f"unexpected cache miss for {alias['text']}")
+        calls.append(str(alias["text"]))
+        if alias["text"] in {"Cars", "Four Ways"}:
+            return {
+                "decision": "drop",
+                "reason_code": "generic_retained_alias_from_ai_review",
+                "reason": "too generic for general-en runtime",
+            }
+        return {
+            "decision": "keep",
+            "reason_code": "specific_retained_alias",
+            "reason": "specific enough to keep",
+        }
+
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+        general_retained_alias_reviewer=reviewer,
+    )
+
+    build_metadata = json.loads(
+        (Path(generated.pack_dir) / "build.json").read_text(encoding="utf-8")
+    )
+    review_cache_path = Path(build_metadata["retained_alias_audit_review_cache_path"])
+
+    assert build_metadata["retained_alias_audit_mode"] == "callable"
+    assert build_metadata["retained_alias_audit_invoked_review_count"] == build_metadata[
+        "retained_alias_audit_scanned_alias_count"
+    ]
+    assert build_metadata["retained_alias_audit_cached_review_count"] == 0
+    assert review_cache_path.exists()
+    assert len(calls) == build_metadata["retained_alias_audit_scanned_alias_count"]
+
+    fail_on_call = True
+
+    regenerated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+        general_retained_alias_reviewer=reviewer,
+    )
+
+    refreshed_build_metadata = json.loads(
+        (Path(regenerated.pack_dir) / "build.json").read_text(encoding="utf-8")
+    )
+
+    assert refreshed_build_metadata["retained_alias_audit_mode"] == "callable"
+    assert refreshed_build_metadata["retained_alias_audit_invoked_review_count"] == 0
+    assert refreshed_build_metadata["retained_alias_audit_cached_review_count"] == (
+        refreshed_build_metadata["retained_alias_audit_scanned_alias_count"]
+    )
+    assert refreshed_build_metadata["retained_alias_audit_review_cache_path"] == str(
+        review_cache_path
+    )
 
 
 def test_entity_alias_candidates_do_not_compact_slash_placeholders() -> None:
@@ -416,6 +583,78 @@ def test_generate_pack_source_supports_pre_resolved_general_bundle(tmp_path: Pat
     assert alias_analysis["backend"] == "pre_resolved_bundle"
     assert alias_analysis["retained_alias_count"] == result.alias_count
     assert alias_analysis["candidate_alias_count"] == result.alias_count
+
+
+def test_generate_pack_source_keeps_generated_org_initialisms(tmp_path: Path) -> None:
+    bundle_dir = create_acronym_general_generation_bundle(tmp_path)
+
+    result = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+
+    aliases = json.loads(
+        (Path(result.pack_dir) / "aliases.json").read_text(encoding="utf-8")
+    )["aliases"]
+    initialisms = {
+        (item["text"], item["label"], item["canonical_text"], item["runtime_tier"])
+        for item in aliases
+    }
+
+    assert (
+        "IEA",
+        "organization",
+        "International Energy Agency",
+        "runtime_exact_acronym_high_precision",
+    ) in initialisms
+
+
+def test_generate_pack_source_prefers_geopolitical_location_acronyms_over_two_letter_org_noise(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_acronym_general_generation_bundle(tmp_path)
+
+    result = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+
+    aliases = json.loads(
+        (Path(result.pack_dir) / "aliases.json").read_text(encoding="utf-8")
+    )["aliases"]
+    alias_entries = {
+        (
+            item["text"],
+            item["label"],
+            item["canonical_text"],
+            item["runtime_tier"],
+        )
+        for item in aliases
+    }
+    alias_text_labels = {(item["text"], item["label"]) for item in aliases}
+
+    assert (
+        "US",
+        "location",
+        "United States",
+        "runtime_exact_geopolitical_high_precision",
+    ) in alias_entries
+    assert (
+        "UK",
+        "location",
+        "United Kingdom",
+        "runtime_exact_geopolitical_high_precision",
+    ) in alias_entries
+    assert (
+        "EU",
+        "location",
+        "European Union",
+        "runtime_exact_geopolitical_high_precision",
+    ) in alias_entries
+    assert ("US", "organization") not in alias_text_labels
+    assert ("UK", "organization") not in alias_text_labels
+    assert ("EU", "organization") not in alias_text_labels
+    assert ("CI", "organization") not in alias_text_labels
 
 
 def test_generate_pack_source_requires_explicit_source_license_class(tmp_path: Path) -> None:

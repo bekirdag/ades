@@ -2,17 +2,49 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
+from functools import lru_cache
+import hashlib
 import json
 from math import log10
+import os
 from pathlib import Path
 import re
+import shlex
 import sqlite3
-from typing import Any, Iterable
+import subprocess
+from typing import Any, Callable, Iterable, Iterator
+
+try:
+    from wordfreq import zipf_frequency as _wordfreq_zipf_frequency
+except Exception:  # pragma: no cover - exercised by runtime dependency resolution.
+    _wordfreq_zipf_frequency = None
 
 
 DEFAULT_ALIAS_ANALYSIS_BACKEND = "sqlite"
 DEFAULT_ALIAS_ANALYSIS_TOP_CLUSTERS = 20
+DEFAULT_RETAINED_ALIAS_AUDIT_CHUNK_SIZE = 1000
+DEFAULT_RETAINED_ALIAS_AUDIT_TIMEOUT_SECONDS = 120.0
+DEFAULT_GENERAL_RETAINED_ALIAS_EXCLUSIONS_FILENAME = (
+    "general-retained-alias-exclusions.jsonl"
+)
+GENERAL_RETAINED_ALIAS_AUDIT_MODE_ENV = "ADES_GENERAL_ALIAS_AUDIT_MODE"
+GENERAL_RETAINED_ALIAS_AUDIT_COMMAND_ENV = "ADES_GENERAL_ALIAS_AUDIT_COMMAND"
+GENERAL_RETAINED_ALIAS_AUDIT_TIMEOUT_ENV = "ADES_GENERAL_ALIAS_AUDIT_TIMEOUT_SECONDS"
+_GENERAL_RETAINED_ALIAS_AUDIT_MODE_AUTO = "auto"
+_GENERAL_RETAINED_ALIAS_AUDIT_MODE_HEURISTIC = "heuristic"
+_GENERAL_RETAINED_ALIAS_AUDIT_MODE_AI_COMMAND = "ai_command"
+_GENERAL_RETAINED_ALIAS_AUDIT_MODE_DETERMINISTIC_COMMON_ENGLISH = (
+    "deterministic_common_english"
+)
+_GENERAL_RETAINED_ALIAS_AUDIT_MODE_CALLABLE = "callable"
+_GENERAL_RETAINED_ALIAS_AUDIT_ALLOWED_MODES = {
+    _GENERAL_RETAINED_ALIAS_AUDIT_MODE_AUTO,
+    _GENERAL_RETAINED_ALIAS_AUDIT_MODE_HEURISTIC,
+    _GENERAL_RETAINED_ALIAS_AUDIT_MODE_AI_COMMAND,
+    _GENERAL_RETAINED_ALIAS_AUDIT_MODE_DETERMINISTIC_COMMON_ENGLISH,
+}
 _EXACT_IDENTIFIER_LABELS = {"cik", "clinical_trial", "gene", "lei", "ticker"}
 _DEFAULT_SOURCE_PRIORITIES = {
     "curated": 0.9,
@@ -108,6 +140,7 @@ _RUNTIME_CALENDAR_SINGLE_TOKEN_WORDS = {
     "july",
     "june",
     "march",
+    "may",
     "monday",
     "november",
     "october",
@@ -118,6 +151,7 @@ _RUNTIME_CALENDAR_SINGLE_TOKEN_WORDS = {
     "tuesday",
     "wednesday",
 }
+_GENERAL_AUDIT_DROPPABLE_CALENDAR_SINGLE_TOKEN_WORDS = {"march", "may"}
 _RUNTIME_NUMBER_SINGLE_TOKEN_WORDS = {
     "eight",
     "eighteen",
@@ -198,6 +232,150 @@ _RUNTIME_GENERIC_ENTITY_HEADS = {
 _RUNTIME_GENERIC_SINGLE_TOKEN_HEADS = (
     _RUNTIME_GENERIC_ENTITY_HEADS | _RUNTIME_GENERIC_LOCATION_HEADS | {"university"}
 )
+_GENERAL_AUDIT_COMMON_SINGLE_TOKEN_WORDS = (
+    _RUNTIME_GENERIC_PHRASE_LEADS
+    | _RUNTIME_AUXILIARY_WORDS
+    | _RUNTIME_CALENDAR_SINGLE_TOKEN_WORDS
+    | _RUNTIME_NUMBER_SINGLE_TOKEN_WORDS
+    | _RUNTIME_GENERIC_SINGLE_TOKEN_HEADS
+    | {
+        "article",
+        "articles",
+        "book",
+        "books",
+        "call",
+        "calls",
+        "capital",
+        "capitals",
+        "car",
+        "cars",
+        "care",
+        "case",
+        "cases",
+        "council",
+        "councils",
+        "day",
+        "days",
+        "field",
+        "fields",
+        "film",
+        "films",
+        "game",
+        "games",
+        "group",
+        "groups",
+        "home",
+        "homes",
+        "house",
+        "houses",
+        "information",
+        "intelligence",
+        "life",
+        "lives",
+        "line",
+        "lines",
+        "media",
+        "month",
+        "months",
+        "news",
+        "part",
+        "parts",
+        "place",
+        "places",
+        "research",
+        "review",
+        "reviews",
+        "road",
+        "roads",
+        "service",
+        "services",
+        "side",
+        "sides",
+        "solution",
+        "solutions",
+        "story",
+        "stories",
+        "street",
+        "streets",
+        "system",
+        "systems",
+        "technology",
+        "technologies",
+        "time",
+        "times",
+        "town",
+        "towns",
+        "use",
+        "uses",
+        "value",
+        "values",
+        "way",
+        "ways",
+        "world",
+        "worlds",
+        "year",
+        "years",
+    }
+)
+_GENERAL_AUDIT_GENERIC_PHRASE_LEADS = (
+    _RUNTIME_GENERIC_PHRASE_LEADS
+    | _RUNTIME_AUXILIARY_WORDS
+    | _RUNTIME_NUMBER_SINGLE_TOKEN_WORDS
+)
+_GENERAL_AUDIT_GENERIC_PHRASE_TAILS = {
+    "day",
+    "days",
+    "month",
+    "months",
+    "way",
+    "ways",
+    "year",
+    "years",
+}
+_GENERAL_AUDIT_COMMON_PHRASE_TOKENS = (
+    _RUNTIME_AUXILIARY_WORDS
+    | _RUNTIME_NUMBER_SINGLE_TOKEN_WORDS
+    | _GENERAL_AUDIT_GENERIC_PHRASE_TAILS
+)
+_GENERAL_AUDIT_WORDFREQ_SINGLE_TOKEN_ZIPF_MIN = 4.8
+_GENERAL_AUDIT_WORDFREQ_PHRASE_ZIPF_MIN = 4.8
+_GENERAL_AUDIT_WORDFREQ_COMMON_TOKEN_ZIPF_MIN = 4.8
+_GENERAL_AUDIT_ARTICLE_LEADS = {
+    "a",
+    "an",
+    "the",
+}
+_GENERAL_AUDIT_EXECUTIVE_TITLE_ACRONYMS = {
+    "cao",
+    "cbo",
+    "cco",
+    "cdo",
+    "ceo",
+    "cfo",
+    "cho",
+    "cio",
+    "cmo",
+    "coo",
+    "cpo",
+    "cro",
+    "cso",
+    "cto",
+}
+_ACRONYM_CONNECTOR_TOKENS = {
+    "a",
+    "an",
+    "and",
+    "at",
+    "by",
+    "for",
+    "from",
+    "in",
+    "of",
+    "on",
+    "the",
+    "to",
+    "with",
+}
 
 
 @dataclass(frozen=True)
@@ -328,6 +506,17 @@ class AliasAnalysisResult:
     retained_aliases_materialized: bool = True
     retained_aliases: list[dict[str, Any]] = field(default_factory=list)
     top_collision_clusters: list[AliasClusterReport] = field(default_factory=list)
+    retained_alias_audit_scanned_alias_count: int = 0
+    retained_alias_audit_removed_alias_count: int = 0
+    retained_alias_audit_chunk_size: int = 0
+    retained_alias_audit_reason_counts: dict[str, int] = field(default_factory=dict)
+    retained_alias_audit_mode: str = _GENERAL_RETAINED_ALIAS_AUDIT_MODE_HEURISTIC
+    retained_alias_audit_reviewer_name: str | None = None
+    retained_alias_audit_review_cache_path: str | None = None
+    retained_alias_audit_invoked_review_count: int = 0
+    retained_alias_audit_cached_review_count: int = 0
+    retained_alias_exclusion_removed_alias_count: int = 0
+    retained_alias_exclusion_source_path: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -346,7 +535,27 @@ class AliasAnalysisResult:
             "top_collision_clusters": [
                 cluster.to_dict() for cluster in self.top_collision_clusters
             ],
+            "retained_alias_audit_scanned_alias_count": self.retained_alias_audit_scanned_alias_count,
+            "retained_alias_audit_removed_alias_count": self.retained_alias_audit_removed_alias_count,
+            "retained_alias_audit_chunk_size": self.retained_alias_audit_chunk_size,
+            "retained_alias_audit_reason_counts": self.retained_alias_audit_reason_counts,
+            "retained_alias_audit_mode": self.retained_alias_audit_mode,
+            "retained_alias_audit_reviewer_name": self.retained_alias_audit_reviewer_name,
+            "retained_alias_audit_review_cache_path": self.retained_alias_audit_review_cache_path,
+            "retained_alias_audit_invoked_review_count": self.retained_alias_audit_invoked_review_count,
+            "retained_alias_audit_cached_review_count": self.retained_alias_audit_cached_review_count,
+            "retained_alias_exclusion_removed_alias_count": self.retained_alias_exclusion_removed_alias_count,
+            "retained_alias_exclusion_source_path": self.retained_alias_exclusion_source_path,
         }
+
+
+@dataclass(frozen=True)
+class RetainedAliasReviewDecision:
+    """One keep/drop verdict for a retained general-en alias."""
+
+    decision: str
+    reason_code: str
+    reason: str
 
 
 def build_alias_candidate(
@@ -1277,11 +1486,11 @@ def _acronym_expansion_quality(
         return (0, 0, 0, 0)
     if not candidate.display_text.isupper():
         return (0, 0, 0, 0)
-    if not (2 <= len(compact) <= 5):
+    if not (2 <= len(compact) <= 6):
         return (0, 0, 0, 0)
     if not compact.isalpha():
         return (0, 0, 0, 0)
-    tokens = re.findall(r"[A-Za-z]+", candidate.canonical_text)
+    tokens = _acronym_source_tokens(candidate.canonical_text)
     if not tokens:
         return (0, 0, 0, 0)
     initials = "".join(token[0].upper() for token in tokens if token[0].isalpha())
@@ -1303,7 +1512,7 @@ def _acronym_expansion_quality(
 
 def _is_compact_alpha_acronym(alias_key: str) -> bool:
     compact = "".join(character for character in alias_key if character.isalnum())
-    return 2 <= len(compact) <= 5 and compact.isalpha()
+    return 2 <= len(compact) <= 6 and compact.isalpha()
 
 
 def _is_short_exact_canonical_acronym_candidate(
@@ -1478,36 +1687,38 @@ def _insert_retained_aliases(
     )
 
 
-def iter_retained_aliases_from_db(path: str | Path) -> Iterator[dict[str, Any]]:
+def iter_retained_aliases_from_db(
+    path: str | Path,
+    *,
+    chunk_size: int = DEFAULT_RETAINED_ALIAS_AUDIT_CHUNK_SIZE,
+) -> Iterator[dict[str, Any]]:
     resolved = Path(path).expanduser().resolve()
     if not resolved.exists():
         raise FileNotFoundError(f"Alias analysis database not found: {resolved}")
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive.")
     connection = sqlite3.connect(str(resolved))
     try:
-        for (
-            display_text,
-            label,
-            generated,
-            score,
-            canonical_text,
-            source_name,
-            entity_id,
-            source_priority,
-            popularity_weight,
-            runtime_tier,
-        ) in connection.execute(
-            """
+        table_info = connection.execute("PRAGMA table_info(retained_aliases)").fetchall()
+        available_columns = {str(row[1]) for row in table_info}
+        select_columns = [
+            "display_text",
+            "label",
+            "generated",
+            "score",
+            "canonical_text",
+            "source_name",
+            "entity_id",
+            "source_priority",
+            "popularity_weight",
+        ]
+        has_runtime_tier = "runtime_tier" in available_columns
+        if has_runtime_tier:
+            select_columns.append("runtime_tier")
+        cursor = connection.execute(
+            f"""
             SELECT
-                display_text,
-                label,
-                generated,
-                score,
-                canonical_text,
-                source_name,
-                entity_id,
-                source_priority,
-                popularity_weight,
-                runtime_tier
+                {", ".join(select_columns)}
             FROM retained_aliases
             ORDER BY
                 display_sort_key ASC,
@@ -1515,21 +1726,72 @@ def iter_retained_aliases_from_db(path: str | Path) -> Iterator[dict[str, Any]]:
                 label_sort_key ASC,
                 label ASC
             """
-        ):
-            yield {
-                "text": str(display_text),
-                "label": str(label),
-                "generated": bool(generated),
-                "score": round(float(score), 4),
-                "canonical_text": str(canonical_text),
-                "source_name": str(source_name),
-                "entity_id": str(entity_id),
-                "source_priority": round(float(source_priority), 4),
-                "popularity_weight": round(float(popularity_weight), 4),
-                "runtime_tier": str(runtime_tier),
-            }
+        )
+        while rows := cursor.fetchmany(chunk_size):
+            for row in rows:
+                (
+                    display_text,
+                    label,
+                    generated,
+                    score,
+                    canonical_text,
+                    source_name,
+                    entity_id,
+                    source_priority,
+                    popularity_weight,
+                    *optional_fields,
+                ) = row
+                runtime_tier = (
+                    str(optional_fields[0])
+                    if has_runtime_tier and optional_fields
+                    else "runtime_exact_high_precision"
+                )
+                yield {
+                    "text": str(display_text),
+                    "label": str(label),
+                    "generated": bool(generated),
+                    "score": round(float(score), 4),
+                    "canonical_text": str(canonical_text),
+                    "source_name": str(source_name),
+                    "entity_id": str(entity_id),
+                    "source_priority": round(float(source_priority), 4),
+                    "popularity_weight": round(float(popularity_weight), 4),
+                    "runtime_tier": str(runtime_tier),
+                }
     finally:
         connection.close()
+
+
+def build_retained_alias_review_payload(alias: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "text": str(alias.get("text", "")),
+        "label": str(alias.get("label", "")),
+        "canonical_text": str(alias.get("canonical_text", "")),
+        "entity_id": str(alias.get("entity_id", "")),
+        "source_name": str(alias.get("source_name", "")),
+        "generated": bool(alias.get("generated", False)),
+        "score": float(alias.get("score", 0.0)),
+        "source_priority": float(alias.get("source_priority", 0.0)),
+        "popularity_weight": float(alias.get("popularity_weight", 0.0)),
+        "runtime_tier": str(alias.get("runtime_tier", "")),
+    }
+
+
+def build_retained_alias_review_key(alias: dict[str, Any]) -> str:
+    key_payload = {
+        "text": str(alias.get("text", "")),
+        "label": str(alias.get("label", "")),
+        "canonical_text": str(alias.get("canonical_text", "")),
+        "entity_id": str(alias.get("entity_id", "")),
+        "source_name": str(alias.get("source_name", "")),
+    }
+    serialized = json.dumps(
+        key_payload,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def _resolve_alias_lane(
@@ -1760,7 +2022,7 @@ def _is_strong_runtime_acronym_candidate(
     )
     if candidate.label != "organization":
         return False
-    if not (2 <= len(compact) <= 5):
+    if not (3 <= len(compact) <= 5):
         return False
     if not compact.isalpha():
         return False
@@ -1829,7 +2091,7 @@ def _is_strong_geopolitical_acronym_candidate(
         return False
     if not candidate.display_text.isupper():
         return False
-    tokens = re.findall(r"[A-Za-z]+", candidate.canonical_text)
+    tokens = _acronym_source_tokens(candidate.canonical_text)
     if len(tokens) < 2:
         return False
     initials = "".join(token[0].upper() for token in tokens if token[:1].isalpha())
@@ -1853,6 +2115,14 @@ def _is_blocklisted_runtime_single_token(alias_key: str) -> bool:
         or normalized_alias in _RUNTIME_NUMBER_SINGLE_TOKEN_WORDS
         or normalized_alias in _RUNTIME_GENERIC_SINGLE_TOKEN_HEADS
     )
+
+
+def _acronym_source_tokens(value: str) -> list[str]:
+    return [
+        token
+        for token in re.findall(r"[A-Za-z]+", value)
+        if token.casefold() not in _ACRONYM_CONNECTOR_TOKENS
+    ]
 
 
 def _should_block_single_label_natural_alias(
@@ -2160,3 +2430,1053 @@ def _clean_text(raw_value: Any) -> str:
     if raw_value is None:
         return ""
     return str(raw_value).strip()
+
+
+@dataclass(frozen=True)
+class _GeneralRetainedAliasAuditConfig:
+    mode: str
+    reviewer_name: str
+    reviewer: Callable[[dict[str, Any]], RetainedAliasReviewDecision | dict[str, Any]] | None
+    reviewer_command: str | None
+    review_timeout_seconds: float
+    review_cache_path: Path | None
+
+
+def audit_general_retained_aliases(
+    result: AliasAnalysisResult,
+    *,
+    chunk_size: int = DEFAULT_RETAINED_ALIAS_AUDIT_CHUNK_SIZE,
+    review_mode: str | None = None,
+    reviewer: Callable[[dict[str, Any]], RetainedAliasReviewDecision | dict[str, Any]]
+    | None = None,
+    reviewer_command: str | None = None,
+    review_timeout_seconds: float | None = None,
+    review_cache_path: str | Path | None = None,
+) -> AliasAnalysisResult:
+    """Remove overly generic retained aliases from the general-en pack output."""
+
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive.")
+    audit_config = _resolve_general_retained_alias_audit_config(
+        review_mode=review_mode,
+        reviewer=reviewer,
+        reviewer_command=reviewer_command,
+        review_timeout_seconds=review_timeout_seconds,
+        review_cache_path=review_cache_path,
+    )
+    if (
+        audit_config.mode != _GENERAL_RETAINED_ALIAS_AUDIT_MODE_HEURISTIC
+        and audit_config.review_cache_path is None
+        and result.database_path
+    ):
+        database_path = Path(result.database_path).expanduser().resolve()
+        audit_config = replace(
+            audit_config,
+            review_cache_path=database_path.with_name(
+                f"{database_path.stem}-retained-alias-reviews.sqlite"
+            ),
+        )
+    if result.retained_aliases_materialized:
+        return _audit_materialized_general_retained_aliases(
+            result,
+            chunk_size=chunk_size,
+            audit_config=audit_config,
+        )
+    if not result.database_path:
+        raise ValueError("database_path is required for DB-backed retained alias audits.")
+    return _audit_general_retained_aliases_in_db(
+        result,
+        analysis_db_path=Path(result.database_path),
+        chunk_size=chunk_size,
+        audit_config=audit_config,
+    )
+
+
+def _audit_materialized_general_retained_aliases(
+    result: AliasAnalysisResult,
+    *,
+    chunk_size: int,
+    audit_config: _GeneralRetainedAliasAuditConfig,
+) -> AliasAnalysisResult:
+    kept_aliases: list[dict[str, Any]] = []
+    removed_reason_counts: dict[str, int] = {}
+    removed_alias_count = 0
+    scanned_alias_count = 0
+    invoked_review_count = 0
+    cached_review_count = 0
+    review_connection = (
+        _open_retained_alias_review_store(audit_config.review_cache_path)
+        if audit_config.mode != _GENERAL_RETAINED_ALIAS_AUDIT_MODE_HEURISTIC
+        else None
+    )
+    try:
+        for alias in result.retained_aliases:
+            scanned_alias_count += 1
+            decision, reused_cache = _review_general_retained_alias(
+                alias,
+                audit_config=audit_config,
+                review_connection=review_connection,
+            )
+            if reused_cache:
+                cached_review_count += 1
+            elif audit_config.mode != _GENERAL_RETAINED_ALIAS_AUDIT_MODE_HEURISTIC:
+                invoked_review_count += 1
+            if decision is None or decision.decision == "keep":
+                kept_aliases.append(alias)
+                continue
+            removed_alias_count += 1
+            removed_reason_counts[decision.reason_code] = (
+                removed_reason_counts.get(decision.reason_code, 0) + 1
+            )
+    finally:
+        if review_connection is not None:
+            review_connection.close()
+    retained_aliases = sorted(
+        kept_aliases,
+        key=lambda item: (
+            str(item["text"]).casefold(),
+            str(item["text"]),
+            str(item["label"]).casefold(),
+            str(item["label"]),
+        ),
+    )
+    retained_label_counts = _build_retained_label_counts(
+        (str(item["label"]) for item in retained_aliases)
+    )
+    retained_alias_audit_reason_counts = {
+        reason: removed_reason_counts[reason]
+        for reason in sorted(removed_reason_counts, key=lambda value: (value.casefold(), value))
+    }
+    return replace(
+        result,
+        retained_aliases=retained_aliases,
+        retained_alias_count=len(retained_aliases),
+        retained_label_counts=retained_label_counts,
+        retained_alias_audit_scanned_alias_count=scanned_alias_count,
+        retained_alias_audit_removed_alias_count=removed_alias_count,
+        retained_alias_audit_chunk_size=chunk_size,
+        retained_alias_audit_reason_counts=retained_alias_audit_reason_counts,
+        retained_alias_audit_mode=audit_config.mode,
+        retained_alias_audit_reviewer_name=audit_config.reviewer_name,
+        retained_alias_audit_review_cache_path=(
+            str(audit_config.review_cache_path) if audit_config.review_cache_path else None
+        ),
+        retained_alias_audit_invoked_review_count=invoked_review_count,
+        retained_alias_audit_cached_review_count=cached_review_count,
+    )
+
+
+def _audit_general_retained_aliases_in_db(
+    result: AliasAnalysisResult,
+    *,
+    analysis_db_path: Path,
+    chunk_size: int,
+    audit_config: _GeneralRetainedAliasAuditConfig,
+) -> AliasAnalysisResult:
+    resolved_path = analysis_db_path.expanduser().resolve()
+    if not resolved_path.exists():
+        raise FileNotFoundError(f"Alias analysis database not found: {resolved_path}")
+    connection = sqlite3.connect(str(resolved_path))
+    review_connection = (
+        _open_retained_alias_review_store(audit_config.review_cache_path)
+        if audit_config.mode != _GENERAL_RETAINED_ALIAS_AUDIT_MODE_HEURISTIC
+        else None
+    )
+    try:
+        removed_reason_counts: dict[str, int] = {}
+        removed_alias_count = 0
+        scanned_alias_count = 0
+        invoked_review_count = 0
+        cached_review_count = 0
+        last_rowid = 0
+        while True:
+            rows = connection.execute(
+                """
+                SELECT
+                    rowid,
+                    display_text,
+                    label,
+                    canonical_text,
+                    entity_id,
+                    source_name,
+                    generated,
+                    score,
+                    source_priority,
+                    popularity_weight,
+                    runtime_tier
+                FROM retained_aliases
+                WHERE rowid > ?
+                ORDER BY rowid ASC
+                LIMIT ?
+                """,
+                (last_rowid, chunk_size),
+            ).fetchall()
+            if not rows:
+                break
+            rowids_to_delete: list[int] = []
+            for (
+                rowid,
+                display_text,
+                label,
+                canonical_text,
+                entity_id,
+                source_name,
+                generated,
+                score,
+                source_priority,
+                popularity_weight,
+                runtime_tier,
+            ) in rows:
+                scanned_alias_count += 1
+                decision, reused_cache = _review_general_retained_alias(
+                    {
+                        "text": str(display_text),
+                        "label": str(label),
+                        "canonical_text": str(canonical_text),
+                        "entity_id": str(entity_id),
+                        "source_name": str(source_name),
+                        "generated": bool(generated),
+                        "score": float(score),
+                        "source_priority": float(source_priority),
+                        "popularity_weight": float(popularity_weight),
+                        "runtime_tier": str(runtime_tier),
+                    },
+                    audit_config=audit_config,
+                    review_connection=review_connection,
+                )
+                if reused_cache:
+                    cached_review_count += 1
+                elif audit_config.mode != _GENERAL_RETAINED_ALIAS_AUDIT_MODE_HEURISTIC:
+                    invoked_review_count += 1
+                if decision is None or decision.decision == "keep":
+                    continue
+                rowids_to_delete.append(int(rowid))
+                removed_alias_count += 1
+                removed_reason_counts[decision.reason_code] = (
+                    removed_reason_counts.get(decision.reason_code, 0) + 1
+                )
+            if rowids_to_delete:
+                connection.executemany(
+                    "DELETE FROM retained_aliases WHERE rowid = ?",
+                    ((rowid,) for rowid in rowids_to_delete),
+                )
+                connection.commit()
+            last_rowid = int(rows[-1][0])
+        retained_alias_count = int(
+            connection.execute("SELECT COUNT(*) FROM retained_aliases").fetchone()[0]
+        )
+        retained_label_counts = _build_retained_label_counts(
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT label
+                FROM retained_aliases
+                ORDER BY label_sort_key ASC, label ASC
+                """
+            )
+        )
+        retained_alias_audit_reason_counts = {
+            reason: removed_reason_counts[reason]
+            for reason in sorted(
+                removed_reason_counts,
+                key=lambda value: (value.casefold(), value),
+            )
+        }
+        return replace(
+            result,
+            retained_alias_count=retained_alias_count,
+            retained_label_counts=retained_label_counts,
+            retained_alias_audit_scanned_alias_count=scanned_alias_count,
+            retained_alias_audit_removed_alias_count=removed_alias_count,
+            retained_alias_audit_chunk_size=chunk_size,
+            retained_alias_audit_reason_counts=retained_alias_audit_reason_counts,
+            retained_alias_audit_mode=audit_config.mode,
+            retained_alias_audit_reviewer_name=audit_config.reviewer_name,
+            retained_alias_audit_review_cache_path=(
+                str(audit_config.review_cache_path) if audit_config.review_cache_path else None
+            ),
+            retained_alias_audit_invoked_review_count=invoked_review_count,
+            retained_alias_audit_cached_review_count=cached_review_count,
+        )
+    finally:
+        if review_connection is not None:
+            review_connection.close()
+        connection.close()
+
+
+def apply_general_retained_alias_exclusions(
+    result: AliasAnalysisResult,
+    *,
+    exclusions_path: str | Path,
+    chunk_size: int = DEFAULT_RETAINED_ALIAS_AUDIT_CHUNK_SIZE,
+) -> AliasAnalysisResult:
+    """Apply a curated retained-alias exclusion list to a general-en analysis result."""
+
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive.")
+    resolved_exclusions_path = Path(exclusions_path).expanduser().resolve()
+    if not resolved_exclusions_path.exists():
+        raise FileNotFoundError(
+            f"Retained alias exclusion list not found: {resolved_exclusions_path}"
+        )
+    exclusion_keys = _load_general_retained_alias_exclusion_keys(resolved_exclusions_path)
+    if not exclusion_keys:
+        return replace(
+            result,
+            retained_alias_exclusion_removed_alias_count=0,
+            retained_alias_exclusion_source_path=str(resolved_exclusions_path),
+        )
+    if result.retained_aliases_materialized:
+        return _apply_general_retained_alias_exclusions_materialized(
+            result,
+            exclusion_keys=exclusion_keys,
+            exclusions_path=resolved_exclusions_path,
+        )
+    if not result.database_path:
+        raise ValueError(
+            "database_path is required for DB-backed retained alias exclusion application."
+        )
+    return _apply_general_retained_alias_exclusions_in_db(
+        result,
+        analysis_db_path=Path(result.database_path),
+        exclusion_keys=exclusion_keys,
+        exclusions_path=resolved_exclusions_path,
+        chunk_size=chunk_size,
+    )
+
+
+def _apply_general_retained_alias_exclusions_materialized(
+    result: AliasAnalysisResult,
+    *,
+    exclusion_keys: set[str],
+    exclusions_path: Path,
+) -> AliasAnalysisResult:
+    kept_aliases: list[dict[str, Any]] = []
+    removed_alias_count = 0
+    for alias in result.retained_aliases:
+        if build_retained_alias_review_key(alias) in exclusion_keys:
+            removed_alias_count += 1
+            continue
+        kept_aliases.append(alias)
+    retained_aliases = sorted(
+        kept_aliases,
+        key=lambda item: (
+            str(item["text"]).casefold(),
+            str(item["text"]),
+            str(item["label"]).casefold(),
+            str(item["label"]),
+        ),
+    )
+    retained_label_counts = _build_retained_label_counts(
+        str(item["label"]) for item in retained_aliases
+    )
+    return replace(
+        result,
+        retained_aliases=retained_aliases,
+        retained_alias_count=len(retained_aliases),
+        retained_label_counts=retained_label_counts,
+        retained_alias_exclusion_removed_alias_count=removed_alias_count,
+        retained_alias_exclusion_source_path=str(exclusions_path),
+    )
+
+
+def _apply_general_retained_alias_exclusions_in_db(
+    result: AliasAnalysisResult,
+    *,
+    analysis_db_path: Path,
+    exclusion_keys: set[str],
+    exclusions_path: Path,
+    chunk_size: int,
+) -> AliasAnalysisResult:
+    resolved_path = analysis_db_path.expanduser().resolve()
+    if not resolved_path.exists():
+        raise FileNotFoundError(f"Alias analysis database not found: {resolved_path}")
+    connection = sqlite3.connect(str(resolved_path))
+    try:
+        removed_alias_count = 0
+        last_rowid = 0
+        while True:
+            rows = connection.execute(
+                """
+                SELECT
+                    rowid,
+                    display_text,
+                    label,
+                    canonical_text,
+                    entity_id,
+                    source_name,
+                    generated,
+                    score,
+                    source_priority,
+                    popularity_weight,
+                    runtime_tier
+                FROM retained_aliases
+                WHERE rowid > ?
+                ORDER BY rowid ASC
+                LIMIT ?
+                """,
+                (last_rowid, chunk_size),
+            ).fetchall()
+            if not rows:
+                break
+            rowids_to_delete: list[int] = []
+            for (
+                rowid,
+                display_text,
+                label,
+                canonical_text,
+                entity_id,
+                source_name,
+                generated,
+                score,
+                source_priority,
+                popularity_weight,
+                runtime_tier,
+            ) in rows:
+                alias = {
+                    "text": str(display_text),
+                    "label": str(label),
+                    "canonical_text": str(canonical_text),
+                    "entity_id": str(entity_id),
+                    "source_name": str(source_name),
+                    "generated": bool(generated),
+                    "score": float(score),
+                    "source_priority": float(source_priority),
+                    "popularity_weight": float(popularity_weight),
+                    "runtime_tier": str(runtime_tier),
+                }
+                if build_retained_alias_review_key(alias) not in exclusion_keys:
+                    continue
+                rowids_to_delete.append(int(rowid))
+                removed_alias_count += 1
+            if rowids_to_delete:
+                connection.executemany(
+                    "DELETE FROM retained_aliases WHERE rowid = ?",
+                    ((rowid,) for rowid in rowids_to_delete),
+                )
+                connection.commit()
+            last_rowid = int(rows[-1][0])
+        retained_alias_count = int(
+            connection.execute("SELECT COUNT(*) FROM retained_aliases").fetchone()[0]
+        )
+        retained_label_counts = _build_retained_label_counts(
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT label
+                FROM retained_aliases
+                ORDER BY label_sort_key ASC, label ASC
+                """
+            )
+        )
+        return replace(
+            result,
+            retained_alias_count=retained_alias_count,
+            retained_label_counts=retained_label_counts,
+            retained_alias_exclusion_removed_alias_count=removed_alias_count,
+            retained_alias_exclusion_source_path=str(exclusions_path),
+        )
+    finally:
+        connection.close()
+
+
+def _load_general_retained_alias_exclusion_keys(path: Path) -> set[str]:
+    exclusion_keys: set[str] = set()
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        payload = json.loads(line)
+        if not isinstance(payload, dict):
+            raise ValueError(
+                "Retained alias exclusion entries must be JSON objects in JSONL format."
+            )
+        decision = _clean_text(payload.get("decision")).casefold()
+        if decision and decision != "drop":
+            continue
+        review_key = _clean_text(payload.get("review_key"))
+        if not review_key:
+            review_key = build_retained_alias_review_key(payload)
+        exclusion_keys.add(review_key)
+    return exclusion_keys
+
+
+def _resolve_general_retained_alias_audit_config(
+    *,
+    review_mode: str | None,
+    reviewer: Callable[[dict[str, Any]], RetainedAliasReviewDecision | dict[str, Any]]
+    | None,
+    reviewer_command: str | None,
+    review_timeout_seconds: float | None,
+    review_cache_path: str | Path | None,
+) -> _GeneralRetainedAliasAuditConfig:
+    if reviewer is not None:
+        return _GeneralRetainedAliasAuditConfig(
+            mode=_GENERAL_RETAINED_ALIAS_AUDIT_MODE_CALLABLE,
+            reviewer_name=_resolve_reviewer_name(reviewer),
+            reviewer=reviewer,
+            reviewer_command=None,
+            review_timeout_seconds=_resolve_general_retained_alias_audit_timeout(
+                review_timeout_seconds
+            ),
+            review_cache_path=_resolve_general_retained_alias_review_cache_path(
+                review_cache_path
+            ),
+        )
+    raw_mode = (
+        str(
+            review_mode
+            if review_mode is not None
+            else os.getenv(
+                GENERAL_RETAINED_ALIAS_AUDIT_MODE_ENV,
+                _GENERAL_RETAINED_ALIAS_AUDIT_MODE_AUTO,
+            )
+        )
+        .strip()
+        .lower()
+        or _GENERAL_RETAINED_ALIAS_AUDIT_MODE_AUTO
+    )
+    if raw_mode not in _GENERAL_RETAINED_ALIAS_AUDIT_ALLOWED_MODES:
+        raise ValueError(
+            f"Unsupported {GENERAL_RETAINED_ALIAS_AUDIT_MODE_ENV} value: {raw_mode!r}."
+        )
+    resolved_command = _clean_text(
+        reviewer_command or os.getenv(GENERAL_RETAINED_ALIAS_AUDIT_COMMAND_ENV)
+    )
+    resolved_mode = raw_mode
+    if resolved_mode == _GENERAL_RETAINED_ALIAS_AUDIT_MODE_AUTO:
+        resolved_mode = (
+            _GENERAL_RETAINED_ALIAS_AUDIT_MODE_AI_COMMAND
+            if resolved_command
+            else _GENERAL_RETAINED_ALIAS_AUDIT_MODE_DETERMINISTIC_COMMON_ENGLISH
+        )
+    if resolved_mode == _GENERAL_RETAINED_ALIAS_AUDIT_MODE_AI_COMMAND and not resolved_command:
+        raise RuntimeError(
+            "general-en retained alias AI review requires a configured reviewer command. "
+            f"Set {GENERAL_RETAINED_ALIAS_AUDIT_COMMAND_ENV} or pass reviewer_command."
+        )
+    return _GeneralRetainedAliasAuditConfig(
+        mode=resolved_mode,
+        reviewer_name=(
+            _resolve_command_reviewer_name(resolved_command)
+            if resolved_mode == _GENERAL_RETAINED_ALIAS_AUDIT_MODE_AI_COMMAND
+            else resolved_mode
+        ),
+        reviewer=None,
+        reviewer_command=resolved_command or None,
+        review_timeout_seconds=_resolve_general_retained_alias_audit_timeout(
+            review_timeout_seconds
+        ),
+        review_cache_path=(
+            _resolve_general_retained_alias_review_cache_path(review_cache_path)
+            if resolved_mode
+            not in {
+                _GENERAL_RETAINED_ALIAS_AUDIT_MODE_HEURISTIC,
+                _GENERAL_RETAINED_ALIAS_AUDIT_MODE_DETERMINISTIC_COMMON_ENGLISH,
+            }
+            else None
+        ),
+    )
+
+
+def _resolve_general_retained_alias_audit_timeout(value: float | None) -> float:
+    raw_value = value
+    if raw_value is None:
+        env_value = _clean_text(os.getenv(GENERAL_RETAINED_ALIAS_AUDIT_TIMEOUT_ENV))
+        raw_value = (
+            float(env_value)
+            if env_value
+            else DEFAULT_RETAINED_ALIAS_AUDIT_TIMEOUT_SECONDS
+        )
+    if raw_value <= 0:
+        raise ValueError("review_timeout_seconds must be positive.")
+    return float(raw_value)
+
+
+def _resolve_general_retained_alias_review_cache_path(
+    value: str | Path | None,
+) -> Path | None:
+    if value is None:
+        return None
+    return Path(value).expanduser().resolve()
+
+
+def _resolve_reviewer_name(
+    reviewer: Callable[[dict[str, Any]], RetainedAliasReviewDecision | dict[str, Any]],
+) -> str:
+    name = getattr(reviewer, "__name__", "")
+    if name:
+        return str(name)
+    return reviewer.__class__.__name__
+
+
+def _resolve_command_reviewer_name(command: str) -> str:
+    tokens = shlex.split(command)
+    if not tokens:
+        raise RuntimeError(
+            f"{GENERAL_RETAINED_ALIAS_AUDIT_COMMAND_ENV} did not resolve to an executable."
+        )
+    return tokens[0]
+
+
+def _open_retained_alias_review_store(
+    path: Path | None,
+) -> sqlite3.Connection | None:
+    if path is None:
+        return None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(str(path))
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS retained_alias_audit_reviews (
+            review_key TEXT NOT NULL,
+            reviewer_mode TEXT NOT NULL,
+            reviewer_name TEXT NOT NULL,
+            display_text TEXT NOT NULL,
+            label TEXT NOT NULL,
+            canonical_text TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            source_name TEXT NOT NULL,
+            decision TEXT NOT NULL,
+            reason_code TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            response_json TEXT NOT NULL,
+            reviewed_at TEXT NOT NULL,
+            PRIMARY KEY (review_key, reviewer_mode, reviewer_name)
+        )
+        """
+    )
+    connection.commit()
+    return connection
+
+
+def _review_general_retained_alias(
+    alias: dict[str, Any],
+    *,
+    audit_config: _GeneralRetainedAliasAuditConfig,
+    review_connection: sqlite3.Connection | None,
+) -> tuple[RetainedAliasReviewDecision | None, bool]:
+    if audit_config.mode == _GENERAL_RETAINED_ALIAS_AUDIT_MODE_HEURISTIC:
+        reason = _classify_generic_general_retained_alias(
+            text=str(alias.get("text", "")),
+            label=str(alias.get("label", "")),
+            canonical_text=str(alias.get("canonical_text", "")),
+        )
+        if reason is None:
+            return None, False
+        return (
+            RetainedAliasReviewDecision(
+                decision="drop",
+                reason_code=reason,
+                reason=reason,
+            ),
+            False,
+        )
+    if (
+        audit_config.mode
+        == _GENERAL_RETAINED_ALIAS_AUDIT_MODE_DETERMINISTIC_COMMON_ENGLISH
+    ):
+        reason = _classify_deterministic_common_english_retained_alias(
+            text=str(alias.get("text", "")),
+            label=str(alias.get("label", "")),
+            canonical_text=str(alias.get("canonical_text", "")),
+        )
+        if reason is None:
+            return None, False
+        return (
+            RetainedAliasReviewDecision(
+                decision="drop",
+                reason_code=reason,
+                reason=reason,
+            ),
+            False,
+        )
+    cached = _load_cached_retained_alias_review(
+        review_connection,
+        alias,
+        audit_config=audit_config,
+    )
+    if cached is not None:
+        return cached, True
+    if audit_config.mode == _GENERAL_RETAINED_ALIAS_AUDIT_MODE_CALLABLE:
+        if audit_config.reviewer is None:
+            raise RuntimeError("callable audit mode requires a reviewer callable.")
+        raw_decision = audit_config.reviewer(dict(alias))
+        response_payload = (
+            raw_decision
+            if isinstance(raw_decision, dict)
+            else {
+                "decision": raw_decision.decision,
+                "reason_code": raw_decision.reason_code,
+                "reason": raw_decision.reason,
+            }
+        )
+    elif audit_config.mode == _GENERAL_RETAINED_ALIAS_AUDIT_MODE_AI_COMMAND:
+        if not audit_config.reviewer_command:
+            raise RuntimeError("ai_command audit mode requires reviewer_command.")
+        response_payload = _run_general_retained_alias_ai_command(
+            alias,
+            command=audit_config.reviewer_command,
+            timeout_seconds=audit_config.review_timeout_seconds,
+        )
+        raw_decision = response_payload
+    else:
+        raise RuntimeError(f"Unsupported general retained alias audit mode: {audit_config.mode}")
+    decision = _coerce_retained_alias_review_decision(raw_decision)
+    _store_cached_retained_alias_review(
+        review_connection,
+        alias,
+        audit_config=audit_config,
+        decision=decision,
+        response_payload=response_payload,
+    )
+    return decision, False
+
+
+def _retained_alias_review_payload(alias: dict[str, Any]) -> dict[str, Any]:
+    return build_retained_alias_review_payload(alias)
+
+
+def _retained_alias_review_key(alias: dict[str, Any]) -> str:
+    return build_retained_alias_review_key(alias)
+
+
+def _load_cached_retained_alias_review(
+    connection: sqlite3.Connection | None,
+    alias: dict[str, Any],
+    *,
+    audit_config: _GeneralRetainedAliasAuditConfig,
+) -> RetainedAliasReviewDecision | None:
+    if connection is None:
+        return None
+    row = connection.execute(
+        """
+        SELECT decision, reason_code, reason
+        FROM retained_alias_audit_reviews
+        WHERE review_key = ?
+          AND reviewer_mode = ?
+          AND reviewer_name = ?
+        """,
+        (
+            _retained_alias_review_key(alias),
+            audit_config.mode,
+            audit_config.reviewer_name,
+        ),
+    ).fetchone()
+    if row is None:
+        return None
+    return RetainedAliasReviewDecision(
+        decision=str(row[0]),
+        reason_code=str(row[1]),
+        reason=str(row[2]),
+    )
+
+
+def _store_cached_retained_alias_review(
+    connection: sqlite3.Connection | None,
+    alias: dict[str, Any],
+    *,
+    audit_config: _GeneralRetainedAliasAuditConfig,
+    decision: RetainedAliasReviewDecision,
+    response_payload: dict[str, Any],
+) -> None:
+    if connection is None:
+        return
+    payload = _retained_alias_review_payload(alias)
+    reviewed_at = datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO retained_alias_audit_reviews (
+            review_key,
+            reviewer_mode,
+            reviewer_name,
+            display_text,
+            label,
+            canonical_text,
+            entity_id,
+            source_name,
+            decision,
+            reason_code,
+            reason,
+            payload_json,
+            response_json,
+            reviewed_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            _retained_alias_review_key(alias),
+            audit_config.mode,
+            audit_config.reviewer_name,
+            payload["text"],
+            payload["label"],
+            payload["canonical_text"],
+            payload["entity_id"],
+            payload["source_name"],
+            decision.decision,
+            decision.reason_code,
+            decision.reason,
+            json.dumps(payload, ensure_ascii=False, sort_keys=True),
+            json.dumps(response_payload, ensure_ascii=False, sort_keys=True),
+            reviewed_at,
+        ),
+    )
+    connection.commit()
+
+
+def _run_general_retained_alias_ai_command(
+    alias: dict[str, Any],
+    *,
+    command: str,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    payload = {
+        "task": "general_retained_alias_review",
+        "instructions": (
+            "Review one retained alias from the general-en pack and return a keep/drop "
+            "decision. Drop generic English words or phrases even if they correspond to "
+            "obscure real entities. Prefer false negatives over broad false positives."
+        ),
+        "required_response_schema": {
+            "decision": "keep|drop",
+            "reason_code": "short_snake_case_code",
+            "reason": "short_human_readable_reason",
+        },
+        "alias": _retained_alias_review_payload(alias),
+    }
+    process = subprocess.run(
+        shlex.split(command),
+        input=json.dumps(payload, ensure_ascii=False),
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+        check=False,
+    )
+    if process.returncode != 0:
+        error_output = _clean_text(process.stderr) or _clean_text(process.stdout)
+        raise RuntimeError(
+            "general-en retained alias AI review command failed: "
+            f"{error_output or f'exit code {process.returncode}'}"
+        )
+    try:
+        response = json.loads(process.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "general-en retained alias AI review command did not return JSON."
+        ) from exc
+    if not isinstance(response, dict):
+        raise RuntimeError(
+            "general-en retained alias AI review command must return a JSON object."
+        )
+    return response
+
+
+def _coerce_retained_alias_review_decision(
+    raw_value: RetainedAliasReviewDecision | dict[str, Any],
+) -> RetainedAliasReviewDecision:
+    if isinstance(raw_value, RetainedAliasReviewDecision):
+        decision = raw_value
+    elif isinstance(raw_value, dict):
+        decision_value = _clean_text(raw_value.get("decision")).casefold()
+        if decision_value not in {"keep", "drop"}:
+            raise RuntimeError(
+                "retained alias reviewer must return decision=keep or decision=drop."
+            )
+        reason_code = _clean_text(raw_value.get("reason_code"))
+        if not reason_code:
+            reason_code = (
+                "ai_retained_alias_keep"
+                if decision_value == "keep"
+                else "ai_retained_alias_drop"
+            )
+        reason = _clean_text(raw_value.get("reason")) or reason_code
+        decision = RetainedAliasReviewDecision(
+            decision=decision_value,
+            reason_code=reason_code,
+            reason=reason,
+        )
+    else:
+        raise RuntimeError(
+            "retained alias reviewer must return a RetainedAliasReviewDecision or dict."
+        )
+    if decision.decision not in {"keep", "drop"}:
+        raise RuntimeError("retained alias review decision must be keep or drop.")
+    if not decision.reason_code:
+        raise RuntimeError("retained alias review decision must include a reason_code.")
+    if not decision.reason:
+        raise RuntimeError("retained alias review decision must include a reason.")
+    return decision
+
+
+def _build_retained_label_counts(labels: Iterable[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for label in labels:
+        counts[label] = counts.get(label, 0) + 1
+    return {
+        label: counts[label]
+        for label in sorted(counts, key=lambda value: (value.casefold(), value))
+    }
+
+
+def _classify_generic_general_retained_alias(
+    *,
+    text: str,
+    label: str,
+    canonical_text: str,
+) -> str | None:
+    del canonical_text
+    tokens = _general_audit_alpha_tokens(text)
+    if not tokens:
+        return None
+    if len(tokens) == 1 and label == "organization":
+        token = tokens[0]
+        if token in _GENERAL_AUDIT_EXECUTIVE_TITLE_ACRONYMS:
+            return "generic_retained_single_token_alias"
+    if _has_protected_uppercase_segment(text):
+        return None
+    if len(tokens) == 1:
+        token = tokens[0]
+        if (
+            token in _RUNTIME_CALENDAR_SINGLE_TOKEN_WORDS
+            and token not in _GENERAL_AUDIT_DROPPABLE_CALENDAR_SINGLE_TOKEN_WORDS
+        ):
+            return None
+        if _is_blocklisted_runtime_single_token(text):
+            return "generic_retained_single_token_alias"
+        if token in _GENERAL_AUDIT_COMMON_SINGLE_TOKEN_WORDS:
+            return "generic_retained_single_token_alias"
+        return None
+    if _has_parenthetical_disambiguation(text):
+        return None
+    if any(token in _RUNTIME_PERSON_PARTICLES for token in tokens):
+        return None
+    if len(tokens) > 2:
+        return None
+    if len(tokens) > 1 and tokens[0] in _RUNTIME_CALENDAR_SINGLE_TOKEN_WORDS:
+        return None
+    if tokens[0] in _GENERAL_AUDIT_ARTICLE_LEADS:
+        return None
+    if (
+        len(tokens) == 2
+        and tokens[1] in _GENERAL_AUDIT_GENERIC_PHRASE_TAILS
+        and tokens[0] in _GENERAL_AUDIT_GENERIC_PHRASE_LEADS
+    ):
+        return "generic_retained_phrase_alias"
+    if (
+        len(tokens) == 2
+        and tokens[0] in _GENERAL_AUDIT_GENERIC_PHRASE_TAILS
+        and tokens[1] in _RUNTIME_NUMBER_SINGLE_TOKEN_WORDS
+    ):
+        return "generic_retained_phrase_alias"
+    return None
+
+
+def _classify_deterministic_common_english_retained_alias(
+    *,
+    text: str,
+    label: str,
+    canonical_text: str,
+) -> str | None:
+    if _has_non_ascii_alpha_character(text):
+        return None
+    if _has_parenthetical_disambiguation(text):
+        return None
+    if any(character.isdigit() for character in text):
+        return None
+    if any(character in "+/@&" for character in text):
+        return None
+    if _has_dotted_initial_segment(text):
+        return None
+    heuristic_reason = _classify_generic_general_retained_alias(
+        text=text,
+        label=label,
+        canonical_text=canonical_text,
+    )
+    if heuristic_reason is not None:
+        return heuristic_reason
+    if _has_protected_uppercase_segment(text):
+        return None
+    tokens = _general_audit_alpha_tokens(text)
+    if not tokens:
+        return None
+    normalized_text = _normalize_general_audit_phrase(text)
+    if not normalized_text:
+        return None
+    if len(tokens) == 1:
+        if not normalized_text.isalpha():
+            return None
+        if (
+            tokens[0] in _RUNTIME_CALENDAR_SINGLE_TOKEN_WORDS
+            and tokens[0] not in _GENERAL_AUDIT_DROPPABLE_CALENDAR_SINGLE_TOKEN_WORDS
+        ):
+            return None
+        return None
+    if tokens[0] in _GENERAL_AUDIT_ARTICLE_LEADS:
+        return None
+    if any(token in _RUNTIME_PERSON_PARTICLES for token in tokens):
+        return None
+    if tokens[0] in _RUNTIME_CALENDAR_SINGLE_TOKEN_WORDS:
+        return None
+    if len(tokens) > 2:
+        return None
+    phrase_zipf = _wordfreq_zipf_frequency_en(normalized_text)
+    if phrase_zipf < _GENERAL_AUDIT_WORDFREQ_PHRASE_ZIPF_MIN:
+        return None
+    token_zipfs = [_wordfreq_zipf_frequency_en(token) for token in tokens]
+    if min(token_zipfs) < _GENERAL_AUDIT_WORDFREQ_COMMON_TOKEN_ZIPF_MIN:
+        return None
+    if (
+        len(tokens) == 2
+        and tokens[1] in _GENERAL_AUDIT_GENERIC_PHRASE_TAILS
+        and tokens[0] in _GENERAL_AUDIT_GENERIC_PHRASE_LEADS
+    ):
+        return "wordfreq_high_frequency_phrase_alias"
+    if (
+        len(tokens) == 2
+        and tokens[0] in _GENERAL_AUDIT_GENERIC_PHRASE_TAILS
+        and tokens[1] in _RUNTIME_NUMBER_SINGLE_TOKEN_WORDS
+    ):
+        return "wordfreq_high_frequency_phrase_alias"
+    return None
+
+
+@lru_cache(maxsize=200_000)
+def _wordfreq_zipf_frequency_en(text: str) -> float:
+    normalized = _normalize_general_audit_phrase(text)
+    if not normalized:
+        return 0.0
+    if _wordfreq_zipf_frequency is None:
+        raise RuntimeError(
+            "wordfreq is required for deterministic common-English retained alias review."
+        )
+    return float(_wordfreq_zipf_frequency(normalized, "en"))
+
+
+def _normalize_general_audit_phrase(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text).strip()).casefold()
+
+
+def _general_audit_alpha_tokens(text: str) -> list[str]:
+    return [token.casefold() for token in re.findall(r"[A-Za-z]+", text)]
+
+
+def _has_protected_uppercase_segment(text: str) -> bool:
+    return any(
+        len(segment) > 1 and segment.isupper()
+        for segment in re.split(r"[\s/._-]+", text.strip())
+        if segment
+    )
+
+
+def _has_dotted_initial_segment(text: str) -> bool:
+    return re.search(r"(?:^|[\s(])(?:[A-Za-z]\.){1,}(?:$|[\s)])", text.strip()) is not None
+
+
+def _has_non_ascii_alpha_character(text: str) -> bool:
+    return any(character.isalpha() and not character.isascii() for character in text)
+
+
+def _has_parenthetical_disambiguation(text: str) -> bool:
+    stripped = text.strip()
+    return "(" in stripped and ")" in stripped

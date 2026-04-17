@@ -290,6 +290,69 @@ def test_public_api_generated_general_pack_backfills_document_defined_acronyms(
     assert ("US", "location") in entities
 
 
+def test_public_api_generated_general_pack_extracts_standalone_org_initialisms(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_acronym_general_generation_bundle(tmp_path / "bundle")
+
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    registry = build_registry(
+        [generated.pack_dir],
+        output_dir=tmp_path / "registry",
+    )
+
+    install_root = tmp_path / "install"
+    pull_pack(
+        "general-en",
+        storage_root=install_root,
+        registry_url=registry.index_url,
+    )
+    response = tag(
+        "The IEA said energy markets would respond.",
+        pack="general-en",
+        storage_root=install_root,
+    )
+
+    entities = {(entity.text, entity.label) for entity in response.entities}
+    assert ("IEA", "organization") in entities
+
+
+def test_public_api_generated_general_pack_prefers_geopolitical_location_acronyms_over_two_letter_org_noise(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_acronym_general_generation_bundle(tmp_path / "bundle")
+
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    registry = build_registry(
+        [generated.pack_dir],
+        output_dir=tmp_path / "registry",
+    )
+
+    install_root = tmp_path / "install"
+    pull_pack(
+        "general-en",
+        storage_root=install_root,
+        registry_url=registry.index_url,
+    )
+    response = tag(
+        "US officials said the UK and EU would respond while CI Simpson filed a report.",
+        pack="general-en",
+        storage_root=install_root,
+    )
+
+    entities = {(entity.text, entity.label) for entity in response.entities}
+    assert ("US", "location") in entities
+    assert ("UK", "location") in entities
+    assert ("EU", "location") in entities
+    assert ("CI", "organization") not in entities
+
+
 def test_public_api_generated_general_pack_recovers_geopolitical_and_structured_org_spans(
     tmp_path: Path,
 ) -> None:
@@ -328,3 +391,41 @@ def test_public_api_generated_general_pack_recovers_geopolitical_and_structured_
     assert ("Harbor China Information", "organization") in entities
     assert ("Four", "location") not in entities
     assert ("Harbor", "organization") not in entities
+
+
+def test_public_api_generated_general_pack_backfills_structured_orgs_and_skips_datelines(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    registry = build_registry(
+        [generated.pack_dir],
+        output_dir=tmp_path / "registry",
+    )
+
+    install_root = tmp_path / "install"
+    pull_pack(
+        "general-en",
+        storage_root=install_root,
+        registry_url=registry.index_url,
+    )
+    response = tag(
+        (
+            "LONDON (Reuters) - Russian Foreign Ministry officials met Columbia University "
+            "and Opinion Research Corporation advisers."
+        ),
+        pack="general-en",
+        storage_root=install_root,
+    )
+
+    entities = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("Russian Foreign Ministry", "organization") in entities
+    assert ("Columbia University", "organization") in entities
+    assert ("Opinion Research Corporation", "organization") in entities
+    assert ("LONDON", "organization") not in entities
+    assert ("LONDON", "location") not in entities

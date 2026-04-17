@@ -163,6 +163,61 @@ def test_keep_exact_all_caps_expansion_acronym_candidate() -> None:
     )
 
 
+def test_skip_all_caps_section_heading_singletons() -> None:
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="NOTES",
+            candidate_value="NOTES",
+            canonical_text="NOTES",
+            candidate_label="organization",
+            candidate_domain="general",
+            segment_text="NOTES: Pittsburgh closed the period well.",
+            start=0,
+            end=5,
+        )
+        is True
+    )
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="UP",
+            candidate_value="UP",
+            canonical_text="UP",
+            candidate_label="location",
+            candidate_domain="general",
+            segment_text="UP NEXT Lightning: At the Los Angeles Kings on Thursday night.",
+            start=0,
+            end=2,
+        )
+        is True
+    )
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="NEXT",
+            candidate_value="NEXT",
+            canonical_text="NEXT",
+            candidate_label="organization",
+            candidate_domain="general",
+            segment_text="UP NEXT Lightning: At the Los Angeles Kings on Thursday night.",
+            start=3,
+            end=7,
+        )
+        is True
+    )
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="NHL",
+            candidate_value="NHL",
+            canonical_text="National Hockey League",
+            candidate_label="organization",
+            candidate_domain="general",
+            segment_text="The NHL season resumed in October.",
+            start=4,
+            end=7,
+        )
+        is False
+    )
+
+
 def test_keep_valid_titleled_exact_phrases() -> None:
     assert (
         _should_skip_multi_token_lookup_candidate(

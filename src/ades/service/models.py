@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime
 from typing import Literal
 from typing import Any
@@ -9,6 +10,31 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from ..packs.quality_defaults import DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES
+
+try:
+    from wordfreq import zipf_frequency as _wordfreq_zipf_frequency
+except ImportError:  # pragma: no cover - packaging/tests install wordfreq
+    _wordfreq_zipf_frequency = None
+
+_GENERAL_EXECUTIVE_TITLE_ACRONYMS = {
+    "cao",
+    "cbo",
+    "cco",
+    "cdo",
+    "ceo",
+    "cfo",
+    "cho",
+    "cio",
+    "cmo",
+    "coo",
+    "cpo",
+    "cro",
+    "cso",
+    "cto",
+}
+_GENERAL_OUTPUT_ARTICLE_LEADS = {"the"}
+_GENERAL_OUTPUT_SINGLE_TOKEN_GENERIC_ZIPF_MIN = 5.25
+_GENERAL_OUTPUT_ARTICLE_TAIL_GENERIC_ZIPF_MIN = 4.7
 
 
 class PackSummary(BaseModel):
@@ -1358,10 +1384,120 @@ class EntityMatch(BaseModel):
     label: str
     start: int
     end: int
+    aliases: list[str] = Field(default_factory=list)
     confidence: float | None = None
     relevance: float | None = None
     provenance: EntityProvenance | None = None
     link: EntityLink | None = None
+
+
+def _merge_duplicate_linked_entities(entities: list[EntityMatch]) -> tuple[list[EntityMatch], int]:
+    ordered_entity_ids: list[str] = []
+    grouped: dict[str, list[EntityMatch]] = {}
+    passthrough: list[EntityMatch] = []
+
+    for entity in entities:
+        link = entity.link
+        entity_id = link.entity_id.strip() if link is not None else ""
+        if not entity_id:
+            passthrough.append(entity)
+            continue
+        if entity_id not in grouped:
+            ordered_entity_ids.append(entity_id)
+            grouped[entity_id] = []
+        grouped[entity_id].append(entity)
+
+    merged: list[EntityMatch] = list(passthrough)
+    merged_count = 0
+    for entity_id in ordered_entity_ids:
+        group = grouped[entity_id]
+        if len(group) == 1:
+            merged.append(group[0])
+            continue
+        merged_count += len(group) - 1
+        representative = min(
+            group,
+            key=lambda item: (
+                item.start,
+                item.end,
+                -(item.relevance if item.relevance is not None else (item.confidence or 0.0)),
+                item.label.casefold(),
+                item.text.casefold(),
+            ),
+        )
+        alias_values: list[str] = []
+        seen_aliases: set[str] = set()
+        for item in group:
+            values = item.aliases or [item.text]
+            for value in values:
+                normalized = value.casefold()
+                if not value or normalized in seen_aliases:
+                    continue
+                seen_aliases.add(normalized)
+                alias_values.append(value)
+        confidence_values = [item.confidence for item in group if item.confidence is not None]
+        relevance_values = [item.relevance for item in group if item.relevance is not None]
+        merged.append(
+            representative.model_copy(
+                update={
+                    "aliases": alias_values,
+                    "confidence": max(confidence_values) if confidence_values else None,
+                    "relevance": max(relevance_values) if relevance_values else None,
+                }
+            )
+        )
+
+    merged.sort(key=lambda item: (item.start, item.end, item.label.casefold(), item.text.casefold()))
+    return merged, merged_count
+
+
+def _is_generic_general_org_title_alias(text: str) -> bool:
+    normalized = "".join(character for character in text.casefold() if character.isalpha())
+    return normalized in _GENERAL_EXECUTIVE_TITLE_ACRONYMS
+
+
+def _wordfreq_zipf_en(text: str) -> float:
+    if _wordfreq_zipf_frequency is None:
+        return 0.0
+    return float(_wordfreq_zipf_frequency(text.casefold(), "en"))
+
+
+def _is_common_english_general_org_alias(entity: EntityMatch) -> bool:
+    if entity.label != "organization":
+        return False
+    if entity.link is None:
+        return False
+    if entity.link.canonical_text.casefold() != entity.text.casefold():
+        return False
+    text = entity.text.strip()
+    if not text.isascii():
+        return False
+    tokens = [token.casefold() for token in text.split() if token.isalpha()]
+    if not tokens:
+        return False
+    if len(tokens) == 1:
+        if not text.isalpha():
+            return False
+        return _wordfreq_zipf_en(tokens[0]) >= _GENERAL_OUTPUT_SINGLE_TOKEN_GENERIC_ZIPF_MIN
+    if len(tokens) == 2 and tokens[0] in _GENERAL_OUTPUT_ARTICLE_LEADS:
+        return _wordfreq_zipf_en(tokens[1]) >= _GENERAL_OUTPUT_ARTICLE_TAIL_GENERIC_ZIPF_MIN
+    return False
+
+
+def _filter_final_output_entities(pack: str, entities: list[EntityMatch]) -> tuple[list[EntityMatch], int]:
+    if pack != "general-en":
+        return entities, 0
+    kept: list[EntityMatch] = []
+    removed = 0
+    for entity in entities:
+        if entity.label == "organization" and (
+            _is_generic_general_org_title_alias(entity.text)
+            or _is_common_english_general_org_alias(entity)
+        ):
+            removed += 1
+            continue
+        kept.append(entity)
+    return kept, removed
 
 
 class TagMetrics(BaseModel):
@@ -1505,6 +1641,38 @@ class TagResponse(BaseModel):
     debug: TagDebug | None = None
     warnings: list[str] = Field(default_factory=list)
     timing_ms: int
+
+    @model_validator(mode="after")
+    def dedupe_linked_entities(self) -> "TagResponse":
+        filtered_entities, filtered_count = _filter_final_output_entities(self.pack, self.entities)
+        merged_entities, merged_count = _merge_duplicate_linked_entities(filtered_entities)
+        if filtered_count == 0 and merged_count == 0:
+            return self
+        self.entities = merged_entities
+        if self.metrics is not None:
+            entity_count = len(merged_entities)
+            per_label_counts = Counter(entity.label for entity in merged_entities)
+            per_lane_counts = Counter(
+                entity.provenance.lane
+                for entity in merged_entities
+                if entity.provenance is not None and entity.provenance.lane
+            )
+            self.metrics.entity_count = entity_count
+            self.metrics.per_label_counts = dict(sorted(per_label_counts.items()))
+            self.metrics.per_lane_counts = dict(sorted(per_lane_counts.items()))
+            self.metrics.entities_per_100_tokens = (
+                round((entity_count * 100 / self.metrics.token_count), 4)
+                if self.metrics.token_count
+                else 0.0
+            )
+        if len(self.topics) == 1:
+            label_counts = Counter(entity.label for entity in merged_entities)
+            self.topics[0].evidence_count = len(merged_entities)
+            self.topics[0].entity_labels = [
+                label
+                for label, _ in sorted(label_counts.items(), key=lambda item: (-item[1], item[0]))
+            ]
+        return self
 
 
 class BatchSourceSummary(BaseModel):

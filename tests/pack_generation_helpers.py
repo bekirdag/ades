@@ -148,6 +148,113 @@ def create_acronym_general_generation_bundle(root: Path) -> Path:
                 "source_name": "curated-general",
                 "population": 331_000_000,
             },
+            {
+                "entity_id": "location:united-kingdom",
+                "entity_type": "location",
+                "canonical_text": "United Kingdom",
+                "aliases": ["the UK"],
+                "source_name": "curated-general",
+                "population": 67_000_000,
+            },
+            {
+                "entity_id": "location:european-union",
+                "entity_type": "location",
+                "canonical_text": "European Union",
+                "aliases": [],
+                "source_name": "curated-general",
+                "population": 449_000_000,
+            },
+            {
+                "entity_id": "organization:university-of-sfax",
+                "entity_type": "organization",
+                "canonical_text": "University of Sfax",
+                "aliases": ["US"],
+                "source_name": "curated-general",
+                "popularity": 0.72,
+            },
+            {
+                "entity_id": "organization:university-of-koblenz",
+                "entity_type": "organization",
+                "canonical_text": "University of Koblenz",
+                "aliases": ["UK"],
+                "source_name": "curated-general",
+                "popularity": 0.7,
+            },
+            {
+                "entity_id": "organization:eu-group",
+                "entity_type": "organization",
+                "canonical_text": "EU",
+                "aliases": ["EU (group)"],
+                "source_name": "curated-general",
+                "popularity": 0.68,
+            },
+            {
+                "entity_id": "organization:cryonics-institute",
+                "entity_type": "organization",
+                "canonical_text": "Cryonics Institute",
+                "aliases": ["CI"],
+                "source_name": "curated-general",
+                "popularity": 0.66,
+            },
+        ]
+    )
+    entities_path.write_text(
+        "".join(json.dumps(item) + "\n" for item in records),
+        encoding="utf-8",
+    )
+    return bundle_dir
+
+
+def create_generic_audit_general_generation_bundle(root: Path) -> Path:
+    bundle_dir = create_general_generation_bundle(root)
+    entities_path = bundle_dir / "normalized" / "entities.jsonl"
+    records = [
+        json.loads(line)
+        for line in entities_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    records.extend(
+        [
+            {
+                "entity_id": "location:march",
+                "entity_type": "location",
+                "canonical_text": "March",
+                "aliases": [],
+                "source_name": "curated-general",
+                "population": 9_500_000,
+            },
+            {
+                "entity_id": "organization:can",
+                "entity_type": "organization",
+                "canonical_text": "Can",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.96,
+            },
+            {
+                "entity_id": "location:five",
+                "entity_type": "location",
+                "canonical_text": "Five",
+                "aliases": [],
+                "source_name": "curated-general",
+                "population": 8_800_000,
+            },
+            {
+                "entity_id": "organization:cars",
+                "entity_type": "organization",
+                "canonical_text": "Cars",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.97,
+            },
+            {
+                "entity_id": "location:four-ways",
+                "entity_type": "location",
+                "canonical_text": "Four Ways",
+                "aliases": [],
+                "source_name": "curated-general",
+                "population": 7_700_000,
+            },
         ]
     )
     entities_path.write_text(
