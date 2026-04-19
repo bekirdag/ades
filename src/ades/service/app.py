@@ -27,6 +27,8 @@ from ..api import (
     diff_pack_versions,
     evaluate_extraction_quality,
     evaluate_extraction_release_thresholds,
+    evaluate_vector_quality,
+    evaluate_vector_release_thresholds_from_report,
     generate_pack_source,
     get_pack,
     get_pack_health,
@@ -109,6 +111,10 @@ from .models import (
     RegistryEvaluateExtractionQualityResponse,
     RegistryEvaluateReleaseThresholdsRequest,
     RegistryEvaluateReleaseThresholdsResponse,
+    RegistryEvaluateVectorQualityRequest,
+    RegistryEvaluateVectorQualityResponse,
+    RegistryEvaluateVectorReleaseThresholdsRequest,
+    RegistryEvaluateVectorReleaseThresholdsResponse,
     RegistryPackQualityResponse,
     RegistryPackDiffResponse,
     RegistryPublishGeneratedReleaseRequest,
@@ -146,6 +152,16 @@ def _bool_option(options: dict[str, object] | None, key: str) -> bool | None:
         if normalized in {"0", "false", "no", "n", "off"}:
             return False
     raise ValueError(f"Invalid boolean option for {key}.")
+
+
+def _refinement_depth_option(options: dict[str, object] | None) -> str:
+    if not options or "refinement_depth" not in options:
+        return "light"
+    value = options["refinement_depth"]
+    normalized = str(value).strip().casefold()
+    if normalized in {"light", "deep"}:
+        return normalized
+    raise ValueError("Invalid refinement_depth option.")
 
 
 def _raise_configuration_http_exception(exc: Exception) -> None:
@@ -846,6 +862,31 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post(
+        "/v0/registry/evaluate-vector-quality",
+        response_model=RegistryEvaluateVectorQualityResponse,
+    )
+    def runtime_evaluate_vector_quality(
+        request: RegistryEvaluateVectorQualityRequest,
+    ) -> RegistryEvaluateVectorQualityResponse:
+        """Evaluate the hosted vector-quality lane against one golden set."""
+
+        try:
+            return evaluate_vector_quality(
+                request.pack_id,
+                storage_root=storage_root,
+                golden_set_path=request.golden_set_path,
+                profile=request.profile,
+                refinement_depth=request.refinement_depth,
+                top_k=request.top_k,
+                write_report=request.write_report,
+                report_path=request.report_path,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
         "/v0/registry/benchmark-runtime",
         response_model=RegistryBenchmarkRuntimeResponse,
     )
@@ -964,6 +1005,31 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 max_peak_memory_mb=request.max_peak_memory_mb,
                 model_artifact_path=request.model_artifact_path,
                 peak_memory_mb=request.peak_memory_mb,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/evaluate-vector-release-thresholds",
+        response_model=RegistryEvaluateVectorReleaseThresholdsResponse,
+    )
+    def runtime_evaluate_vector_release_thresholds(
+        request: RegistryEvaluateVectorReleaseThresholdsRequest,
+    ) -> RegistryEvaluateVectorReleaseThresholdsResponse:
+        """Evaluate one stored vector-quality report against release thresholds."""
+
+        try:
+            return evaluate_vector_release_thresholds_from_report(
+                report_path=request.report_path,
+                min_related_precision_at_k=request.min_related_precision_at_k,
+                min_related_recall_at_k=request.min_related_recall_at_k,
+                min_related_mrr=request.min_related_mrr,
+                min_refinement_alignment_rate=request.min_refinement_alignment_rate,
+                min_easy_case_pass_rate=request.min_easy_case_pass_rate,
+                max_fallback_rate=request.max_fallback_rate,
+                max_p95_latency_ms=request.max_p95_latency_ms,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1134,6 +1200,14 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 storage_root=storage_root,
                 debug=bool(_bool_option(request.options, "debug")),
                 hybrid=_bool_option(request.options, "hybrid"),
+                include_related_entities=bool(
+                    _bool_option(request.options, "include_related_entities")
+                ),
+                include_graph_support=bool(
+                    _bool_option(request.options, "include_graph_support")
+                ),
+                refine_links=bool(_bool_option(request.options, "refine_links")),
+                refinement_depth=_refinement_depth_option(request.options),
                 registry=runtime_state.ensure_registry(),
             )
         except FileNotFoundError as exc:
@@ -1162,6 +1236,14 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 storage_root=storage_root,
                 debug=bool(_bool_option(request.options, "debug")),
                 hybrid=_bool_option(request.options, "hybrid"),
+                include_related_entities=bool(
+                    _bool_option(request.options, "include_related_entities")
+                ),
+                include_graph_support=bool(
+                    _bool_option(request.options, "include_graph_support")
+                ),
+                refine_links=bool(_bool_option(request.options, "refine_links")),
+                refinement_depth=_refinement_depth_option(request.options),
                 registry=runtime_state.ensure_registry(),
             )
         except FileNotFoundError as exc:
@@ -1217,6 +1299,14 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 manifest_output_path=request.output.manifest_path if request.output else None,
                 debug=bool(_bool_option(request.options, "debug")),
                 hybrid=_bool_option(request.options, "hybrid"),
+                include_related_entities=bool(
+                    _bool_option(request.options, "include_related_entities")
+                ),
+                include_graph_support=bool(
+                    _bool_option(request.options, "include_graph_support")
+                ),
+                refine_links=bool(_bool_option(request.options, "refine_links")),
+                refinement_depth=_refinement_depth_option(request.options),
                 registry=runtime_state.ensure_registry(),
             )
         except FileNotFoundError as exc:

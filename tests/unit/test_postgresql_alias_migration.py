@@ -2,6 +2,7 @@ from pathlib import Path
 
 from tests.pack_registry_helpers import create_pack_source
 
+from ades.service.models import VectorIndexBuildResponse
 from ades.storage.paths import build_storage_layout, ensure_storage_layout
 from ades.storage.postgresql import PostgreSQLMetadataStore
 
@@ -95,6 +96,21 @@ class _LookupConnection:
         return list(self.rows)
 
 
+class _ParameterizedRecordingConnection:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple[object, ...] | list[object]]] = []
+
+    def __enter__(self) -> "_ParameterizedRecordingConnection":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    def execute(self, statement: str, params: tuple[object, ...] | list[object] = ()):
+        self.calls.append((statement, params))
+        return self
+
+
 def test_postgresql_ensure_schema_includes_alias_column_migrations(tmp_path: Path) -> None:
     layout = ensure_storage_layout(build_storage_layout(tmp_path))
     recorder = _RecordingConnection()
@@ -119,6 +135,14 @@ def test_postgresql_ensure_schema_includes_alias_column_migrations(tmp_path: Pat
         for statement in recorder.statements
     )
     assert any(
+        "CREATE TABLE IF NOT EXISTS vector_build_jobs" in statement
+        for statement in recorder.statements
+    )
+    assert any(
+        "CREATE TABLE IF NOT EXISTS vector_collection_releases" in statement
+        for statement in recorder.statements
+    )
+    assert any(
         "SELECT pg_advisory_lock" in statement
         for statement in recorder.statements
     )
@@ -134,6 +158,17 @@ def test_postgresql_ensure_schema_includes_alias_column_migrations(tmp_path: Pat
         "idx_pack_rules_rule_name_trgm" in statement
         for statement in recorder.statements
     )
+    normalized_alias_column_index = next(
+        index
+        for index, statement in enumerate(recorder.statements)
+        if "ADD COLUMN IF NOT EXISTS normalized_alias_text" in statement
+    )
+    alias_lookup_index = next(
+        index
+        for index, statement in enumerate(recorder.statements)
+        if "CREATE INDEX IF NOT EXISTS idx_pack_aliases_lookup" in statement
+    )
+    assert normalized_alias_column_index < alias_lookup_index
 
 
 def test_postgresql_ensure_schema_skips_runtime_ddl_when_schema_current(
@@ -246,6 +281,52 @@ def test_postgresql_sync_from_filesystem_ignores_hidden_backup_directories(
 
     assert visible_pack.name in captured
     assert hidden_pack.name not in captured
+
+
+def test_postgresql_record_vector_build_persists_release_state() -> None:
+    recorder = _ParameterizedRecordingConnection()
+    store = object.__new__(PostgreSQLMetadataStore)
+    store._connect = lambda: recorder  # type: ignore[method-assign]
+
+    result = VectorIndexBuildResponse(
+        output_dir="/mnt/githubActions/ades_big_data/vector_indexes/general-en",
+        manifest_path="/mnt/githubActions/ades_big_data/vector_indexes/general-en/qid_graph_index_manifest.json",
+        artifact_path="/mnt/githubActions/ades_big_data/vector_indexes/general-en/qid_graph_points.jsonl.gz",
+        collection_name="ades-qids-20260419",
+        alias_name="ades-qids-current",
+        qdrant_url="http://qdrant.local:6333",
+        published=True,
+        dimensions=384,
+        point_count=125,
+        target_entity_count=125,
+        bundle_count=1,
+        bundle_dirs=["/mnt/githubActions/ades_big_data/pack_sources/bundles/general-en"],
+        pack_ids=["general-en"],
+        truthy_path="/mnt/githubActions/ades_big_data/pack_sources/raw/wikidata_truthy.nt.gz",
+        processed_line_count=1000,
+        matched_statement_count=250,
+        allowed_predicates=["P31", "P463"],
+        warnings=["skipped_non_wikidata:general-en:4"],
+    )
+
+    build_id = store.record_vector_build(result, build_id="vector-build:test")
+
+    assert build_id == "vector-build:test"
+    assert len(recorder.calls) == 2
+    insert_statement, insert_params = recorder.calls[0]
+    release_statement, release_params = recorder.calls[1]
+    assert "INSERT INTO vector_build_jobs" in insert_statement
+    assert insert_params[0] == "vector-build:test"
+    assert insert_params[1] == "ades-qids-20260419"
+    assert insert_params[2] == "ades-qids-current"
+    assert insert_params[10] == "[\"/mnt/githubActions/ades_big_data/pack_sources/bundles/general-en\"]"
+    assert insert_params[11] == "[\"general-en\"]"
+    assert insert_params[15] == "[\"P31\", \"P463\"]"
+    assert insert_params[16] == "[\"skipped_non_wikidata:general-en:4\"]"
+    assert "INSERT INTO vector_collection_releases" in release_statement
+    assert release_params[0] == "ades-qids-current"
+    assert release_params[1] == "ades-qids-20260419"
+    assert release_params[2] == "vector-build:test"
 
 
 def test_postgresql_manifest_rows_ignore_hidden_backup_paths(tmp_path: Path) -> None:

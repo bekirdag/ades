@@ -1,0 +1,49 @@
+"""Hosted vector-search helpers for QID-centric enrichment."""
+
+from .builder import (
+    DEFAULT_QID_GRAPH_ALLOWED_PREDICATES,
+    DEFAULT_QID_GRAPH_DIMENSIONS,
+    build_qid_graph_index,
+)
+from .evaluation import (
+    DEFAULT_VECTOR_QUALITY_ROOT,
+    VectorGoldenCase,
+    VectorGoldenSeedEntity,
+    VectorGoldenSet,
+    VectorQualityReport,
+    VectorReleaseThresholdDecision,
+    VectorReleaseThresholds,
+    default_vector_release_thresholds,
+    evaluate_vector_golden_set,
+    evaluate_vector_release_thresholds,
+    load_vector_golden_set,
+    load_vector_quality_report,
+    vector_golden_set_path,
+    vector_quality_report_path,
+    write_vector_golden_set,
+    write_vector_quality_report,
+)
+from .service import enrich_tag_response_with_related_entities
+
+__all__ = [
+    "DEFAULT_QID_GRAPH_ALLOWED_PREDICATES",
+    "DEFAULT_QID_GRAPH_DIMENSIONS",
+    "DEFAULT_VECTOR_QUALITY_ROOT",
+    "VectorGoldenCase",
+    "VectorGoldenSeedEntity",
+    "VectorGoldenSet",
+    "VectorQualityReport",
+    "VectorReleaseThresholdDecision",
+    "VectorReleaseThresholds",
+    "build_qid_graph_index",
+    "default_vector_release_thresholds",
+    "enrich_tag_response_with_related_entities",
+    "evaluate_vector_golden_set",
+    "evaluate_vector_release_thresholds",
+    "load_vector_golden_set",
+    "load_vector_quality_report",
+    "vector_golden_set_path",
+    "vector_quality_report_path",
+    "write_vector_golden_set",
+    "write_vector_quality_report",
+]

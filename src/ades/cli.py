@@ -18,6 +18,7 @@ from .api import build_finance_source_bundle as api_build_finance_source_bundle
 from .api import build_finance_country_source_bundles as api_build_finance_country_source_bundles
 from .api import build_general_source_bundle as api_build_general_source_bundle
 from .api import build_medical_source_bundle as api_build_medical_source_bundle
+from .api import build_qid_graph_index as api_build_qid_graph_index
 from .api import build_registry as api_build_registry
 from .api import compare_extraction_quality_reports as api_compare_extraction_quality_reports
 from .api import deactivate_pack as api_deactivate_pack
@@ -25,6 +26,8 @@ from .api import diff_pack_versions as api_diff_pack_versions
 from .api import evaluate_extraction_quality as api_evaluate_extraction_quality
 from .api import evaluate_live_news_feedback as api_evaluate_live_news_feedback
 from .api import evaluate_extraction_release_thresholds as api_evaluate_extraction_release_thresholds
+from .api import evaluate_vector_quality as api_evaluate_vector_quality
+from .api import evaluate_vector_release_thresholds_from_report as api_evaluate_vector_release_thresholds
 from .api import fetch_finance_source_snapshot as api_fetch_finance_source_snapshot
 from .api import fetch_finance_country_source_snapshots as api_fetch_finance_country_source_snapshots
 from .api import fetch_general_source_snapshot as api_fetch_general_source_snapshot
@@ -444,6 +447,10 @@ def _tag_text_response(
     output_path: Path | None,
     output_dir: Path | None,
     pretty_output: bool,
+    include_related_entities: bool = False,
+    include_graph_support: bool = False,
+    refine_links: bool = False,
+    refinement_depth: str = "light",
 ):
     """Run one inline tag request through the preferred runtime path."""
 
@@ -457,6 +464,10 @@ def _tag_text_response(
             output_dir=output_dir,
             pretty_output=pretty_output,
             settings=settings,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
         )
     return api_tag(
         text,
@@ -465,6 +476,10 @@ def _tag_text_response(
         output_path=output_path,
         output_dir=output_dir,
         pretty_output=pretty_output,
+        include_related_entities=include_related_entities,
+        include_graph_support=include_graph_support,
+        refine_links=refine_links,
+        refinement_depth=refinement_depth,
     )
 
 
@@ -476,6 +491,10 @@ def _tag_file_response(
     output_path: Path | None,
     output_dir: Path | None,
     pretty_output: bool,
+    include_related_entities: bool = False,
+    include_graph_support: bool = False,
+    refine_links: bool = False,
+    refinement_depth: str = "light",
 ):
     """Run one file tag request through the preferred runtime path."""
 
@@ -489,6 +508,10 @@ def _tag_file_response(
             output_dir=output_dir,
             pretty_output=pretty_output,
             settings=settings,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
         )
     return api_tag_file(
         path,
@@ -497,6 +520,10 @@ def _tag_file_response(
         output_path=output_path,
         output_dir=output_dir,
         pretty_output=pretty_output,
+        include_related_entities=include_related_entities,
+        include_graph_support=include_graph_support,
+        refine_links=refine_links,
+        refinement_depth=refinement_depth,
     )
 
 
@@ -521,6 +548,10 @@ def _tag_files_response(
     max_input_bytes: int | None,
     write_manifest: bool,
     manifest_output: Path | None,
+    include_related_entities: bool = False,
+    include_graph_support: bool = False,
+    refine_links: bool = False,
+    refinement_depth: str = "light",
 ):
     """Run one batch tag request through the preferred runtime path."""
 
@@ -547,6 +578,10 @@ def _tag_files_response(
             max_input_bytes=max_input_bytes,
             write_manifest=write_manifest,
             manifest_output_path=manifest_output,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
         )
     return api_tag_files(
         files,
@@ -568,6 +603,10 @@ def _tag_files_response(
         max_input_bytes=max_input_bytes,
         write_manifest=write_manifest,
         manifest_output_path=manifest_output,
+        include_related_entities=include_related_entities,
+        include_graph_support=include_graph_support,
+        refine_links=refine_links,
+        refinement_depth=refinement_depth,
     )
 
 
@@ -1326,6 +1365,59 @@ def registry_evaluate_extraction_quality(
     _echo_json(response.model_dump(mode="json"))
 
 
+@registry_app.command("evaluate-vector-quality")
+def registry_evaluate_vector_quality(
+    pack_id: str = typer.Argument(..., help="Installed pack id to evaluate."),
+    golden_set_path: Path | None = typer.Option(
+        None,
+        "--golden-set-path",
+        help="Optional explicit vector golden set JSON path. Defaults to the /mnt vector-quality root.",
+    ),
+    profile: str = typer.Option(
+        "default",
+        "--profile",
+        help="Vector golden set profile to use when --golden-set-path is omitted.",
+    ),
+    refinement_depth: str = typer.Option(
+        "light",
+        "--refinement-depth",
+        help="Hosted vector refinement depth: light or deep.",
+    ),
+    top_k: int | None = typer.Option(
+        None,
+        "--top-k",
+        min=1,
+        max=100,
+        help="Optional related-entity cutoff used for report metrics.",
+    ),
+    write_report: bool = typer.Option(
+        True,
+        "--write-report/--no-write-report",
+        help="Persist the evaluated vector-quality report to disk.",
+    ),
+    report_path: Path | None = typer.Option(
+        None,
+        "--report-path",
+        help="Optional explicit JSON path for the persisted vector-quality report.",
+    ),
+) -> None:
+    """Evaluate the hosted vector refinement lane against one golden set."""
+
+    try:
+        response = api_evaluate_vector_quality(
+            pack_id,
+            golden_set_path=golden_set_path,
+            profile=profile,
+            refinement_depth=refinement_depth,
+            top_k=top_k,
+            write_report=write_report,
+            report_path=report_path,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
 @registry_app.command("evaluate-live-news")
 def registry_evaluate_live_news(
     pack_id: str = typer.Argument(..., help="Installed pack id to evaluate."),
@@ -1664,6 +1756,82 @@ def registry_evaluate_release_thresholds(
         raise typer.Exit(code=1)
 
 
+@registry_app.command("evaluate-vector-release-thresholds")
+def registry_evaluate_vector_release_thresholds(
+    report_path: Path = typer.Option(
+        ...,
+        "--report-path",
+        help="Stored vector-quality report JSON to evaluate.",
+    ),
+    min_related_precision_at_k: float | None = typer.Option(
+        None,
+        "--min-related-precision-at-k",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable related-entity precision@k.",
+    ),
+    min_related_recall_at_k: float | None = typer.Option(
+        None,
+        "--min-related-recall-at-k",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable related-entity recall@k.",
+    ),
+    min_related_mrr: float | None = typer.Option(
+        None,
+        "--min-related-mrr",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable related-entity MRR.",
+    ),
+    min_refinement_alignment_rate: float | None = typer.Option(
+        None,
+        "--min-refinement-alignment-rate",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable refinement-alignment rate.",
+    ),
+    min_easy_case_pass_rate: float | None = typer.Option(
+        None,
+        "--min-easy-case-pass-rate",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable easy-case pass rate.",
+    ),
+    max_fallback_rate: float | None = typer.Option(
+        None,
+        "--max-fallback-rate",
+        min=0.0,
+        max=1.0,
+        help="Maximum acceptable fallback rate.",
+    ),
+    max_p95_latency_ms: int | None = typer.Option(
+        None,
+        "--max-p95-latency-ms",
+        min=0,
+        help="Maximum allowed p95 latency in milliseconds.",
+    ),
+) -> None:
+    """Evaluate one stored vector-quality report against release thresholds."""
+
+    try:
+        response = api_evaluate_vector_release_thresholds(
+            report_path=report_path,
+            min_related_precision_at_k=min_related_precision_at_k,
+            min_related_recall_at_k=min_related_recall_at_k,
+            min_related_mrr=min_related_mrr,
+            min_refinement_alignment_rate=min_refinement_alignment_rate,
+            min_easy_case_pass_rate=min_easy_case_pass_rate,
+            max_fallback_rate=max_fallback_rate,
+            max_p95_latency_ms=max_p95_latency_ms,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+    if not response.passed:
+        raise typer.Exit(code=1)
+
+
 @registry_app.command("fetch-finance-sources")
 def registry_fetch_finance_sources(
     output_dir: Path = typer.Option(
@@ -1930,6 +2098,74 @@ def registry_build_general_bundle(
             version=version,
         )
     except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("build-qid-graph-index")
+def registry_build_qid_graph_index(
+    bundle_dirs: list[Path] = typer.Option(
+        ...,
+        "--bundle-dir",
+        help="Normalized bundle directory with bundle.json. Repeat for multiple packs.",
+    ),
+    truthy_path: Path = typer.Option(
+        ...,
+        "--truthy-path",
+        help="Wikidata truthy RDF dump path (.nt or .nt.gz).",
+    ),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the QID graph artifact and manifest should be written.",
+    ),
+    dimensions: int = typer.Option(
+        384,
+        "--dimensions",
+        min=1,
+        help="Deterministic graph-vector dimensionality.",
+    ),
+    predicate: list[str] = typer.Option(
+        None,
+        "--predicate",
+        help="Allowed Wikidata property id. Repeat to override the default predicate set.",
+    ),
+    qdrant_url: str | None = typer.Option(
+        None,
+        "--qdrant-url",
+        help="Optional Qdrant base URL. When provided, the built artifact is published.",
+    ),
+    qdrant_api_key: str | None = typer.Option(
+        None,
+        "--qdrant-api-key",
+        help="Optional Qdrant API key override.",
+    ),
+    collection_name: str | None = typer.Option(
+        None,
+        "--collection-name",
+        help="Optional explicit Qdrant collection name. Defaults to one timestamped name.",
+    ),
+    publish_alias: str | None = typer.Option(
+        None,
+        "--publish-alias",
+        help="Optional alias to atomically point at the published collection.",
+    ),
+) -> None:
+    """Build one hosted QID graph index artifact and optionally publish it to Qdrant."""
+
+    try:
+        response = api_build_qid_graph_index(
+            bundle_dirs,
+            truthy_path=truthy_path,
+            output_dir=output_dir,
+            dimensions=dimensions,
+            allowed_predicates=predicate or None,
+            qdrant_url=qdrant_url,
+            qdrant_api_key=qdrant_api_key,
+            collection_name=collection_name,
+            publish_alias=publish_alias,
+        )
+    except (FileNotFoundError, ValueError) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
@@ -2346,6 +2582,26 @@ def tag(
         "--compact-output",
         help="Persist compact JSON instead of pretty-printed JSON.",
     ),
+    include_related_entities: bool = typer.Option(
+        False,
+        "--include-related-entities",
+        help="Request hosted related-entity enrichment when the production vector lane is enabled.",
+    ),
+    include_graph_support: bool = typer.Option(
+        False,
+        "--include-graph-support",
+        help="Include hosted graph-support metadata when the production vector lane is enabled.",
+    ),
+    refine_links: bool = typer.Option(
+        False,
+        "--refine-links",
+        help="Allow the hosted vector lane to refine low-confidence links.",
+    ),
+    refinement_depth: str = typer.Option(
+        "light",
+        "--refinement-depth",
+        help="Hosted vector refinement depth: light or deep.",
+    ),
 ) -> None:
     """Tag inline text or a local file through the local pipeline."""
 
@@ -2365,6 +2621,10 @@ def tag(
                 output_path=output,
                 output_dir=output_dir,
                 pretty_output=not compact_output,
+                include_related_entities=include_related_entities,
+                include_graph_support=include_graph_support,
+                refine_links=refine_links,
+                refinement_depth=refinement_depth,
             )
         else:
             response = _tag_text_response(
@@ -2374,6 +2634,10 @@ def tag(
                 output_path=output,
                 output_dir=output_dir,
                 pretty_output=not compact_output,
+                include_related_entities=include_related_entities,
+                include_graph_support=include_graph_support,
+                refine_links=refine_links,
+                refinement_depth=refinement_depth,
             )
     except FileNotFoundError as exc:
         _exit_with_cli_error(exc)
@@ -2475,6 +2739,26 @@ def tag_files(
         "--compact-output",
         help="Persist compact JSON instead of pretty-printed JSON.",
     ),
+    include_related_entities: bool = typer.Option(
+        False,
+        "--include-related-entities",
+        help="Request hosted related-entity enrichment when the production vector lane is enabled.",
+    ),
+    include_graph_support: bool = typer.Option(
+        False,
+        "--include-graph-support",
+        help="Include hosted graph-support metadata when the production vector lane is enabled.",
+    ),
+    refine_links: bool = typer.Option(
+        False,
+        "--refine-links",
+        help="Allow the hosted vector lane to refine low-confidence links.",
+    ),
+    refinement_depth: str = typer.Option(
+        "light",
+        "--refinement-depth",
+        help="Hosted vector refinement depth: light or deep.",
+    ),
 ) -> None:
     """Tag multiple local files through the local pipeline."""
 
@@ -2516,6 +2800,10 @@ def tag_files(
             max_input_bytes=max_input_bytes,
             write_manifest=write_manifest,
             manifest_output=manifest_output,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
         )
     except FileNotFoundError as exc:
         _exit_with_cli_error(exc)

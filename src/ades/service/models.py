@@ -994,6 +994,110 @@ class RegistryEvaluateReleaseThresholdsResponse(BaseModel):
     quality_delta: ExtractionQualityDeltaResponse | None = None
 
 
+class VectorCaseResultResponse(BaseModel):
+    """Outcome for one evaluated hosted vector-quality case."""
+
+    name: str
+    case_kind: str
+    seed_entity_ids: list[str] = Field(default_factory=list)
+    expected_related_entity_ids: list[str] = Field(default_factory=list)
+    actual_related_entity_ids: list[str] = Field(default_factory=list)
+    matched_related_entity_ids: list[str] = Field(default_factory=list)
+    missing_related_entity_ids: list[str] = Field(default_factory=list)
+    unexpected_related_entity_ids: list[str] = Field(default_factory=list)
+    expected_boosted_entity_ids: list[str] = Field(default_factory=list)
+    actual_boosted_entity_ids: list[str] = Field(default_factory=list)
+    expected_downgraded_entity_ids: list[str] = Field(default_factory=list)
+    actual_downgraded_entity_ids: list[str] = Field(default_factory=list)
+    expected_refinement_applied: bool = False
+    actual_refinement_applied: bool = False
+    graph_support_applied: bool = False
+    fallback_used: bool = False
+    refinement_score: float | None = None
+    related_precision_at_k: float
+    related_recall_at_k: float
+    reciprocal_rank: float
+    timing_ms: int
+    warnings: list[str] = Field(default_factory=list)
+    passed: bool
+
+
+class VectorQualityReportResponse(BaseModel):
+    """Aggregate report for hosted vector-quality evaluation."""
+
+    pack_id: str
+    profile: str
+    refinement_depth: Literal["light", "deep"]
+    collection_alias: str | None = None
+    provider: str | None = None
+    case_count: int
+    top_k: int
+    related_precision_at_k: float
+    related_recall_at_k: float
+    related_mrr: float
+    refinement_alignment_rate: float
+    easy_case_pass_rate: float
+    graph_support_rate: float
+    refinement_trigger_rate: float
+    fallback_rate: float
+    p50_latency_ms: int = 0
+    p95_latency_ms: int = 0
+    warnings: list[str] = Field(default_factory=list)
+    cases: list[VectorCaseResultResponse] = Field(default_factory=list)
+
+
+class RegistryEvaluateVectorQualityRequest(BaseModel):
+    """Request body for evaluating one hosted vector-quality golden set."""
+
+    pack_id: str
+    golden_set_path: str | None = None
+    profile: str = "default"
+    refinement_depth: Literal["light", "deep"] = "light"
+    top_k: int | None = Field(None, ge=1, le=100)
+    write_report: bool = True
+    report_path: str | None = None
+
+
+class RegistryEvaluateVectorQualityResponse(VectorQualityReportResponse):
+    """Hosted vector-quality report plus optional persisted report path."""
+
+    report_path: str | None = None
+
+
+class RegistryVectorReleaseThresholdsResponse(BaseModel):
+    """Structured threshold configuration for one vector-quality release decision."""
+
+    min_related_precision_at_k: float
+    min_related_recall_at_k: float
+    min_related_mrr: float
+    min_refinement_alignment_rate: float
+    min_easy_case_pass_rate: float
+    max_fallback_rate: float
+    max_p95_latency_ms: int | None = None
+
+
+class RegistryEvaluateVectorReleaseThresholdsRequest(BaseModel):
+    """Request body for evaluating one stored vector-quality report."""
+
+    report_path: str
+    min_related_precision_at_k: float | None = Field(None, ge=0.0, le=1.0)
+    min_related_recall_at_k: float | None = Field(None, ge=0.0, le=1.0)
+    min_related_mrr: float | None = Field(None, ge=0.0, le=1.0)
+    min_refinement_alignment_rate: float | None = Field(None, ge=0.0, le=1.0)
+    min_easy_case_pass_rate: float | None = Field(None, ge=0.0, le=1.0)
+    max_fallback_rate: float | None = Field(None, ge=0.0, le=1.0)
+    max_p95_latency_ms: int | None = Field(None, ge=0)
+
+
+class RegistryEvaluateVectorReleaseThresholdsResponse(BaseModel):
+    """Structured release-threshold decision for one stored vector-quality report."""
+
+    report_path: str
+    thresholds: RegistryVectorReleaseThresholdsResponse
+    passed: bool
+    reasons: list[str] = Field(default_factory=list)
+
+
 class RegistryGeneratePackRequest(BaseModel):
     """Request body for generating one pack directory from a normalized bundle."""
 
@@ -1469,6 +1573,39 @@ class EntityLink(BaseModel):
     provider: str
 
 
+class RelatedEntityMatch(BaseModel):
+    """Related entity returned by the hosted QID graph enrichment lane."""
+
+    entity_id: str
+    canonical_text: str
+    score: float
+    provider: str
+    entity_type: str | None = None
+    source_name: str | None = None
+    packs: list[str] = Field(default_factory=list)
+    seed_entity_ids: list[str] = Field(default_factory=list)
+    shared_seed_count: int = 0
+
+
+class GraphSupport(BaseModel):
+    """Metadata describing one hosted graph-enrichment attempt."""
+
+    requested: bool = False
+    applied: bool = False
+    provider: str | None = None
+    collection_alias: str | None = None
+    requested_related_entities: bool = False
+    requested_refinement: bool = False
+    refinement_depth: Literal["light", "deep"] | None = None
+    seed_entity_ids: list[str] = Field(default_factory=list)
+    coherence_score: float | None = None
+    related_entity_count: int = 0
+    refined_entity_count: int = 0
+    boosted_entity_ids: list[str] = Field(default_factory=list)
+    downgraded_entity_ids: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class EntityMatch(BaseModel):
     """Single extracted entity."""
 
@@ -1741,6 +1878,12 @@ class TagResponse(BaseModel):
     source_fingerprint: SourceFingerprint | None = None
     saved_output_path: str | None = None
     entities: list[EntityMatch] = Field(default_factory=list)
+    related_entities: list[RelatedEntityMatch] = Field(default_factory=list)
+    refinement_applied: bool = False
+    refinement_strategy: str | None = None
+    refinement_score: float | None = None
+    refinement_debug: dict[str, Any] | None = None
+    graph_support: GraphSupport | None = None
     topics: list[TopicMatch] = Field(default_factory=list)
     metrics: TagMetrics | None = None
     debug: TagDebug | None = None
@@ -1932,3 +2075,26 @@ class LookupResponse(BaseModel):
     fuzzy: bool = False
     active_only: bool = True
     candidates: list[LookupCandidate] = Field(default_factory=list)
+
+
+class VectorIndexBuildResponse(BaseModel):
+    """Stable result payload for one offline QID graph index build."""
+
+    output_dir: str
+    manifest_path: str
+    artifact_path: str
+    collection_name: str | None = None
+    alias_name: str | None = None
+    qdrant_url: str | None = None
+    published: bool = False
+    dimensions: int
+    point_count: int
+    target_entity_count: int
+    bundle_count: int
+    bundle_dirs: list[str] = Field(default_factory=list)
+    pack_ids: list[str] = Field(default_factory=list)
+    truthy_path: str
+    processed_line_count: int
+    matched_statement_count: int
+    allowed_predicates: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)

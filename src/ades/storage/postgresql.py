@@ -9,8 +9,10 @@ import json
 from pathlib import Path
 import re
 from threading import Lock
+from uuid import uuid4
 
 from ..packs.manifest import PackManifest
+from ..service.models import VectorIndexBuildResponse
 from ..text_processing import normalize_lookup_text
 from .paths import StorageLayout, iter_pack_manifest_paths
 
@@ -51,6 +53,10 @@ _REQUIRED_TABLE_NAMES = frozenset(
         "pack_labels",
         "pack_rules",
         "pack_aliases",
+        "vector_build_jobs",
+        "vector_collection_releases",
+        "vector_feature_entitlements",
+        "vector_usage_counters",
     }
 )
 _REQUIRED_PACK_ALIASES_COLUMNS = frozenset(
@@ -199,12 +205,72 @@ class PostgreSQLMetadataStore:
             )
             """,
             """
-            CREATE INDEX IF NOT EXISTS idx_installed_packs_active
-            ON installed_packs(active, pack_id)
+            CREATE TABLE IF NOT EXISTS vector_build_jobs (
+                build_id TEXT PRIMARY KEY,
+                collection_name TEXT,
+                alias_name TEXT,
+                output_dir TEXT NOT NULL,
+                manifest_path TEXT NOT NULL,
+                artifact_path TEXT NOT NULL,
+                dimensions INTEGER NOT NULL,
+                point_count INTEGER NOT NULL DEFAULT 0,
+                target_entity_count INTEGER NOT NULL DEFAULT 0,
+                bundle_count INTEGER NOT NULL DEFAULT 0,
+                bundle_dirs_json TEXT NOT NULL DEFAULT '[]',
+                pack_ids_json TEXT NOT NULL DEFAULT '[]',
+                truthy_path TEXT NOT NULL,
+                processed_line_count BIGINT NOT NULL DEFAULT 0,
+                matched_statement_count BIGINT NOT NULL DEFAULT 0,
+                allowed_predicates_json TEXT NOT NULL DEFAULT '[]',
+                warnings_json TEXT NOT NULL DEFAULT '[]',
+                qdrant_url TEXT,
+                published BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL
+            )
             """,
             """
-            CREATE INDEX IF NOT EXISTS idx_pack_aliases_lookup
-            ON pack_aliases(normalized_alias_text, label)
+            CREATE TABLE IF NOT EXISTS vector_collection_releases (
+                alias_name TEXT PRIMARY KEY,
+                collection_name TEXT NOT NULL,
+                build_id TEXT REFERENCES vector_build_jobs(build_id) ON DELETE SET NULL,
+                pack_ids_json TEXT NOT NULL DEFAULT '[]',
+                point_count INTEGER NOT NULL DEFAULT 0,
+                dimensions INTEGER NOT NULL,
+                qdrant_url TEXT,
+                published_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS vector_feature_entitlements (
+                subject_id TEXT PRIMARY KEY,
+                plan_name TEXT NOT NULL,
+                refinement_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                deep_refinement_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                related_entities_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                graph_support_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                request_budget INTEGER,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS vector_usage_counters (
+                subject_id TEXT NOT NULL,
+                period_start TIMESTAMPTZ NOT NULL,
+                period_end TIMESTAMPTZ NOT NULL,
+                tag_request_count BIGINT NOT NULL DEFAULT 0,
+                refinement_request_count BIGINT NOT NULL DEFAULT 0,
+                related_entity_request_count BIGINT NOT NULL DEFAULT 0,
+                refined_mention_count BIGINT NOT NULL DEFAULT 0,
+                PRIMARY KEY (subject_id, period_start, period_end)
+            )
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_installed_packs_active
+            ON installed_packs(active, pack_id)
             """,
             """
             CREATE INDEX IF NOT EXISTS idx_pack_rules_lookup
@@ -241,6 +307,10 @@ class PostgreSQLMetadataStore:
             """
             ALTER TABLE pack_aliases
             ADD COLUMN IF NOT EXISTS popularity_weight DOUBLE PRECISION NOT NULL DEFAULT 0.5
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_pack_aliases_lookup
+            ON pack_aliases(normalized_alias_text, label)
             """,
         ]
         with self._connect() as connection:
@@ -456,6 +526,128 @@ class PostgreSQLMetadataStore:
                 (pack_id,),
             )
         return cursor.rowcount > 0
+
+    def record_vector_build(
+        self,
+        result: VectorIndexBuildResponse,
+        *,
+        build_id: str | None = None,
+    ) -> str:
+        build_identifier = build_id or f"vector-build:{uuid4()}"
+        now = _utc_now()
+        bundle_dirs_json = json.dumps(result.bundle_dirs, sort_keys=True)
+        pack_ids_json = json.dumps(result.pack_ids, sort_keys=True)
+        allowed_predicates_json = json.dumps(result.allowed_predicates, sort_keys=True)
+        warnings_json = json.dumps(result.warnings, sort_keys=True)
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO vector_build_jobs (
+                    build_id,
+                    collection_name,
+                    alias_name,
+                    output_dir,
+                    manifest_path,
+                    artifact_path,
+                    dimensions,
+                    point_count,
+                    target_entity_count,
+                    bundle_count,
+                    bundle_dirs_json,
+                    pack_ids_json,
+                    truthy_path,
+                    processed_line_count,
+                    matched_statement_count,
+                    allowed_predicates_json,
+                    warnings_json,
+                    qdrant_url,
+                    published,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                ON CONFLICT (build_id) DO UPDATE SET
+                    collection_name = EXCLUDED.collection_name,
+                    alias_name = EXCLUDED.alias_name,
+                    output_dir = EXCLUDED.output_dir,
+                    manifest_path = EXCLUDED.manifest_path,
+                    artifact_path = EXCLUDED.artifact_path,
+                    dimensions = EXCLUDED.dimensions,
+                    point_count = EXCLUDED.point_count,
+                    target_entity_count = EXCLUDED.target_entity_count,
+                    bundle_count = EXCLUDED.bundle_count,
+                    bundle_dirs_json = EXCLUDED.bundle_dirs_json,
+                    pack_ids_json = EXCLUDED.pack_ids_json,
+                    truthy_path = EXCLUDED.truthy_path,
+                    processed_line_count = EXCLUDED.processed_line_count,
+                    matched_statement_count = EXCLUDED.matched_statement_count,
+                    allowed_predicates_json = EXCLUDED.allowed_predicates_json,
+                    warnings_json = EXCLUDED.warnings_json,
+                    qdrant_url = EXCLUDED.qdrant_url,
+                    published = EXCLUDED.published,
+                    updated_at = EXCLUDED.updated_at
+                """,
+                (
+                    build_identifier,
+                    result.collection_name,
+                    result.alias_name,
+                    result.output_dir,
+                    result.manifest_path,
+                    result.artifact_path,
+                    result.dimensions,
+                    result.point_count,
+                    result.target_entity_count,
+                    result.bundle_count,
+                    bundle_dirs_json,
+                    pack_ids_json,
+                    result.truthy_path,
+                    result.processed_line_count,
+                    result.matched_statement_count,
+                    allowed_predicates_json,
+                    warnings_json,
+                    result.qdrant_url,
+                    result.published,
+                    now,
+                    now,
+                ),
+            )
+            if result.alias_name and result.collection_name:
+                connection.execute(
+                    """
+                    INSERT INTO vector_collection_releases (
+                        alias_name,
+                        collection_name,
+                        build_id,
+                        pack_ids_json,
+                        point_count,
+                        dimensions,
+                        qdrant_url,
+                        published_at,
+                        updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (alias_name) DO UPDATE SET
+                        collection_name = EXCLUDED.collection_name,
+                        build_id = EXCLUDED.build_id,
+                        pack_ids_json = EXCLUDED.pack_ids_json,
+                        point_count = EXCLUDED.point_count,
+                        dimensions = EXCLUDED.dimensions,
+                        qdrant_url = EXCLUDED.qdrant_url,
+                        updated_at = EXCLUDED.updated_at
+                    """,
+                    (
+                        result.alias_name,
+                        result.collection_name,
+                        build_identifier,
+                        pack_ids_json,
+                        result.point_count,
+                        result.dimensions,
+                        result.qdrant_url,
+                        now,
+                        now,
+                    ),
+                )
+        return build_identifier
 
     def list_pack_labels(self, pack_id: str) -> list[str]:
         with self._connect() as connection:

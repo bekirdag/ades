@@ -239,12 +239,28 @@ def _extract_error_detail(body: str, *, fallback: str) -> str:
     return body.strip() or fallback
 
 
-def _options_payload(*, debug: bool = False, hybrid: bool | None = None) -> dict[str, Any]:
+def _options_payload(
+    *,
+    debug: bool = False,
+    hybrid: bool | None = None,
+    include_related_entities: bool = False,
+    include_graph_support: bool = False,
+    refine_links: bool = False,
+    refinement_depth: str = "light",
+) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     if debug:
         payload["debug"] = True
     if hybrid is not None:
         payload["hybrid"] = hybrid
+    if include_related_entities:
+        payload["include_related_entities"] = True
+    if include_graph_support:
+        payload["include_graph_support"] = True
+    if refine_links:
+        payload["refine_links"] = True
+    if refinement_depth != "light":
+        payload["refinement_depth"] = refinement_depth
     return payload
 
 
@@ -259,6 +275,10 @@ def tag_via_local_service(
     settings: Settings | None = None,
     debug: bool = False,
     hybrid: bool | None = None,
+    include_related_entities: bool = False,
+    include_graph_support: bool = False,
+    refine_links: bool = False,
+    refinement_depth: str = "light",
 ) -> TagResponse:
     """Tag inline text through the warm local HTTP service."""
 
@@ -268,7 +288,14 @@ def tag_via_local_service(
         "text": text,
         "pack": pack,
         "content_type": content_type,
-        "options": _options_payload(debug=debug, hybrid=hybrid),
+        "options": _options_payload(
+            debug=debug,
+            hybrid=hybrid,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
+        ),
     }
     output = _output_payload(path=output_path, directory=output_dir, pretty=pretty_output)
     if output is not None:
@@ -288,6 +315,10 @@ def tag_file_via_local_service(
     settings: Settings | None = None,
     debug: bool = False,
     hybrid: bool | None = None,
+    include_related_entities: bool = False,
+    include_graph_support: bool = False,
+    refine_links: bool = False,
+    refinement_depth: str = "light",
 ) -> TagResponse:
     """Tag one local file through the warm local HTTP service."""
 
@@ -296,7 +327,14 @@ def tag_file_via_local_service(
     payload: dict[str, Any] = {
         "path": str(Path(path).expanduser()),
         "pack": pack,
-        "options": _options_payload(debug=debug, hybrid=hybrid),
+        "options": _options_payload(
+            debug=debug,
+            hybrid=hybrid,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
+        ),
     }
     if content_type is not None:
         payload["content_type"] = content_type
@@ -331,6 +369,10 @@ def tag_files_via_local_service(
     manifest_output_path: str | Path | None = None,
     debug: bool = False,
     hybrid: bool | None = None,
+    include_related_entities: bool = False,
+    include_graph_support: bool = False,
+    refine_links: bool = False,
+    refinement_depth: str = "light",
 ) -> BatchTagResponse:
     """Tag multiple local files through the warm local HTTP service."""
 

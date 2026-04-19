@@ -137,8 +137,11 @@ from .service.models import (
     RegistryCompareExtractionQualityResponse,
     RegistryEvaluateExtractionQualityResponse,
     RegistryEvaluateReleaseThresholdsResponse,
+    RegistryEvaluateVectorQualityResponse,
+    RegistryEvaluateVectorReleaseThresholdsResponse,
     RegistryPackDiffResponse,
     RegistryReleaseThresholdsResponse,
+    RegistryVectorReleaseThresholdsResponse,
     RegistryPrepareDeployReleaseResponse,
     RegistryFetchFinanceCountrySourcesResponse,
     RegistryFetchGeneralSourcesResponse,
@@ -176,6 +179,9 @@ from .service.models import (
     SourceFingerprint,
     StatusResponse,
     TagResponse,
+    VectorCaseResultResponse,
+    VectorIndexBuildResponse,
+    VectorQualityReportResponse,
 )
 from .storage.paths import build_storage_layout, ensure_storage_layout
 from .storage.results import (
@@ -188,6 +194,23 @@ from .storage.results import (
     persist_tag_responses_json,
     verify_reused_output_items,
 )
+from .vector.builder import (
+    DEFAULT_QID_GRAPH_ALLOWED_PREDICATES,
+    DEFAULT_QID_GRAPH_DIMENSIONS,
+    build_qid_graph_index as run_build_qid_graph_index,
+)
+from .vector.evaluation import (
+    default_vector_release_thresholds,
+    evaluate_vector_golden_set,
+    evaluate_vector_release_thresholds,
+    load_vector_golden_set,
+    load_vector_quality_report,
+    vector_golden_set_path as default_vector_golden_set_path,
+    vector_quality_report_path as default_vector_quality_report_path,
+    write_vector_quality_report,
+    VectorReleaseThresholds,
+)
+from .vector.service import enrich_tag_response_with_related_entities
 
 
 def _resolve_settings(
@@ -209,6 +232,12 @@ def _resolve_settings(
         runtime_target=base.runtime_target,
         metadata_backend=base.metadata_backend,
         database_url=database_url if database_url is not None else base.database_url,
+        vector_search_enabled=base.vector_search_enabled,
+        vector_search_url=base.vector_search_url,
+        vector_search_api_key=base.vector_search_api_key,
+        vector_search_collection_alias=base.vector_search_collection_alias,
+        vector_search_related_limit=base.vector_search_related_limit,
+        vector_search_score_threshold=base.vector_search_score_threshold,
         config_path=base.config_path,
     )
 
@@ -1546,6 +1575,96 @@ def _extraction_report_response(
     )
 
 
+def _vector_case_response(case: object) -> VectorCaseResultResponse:
+    return VectorCaseResultResponse(
+        name=str(getattr(case, "name")),
+        case_kind=str(getattr(case, "case_kind")),
+        seed_entity_ids=[str(item) for item in getattr(case, "seed_entity_ids")],
+        expected_related_entity_ids=[
+            str(item) for item in getattr(case, "expected_related_entity_ids")
+        ],
+        actual_related_entity_ids=[
+            str(item) for item in getattr(case, "actual_related_entity_ids")
+        ],
+        matched_related_entity_ids=[
+            str(item) for item in getattr(case, "matched_related_entity_ids")
+        ],
+        missing_related_entity_ids=[
+            str(item) for item in getattr(case, "missing_related_entity_ids")
+        ],
+        unexpected_related_entity_ids=[
+            str(item) for item in getattr(case, "unexpected_related_entity_ids")
+        ],
+        expected_boosted_entity_ids=[
+            str(item) for item in getattr(case, "expected_boosted_entity_ids")
+        ],
+        actual_boosted_entity_ids=[
+            str(item) for item in getattr(case, "actual_boosted_entity_ids")
+        ],
+        expected_downgraded_entity_ids=[
+            str(item) for item in getattr(case, "expected_downgraded_entity_ids")
+        ],
+        actual_downgraded_entity_ids=[
+            str(item) for item in getattr(case, "actual_downgraded_entity_ids")
+        ],
+        expected_refinement_applied=bool(getattr(case, "expected_refinement_applied")),
+        actual_refinement_applied=bool(getattr(case, "actual_refinement_applied")),
+        graph_support_applied=bool(getattr(case, "graph_support_applied")),
+        fallback_used=bool(getattr(case, "fallback_used")),
+        refinement_score=(
+            float(getattr(case, "refinement_score"))
+            if getattr(case, "refinement_score") is not None
+            else None
+        ),
+        related_precision_at_k=float(getattr(case, "related_precision_at_k")),
+        related_recall_at_k=float(getattr(case, "related_recall_at_k")),
+        reciprocal_rank=float(getattr(case, "reciprocal_rank")),
+        timing_ms=int(getattr(case, "timing_ms")),
+        warnings=[str(item) for item in getattr(case, "warnings")],
+        passed=bool(getattr(case, "passed")),
+    )
+
+
+def _vector_quality_report_response(
+    report: object,
+    *,
+    report_path: str | None = None,
+) -> RegistryEvaluateVectorQualityResponse:
+    return RegistryEvaluateVectorQualityResponse(
+        report_path=report_path,
+        pack_id=str(getattr(report, "pack_id")),
+        profile=str(getattr(report, "profile")),
+        refinement_depth=str(getattr(report, "refinement_depth")),
+        collection_alias=(
+            str(getattr(report, "collection_alias"))
+            if getattr(report, "collection_alias") is not None
+            else None
+        ),
+        provider=(
+            str(getattr(report, "provider"))
+            if getattr(report, "provider") is not None
+            else None
+        ),
+        case_count=int(getattr(report, "case_count")),
+        top_k=int(getattr(report, "top_k")),
+        related_precision_at_k=float(getattr(report, "related_precision_at_k")),
+        related_recall_at_k=float(getattr(report, "related_recall_at_k")),
+        related_mrr=float(getattr(report, "related_mrr")),
+        refinement_alignment_rate=float(getattr(report, "refinement_alignment_rate")),
+        easy_case_pass_rate=float(getattr(report, "easy_case_pass_rate")),
+        graph_support_rate=float(getattr(report, "graph_support_rate")),
+        refinement_trigger_rate=float(getattr(report, "refinement_trigger_rate")),
+        fallback_rate=float(getattr(report, "fallback_rate")),
+        p50_latency_ms=int(getattr(report, "p50_latency_ms")),
+        p95_latency_ms=int(getattr(report, "p95_latency_ms")),
+        warnings=[str(item) for item in getattr(report, "warnings")],
+        cases=[
+            _vector_case_response(case)
+            for case in getattr(report, "cases")
+        ],
+    )
+
+
 def _live_news_issue_response(issue: object) -> LiveNewsIssueResponse:
     return LiveNewsIssueResponse(
         issue_type=str(getattr(issue, "issue_type")),
@@ -2127,6 +2246,126 @@ def evaluate_extraction_release_thresholds(
     )
 
 
+def evaluate_vector_quality(
+    pack_id: str,
+    *,
+    storage_root: str | Path | None = None,
+    golden_set_path: str | Path | None = None,
+    profile: str = "default",
+    refinement_depth: str = "light",
+    top_k: int | None = None,
+    write_report: bool = True,
+    report_path: str | Path | None = None,
+) -> RegistryEvaluateVectorQualityResponse:
+    """Evaluate the hosted vector refinement lane against one vector golden set."""
+
+    settings = _resolve_settings(storage_root=storage_root)
+    if not write_report and report_path is not None:
+        raise ValueError("report_path requires write_report=True.")
+    resolved_golden_set_path = (
+        Path(golden_set_path).expanduser().resolve()
+        if golden_set_path is not None
+        else default_vector_golden_set_path(pack_id, profile=profile)
+    )
+    golden_set = load_vector_golden_set(resolved_golden_set_path)
+    if golden_set.pack_id != pack_id:
+        raise ValueError(
+            "Vector golden set pack_id does not match requested pack_id: "
+            f"{golden_set.pack_id} != {pack_id}"
+        )
+    report = evaluate_vector_golden_set(
+        golden_set,
+        settings=settings,
+        refinement_depth=refinement_depth,
+        top_k=top_k,
+    )
+    persisted_report_path: str | None = None
+    if write_report:
+        destination = (
+            Path(report_path).expanduser().resolve()
+            if report_path is not None
+            else default_vector_quality_report_path(
+                pack_id,
+                profile=golden_set.profile,
+            )
+        )
+        persisted_report_path = str(write_vector_quality_report(destination, report))
+    return _vector_quality_report_response(report, report_path=persisted_report_path)
+
+
+def evaluate_vector_release_thresholds_from_report(
+    *,
+    report_path: str | Path,
+    min_related_precision_at_k: float | None = None,
+    min_related_recall_at_k: float | None = None,
+    min_related_mrr: float | None = None,
+    min_refinement_alignment_rate: float | None = None,
+    min_easy_case_pass_rate: float | None = None,
+    max_fallback_rate: float | None = None,
+    max_p95_latency_ms: int | None = None,
+) -> RegistryEvaluateVectorReleaseThresholdsResponse:
+    """Evaluate one stored vector-quality report against hosted release thresholds."""
+
+    resolved_report_path = Path(report_path).expanduser().resolve()
+    report = load_vector_quality_report(resolved_report_path)
+    defaults = default_vector_release_thresholds()
+    thresholds = VectorReleaseThresholds(
+        min_related_precision_at_k=(
+            defaults.min_related_precision_at_k
+            if min_related_precision_at_k is None
+            else min_related_precision_at_k
+        ),
+        min_related_recall_at_k=(
+            defaults.min_related_recall_at_k
+            if min_related_recall_at_k is None
+            else min_related_recall_at_k
+        ),
+        min_related_mrr=(
+            defaults.min_related_mrr
+            if min_related_mrr is None
+            else min_related_mrr
+        ),
+        min_refinement_alignment_rate=(
+            defaults.min_refinement_alignment_rate
+            if min_refinement_alignment_rate is None
+            else min_refinement_alignment_rate
+        ),
+        min_easy_case_pass_rate=(
+            defaults.min_easy_case_pass_rate
+            if min_easy_case_pass_rate is None
+            else min_easy_case_pass_rate
+        ),
+        max_fallback_rate=(
+            defaults.max_fallback_rate
+            if max_fallback_rate is None
+            else max_fallback_rate
+        ),
+        max_p95_latency_ms=(
+            defaults.max_p95_latency_ms
+            if max_p95_latency_ms is None
+            else max_p95_latency_ms
+        ),
+    )
+    decision = evaluate_vector_release_thresholds(
+        report,
+        thresholds=thresholds,
+    )
+    return RegistryEvaluateVectorReleaseThresholdsResponse(
+        report_path=str(resolved_report_path),
+        thresholds=RegistryVectorReleaseThresholdsResponse(
+            min_related_precision_at_k=thresholds.min_related_precision_at_k,
+            min_related_recall_at_k=thresholds.min_related_recall_at_k,
+            min_related_mrr=thresholds.min_related_mrr,
+            min_refinement_alignment_rate=thresholds.min_refinement_alignment_rate,
+            min_easy_case_pass_rate=thresholds.min_easy_case_pass_rate,
+            max_fallback_rate=thresholds.max_fallback_rate,
+            max_p95_latency_ms=thresholds.max_p95_latency_ms,
+        ),
+        passed=decision.passed,
+        reasons=[str(item) for item in decision.reasons],
+    )
+
+
 def npm_installer_info() -> NpmInstallerInfo:
     """Return the canonical npm-wrapper bootstrap metadata."""
 
@@ -2234,6 +2473,10 @@ def tag(
     storage_root: str | Path | None = None,
     debug: bool = False,
     hybrid: bool | None = None,
+    include_related_entities: bool = False,
+    include_graph_support: bool = False,
+    refine_links: bool = False,
+    refinement_depth: str = "light",
     registry: PackRegistry | None = None,
     runtime: PackRuntime | None = None,
 ) -> TagResponse:
@@ -2262,6 +2505,14 @@ def tag(
         registry=registry,
         runtime=runtime,
     )
+    response = enrich_tag_response_with_related_entities(
+        response,
+        settings=settings,
+        include_related_entities=include_related_entities,
+        include_graph_support=include_graph_support,
+        refine_links=refine_links,
+        refinement_depth=refinement_depth,
+    )
     if output_path is not None or output_dir is not None:
         response = persist_tag_response_json(
             response,
@@ -2285,6 +2536,10 @@ def tag_file(
     storage_root: str | Path | None = None,
     debug: bool = False,
     hybrid: bool | None = None,
+    include_related_entities: bool = False,
+    include_graph_support: bool = False,
+    refine_links: bool = False,
+    refinement_depth: str = "light",
     registry: PackRegistry | None = None,
     runtime: PackRuntime | None = None,
 ) -> TagResponse:
@@ -2325,6 +2580,14 @@ def tag_file(
             "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
         }
     )
+    response = enrich_tag_response_with_related_entities(
+        response,
+        settings=settings,
+        include_related_entities=include_related_entities,
+        include_graph_support=include_graph_support,
+        refine_links=refine_links,
+        refinement_depth=refinement_depth,
+    )
     if output_path is not None or output_dir is not None:
         response = persist_tag_response_json(
             response,
@@ -2361,6 +2624,10 @@ def tag_files(
     manifest_output_path: str | Path | None = None,
     debug: bool = False,
     hybrid: bool | None = None,
+    include_related_entities: bool = False,
+    include_graph_support: bool = False,
+    refine_links: bool = False,
+    refinement_depth: str = "light",
     registry: PackRegistry | None = None,
     runtime: PackRuntime | None = None,
 ) -> BatchTagResponse:
@@ -2485,6 +2752,14 @@ def tag_files(
                                 "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
                             }
                         )
+                        repaired_response = enrich_tag_response_with_related_entities(
+                            repaired_response,
+                            settings=settings,
+                            include_related_entities=include_related_entities,
+                            include_graph_support=include_graph_support,
+                            refine_links=refine_links,
+                            refinement_depth=refinement_depth,
+                        )
                         repaired_response = persist_tag_response_json(
                             repaired_response,
                             pack_id=resolved_pack,
@@ -2521,6 +2796,14 @@ def tag_files(
                 "input_size_bytes": input_size_bytes,
                 "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
             }
+        )
+        response = enrich_tag_response_with_related_entities(
+            response,
+            settings=settings,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
         )
         record_tag_observation(settings.storage_root, response)
         items.append(response)
@@ -2774,6 +3057,75 @@ def lookup_candidates(
         active_only=active_only,
         candidates=candidates,
     )
+
+
+def build_qid_graph_index(
+    bundle_dirs: Iterable[str | Path],
+    *,
+    truthy_path: str | Path,
+    output_dir: str | Path,
+    storage_root: str | Path | None = None,
+    dimensions: int = DEFAULT_QID_GRAPH_DIMENSIONS,
+    allowed_predicates: Iterable[str] | None = None,
+    qdrant_url: str | None = None,
+    qdrant_api_key: str | None = None,
+    collection_name: str | None = None,
+    publish_alias: str | None = None,
+) -> VectorIndexBuildResponse:
+    """Build one hosted QID graph artifact and optionally publish it to Qdrant."""
+
+    settings = _resolve_settings(storage_root=storage_root)
+    resolved_qdrant_url = qdrant_url if qdrant_url is not None else settings.vector_search_url
+    resolved_qdrant_api_key = (
+        qdrant_api_key if qdrant_api_key is not None else settings.vector_search_api_key
+    )
+    resolved_publish_alias = (
+        publish_alias
+        if publish_alias is not None
+        else (
+            settings.vector_search_collection_alias
+            if resolved_qdrant_url and settings.vector_search_enabled
+            else None
+        )
+    )
+    response = run_build_qid_graph_index(
+        bundle_dirs,
+        truthy_path=truthy_path,
+        output_dir=output_dir,
+        dimensions=dimensions,
+        allowed_predicates=(
+            list(allowed_predicates)
+            if allowed_predicates is not None
+            else list(DEFAULT_QID_GRAPH_ALLOWED_PREDICATES)
+        ),
+        qdrant_url=resolved_qdrant_url,
+        qdrant_api_key=resolved_qdrant_api_key,
+        collection_name=collection_name,
+        publish_alias=resolved_publish_alias,
+    )
+    _record_vector_build_state_if_supported(settings, response)
+    return response
+
+
+def _record_vector_build_state_if_supported(
+    settings: Settings,
+    response: VectorIndexBuildResponse,
+) -> None:
+    if settings.runtime_target.value != "production_server":
+        return
+    if settings.metadata_backend.value != "postgresql":
+        return
+    if not settings.database_url:
+        return
+    registry = PackRegistry(
+        settings.storage_root,
+        runtime_target=settings.runtime_target,
+        metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
+    )
+    recorder = getattr(registry.store, "record_vector_build", None)
+    if callable(recorder):
+        recorder(response)
 
 
 def create_service_app(*, storage_root: str | Path | None = None):

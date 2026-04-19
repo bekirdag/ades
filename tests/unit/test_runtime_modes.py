@@ -13,12 +13,18 @@ def test_settings_from_env_resolve_local_runtime_defaults(monkeypatch) -> None:
     monkeypatch.setenv("ADES_STORAGE_ROOT", "/tmp/ades-unit-test")
     monkeypatch.setenv("ADES_RUNTIME_TARGET", "local")
     monkeypatch.setenv("ADES_METADATA_BACKEND", "sqlite")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_URL", "http://qdrant.local:6333")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_RELATED_LIMIT", "8")
 
     settings = Settings.from_env()
 
     assert settings.storage_root == Path("/tmp/ades-unit-test")
     assert settings.runtime_target is RuntimeTarget.LOCAL
     assert settings.metadata_backend is MetadataBackend.SQLITE
+    assert settings.vector_search_enabled is True
+    assert settings.vector_search_url == "http://qdrant.local:6333"
+    assert settings.vector_search_related_limit == 8
 
 
 def test_production_service_requires_explicit_runtime(monkeypatch) -> None:
