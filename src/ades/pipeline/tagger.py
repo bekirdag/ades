@@ -12,7 +12,7 @@ from time import perf_counter
 
 from ..packs.registry import PackRegistry
 from ..packs.runtime import PackRuntime, RuleDefinition, load_pack_runtime
-from .hybrid import ProposalProvider, ProposalSpan, get_proposal_spans
+from .hybrid import ProposalProvider, ProposalSpan, get_proposal_spans, hybrid_enabled
 from ..runtime_matcher import (
     MatcherEntryPayload,
     find_exact_match_candidates,
@@ -145,6 +145,16 @@ _AUXILIARY_LOOKUP_TOKENS = {
     "will",
     "would",
 }
+_PERSON_NAME_SUFFIX_TOKENS = {
+    "i",
+    "ii",
+    "iii",
+    "iv",
+    "jr",
+    "jr.",
+    "sr",
+    "sr.",
+}
 _PERSON_NAME_PARTICLES = {
     "al",
     "ap",
@@ -184,6 +194,7 @@ _GENERIC_SINGLE_TOKEN_HEADS = {
     "bank",
     "city",
     "company",
+    "congress",
     "department",
     "founder",
     "fund",
@@ -194,12 +205,48 @@ _GENERIC_SINGLE_TOKEN_HEADS = {
     "university",
     "world",
 }
+_RUNTIME_GENERIC_SINGLE_TOKEN_ALIAS_TEXTS = {
+    "brits",
+    "canadian",
+    "fc",
+    "linda",
+    "many",
+    "proof",
+    "queen",
+    "save",
+    "taurasi",
+    "unknown",
+}
+_RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS = {"ct", "not", "uk", "us"}
+_RUNTIME_GENERIC_PHRASE_ALIAS_TEXTS = {
+    "central command",
+    "cut off",
+    "high school",
+    "high level",
+    "john i",
+    "let the acm network",
+    "many springs",
+    "more than",
+    "new deal",
+    "tamim bin hamad al",
+    "u-turn",
+    "with us",
+}
 _ARTICLE_LED_STRUCTURAL_FRAGMENT_TOKENS = {
     "international",
     "local",
     "national",
     "regional",
 }
+_RUNTIME_ARTICLE_LED_GENERIC_ALIAS_TOKENS = (
+    _GENERIC_SINGLE_TOKEN_HEADS
+    | _GENERIC_PHRASE_LEADS
+    | _ARTICLE_LED_STRUCTURAL_FRAGMENT_TOKENS
+    | {"art", "board", "public", "village", "washington"}
+)
+_RUNTIME_FUNCTION_YEAR_ALIAS_RE = re.compile(
+    r"^(?:and|by|for|from|in|of|on|or|the|to|with)\s+(?:19|20)\d{2}$"
+)
 _ACRONYM_CONNECTOR_WORDS = {
     "a",
     "an",
@@ -221,6 +268,13 @@ _MAX_ACRONYM_DEFINITION_WINDOW = 16
 _EXPLICIT_ACRONYM_PAREN_RE = re.compile(r"\(\s*(?P<acronym>[A-Z][A-Z0-9.&/-]{2,9})\s*\)")
 _EXPLICIT_ACRONYM_COMMA_RE = re.compile(
     r",\s*(?:or\s+)?(?P<acronym>[A-Z][A-Z0-9.&/-]{2,9})(?=,)"
+)
+_GENERIC_DURATION_ALIAS_RE = re.compile(
+    r"^\d+\s+(?:sec|secs|second|seconds|min|mins|minute|minutes|hr|hrs|hour|hours)$"
+)
+_DATE_LIKE_ALIAS_RE = re.compile(
+    r"^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2},\s+\d{4}$",
+    flags=re.IGNORECASE,
 )
 _EXPLICIT_ACRONYM_LONGFORM_RE = re.compile(
     r"(?P<long>[A-Z][A-Za-z0-9'’-]*(?:\s+(?:(?:[A-Z][A-Za-z0-9'’-]*)|(?:a|an|and|at|by|for|from|in|of|on|the|to|with|da|de|del|du|la|van|von))){1,11})\s*$"
@@ -483,6 +537,7 @@ _GENERIC_OFFICE_TITLE_TOKENS = {
     "minister",
     "officer",
     "president",
+    "premier",
     "prosecutor",
     "secretary",
     "senator",
@@ -508,6 +563,81 @@ _SINGLETON_ORG_CONTEXT_CUE_TOKENS = {
     "via",
     "with",
 }
+_PERSON_SURNAME_COREFERENCE_FOLLOWING_CUES = (
+    _CONTEXTUAL_ORG_ACRONYM_REPORTING_CUES
+    | _AUXILIARY_LOOKUP_TOKENS
+    | {
+        "added",
+        "adding",
+        "believes",
+        "believed",
+        "called",
+        "calls",
+        "confirmed",
+        "confirms",
+        "confirming",
+        "continuing",
+        "departure",
+        "denied",
+        "denies",
+        "deny",
+        "explained",
+        "expects",
+        "expected",
+        "estimated",
+        "estimates",
+        "leadership",
+        "noted",
+        "notes",
+        "probe",
+        "staying",
+        "tenure",
+        "thinks",
+        "warned",
+        "warns",
+        "who",
+        "whose",
+    }
+)
+_PERSON_SURNAME_COREFERENCE_PRECEDING_TITLE_TOKENS = (
+    _GENERIC_OFFICE_TITLE_TOKENS | {"dr", "gov", "mr", "mrs", "ms", "rep", "sen"}
+)
+_PERSON_SURNAME_COREFERENCE_PREPOSITION_CUES = {
+    "about",
+    "against",
+    "around",
+    "by",
+    "for",
+    "from",
+    "under",
+    "via",
+    "with",
+}
+_PERSON_SURNAME_COREFERENCE_TRAILING_NOUN_CUES = {
+    "administration",
+    "adviser",
+    "advisers",
+    "advisor",
+    "advisors",
+    "allies",
+    "backers",
+    "campaign",
+    "critic",
+    "critics",
+    "government",
+    "office",
+    "opponents",
+    "premiership",
+    "spokesman",
+    "spokesperson",
+    "spokeswoman",
+    "staff",
+    "supporters",
+    "team",
+}
+_PERSON_SURNAME_COREFERENCE_FRAGMENT_LEADS = (
+    _GENERIC_PHRASE_LEADS | _PERSON_SURNAME_COREFERENCE_PREPOSITION_CUES
+)
 _HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS: set[str] = set()
 for _suffix in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS:
     _HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS.add(re.escape(_suffix))
@@ -665,6 +795,21 @@ def _build_entity_link(
         entity_id=f"ades:{provider_id}:{pack_id}:{label.casefold()}:{normalized_value}",
         canonical_text=canonical_text,
         provider=provider,
+    )
+
+
+def _build_runtime_generated_entity_link(
+    *,
+    provider: str,
+    runtime: PackRuntime,
+    label: str,
+    canonical_text: str,
+) -> EntityLink:
+    return _build_entity_link(
+        provider=provider,
+        pack_id=runtime.pack_id,
+        label=label,
+        canonical_text=canonical_text,
     )
 
 
@@ -1629,6 +1774,7 @@ def _should_skip_single_token_lookup_candidate(
 ) -> bool:
     label_key = candidate_label.casefold()
     canonical_text = canonical_text or candidate_value
+    normalized_matched_text = normalize_lookup_text(matched_text)
     normalized_candidate_value = normalize_lookup_text(candidate_value)
     normalized_canonical_text = normalize_lookup_text(canonical_text)
     if label_key not in {"organization", "person", "location"}:
@@ -1642,16 +1788,33 @@ def _should_skip_single_token_lookup_candidate(
         return True
     if candidate_domain == "general" and not any(character.isalpha() for character in matched_text):
         return True
+    if candidate_domain == "general" and (
+        normalized_matched_text in _RUNTIME_GENERIC_PHRASE_ALIAS_TEXTS
+        or normalized_candidate_value in _RUNTIME_GENERIC_PHRASE_ALIAS_TEXTS
+        or normalized_canonical_text in _RUNTIME_GENERIC_PHRASE_ALIAS_TEXTS
+    ):
+        return True
+    if (
+        candidate_domain == "general"
+        and label_key == "organization"
+        and _is_single_token_all_caps(matched_text)
+        and (
+            normalized_matched_text in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS
+            or normalized_candidate_value in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS
+            or normalized_canonical_text in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS
+        )
+    ):
+        return True
     if not _is_single_token_alpha(matched_text):
         return False
     if matched_text.islower():
         return True
-    normalized_matched_text = normalize_lookup_text(matched_text)
     generic_single_token_blocklist = (
         _GENERIC_SINGLE_TOKEN_HEADS
         | _GENERIC_PHRASE_LEADS
         | _CALENDAR_SINGLE_TOKEN_WORDS
         | _NUMBER_SINGLE_TOKEN_WORDS
+        | _RUNTIME_GENERIC_SINGLE_TOKEN_ALIAS_TEXTS
     )
     if (
         normalized_matched_text in generic_single_token_blocklist
@@ -1736,12 +1899,28 @@ def _should_skip_multi_token_lookup_candidate(
     if candidate_domain != "general":
         return False
     label_key = candidate_label.casefold()
+    canonical_text = canonical_text or candidate_value
     if label_key not in {"organization", "person", "location"}:
         return False
     tokens = TOKEN_RE.findall(matched_text)
     if len(tokens) < 2:
         return False
     lowered_tokens = [normalize_lookup_text(token) for token in tokens]
+    normalized_values = {
+        normalize_lookup_text(matched_text),
+        normalize_lookup_text(candidate_value),
+        normalize_lookup_text(canonical_text),
+    }
+    if any(value in _RUNTIME_GENERIC_PHRASE_ALIAS_TEXTS for value in normalized_values):
+        return True
+    if any(_RUNTIME_FUNCTION_YEAR_ALIAS_RE.fullmatch(value) for value in normalized_values):
+        return True
+    if (
+        len(lowered_tokens) == 2
+        and lowered_tokens[0] in _GENERIC_PHRASE_LEADS
+        and lowered_tokens[1] in _RUNTIME_ARTICLE_LED_GENERIC_ALIAS_TOKENS
+    ):
+        return True
     if (
         label_key == "organization"
         and _looks_like_generic_office_title_candidate(tokens, lowered_tokens)
@@ -1829,6 +2008,176 @@ def _looks_like_sentence_boundary_singleton_org_noise(
         return False
     previous_lower = normalize_lookup_text(_previous_token(text, start))
     return previous_lower not in _SINGLETON_ORG_CONTEXT_CUE_TOKENS
+
+
+def _person_surname_key(value: str) -> str | None:
+    tokens = [token for token in TOKEN_RE.findall(value) if any(character.isalpha() for character in token)]
+    if len(tokens) < 2:
+        return None
+    if len(tokens) == 2:
+        leading_token = normalize_lookup_text(tokens[0])
+        if (
+            leading_token in _PERSON_SURNAME_COREFERENCE_FRAGMENT_LEADS
+            or leading_token in _PERSON_SURNAME_COREFERENCE_PRECEDING_TITLE_TOKENS
+        ):
+            return None
+    for token in reversed(tokens):
+        normalized = normalize_lookup_text(token)
+        if (
+            not normalized
+            or normalized in _PERSON_NAME_PARTICLES
+            or normalized in _PERSON_NAME_SUFFIX_TOKENS
+            or normalized in _GENERIC_OFFICE_TITLE_TOKENS
+        ):
+            continue
+        return normalized
+    return None
+
+
+def _person_surname_coreference_candidate(
+    value: str,
+) -> tuple[str | None, str | None]:
+    normalized_tokens = [
+        normalize_lookup_text(token)
+        for token in TOKEN_RE.findall(value)
+        if any(character.isalpha() for character in token)
+    ]
+    if len(normalized_tokens) == 2:
+        leading_token = normalized_tokens[0]
+        if leading_token in _PERSON_SURNAME_COREFERENCE_FRAGMENT_LEADS:
+            fragment_kind = (
+                "generic_lead_fragment"
+                if leading_token in _GENERIC_PHRASE_LEADS
+                else "preposition_lead_fragment"
+            )
+            return normalized_tokens[1], fragment_kind
+    if _is_single_token_alpha(value):
+        return normalize_lookup_text(value), "single_token"
+    return None, None
+
+
+def _person_surname_coreference_mention_types(
+    text: str,
+    *,
+    start: int,
+    end: int,
+) -> set[str]:
+    mention_types: set[str] = set()
+    trailing_text = text[end:]
+    if re.match(r"^\s*[’']s\b", trailing_text):
+        mention_types.add("possessive_suffix")
+    if re.match(
+        r"^\s*,\s*(?:who|whose|said|says|told|added|noted|warned|wrote)\b",
+        trailing_text,
+        flags=re.IGNORECASE,
+    ):
+        mention_types.add("appositive_clause")
+    next_span = _next_contiguous_token_span(text, end)
+    next_lower = normalize_lookup_text(next_span[2]) if next_span is not None else ""
+    if next_lower in _PERSON_SURNAME_COREFERENCE_FOLLOWING_CUES:
+        mention_types.add("following_cue")
+    if next_lower in _PERSON_SURNAME_COREFERENCE_TRAILING_NOUN_CUES:
+        mention_types.add("institutional_tail")
+    previous_span = _previous_contiguous_token_span(text, start)
+    if previous_span is None:
+        return mention_types
+    previous_lower = normalize_lookup_text(previous_span[2])
+    if previous_lower in _PERSON_SURNAME_COREFERENCE_PRECEDING_TITLE_TOKENS:
+        mention_types.add("title_lead")
+    if previous_lower in _PERSON_SURNAME_COREFERENCE_PREPOSITION_CUES:
+        mention_types.add("preposition_lead")
+        if previous_lower == "about" and next_lower in _PERSON_SURNAME_COREFERENCE_FOLLOWING_CUES:
+            mention_types.add("about_discourse")
+    if previous_lower != "to":
+        return mention_types
+    earlier_span = _previous_contiguous_token_span(text, previous_span[0])
+    if earlier_span is None:
+        return mention_types
+    if normalize_lookup_text(earlier_span[2]) == "according":
+        mention_types.add("according_to")
+    return mention_types
+
+
+def _looks_like_person_surname_coreference_context(
+    text: str,
+    *,
+    start: int,
+    end: int,
+) -> bool:
+    return bool(
+        _person_surname_coreference_mention_types(
+            text,
+            start=start,
+            end=end,
+        )
+    )
+
+
+def _suppress_document_person_surname_false_positives(
+    candidates: list[ExtractedCandidate],
+    *,
+    text: str,
+    pack_id: str,
+) -> tuple[list[ExtractedCandidate], list[ExtractedCandidate]]:
+    if pack_id != "general-en":
+        return candidates, []
+
+    filtered: list[ExtractedCandidate] = []
+    discarded: list[ExtractedCandidate] = []
+    seen_person_surname_ends: dict[str, int] = {}
+    seen_person_surname_entity_ids: dict[str, set[str]] = {}
+
+    for candidate in sorted(candidates, key=lambda item: (item.entity.start, item.entity.end)):
+        entity = candidate.entity
+        label_key = entity.label.casefold()
+        if label_key == "person":
+            surname_key = _person_surname_key(entity.text)
+            if surname_key is not None:
+                seen_person_surname_ends[surname_key] = max(
+                    entity.end,
+                    seen_person_surname_ends.get(surname_key, -1),
+                )
+                if entity.link is not None and entity.link.entity_id:
+                    seen_person_surname_entity_ids.setdefault(surname_key, set()).add(
+                        entity.link.entity_id
+                    )
+                filtered.append(candidate)
+                continue
+        if label_key not in {"organization", "location", "person"}:
+            filtered.append(candidate)
+            continue
+        if candidate.domain != "general":
+            filtered.append(candidate)
+            continue
+        surname_key, candidate_kind = _person_surname_coreference_candidate(entity.text)
+        if surname_key is None or candidate_kind is None:
+            filtered.append(candidate)
+            continue
+        previous_person_end = seen_person_surname_ends.get(surname_key)
+        if previous_person_end is None or previous_person_end >= entity.start:
+            filtered.append(candidate)
+            continue
+        if label_key == "person":
+            candidate_entity_id = entity.link.entity_id if entity.link is not None else None
+            if (
+                candidate_entity_id is not None
+                and candidate_entity_id in seen_person_surname_entity_ids.get(surname_key, set())
+            ):
+                filtered.append(candidate)
+                continue
+        if candidate_kind != "single_token":
+            discarded.append(candidate)
+            continue
+        if not _looks_like_person_surname_coreference_context(
+            text,
+            start=entity.start,
+            end=entity.end,
+        ):
+            filtered.append(candidate)
+            continue
+        discarded.append(candidate)
+
+    return filtered, discarded
 
 
 def _single_token_occurrence_count(text: str, matched_text: str) -> int:
@@ -2114,10 +2463,14 @@ def _backfill_heuristic_definition_acronym_entities(
         (candidate.normalized_start, candidate.normalized_end, candidate.entity.label.casefold())
         for candidate in extracted
     }
-    definitions_by_key = {
-        (definition.normalized_acronym, definition.label.casefold()): definition
-        for definition in definitions
-    }
+    definitions_by_key: dict[tuple[str, str], list[HeuristicAcronymDefinition]] = {}
+    for definition in definitions:
+        definitions_by_key.setdefault(
+            (definition.normalized_acronym, definition.label.casefold()),
+            [],
+        ).append(definition)
+    for group in definitions_by_key.values():
+        group.sort(key=lambda item: item.acronym_start)
     augmented = list(extracted)
 
     for start, end in _iter_token_spans(normalized_input.text):
@@ -2126,8 +2479,16 @@ def _backfill_heuristic_definition_acronym_entities(
         if len(normalized_acronym) < 2 or not normalized_acronym.isupper():
             continue
         for label_key in ("organization", "location"):
-            definition = definitions_by_key.get((normalized_acronym, label_key))
-            if definition is None or start < definition.acronym_start:
+            matching_definitions = definitions_by_key.get((normalized_acronym, label_key), [])
+            definition = next(
+                (
+                    item
+                    for item in reversed(matching_definitions)
+                    if start >= item.acronym_start
+                ),
+                None,
+            )
+            if definition is None:
                 continue
             span_key = (start, end, label_key)
             if span_key in existing_spans:
@@ -2141,16 +2502,21 @@ def _backfill_heuristic_definition_acronym_entities(
                         start=raw_start,
                         end=raw_end,
                         confidence=0.67,
-                        provenance=_build_provenance(
-                            match_kind="alias",
-                            match_path="heuristic.explicit_definition_acronym",
-                            match_source=f"{definition.long_form} ({token_text})",
-                            source_pack=runtime.pack_id,
-                            source_domain=runtime.domain,
-                            lane="heuristic_definition_acronym_backfill",
-                        ),
-                        link=None,
+                    provenance=_build_provenance(
+                        match_kind="alias",
+                        match_path="heuristic.explicit_definition_acronym",
+                        match_source=f"{definition.long_form} ({token_text})",
+                        source_pack=runtime.pack_id,
+                        source_domain=runtime.domain,
+                        lane="heuristic_definition_acronym_backfill",
                     ),
+                    link=_build_runtime_generated_entity_link(
+                        provider="heuristic.explicit_definition_acronym",
+                        runtime=runtime,
+                        label=definition.label,
+                        canonical_text=definition.long_form,
+                    ),
+                ),
                     domain=runtime.domain,
                     lane="heuristic_definition_acronym_backfill",
                     normalized_start=start,
@@ -2203,7 +2569,12 @@ def _backfill_heuristic_structured_organization_entities(
                         source_domain=runtime.domain,
                         lane="heuristic_structured_org_backfill",
                     ),
-                    link=None,
+                    link=_build_runtime_generated_entity_link(
+                        provider="heuristic.structural_organization",
+                        runtime=runtime,
+                        label="organization",
+                        canonical_text=candidate.text,
+                    ),
                 ),
                 domain=runtime.domain,
                 lane="heuristic_structured_org_backfill",
@@ -2258,7 +2629,12 @@ def _backfill_heuristic_structured_location_entities(
                         source_domain=runtime.domain,
                         lane="heuristic_structured_location_backfill",
                     ),
-                    link=None,
+                    link=_build_runtime_generated_entity_link(
+                        provider="heuristic.structural_location",
+                        runtime=runtime,
+                        label="location",
+                        canonical_text=candidate.text,
+                    ),
                 ),
                 domain=runtime.domain,
                 lane="heuristic_structured_location_backfill",
@@ -2315,7 +2691,12 @@ def _backfill_heuristic_hyphenated_location_entities(
                         source_domain=runtime.domain,
                         lane="heuristic_hyphenated_location_backfill",
                     ),
-                    link=None,
+                    link=_build_runtime_generated_entity_link(
+                        provider="heuristic.hyphenated_location",
+                        runtime=runtime,
+                        label="location",
+                        canonical_text=candidate_text,
+                    ),
                 ),
                 domain=runtime.domain,
                 lane="heuristic_hyphenated_location_backfill",
@@ -2623,7 +3004,12 @@ def _backfill_contextual_org_acronym_entities(
                         source_domain=runtime.domain,
                         lane="contextual_org_acronym_backfill",
                     ),
-                    link=None,
+                    link=_build_runtime_generated_entity_link(
+                        provider="heuristic.contextual_acronym",
+                        runtime=runtime,
+                        label="organization",
+                        canonical_text=token_text,
+                    ),
                 ),
                 domain=runtime.domain,
                 lane="contextual_org_acronym_backfill",
@@ -3240,7 +3626,7 @@ def _score_entity_relevance(
     position_score = 1.0 - min(1.0, candidate.normalized_start / max(1, len(text)))
     span_bonus = min(0.08, max(0, _span_token_count(entity.text) - 1) * 0.03)
     occurrence_text = _relevance_occurrence_text(candidate)
-    occurrence_bonus = min(0.12, max(0, _count_occurrences(text, occurrence_text) - 1) * 0.05)
+    occurrence_bonus = min(0.18, max(0, _count_occurrences(text, occurrence_text) - 1) * 0.06)
     lane_bonus = {
         "deterministic_rule": 0.18,
         "deterministic_alias": 0.12,
@@ -3395,6 +3781,311 @@ def _apply_repeated_surface_consistency(
     return sorted(rewritten, key=lambda item: (item.entity.start, item.entity.end))
 
 
+def _is_runtime_generic_duration_alias(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    for raw_value in (
+        candidate.entity.text,
+        provenance.match_source,
+        candidate.entity.link.canonical_text if candidate.entity.link is not None else None,
+    ):
+        if not raw_value:
+            continue
+        normalized = " ".join(str(raw_value).casefold().split())
+        if _GENERIC_DURATION_ALIAS_RE.fullmatch(normalized):
+            return True
+    return False
+
+
+def _runtime_normalized_alias_values(candidate: ExtractedCandidate) -> set[str]:
+    provenance = candidate.entity.provenance
+    values: set[str] = set()
+    for raw_value in (
+        candidate.entity.text,
+        provenance.match_source if provenance is not None else None,
+        candidate.entity.link.canonical_text if candidate.entity.link is not None else None,
+    ):
+        if not raw_value:
+            continue
+        normalized = " ".join(str(raw_value).casefold().split())
+        if normalized:
+            values.add(normalized)
+    return values
+
+
+def _contains_apostropheish_suffix(value: str) -> bool:
+    return bool(
+        re.search(
+            r"(?:['’ʻ`]|[\u2000-\u200b\u202f\u205f\u3000])s\b",
+            value,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _normalize_apostropheish_alias_text(value: str) -> str:
+    return " ".join(
+        re.sub(r"[\'’ʻ`]+", " ", value.casefold()).split()
+    )
+
+
+def _is_runtime_possessive_alias_artifact(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    if candidate.lane != "deterministic_alias":
+        return False
+    if candidate.entity.label.casefold() not in {"organization", "location"}:
+        return False
+    surface = candidate.entity.text
+    if not _contains_apostropheish_suffix(surface):
+        return False
+    source_values = [
+        provenance.match_source or "",
+        candidate.entity.link.canonical_text if candidate.entity.link is not None else "",
+    ]
+    if any(_contains_apostropheish_suffix(value) for value in source_values if value):
+        return False
+    normalized_surface = _normalize_apostropheish_alias_text(surface)
+    return any(
+        value
+        and _normalize_apostropheish_alias_text(value) == normalized_surface
+        and value.casefold() != surface.casefold()
+        for value in source_values
+    )
+
+
+def _is_runtime_leading_apostrophe_fragment_alias(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    if candidate.entity.label.casefold() not in {"organization", "person", "location"}:
+        return False
+    if re.match(r"^[sdt]\s+[A-Z]", candidate.entity.text) is None:
+        return False
+    return True
+
+
+def _is_runtime_generic_single_token_alias(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    if candidate.lane != "deterministic_alias":
+        return False
+    if not _is_single_token_alpha(candidate.entity.text):
+        return False
+    blocklist = (
+        _GENERIC_SINGLE_TOKEN_HEADS
+        | _GENERIC_PHRASE_LEADS
+        | _CALENDAR_SINGLE_TOKEN_WORDS
+        | _NUMBER_SINGLE_TOKEN_WORDS
+        | _RUNTIME_GENERIC_SINGLE_TOKEN_ALIAS_TEXTS
+    )
+    normalized_values = _runtime_normalized_alias_values(candidate)
+    if (
+        candidate.entity.label.casefold() == "organization"
+        and _is_single_token_all_caps(candidate.entity.text)
+        and any(value in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS for value in normalized_values)
+    ):
+        return True
+    return any(value in blocklist for value in normalized_values)
+
+
+def _is_runtime_contextual_org_acronym_noise(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    if candidate.lane != "contextual_org_acronym_backfill":
+        return False
+    if candidate.entity.label.casefold() != "organization":
+        return False
+    if not _is_single_token_all_caps(candidate.entity.text):
+        return False
+    return any(
+        value in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS
+        for value in _runtime_normalized_alias_values(candidate)
+    )
+
+
+def _is_runtime_generic_phrase_fragment_alias(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    normalized_values = _runtime_normalized_alias_values(candidate)
+    return any(value in _RUNTIME_GENERIC_PHRASE_ALIAS_TEXTS for value in normalized_values)
+
+
+def _is_runtime_function_year_alias(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    return any(
+        _RUNTIME_FUNCTION_YEAR_ALIAS_RE.fullmatch(value)
+        for value in _runtime_normalized_alias_values(candidate)
+    )
+
+
+def _runtime_alias_tokens(value: str) -> list[str]:
+    return [token.casefold() for token in re.findall(r"[A-Za-z]+|&", value)]
+
+
+def _is_runtime_truncated_connector_alias_artifact(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    if candidate.lane != "deterministic_alias":
+        return False
+    if candidate.entity.label.casefold() != "organization":
+        return False
+    surface_tokens = _runtime_alias_tokens(candidate.entity.text)
+    if not surface_tokens:
+        return False
+    for raw_value in (
+        provenance.match_source or "",
+        candidate.entity.link.canonical_text if candidate.entity.link is not None else "",
+    ):
+        source_tokens = _runtime_alias_tokens(raw_value)
+        if len(source_tokens) <= len(surface_tokens):
+            continue
+        if source_tokens[: len(surface_tokens)] != surface_tokens:
+            continue
+        if source_tokens[len(surface_tokens)] in {"&", "and"}:
+            return True
+    return False
+
+
+def _is_runtime_date_like_alias(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    return any(_DATE_LIKE_ALIAS_RE.fullmatch(value) for value in _runtime_normalized_alias_values(candidate))
+
+
+def _is_runtime_quoted_fragment_alias(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    surface = candidate.entity.text
+    if '"' not in surface and "“" not in surface and "”" not in surface:
+        return False
+    normalized = " ".join(surface.casefold().split())
+    if '"' in surface and surface.count('"') % 2 == 1:
+        return True
+    return normalized.startswith("the ")
+
+
+def _is_runtime_article_led_generic_alias(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    if candidate.entity.label.casefold() not in {"organization", "location"}:
+        return False
+    normalized_tokens = [
+        normalize_lookup_text(token)
+        for token in TOKEN_RE.findall(candidate.entity.text)
+        if any(character.isalpha() for character in token)
+    ]
+    if len(normalized_tokens) != 2 or normalized_tokens[0] not in _GENERIC_PHRASE_LEADS:
+        return False
+    return normalized_tokens[1] in _RUNTIME_ARTICLE_LED_GENERIC_ALIAS_TOKENS
+
+
+def _is_runtime_article_led_generic_org_alias(candidate: ExtractedCandidate) -> bool:
+    return _is_runtime_article_led_generic_alias(candidate)
+
+
+def _is_runtime_single_token_titleish_fragment_alias(
+    candidate: ExtractedCandidate,
+    *,
+    text: str,
+) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    if candidate.lane != "deterministic_alias":
+        return False
+    if candidate.entity.label.casefold() not in {"organization", "location"}:
+        return False
+    surface = candidate.entity.text.strip()
+    if not surface.isalpha() or surface.isupper():
+        return False
+    normalized = normalize_lookup_text(surface)
+    if normalized in (
+        _GENERIC_SINGLE_TOKEN_HEADS
+        | _GENERIC_PHRASE_LEADS
+        | _CALENDAR_SINGLE_TOKEN_WORDS
+        | _NUMBER_SINGLE_TOKEN_WORDS
+        | _RUNTIME_GENERIC_SINGLE_TOKEN_ALIAS_TEXTS
+    ):
+        return False
+    previous_span = _previous_contiguous_token_span(text, candidate.entity.start)
+    next_span = _next_contiguous_token_span(text, candidate.entity.end)
+    return _is_titleish_token(previous_span[2] if previous_span is not None else "") or _is_titleish_token(
+        next_span[2] if next_span is not None else ""
+    )
+
+
+def _is_runtime_partial_person_fragment_alias(candidate: ExtractedCandidate) -> bool:
+    provenance = candidate.entity.provenance
+    if provenance is None or provenance.source_pack != "general-en":
+        return False
+    if candidate.entity.label.casefold() != "person":
+        return False
+    tokens = [
+        token
+        for token in TOKEN_RE.findall(candidate.entity.text)
+        if any(character.isalpha() for character in token)
+    ]
+    if len(tokens) < 2:
+        return False
+    last_normalized = normalize_lookup_text(tokens[-1])
+    canonical_values = _runtime_normalized_alias_values(candidate) - {
+        " ".join(candidate.entity.text.casefold().split())
+    }
+    if not canonical_values:
+        return False
+    return (
+        last_normalized in _PERSON_NAME_PARTICLES
+        or last_normalized in _PERSON_NAME_SUFFIX_TOKENS
+        or len(last_normalized) == 1
+    )
+
+
+def _runtime_general_en_discard_reason(
+    candidate: ExtractedCandidate,
+    *,
+    text: str,
+) -> str | None:
+    if _is_runtime_generic_duration_alias(candidate):
+        return "runtime_generic_duration_alias"
+    if _is_runtime_contextual_org_acronym_noise(candidate):
+        return "runtime_contextual_org_acronym_noise"
+    if _is_runtime_possessive_alias_artifact(candidate):
+        return "runtime_possessive_alias_artifact"
+    if _is_runtime_truncated_connector_alias_artifact(candidate):
+        return "runtime_truncated_connector_alias_artifact"
+    if _is_runtime_leading_apostrophe_fragment_alias(candidate):
+        return "runtime_leading_apostrophe_fragment_alias"
+    if _is_runtime_date_like_alias(candidate):
+        return "runtime_date_like_alias"
+    if _is_runtime_function_year_alias(candidate):
+        return "runtime_function_year_alias"
+    if _is_runtime_quoted_fragment_alias(candidate):
+        return "runtime_quoted_fragment_alias"
+    if _is_runtime_generic_phrase_fragment_alias(candidate):
+        return "runtime_generic_phrase_fragment_alias"
+    if _is_runtime_article_led_generic_alias(candidate):
+        return "runtime_article_led_generic_alias"
+    if _is_runtime_generic_single_token_alias(candidate):
+        return "runtime_generic_single_token_alias"
+    if _is_runtime_single_token_titleish_fragment_alias(candidate, text=text):
+        return "runtime_single_token_titleish_fragment_alias"
+    if _is_runtime_partial_person_fragment_alias(candidate):
+        return "runtime_partial_person_fragment_alias"
+    return None
+
+
 def _interval_weight(candidate: ExtractedCandidate) -> int:
     relevance = candidate.entity.relevance
     confidence = candidate.entity.confidence
@@ -3520,11 +4211,20 @@ def _merge_linked_entity_candidates(
 
     for entity_id in ordered_keys:
         group = groups[entity_id]
-        representative = group[0]
+        representative = min(
+            group,
+            key=lambda item: (
+                item.entity.start,
+                item.entity.end,
+                -(item.entity.relevance if item.entity.relevance is not None else (item.entity.confidence or 0.0)),
+                item.entity.label.casefold(),
+                item.entity.text.casefold(),
+            ),
+        )
         if len(group) == 1:
             merged.append(representative)
             continue
-        merged_discards.extend(group[1:])
+        merged_discards.extend(item for item in group if item is not representative)
         alias_values: list[str] = []
         seen_aliases: set[str] = set()
         for item in group:
@@ -3541,9 +4241,11 @@ def _merge_linked_entity_candidates(
         relevance_values = [
             item.entity.relevance for item in group if item.entity.relevance is not None
         ]
+        mention_count = sum(max(item.entity.mention_count, 1) for item in group)
         merged_entity = representative.entity.model_copy(
             update={
                 "aliases": alias_values,
+                "mention_count": mention_count,
                 "confidence": max(confidence_values) if confidence_values else None,
                 "relevance": max(relevance_values) if relevance_values else None,
             }
@@ -3653,6 +4355,10 @@ def _truncate_input(text: str, warnings: list[str]) -> str:
     return encoded[:MAX_INPUT_BYTES].decode("utf-8", errors="ignore")
 
 
+def _elapsed_ms(start: float) -> int:
+    return int((perf_counter() - start) * 1000)
+
+
 def tag_text(
     *,
     text: str,
@@ -3663,23 +4369,30 @@ def tag_text(
     hybrid: bool | None = None,
     proposal_provider: ProposalProvider | None = None,
     registry: PackRegistry | None = None,
+    runtime: PackRuntime | None = None,
 ) -> TagResponse:
     """Tag text using installed pack rules and indexed alias lookup."""
 
     start = perf_counter()
     warnings: list[str] = []
+    phase_start = perf_counter()
     bounded_text = _truncate_input(text, warnings)
     normalized_input = normalize_text(bounded_text, content_type)
     if not normalized_input.text:
         warnings.append("empty_input")
     if content_type not in {"text/plain", "text/html"}:
         warnings.append(f"unsupported_content_type:{content_type}")
+    normalization_ms = _elapsed_ms(phase_start)
 
     registry = registry or PackRegistry(storage_root)
-    runtime = load_pack_runtime(storage_root, pack, registry=registry)
+    runtime = (
+        runtime
+        if runtime is not None and runtime.pack_id == pack
+        else load_pack_runtime(storage_root, pack, registry=registry)
+    )
     if runtime is None:
         warnings.append(f"pack_not_installed:{pack}")
-        elapsed_ms = int((perf_counter() - start) * 1000)
+        elapsed_ms = _elapsed_ms(start)
         return TagResponse(
             schema_version=TAG_SCHEMA_VERSION,
             version=__version__,
@@ -3691,6 +4404,14 @@ def tag_text(
             entities=[],
             topics=[],
             warnings=warnings,
+            total_time_ms=elapsed_ms,
+            timing_breakdown_ms={
+                "normalization_ms": normalization_ms,
+                "segmentation_ms": 0,
+                "lookup_rule_extraction_ms": 0,
+                "overlap_resolution_ms": 0,
+                "final_metric_assembly_ms": max(0, elapsed_ms - normalization_ms),
+            },
             timing_ms=elapsed_ms,
             metrics=_build_metrics(
                 raw_text=bounded_text,
@@ -3701,13 +4422,17 @@ def tag_text(
             ),
         )
 
+    phase_start = perf_counter()
     segments = segment_text(
         normalized_input.text,
         language=runtime.language,
         max_chars=MAX_SEGMENT_CHARS,
         max_tokens=MAX_SEGMENT_TOKENS,
     )
+    segmentation_ms = _elapsed_ms(phase_start)
+    phase_start = perf_counter()
     extracted: list[ExtractedCandidate] = []
+    hybrid_requested = hybrid_enabled(hybrid)
     for segment in segments:
         segment_extracted = _extract_rule_entities(
             segment.text,
@@ -3725,22 +4450,25 @@ def tag_text(
                 runtime=runtime,
             )
         )
-        document_context = _build_document_context_signals(extracted + segment_extracted)
-        segment_extracted.extend(
-            _extract_hybrid_entities(
-                segment.text,
-                segment_start=segment.start,
-                normalized_input=normalized_input,
-                registry=registry,
-                runtime=runtime,
-                warnings=warnings,
-                document_context=document_context,
-                hybrid=hybrid,
-                proposal_provider=proposal_provider,
+        if hybrid_requested:
+            document_context = _build_document_context_signals(extracted + segment_extracted)
+            segment_extracted.extend(
+                _extract_hybrid_entities(
+                    segment.text,
+                    segment_start=segment.start,
+                    normalized_input=normalized_input,
+                    registry=registry,
+                    runtime=runtime,
+                    warnings=warnings,
+                    document_context=document_context,
+                    hybrid=hybrid,
+                    proposal_provider=proposal_provider,
+                )
             )
-        )
         extracted.extend(segment_extracted)
+    lookup_rule_extraction_ms = _elapsed_ms(phase_start)
 
+    phase_start = perf_counter()
     deduped, duplicate_discards = _dedupe_exact_candidates(extracted)
     coherent = _apply_repeated_surface_consistency(deduped)
     heuristic_structured_org_backfilled = _backfill_heuristic_structured_organization_entities(
@@ -3802,6 +4530,11 @@ def tag_text(
         runtime=runtime,
     )
     resolved, merged_entity_discards = _merge_linked_entity_candidates(resolved)
+    resolved, surname_coreference_discards = _suppress_document_person_surname_false_positives(
+        resolved,
+        text=bounded_text,
+        pack_id=runtime.pack_id,
+    )
 
     total_duplicate_discards = (
         duplicate_discards
@@ -3850,6 +4583,58 @@ def tag_text(
             discarded_span_count=debug_payload.discarded_span_count + len(merged_entity_discards),
             span_decisions=span_decisions,
         )
+    if debug_payload is not None and surname_coreference_discards:
+        span_decisions = list(debug_payload.span_decisions)
+        for item in surname_coreference_discards:
+            span_decisions.append(
+                TagSpanDecision(
+                    text=item.entity.text,
+                    label=item.entity.label,
+                    start=item.entity.start,
+                    end=item.entity.end,
+                    lane=item.lane,
+                    kept=False,
+                    reason="surname_coreference_false_positive",
+                )
+            )
+        debug_payload = TagDebug(
+            kept_span_count=debug_payload.kept_span_count,
+            discarded_span_count=debug_payload.discarded_span_count
+            + len(surname_coreference_discards),
+            span_decisions=span_decisions,
+        )
+
+    runtime_generic_discards: list[tuple[ExtractedCandidate, str]] = []
+    if runtime.pack_id == "general-en":
+        filtered_resolved: list[ExtractedCandidate] = []
+        for candidate in resolved:
+            discard_reason = _runtime_general_en_discard_reason(candidate, text=bounded_text)
+            if discard_reason is not None:
+                runtime_generic_discards.append((candidate, discard_reason))
+                continue
+            filtered_resolved.append(candidate)
+        resolved = filtered_resolved
+        if debug_payload is not None and runtime_generic_discards:
+            span_decisions = list(debug_payload.span_decisions)
+            for item, reason in runtime_generic_discards:
+                span_decisions.append(
+                    TagSpanDecision(
+                        text=item.entity.text,
+                        label=item.entity.label,
+                        start=item.entity.start,
+                        end=item.entity.end,
+                        lane=item.lane,
+                        kept=False,
+                        reason=reason,
+                    )
+                )
+            debug_payload = TagDebug(
+                kept_span_count=debug_payload.kept_span_count,
+                discarded_span_count=debug_payload.discarded_span_count
+                + len(runtime_generic_discards),
+                span_decisions=span_decisions,
+            )
+    overlap_resolution_ms = _elapsed_ms(phase_start)
 
     metrics = _build_metrics(
         raw_text=bounded_text,
@@ -3860,7 +4645,15 @@ def tag_text(
     )
     _apply_density_warning(runtime=runtime, metrics=metrics, warnings=warnings)
 
-    elapsed_ms = int((perf_counter() - start) * 1000)
+    elapsed_ms = _elapsed_ms(start)
+    final_metric_assembly_ms = max(
+        0,
+        elapsed_ms
+        - normalization_ms
+        - segmentation_ms
+        - lookup_rule_extraction_ms
+        - overlap_resolution_ms,
+    )
     return TagResponse(
         schema_version=TAG_SCHEMA_VERSION,
         version=__version__,
@@ -3874,5 +4667,13 @@ def tag_text(
         metrics=metrics,
         debug=debug_payload,
         warnings=warnings,
+        total_time_ms=elapsed_ms,
+        timing_breakdown_ms={
+            "normalization_ms": normalization_ms,
+            "segmentation_ms": segmentation_ms,
+            "lookup_rule_extraction_ms": lookup_rule_extraction_ms,
+            "overlap_resolution_ms": overlap_resolution_ms,
+            "final_metric_assembly_ms": final_metric_assembly_ms,
+        },
         timing_ms=elapsed_ms,
     )

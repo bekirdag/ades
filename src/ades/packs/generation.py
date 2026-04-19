@@ -15,7 +15,10 @@ from ..runtime_matcher import build_matcher_artifact_from_aliases_json
 from ..text_processing import canonicalize_text, normalize_lookup_text
 from .alias_analysis import (
     AliasAnalysisResult,
+    DEFAULT_GENERAL_COMMON_ENGLISH_WORDLIST_FILENAME,
     DEFAULT_GENERAL_RETAINED_ALIAS_EXCLUSIONS_FILENAME,
+    GENERAL_EXACT_ALIAS_EXPLICIT_WORDS,
+    apply_general_exact_alias_exclusions,
     apply_general_retained_alias_exclusions,
     audit_general_retained_aliases,
     analyze_alias_candidates,
@@ -343,6 +346,10 @@ def _default_general_retained_alias_exclusions_path(root: Path) -> Path:
     return root / DEFAULT_GENERAL_RETAINED_ALIAS_EXCLUSIONS_FILENAME
 
 
+def _default_general_common_english_wordlist_path(root: Path) -> Path:
+    return root / DEFAULT_GENERAL_COMMON_ENGLISH_WORDLIST_FILENAME
+
+
 def generate_pack_source(
     bundle_dir: str | Path,
     *,
@@ -588,6 +595,15 @@ def generate_pack_source(
                     alias_analysis,
                     exclusions_path=resolved_exclusions_path,
                 )
+            resolved_word_list_path = _default_general_common_english_wordlist_path(
+                resolved_bundle_dir
+            )
+            if resolved_word_list_path.exists():
+                alias_analysis = apply_general_exact_alias_exclusions(
+                    alias_analysis,
+                    common_word_list_path=resolved_word_list_path,
+                    explicit_words=set(GENERAL_EXACT_ALIAS_EXPLICIT_WORDS),
+                )
     if alias_analysis_path is not None:
         write_alias_analysis_report(alias_analysis_path, alias_analysis)
     ambiguous_alias_count = alias_analysis.ambiguous_alias_count
@@ -595,6 +611,7 @@ def generate_pack_source(
         alias_analysis.blocked_alias_count
         + alias_analysis.retained_alias_audit_removed_alias_count
         + alias_analysis.retained_alias_exclusion_removed_alias_count
+        + alias_analysis.exact_common_english_alias_removed_alias_count
     )
 
     labels_payload = sorted(labels, key=_stable_sort_key)
@@ -768,6 +785,8 @@ def generate_pack_source(
                 "retained_alias_audit_cached_review_count": alias_analysis.retained_alias_audit_cached_review_count,
                 "retained_alias_exclusion_removed_alias_count": alias_analysis.retained_alias_exclusion_removed_alias_count,
                 "retained_alias_exclusion_source_path": alias_analysis.retained_alias_exclusion_source_path,
+                "exact_common_english_alias_removed_alias_count": alias_analysis.exact_common_english_alias_removed_alias_count,
+                "exact_common_english_alias_source_path": alias_analysis.exact_common_english_alias_source_path,
                     "exact_identifier_alias_count": alias_analysis.exact_identifier_alias_count,
                     "natural_language_alias_count": alias_analysis.natural_language_alias_count,
                     "blocked_reason_counts": alias_analysis.blocked_reason_counts,
@@ -963,6 +982,15 @@ def refresh_pack_from_analysis_db(
                 alias_analysis,
                 exclusions_path=resolved_exclusions_path,
             )
+        resolved_word_list_path = _default_general_common_english_wordlist_path(
+            review_cache_root
+        )
+        if resolved_word_list_path.exists():
+            alias_analysis = apply_general_exact_alias_exclusions(
+                alias_analysis,
+                common_word_list_path=resolved_word_list_path,
+                explicit_words=set(GENERAL_EXACT_ALIAS_EXPLICIT_WORDS),
+            )
     if alias_analysis_path is not None:
         write_alias_analysis_report(alias_analysis_path, alias_analysis)
     if alias_analysis.retained_aliases_materialized:
@@ -1066,7 +1094,8 @@ def refresh_pack_from_analysis_db(
                 ),
                 "dropped_alias_count": int(build_metadata.get("dropped_alias_count", 0))
                 + alias_analysis.retained_alias_audit_removed_alias_count
-                + alias_analysis.retained_alias_exclusion_removed_alias_count,
+                + alias_analysis.retained_alias_exclusion_removed_alias_count
+                + alias_analysis.exact_common_english_alias_removed_alias_count,
                 "candidate_alias_count": alias_analysis.candidate_alias_count,
                 "retained_alias_count": alias_analysis.retained_alias_count,
                 "collision_blocked_alias_count": alias_analysis.blocked_alias_count,
@@ -1081,6 +1110,8 @@ def refresh_pack_from_analysis_db(
                 "retained_alias_audit_cached_review_count": alias_analysis.retained_alias_audit_cached_review_count,
                 "retained_alias_exclusion_removed_alias_count": alias_analysis.retained_alias_exclusion_removed_alias_count,
                 "retained_alias_exclusion_source_path": alias_analysis.retained_alias_exclusion_source_path,
+                "exact_common_english_alias_removed_alias_count": alias_analysis.exact_common_english_alias_removed_alias_count,
+                "exact_common_english_alias_source_path": alias_analysis.exact_common_english_alias_source_path,
                 "ambiguous_alias_count": alias_analysis.ambiguous_alias_count,
                 "exact_identifier_alias_count": alias_analysis.exact_identifier_alias_count,
                 "natural_language_alias_count": alias_analysis.natural_language_alias_count,

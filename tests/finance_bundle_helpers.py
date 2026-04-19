@@ -297,6 +297,7 @@ def create_finance_remote_sources(root: Path) -> dict[str, str]:
 
 def create_finance_country_profiles(root: Path) -> dict[str, dict[str, object]]:
     root.mkdir(parents=True, exist_ok=True)
+    finance_raw_snapshots = create_finance_raw_snapshots(root / "finance-raw")
 
     us_regulator = root / "us-sec.html"
     us_regulator.write_text("<html><body>US SEC landing page</body></html>\n", encoding="utf-8")
@@ -307,6 +308,41 @@ def create_finance_country_profiles(root: Path) -> dict[str, dict[str, object]]:
     uk_regulator.write_text("<html><body>UK FCA register landing page</body></html>\n", encoding="utf-8")
     uk_exchange = root / "uk-lse.html"
     uk_exchange.write_text("<html><body>London Stock Exchange news</body></html>\n", encoding="utf-8")
+
+    au_regulator = root / "au-asic.html"
+    au_regulator.write_text("<html><body>ASIC landing page</body></html>\n", encoding="utf-8")
+    au_exchange = root / "au-asx.html"
+    au_exchange.write_text("<html><body>ASX landing page</body></html>\n", encoding="utf-8")
+    au_listed_companies = root / "au-asx-listed-companies.csv"
+    au_listed_companies.write_text(
+        "\n".join(
+            [
+                "Company name,ASX code,GICS industry group",
+                "ASX Limited,ASX,Diversified Financials",
+                "WiseTech Global Limited,WTC,Software",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    au_board = root / "au-asx-board.html"
+    au_board.write_text(
+        """
+        <div class="bio__heading"><h3>Vicki Carter</h3><p>Independent, Non-Executive Director<br />BA (Social Sciences), GradDipMgmt, GAICD</p></div>
+        <div class="bio__heading"><h3>David Clarke</h3><p>Independent, Non-Executive Director, Chair<br />LLB</p></div>
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    au_executive = root / "au-asx-executive-team.html"
+    au_executive.write_text(
+        """
+        <div class="bio__heading"><h3>Helen Lofthouse</h3><p>Managing Director and CEO<br />BSc (Hons), GAICD</p></div>
+        <div class="bio__heading"><h3>Darren Yip</h3><p>Group Executive, Markets and Listings<br />BComm</p></div>
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
 
     return {
         "us": {
@@ -319,6 +355,16 @@ def create_finance_country_profiles(root: Path) -> dict[str, dict[str, object]]:
                     "name": "sec",
                     "source_url": us_regulator.resolve().as_uri(),
                     "category": "securities_regulator",
+                },
+                {
+                    "name": "sec-company-tickers",
+                    "source_url": finance_raw_snapshots["sec_companies"].resolve().as_uri(),
+                    "category": "issuer_directory",
+                },
+                {
+                    "name": "sec-submissions",
+                    "source_url": finance_raw_snapshots["sec_submissions"].resolve().as_uri(),
+                    "category": "filing_system",
                 },
                 {
                     "name": "nyse",
@@ -365,6 +411,85 @@ def create_finance_country_profiles(root: Path) -> dict[str, dict[str, object]]:
                         "category": "executive_officer",
                         "role_title": "Chief Executive Officer",
                     },
+                },
+            ],
+            "people_derivation": {
+                "kind": "sec_proxy",
+                "companies_source": "sec-company-tickers",
+                "submissions_source": "sec-submissions",
+                "archive_base_url": finance_raw_snapshots["archives_root"].resolve().as_uri(),
+                "output_path": "derived_sec_proxy_people_entities.json",
+                "name": "derived-finance-us-sec-proxy-people",
+                "adapter": "sec_proxy_people_derivation",
+            },
+        },
+        "au": {
+            "country_code": "au",
+            "country_name": "Australia",
+            "pack_id": "finance-au-en",
+            "description": "Australia finance entities built from official regulator and exchange sources.",
+            "sources": [
+                {
+                    "name": "asic",
+                    "source_url": au_regulator.resolve().as_uri(),
+                    "category": "securities_regulator",
+                },
+                {
+                    "name": "asx",
+                    "source_url": au_exchange.resolve().as_uri(),
+                    "category": "exchange",
+                },
+                {
+                    "name": "asx-listed-companies",
+                    "source_url": au_listed_companies.resolve().as_uri(),
+                    "category": "issuer_directory",
+                },
+                {
+                    "name": "asx-board",
+                    "source_url": au_board.resolve().as_uri(),
+                    "category": "issuer_profile",
+                },
+                {
+                    "name": "asx-executive-team",
+                    "source_url": au_executive.resolve().as_uri(),
+                    "category": "issuer_profile",
+                },
+            ],
+            "entities": [
+                {
+                    "entity_type": "organization",
+                    "canonical_text": "Australian Securities and Investments Commission",
+                    "aliases": ["ASIC"],
+                    "entity_id": "finance-au:asic",
+                    "metadata": {"country_code": "au", "category": "securities_regulator"},
+                },
+                {
+                    "entity_type": "exchange",
+                    "canonical_text": "Australian Securities Exchange",
+                    "aliases": ["ASX"],
+                    "entity_id": "finance-au:asx",
+                    "metadata": {"country_code": "au", "category": "exchange"},
+                },
+                {
+                    "entity_type": "organization",
+                    "canonical_text": "Australian Prudential Regulation Authority",
+                    "aliases": ["APRA"],
+                    "entity_id": "finance-au:apra",
+                    "metadata": {"country_code": "au", "category": "institution_regulator"},
+                },
+                {
+                    "entity_type": "organization",
+                    "canonical_text": "Reserve Bank of Australia",
+                    "aliases": ["RBA"],
+                    "entity_id": "finance-au:rba",
+                    "metadata": {"country_code": "au", "category": "central_bank"},
+                },
+                {
+                    "entity_type": "market_index",
+                    "canonical_text": "S&P/ASX 200",
+                    "aliases": ["ASX 200"],
+                    "entity_id": "finance-au:asx-200",
+                    "metadata": {"country_code": "au", "category": "market_index"},
                 },
             ],
         },

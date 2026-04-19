@@ -3,10 +3,13 @@ import sqlite3
 
 from ades.packs.alias_analysis import (
     AliasAnalysisResult,
+    apply_general_exact_alias_exclusions,
     analyze_alias_candidates,
     analyze_alias_candidates_from_db,
     audit_general_retained_aliases,
     build_alias_candidate,
+    classify_exact_common_english_wordlist_alias,
+    export_general_common_english_wordlist,
     iter_retained_aliases_from_db,
 )
 
@@ -299,6 +302,335 @@ def test_audit_general_retained_aliases_deterministic_common_english() -> None:
     assert result.retained_alias_audit_reason_counts == {
         "generic_retained_single_token_alias": 2,
     }
+
+
+def test_classify_exact_common_english_wordlist_alias() -> None:
+    common_words = {"exclusive", "new", "sign"}
+    explicit_words = {"ai", "ct", "linda", "many", "not", "queen", "uk"}
+
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="Exclusive",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "common_english_word_list_match"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="NEW",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "common_english_word_list_match"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="AI",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "explicit_generic_alias_override"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="CT",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "explicit_generic_alias_override"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="UK",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "explicit_generic_alias_override"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="Linda",
+            label="location",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "explicit_generic_alias_override"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="NOT",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "explicit_generic_alias_override"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="Five",
+            label="location",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "common_english_word_list_match"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="Europe",
+            label="location",
+            common_words={"europe"},
+            explicit_words=explicit_words,
+        )
+        is None
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="5 min",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "duration_like_alias_match"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="15 Minutes",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "duration_like_alias_match"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="Central Command",
+            label="location",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "explicit_generic_alias_override"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="New Deal",
+            label="location",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "explicit_generic_alias_override"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="U-turn",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "explicit_generic_alias_override"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="The Art",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "explicit_generic_alias_override"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="O'Connor &",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "trailing_connector_alias_match"
+    )
+    assert (
+        classify_exact_common_english_wordlist_alias(
+            text="and 2016",
+            label="organization",
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        == "function_year_alias_match"
+    )
+
+
+def test_apply_general_exact_alias_exclusions_drops_duration_aliases(
+    tmp_path: Path,
+) -> None:
+    word_list_path = tmp_path / "common-english.txt"
+    word_list_path.write_text("exclusive\nnew\nsign\n", encoding="utf-8")
+    result = AliasAnalysisResult(
+        backend="sqlite",
+        database_path=None,
+        candidate_alias_count=2,
+        retained_alias_count=2,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=0,
+        natural_language_alias_count=2,
+        retained_label_counts={"organization": 2},
+        retained_aliases_materialized=True,
+        retained_aliases=[
+            {
+                "text": "5 min",
+                "label": "organization",
+                "canonical_text": "5 min",
+                "entity_id": "org:five-min",
+                "source_name": "synthetic",
+                "generated": False,
+                "score": 0.8,
+                "source_priority": 0.8,
+                "popularity_weight": 0.7,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "World Bank",
+                "label": "organization",
+                "canonical_text": "World Bank",
+                "entity_id": "org:world-bank",
+                "source_name": "synthetic",
+                "generated": False,
+                "score": 0.9,
+                "source_priority": 0.9,
+                "popularity_weight": 0.8,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+        ],
+    )
+
+    filtered = apply_general_exact_alias_exclusions(
+        result,
+        common_word_list_path=word_list_path,
+    )
+
+    assert [(item["text"], item["label"]) for item in filtered.retained_aliases] == [
+        ("World Bank", "organization")
+    ]
+    assert filtered.retained_alias_count == 1
+    assert filtered.exact_common_english_alias_removed_alias_count == 1
+
+
+def test_export_general_common_english_wordlist(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ades.packs import alias_analysis as module
+
+    module._wordfreq_top_n_words_en.cache_clear()
+    monkeypatch.setattr(
+        module,
+        "_wordfreq_top_n_list",
+        lambda lang, n: ["the", "and", "new"][:n],
+    )
+
+    output_path = tmp_path / "wordfreq-en-top3.txt"
+    export_general_common_english_wordlist(output_path, top_n=3)
+
+    assert output_path.read_text(encoding="utf-8").splitlines() == ["the", "and", "new"]
+    module._wordfreq_top_n_words_en.cache_clear()
+
+
+def test_apply_general_exact_alias_exclusions_materialized(tmp_path: Path) -> None:
+    word_list_path = tmp_path / "wordfreq-en-top5.txt"
+    word_list_path.write_text("exclusive\nnew\ncare\n", encoding="utf-8")
+    result = AliasAnalysisResult(
+        backend="sqlite",
+        database_path=None,
+        candidate_alias_count=5,
+        retained_alias_count=5,
+        blocked_alias_count=0,
+        ambiguous_alias_count=0,
+        exact_identifier_alias_count=0,
+        natural_language_alias_count=5,
+        retained_label_counts={"location": 1, "organization": 4},
+        retained_aliases_materialized=True,
+        retained_aliases=[
+            {
+                "text": "Exclusive",
+                "label": "organization",
+                "canonical_text": "Exclusive",
+                "entity_id": "org:exclusive",
+                "source_name": "synthetic",
+                "generated": False,
+                "score": 0.8,
+                "source_priority": 0.8,
+                "popularity_weight": 0.5,
+                "runtime_tier": "search_only",
+            },
+            {
+                "text": "NEW",
+                "label": "organization",
+                "canonical_text": "Next Entertainment World",
+                "entity_id": "org:new",
+                "source_name": "synthetic",
+                "generated": True,
+                "score": 0.8,
+                "source_priority": 0.8,
+                "popularity_weight": 0.5,
+                "runtime_tier": "runtime_exact_acronym_high_precision",
+            },
+            {
+                "text": "AI",
+                "label": "organization",
+                "canonical_text": "Applied Imaging",
+                "entity_id": "org:ai",
+                "source_name": "synthetic",
+                "generated": True,
+                "score": 0.8,
+                "source_priority": 0.8,
+                "popularity_weight": 0.5,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "World Bank",
+                "label": "organization",
+                "canonical_text": "World Bank",
+                "entity_id": "org:world-bank",
+                "source_name": "synthetic",
+                "generated": False,
+                "score": 0.9,
+                "source_priority": 0.9,
+                "popularity_weight": 0.7,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+            {
+                "text": "Chicago",
+                "label": "location",
+                "canonical_text": "Chicago",
+                "entity_id": "loc:chicago",
+                "source_name": "synthetic",
+                "generated": False,
+                "score": 0.9,
+                "source_priority": 0.9,
+                "popularity_weight": 0.7,
+                "runtime_tier": "runtime_exact_high_precision",
+            },
+        ],
+    )
+
+    filtered = apply_general_exact_alias_exclusions(
+        result,
+        common_word_list_path=word_list_path,
+    )
+
+    assert {(item["text"], item["label"]) for item in filtered.retained_aliases} == {
+        ("World Bank", "organization"),
+        ("Chicago", "location"),
+    }
+    assert filtered.retained_alias_count == 2
+    assert filtered.exact_common_english_alias_removed_alias_count == 3
+    assert filtered.exact_common_english_alias_source_path == str(
+        word_list_path.resolve()
+    )
 
 
 def test_audit_general_retained_aliases_generic_phrase_rule() -> None:
@@ -1595,6 +1927,125 @@ def test_alias_analysis_blocks_pronoun_like_caps_acronym_org() -> None:
 
     assert result.retained_alias_count == 0
     assert result.blocked_reason_counts["low_information_single_label_alias"] == 1
+
+
+def test_alias_analysis_keeps_finance_market_index_short_alias_in_runtime_tier() -> None:
+    result = analyze_alias_candidates(
+        [
+            build_alias_candidate(
+                alias_key="vix",
+                display_text="VIX",
+                label="market_index",
+                canonical_text="Cboe Volatility Index",
+                record={
+                    "entity_id": "curated:market_index:cboe-volatility-index",
+                    "source_name": "curated-finance-entities",
+                    "source_priority": 0.9,
+                },
+            )
+        ],
+        allowed_ambiguous_aliases=set(),
+    )
+
+    assert result.retained_alias_count == 1
+    assert result.retained_aliases[0]["text"] == "VIX"
+    assert result.retained_aliases[0]["runtime_tier"] == "runtime_exact_high_precision"
+
+
+def test_alias_analysis_keeps_finance_exchange_initialism_in_runtime_tier() -> None:
+    result = analyze_alias_candidates(
+        [
+            build_alias_candidate(
+                alias_key="lse",
+                display_text="LSE",
+                label="exchange",
+                canonical_text="London Stock Exchange",
+                record={
+                    "entity_id": "curated:exchange:london-stock-exchange",
+                    "source_name": "curated-finance-entities",
+                    "source_priority": 0.9,
+                },
+                generated=True,
+            )
+        ],
+        allowed_ambiguous_aliases=set(),
+    )
+
+    assert result.retained_alias_count == 1
+    assert result.retained_aliases[0]["text"] == "LSE"
+    assert result.retained_aliases[0]["runtime_tier"] == "runtime_exact_high_precision"
+
+
+def test_alias_analysis_keeps_finance_exchange_initialism_over_ticker_conflict() -> None:
+    result = analyze_alias_candidates(
+        [
+            build_alias_candidate(
+                alias_key="lse",
+                display_text="LSE",
+                label="exchange",
+                canonical_text="London Stock Exchange",
+                record={
+                    "entity_id": "curated:exchange:london-stock-exchange",
+                    "source_name": "curated-finance-entities",
+                    "source_priority": 0.9,
+                },
+                generated=True,
+            ),
+            build_alias_candidate(
+                alias_key="lse",
+                display_text="LSE",
+                label="ticker",
+                canonical_text="LSE",
+                record={
+                    "entity_id": "ticker:LSE",
+                    "source_name": "symbol-directory",
+                    "source_priority": 0.65,
+                },
+            ),
+        ],
+        allowed_ambiguous_aliases=set(),
+    )
+
+    assert result.retained_alias_count == 1
+    assert result.retained_aliases[0]["label"] == "exchange"
+    assert result.retained_aliases[0]["text"] == "LSE"
+    assert result.blocked_reason_counts["strong_short_finance_alias"] == 1
+
+
+def test_alias_analysis_keeps_authoritative_finance_exchange_alias_over_generated_org() -> None:
+    result = analyze_alias_candidates(
+        [
+            build_alias_candidate(
+                alias_key="chicago mercantile exchange",
+                display_text="Chicago Mercantile Exchange",
+                label="exchange",
+                canonical_text="CME",
+                record={
+                    "entity_id": "curated:exchange:cme",
+                    "source_name": "curated-finance-entities",
+                    "source_priority": 0.9,
+                },
+            ),
+            build_alias_candidate(
+                alias_key="chicago mercantile exchange",
+                display_text="CHICAGO MERCANTILE EXCHANGE",
+                label="organization",
+                canonical_text="CME GROUP INC.",
+                record={
+                    "entity_id": "sec-cik:0001156375",
+                    "source_name": "sec-company-tickers",
+                    "source_priority": 0.65,
+                },
+                generated=True,
+            ),
+        ],
+        allowed_ambiguous_aliases=set(),
+    )
+
+    assert result.retained_alias_count == 1
+    assert result.retained_aliases[0]["label"] == "exchange"
+    assert result.retained_aliases[0]["text"] == "Chicago Mercantile Exchange"
+    assert result.blocked_reason_counts["authoritative_finance_alias"] == 1
 
 
 def test_alias_analysis_keeps_strong_short_location_in_geopolitical_runtime_tier() -> None:

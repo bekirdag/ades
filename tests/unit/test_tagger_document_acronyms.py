@@ -123,6 +123,7 @@ def test_contextual_org_acronym_backfill_recovers_reporting_and_possessive_cases
 
     assert ("CNBC", "organization", "contextual_org_acronym_backfill") in pairs
     assert ("WWF", "organization", "contextual_org_acronym_backfill") in pairs
+    assert all(entity.entity.link is not None for entity in augmented)
 
 
 def test_contextual_org_acronym_backfill_skips_title_media_and_generic_policy_noise() -> None:
@@ -165,6 +166,12 @@ def test_heuristic_definition_acronym_backfill_recovers_parenthetical_and_comma_
     assert ("IYC", "organization", "heuristic_definition_acronym_backfill") in pairs
     assert ("LTTE", "organization", "heuristic_definition_acronym_backfill") in pairs
     assert sum(1 for entity in augmented if entity.entity.text == "IYC") == 3
+    assert all(entity.entity.link is not None for entity in augmented)
+    assert {
+        entity.entity.link.canonical_text
+        for entity in augmented
+        if entity.entity.text == "IYC" and entity.entity.link is not None
+    } == {"The Indian Youth Congress"}
 
 
 def test_heuristic_definition_acronym_backfill_supports_or_appositive_definitions() -> None:
@@ -184,6 +191,7 @@ def test_heuristic_definition_acronym_backfill_supports_or_appositive_definition
     pairs = {(entity.entity.text, entity.entity.label, entity.lane) for entity in augmented}
 
     assert ("DACA", "organization", "heuristic_definition_acronym_backfill") in pairs
+    assert all(entity.entity.link is not None for entity in augmented)
 
 
 def test_contextual_org_acronym_backfill_supports_source_and_scholarship_cues() -> None:
@@ -204,6 +212,7 @@ def test_contextual_org_acronym_backfill_supports_source_and_scholarship_cues() 
 
     assert ("PTI", "organization", "contextual_org_acronym_backfill") in pairs
     assert ("MIT", "organization", "contextual_org_acronym_backfill") in pairs
+    assert all(entity.entity.link is not None for entity in augmented)
 
 
 def test_derive_initialism_keeps_dotted_initial_prefixes() -> None:
@@ -230,6 +239,7 @@ def test_contextual_org_acronym_backfill_supports_article_led_reporting_cues() -
     pairs = {(entity.entity.text, entity.entity.label, entity.lane) for entity in augmented}
 
     assert ("UNHCR", "organization", "contextual_org_acronym_backfill") in pairs
+    assert all(entity.entity.link is not None for entity in augmented)
 
 
 def test_contextual_org_acronym_backfill_supports_clause_boundary_reporting_cues() -> None:
@@ -252,6 +262,7 @@ def test_contextual_org_acronym_backfill_supports_clause_boundary_reporting_cues
     pairs = {(entity.entity.text, entity.entity.label, entity.lane) for entity in augmented}
 
     assert ("UNHCR", "organization", "contextual_org_acronym_backfill") in pairs
+    assert all(entity.entity.link is not None for entity in augmented)
 
 
 def test_lookup_alias_entities_for_matcher_packs_supplement_short_exact_aliases_from_registry(
@@ -545,6 +556,7 @@ def test_heuristic_structured_org_backfill_recovers_ministry_university_and_corp
         "organization",
         "heuristic_structured_org_backfill",
     ) in pairs
+    assert all(entity.entity.link is not None for entity in augmented)
 
 
 def test_heuristic_structured_org_backfill_recovers_connector_and_hospital_spans() -> None:
@@ -584,6 +596,7 @@ def test_heuristic_structured_org_backfill_recovers_connector_and_hospital_spans
         "organization",
         "heuristic_structured_org_backfill",
     ) in pairs
+    assert all(entity.entity.link is not None for entity in augmented)
 
 
 def test_heuristic_structured_org_and_location_backfill_recover_solutions_and_location_heads() -> None:
@@ -616,3 +629,4 @@ def test_heuristic_structured_org_and_location_backfill_recover_solutions_and_lo
 
     assert ("Ramsey Solutions", "organization", "heuristic_structured_org_backfill") in pairs
     assert ("island of Nauru", "location", "heuristic_structured_location_backfill") in pairs
+    assert all(entity.entity.link is not None for entity in location_augmented)

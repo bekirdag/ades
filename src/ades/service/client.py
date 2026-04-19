@@ -12,7 +12,7 @@ from typing import Any
 import urllib.error
 import urllib.request
 
-from ..config import Settings, get_settings
+from ..config import DEFAULT_STORAGE_ROOT, Settings, get_settings
 from .models import BatchTagResponse, TagResponse
 
 SERVICE_MODE_ENV = "ADES_TAG_SERVICE_MODE"
@@ -75,11 +75,13 @@ def service_base_url(settings: Settings | None = None) -> str:
 def should_use_local_service(settings: Settings | None = None) -> bool:
     """Return whether CLI tagging should prefer the warm local service."""
 
-    settings or get_settings()
+    resolved = settings or get_settings()
     mode = _normalize_service_mode(os.environ.get(SERVICE_MODE_ENV))
     if mode == _SERVICE_MODE_SERVICE:
         return True
     if mode == _SERVICE_MODE_IN_PROCESS:
+        return False
+    if resolved.storage_root.expanduser().resolve() != DEFAULT_STORAGE_ROOT.expanduser().resolve():
         return False
     return True
 
@@ -389,7 +391,14 @@ def tag_files_via_local_service(
         "recursive": recursive,
         "include_patterns": list(include_patterns or []),
         "exclude_patterns": list(exclude_patterns or []),
-        "options": _options_payload(debug=debug, hybrid=hybrid),
+        "options": _options_payload(
+            debug=debug,
+            hybrid=hybrid,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
+        ),
     }
     if pack is not None:
         payload["pack"] = pack

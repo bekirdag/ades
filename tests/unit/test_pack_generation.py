@@ -3,12 +3,14 @@ from pathlib import Path
 
 import pytest
 
+from ades.packs.finance_bundle import build_finance_source_bundle
 from ades.packs.alias_analysis import build_retained_alias_review_key
 from ades.packs.generation import (
     _iter_entity_alias_candidates,
     generate_pack_source,
     refresh_pack_from_analysis_db,
 )
+from tests.finance_bundle_helpers import create_finance_raw_snapshots
 from tests.pack_generation_helpers import (
     create_acronym_general_generation_bundle,
     create_finance_generation_bundle,
@@ -166,6 +168,34 @@ def test_refresh_pack_from_analysis_db_rebuilds_alias_artifacts(tmp_path: Path) 
     )
 
 
+def test_generate_pack_source_keeps_finance_shortforms_from_real_bundle(tmp_path: Path) -> None:
+    snapshots = create_finance_raw_snapshots(tmp_path / "raw")
+    bundle = build_finance_source_bundle(
+        sec_companies_path=snapshots["sec_companies"],
+        sec_submissions_path=snapshots["sec_submissions"],
+        sec_companyfacts_path=snapshots["sec_companyfacts"],
+        symbol_directory_path=snapshots["symbol_directory"],
+        other_listed_path=snapshots["other_listed"],
+        curated_entities_path=snapshots["curated_entities"],
+        output_dir=tmp_path / "finance-source-bundle",
+    )
+
+    result = generate_pack_source(
+        bundle.bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+
+    aliases = json.loads(
+        (Path(result.pack_dir) / "aliases.json").read_text(encoding="utf-8")
+    )["aliases"]
+    alias_pairs = {(item["text"], item["label"]) for item in aliases}
+
+    assert ("VIX", "market_index") in alias_pairs
+    assert ("LSE", "exchange") in alias_pairs
+    assert ("Chicago Mercantile Exchange", "exchange") in alias_pairs
+    assert ("IAL", "organization") not in alias_pairs
+
+
 def test_entity_alias_candidates_generate_plain_geopolitical_acronyms() -> None:
     candidates = _iter_entity_alias_candidates(
         "United States",
@@ -292,6 +322,84 @@ def test_generate_pack_source_applies_curated_general_exclusion_file(
     assert build_metadata["retained_alias_exclusion_source_path"] == str(exclusion_path)
     assert alias_analysis["retained_alias_exclusion_removed_alias_count"] == 1
     assert alias_analysis["retained_alias_exclusion_source_path"] == str(exclusion_path)
+
+
+def test_generate_pack_source_applies_common_english_word_list_to_all_aliases(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    entities_path = bundle_dir / "normalized" / "entities.jsonl"
+    records = [
+        json.loads(line)
+        for line in entities_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    records.extend(
+        [
+            {
+                "entity_id": "organization:exclusive",
+                "entity_type": "organization",
+                "canonical_text": "Exclusive",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.92,
+            },
+            {
+                "entity_id": "organization:new",
+                "entity_type": "organization",
+                "canonical_text": "Next Entertainment World",
+                "aliases": ["NEW"],
+                "source_name": "curated-general",
+                "popularity": 0.91,
+            },
+            {
+                "entity_id": "organization:applied-imaging",
+                "entity_type": "organization",
+                "canonical_text": "Applied Imaging",
+                "aliases": ["AI"],
+                "source_name": "curated-general",
+                "popularity": 0.9,
+            },
+            {
+                "entity_id": "organization:world-bank",
+                "entity_type": "organization",
+                "canonical_text": "World Bank",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.99,
+            },
+        ]
+    )
+    entities_path.write_text(
+        "".join(json.dumps(item) + "\n" for item in records),
+        encoding="utf-8",
+    )
+    word_list_path = bundle_dir / "wordfreq-en-top50000.txt"
+    word_list_path.write_text("exclusive\nnew\ncare\n", encoding="utf-8")
+
+    result = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+
+    pack_dir = Path(result.pack_dir)
+    aliases = json.loads((pack_dir / "aliases.json").read_text(encoding="utf-8"))["aliases"]
+    alias_pairs = {(item["text"], item["label"]) for item in aliases}
+    build_metadata = json.loads((pack_dir / "build.json").read_text(encoding="utf-8"))
+    alias_analysis = json.loads(
+        (pack_dir / "alias-analysis.json").read_text(encoding="utf-8")
+    )
+
+    assert ("Exclusive", "organization") not in alias_pairs
+    assert ("NEW", "organization") not in alias_pairs
+    assert ("AI", "organization") not in alias_pairs
+    assert ("World Bank", "organization") in alias_pairs
+    assert build_metadata["exact_common_english_alias_removed_alias_count"] >= 1
+    assert build_metadata["exact_common_english_alias_source_path"] == str(
+        word_list_path
+    )
+    assert alias_analysis["exact_common_english_alias_removed_alias_count"] >= 1
+    assert alias_analysis["exact_common_english_alias_source_path"] == str(word_list_path)
 
 
 def test_generate_pack_source_can_use_callable_general_retained_alias_reviewer(

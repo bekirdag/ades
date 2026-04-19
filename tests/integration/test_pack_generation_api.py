@@ -284,10 +284,15 @@ def test_public_api_generated_general_pack_backfills_document_defined_acronyms(
     )
 
     entities = {(entity.text, entity.label) for entity in response.entities}
+    aliases = {entity.text: set(entity.aliases) for entity in response.entities}
     assert ("International Energy Agency", "organization") in entities
     assert ("United States", "location") in entities
-    assert ("IEA", "organization") in entities
-    assert ("US", "location") in entities
+    assert response.metrics.entity_count == 2
+    assert aliases["International Energy Agency"] == {
+        "International Energy Agency",
+        "IEA",
+    }
+    assert aliases["United States"] == {"United States", "US"}
 
 
 def test_public_api_generated_general_pack_extracts_standalone_org_initialisms(

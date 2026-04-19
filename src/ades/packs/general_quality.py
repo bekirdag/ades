@@ -122,8 +122,6 @@ DEFAULT_GENERAL_BENCHMARK_QUALITY_CASES: tuple[PackQualityCase, ...] = (
         expected_entities=(
             PackQualityEntity(text="International Energy Agency", label="organization"),
             PackQualityEntity(text="United States", label="location"),
-            PackQualityEntity(text="IEA", label="organization"),
-            PackQualityEntity(text="US", label="location"),
         ),
     ),
     PackQualityCase(

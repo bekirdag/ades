@@ -73,6 +73,15 @@ class MetadataStore(Protocol):
 
     def set_pack_active(self, pack_id: str, active: bool) -> bool: ...
 
+    def repair_pack_installation_paths(
+        self,
+        pack_id: str,
+        *,
+        install_path: str,
+        manifest_path: str,
+        active: bool | None = None,
+    ) -> bool: ...
+
     def delete_pack(self, pack_id: str) -> bool: ...
 
     def list_pack_labels(self, pack_id: str) -> list[str]: ...

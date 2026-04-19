@@ -85,7 +85,7 @@ def test_repull_repairs_stale_alias_metadata_before_skipping_same_version(
     )
 
 
-def test_postgresql_same_version_pull_skips_without_full_disk_resync() -> None:
+def test_postgresql_same_version_pull_repairs_from_disk_before_skipping() -> None:
     class _FakeEntry:
         manifest_url = "https://example.invalid/packs/general-en/manifest.json"
 
@@ -111,12 +111,14 @@ def test_postgresql_same_version_pull_skips_without_full_disk_resync() -> None:
     class _FakeRegistry:
         metadata_backend = MetadataBackend.POSTGRESQL
         store = _FakeStore()
+        sync_calls: list[tuple[str, bool | None]] = []
 
         def get_pack(self, pack_id: str):
             return _FakePack()
 
         def sync_pack_from_disk(self, pack_id: str, *, active: bool | None = None) -> bool:
-            raise AssertionError("same-version PostgreSQL pulls must not re-sync pack aliases")
+            self.sync_calls.append((pack_id, active))
+            return True
 
         def set_pack_active(self, pack_id: str, active: bool) -> bool:
             return True
@@ -133,6 +135,7 @@ def test_postgresql_same_version_pull_skips_without_full_disk_resync() -> None:
 
     assert result.installed == []
     assert result.skipped == ["general-en"]
+    assert installer.registry.sync_calls == [("general-en", True)]
 
 
 def test_lookup_repairs_missing_metadata_rows_from_filesystem(tmp_path: Path) -> None:

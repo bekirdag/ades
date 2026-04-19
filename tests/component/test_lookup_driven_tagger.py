@@ -96,6 +96,97 @@ def _create_singleton_noise_general_generation_bundle(root: Path) -> Path:
     return bundle_dir
 
 
+def _create_person_surname_conflict_general_pack_source(root: Path) -> Path:
+    pack_dir = create_bundle_backed_general_pack_source(root)
+    entities_path = pack_dir / "normalized" / "entities.jsonl"
+    records = [
+        json.loads(line)
+        for line in entities_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    records.extend(
+        [
+            {
+                "entity_id": "person:lisa-d-cook",
+                "entity_type": "person",
+                "canonical_text": "Lisa D. Cook",
+                "aliases": ["Governor Lisa Cook"],
+                "source_name": "curated-general",
+                "popularity": 0.88,
+            },
+            {
+                "entity_id": "person:jerome-powell",
+                "entity_type": "person",
+                "canonical_text": "Jerome Powell",
+                "aliases": ["Jerome H. Powell"],
+                "source_name": "curated-general",
+                "popularity": 0.94,
+            },
+            {
+                "entity_id": "person:doug-ford",
+                "entity_type": "person",
+                "canonical_text": "Doug Ford",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.86,
+            },
+            {
+                "entity_id": "person:bill-davis",
+                "entity_type": "person",
+                "canonical_text": "Bill Davis",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.84,
+            },
+            {
+                "entity_id": "person:byington-ford",
+                "entity_type": "person",
+                "canonical_text": "Byington Ford",
+                "aliases": ["By Ford"],
+                "source_name": "curated-general",
+                "popularity": 0.41,
+            },
+            {
+                "entity_id": "location:cook",
+                "entity_type": "location",
+                "canonical_text": "Cook",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.52,
+            },
+            {
+                "entity_id": "location:powell",
+                "entity_type": "location",
+                "canonical_text": "Powell",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.53,
+            },
+            {
+                "entity_id": "location:davis",
+                "entity_type": "location",
+                "canonical_text": "Davis",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.52,
+            },
+            {
+                "entity_id": "location:ford",
+                "entity_type": "location",
+                "canonical_text": "Ford",
+                "aliases": [],
+                "source_name": "curated-general",
+                "popularity": 0.45,
+            },
+        ]
+    )
+    entities_path.write_text(
+        "".join(json.dumps(item) + "\n" for item in records),
+        encoding="utf-8",
+    )
+    return pack_dir
+
+
 def test_tagger_uses_lookup_for_multi_token_general_aliases(tmp_path: Path) -> None:
     PackInstaller(tmp_path).install("general-en")
 
@@ -402,11 +493,16 @@ def test_tagger_backfills_document_defined_acronyms(tmp_path: Path) -> None:
     )
 
     pairs = {(entity.text, entity.label) for entity in response.entities}
+    aliases = {entity.text: set(entity.aliases) for entity in response.entities}
 
     assert ("International Energy Agency", "organization") in pairs
     assert ("United States", "location") in pairs
-    assert ("IEA", "organization") in pairs
-    assert ("US", "location") in pairs
+    assert response.metrics.entity_count == 2
+    assert aliases["International Energy Agency"] == {
+        "International Energy Agency",
+        "IEA",
+    }
+    assert aliases["United States"] == {"United States", "US"}
 
 
 def test_tagger_backfills_contextual_org_acronyms_and_skips_noise(tmp_path: Path) -> None:
@@ -735,6 +831,67 @@ def test_tagger_suppresses_singleton_org_noise_while_keeping_repeated_mentions(
     assert ("Nimbus", "organization") in pairs
     assert ("But", "organization") not in pairs
     assert ("Riverton", "organization") not in pairs
+
+
+def test_tagger_suppresses_surname_coreference_location_false_positives(
+    tmp_path: Path,
+) -> None:
+    pack_dir = _create_person_surname_conflict_general_pack_source(tmp_path / "bundle-pack")
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "Governor Lisa Cook said rates could stay high. Later, Cook said policy remained tight. "
+            "Jerome Powell said the committee would wait. Later, Powell said inflation was still elevated."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+    lowered = {entity.text.casefold() for entity in response.entities}
+
+    assert ("Governor Lisa Cook", "person") in pairs
+    assert ("Jerome Powell", "person") in pairs
+    assert ("Cook", "location") not in pairs
+    assert ("Powell", "location") not in pairs
+    assert "cook" not in lowered
+    assert "powell" not in lowered
+
+
+def test_tagger_suppresses_additional_surname_coreference_mention_types(
+    tmp_path: Path,
+) -> None:
+    pack_dir = _create_person_surname_conflict_general_pack_source(tmp_path / "bundle-pack")
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "Doug Ford defended the purchase. Premier Ford said the province would keep flying. "
+            "Travel conducted by Ford across Canada continued through the weekend. "
+            "Bill Davis later came under fire. The Davis government sold the jet."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+    lowered = {entity.text.casefold() for entity in response.entities}
+
+    assert ("Doug Ford", "person") in pairs
+    assert ("Bill Davis", "person") in pairs
+    assert ("Ford", "location") not in pairs
+    assert ("Davis", "location") not in pairs
+    assert ("by Ford", "person") not in pairs
+    assert "ford" not in lowered
+    assert "davis" not in lowered
+    assert "by ford" not in lowered
 
 
 def test_tagger_backfills_structured_organizations_and_skips_dateline_noise(

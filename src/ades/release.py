@@ -68,11 +68,11 @@ SMOKE_REMOVE_GUARDRAIL_MESSAGE = (
     f"Cannot remove pack {SMOKE_DEPENDENCY_PACK_ID} while installed dependent packs exist: "
     f"{SMOKE_PULL_PACK_ID}"
 )
-SMOKE_TAG_TEXT = "Issuer Alpha said TICKA traded on EXCHX after USD 12.5 guidance."
+SMOKE_TAG_TEXT = "Org Beta said TICKA traded on EXCHX after USD 12.5 guidance."
 SMOKE_TAG_FILE_NAME = "serve-smoke-input.html"
-SMOKE_TAG_FILE_CONTENT = "<p>Issuer Alpha said TICKA traded on EXCHX after USD 12.5 guidance.</p>\n"
+SMOKE_TAG_FILE_CONTENT = "<p>Org Beta said TICKA traded on EXCHX after USD 12.5 guidance.</p>\n"
 SMOKE_TAG_BATCH_FILES = (
-    ("serve-smoke-batch-alpha.html", "<p>Issuer Alpha said TICKA rallied.</p>\n"),
+    ("serve-smoke-batch-alpha.html", "<p>Org Beta said TICKA rallied.</p>\n"),
     ("serve-smoke-batch-beta.html", "<p>EXCHX closed near USD 12.5.</p>\n"),
 )
 SMOKE_TAG_BATCH_FAKE_MODIFIED_TIME_NS = 1775769721594998319
@@ -110,6 +110,7 @@ SMOKE_TAG_REQUIRED_LABELS = ("organization", "ticker", "exchange", "currency_amo
 SMOKE_SERVE_HOST = "127.0.0.1"
 SMOKE_SERVE_STARTUP_TIMEOUT_SECONDS = 20.0
 SMOKE_SERVE_POLL_INTERVAL_SECONDS = 0.2
+SMOKE_CONFIG_FILE_NAME = "ades-smoke-config.toml"
 
 
 def _run_command(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -208,9 +209,50 @@ def _build_clean_runtime_env(*, overrides: dict[str, str] | None = None) -> dict
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
     env.pop("VIRTUAL_ENV", None)
+    for key in tuple(env):
+        if key.startswith("ADES_"):
+            env.pop(key, None)
     if overrides:
         env.update({key: str(value) for key, value in overrides.items()})
     return env
+
+
+def _write_smoke_config_file(*, working_dir: Path, storage_root: Path) -> Path:
+    """Write one explicit local/sqlite config used by release smoke subprocesses."""
+
+    config_path = (working_dir / SMOKE_CONFIG_FILE_NAME).resolve()
+    config_path.write_text(
+        "\n".join(
+            [
+                "[ades]",
+                f"storage_root = {json.dumps(str(storage_root))}",
+                'runtime_target = "local"',
+                'metadata_backend = "sqlite"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def _build_smoke_cli_env(
+    *,
+    working_dir: Path,
+    storage_root: Path,
+    extra_env: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Build the isolated smoke CLI environment for installed-artifact validation."""
+
+    env_overrides = {
+        "ADES_STORAGE_ROOT": str(storage_root),
+        "ADES_CONFIG_FILE": str(
+            _write_smoke_config_file(working_dir=working_dir, storage_root=storage_root)
+        ),
+    }
+    if extra_env:
+        env_overrides.update(extra_env)
+    return _build_clean_runtime_env(overrides=env_overrides)
 
 
 def _resolve_project_root_path(project_root: str | Path | None = None) -> Path:
@@ -400,19 +442,39 @@ def _parse_status_version(result: ReleaseCommandResult) -> str | None:
 
 
 def _parse_pull_pack_ids(result: ReleaseCommandResult) -> list[str]:
-    """Extract pack ids reported by one JSON `ades pull` payload."""
+    """Extract pack ids reported by one `ades pull` payload."""
 
     payload = _parse_command_payload(result)
-    if payload is None:
-        return []
     pack_ids: list[str] = []
-    for field_name in ("installed", "skipped"):
-        values = payload.get(field_name)
-        if not isinstance(values, list):
+    if payload is not None:
+        for field_name in ("installed", "skipped"):
+            values = payload.get(field_name)
+            if not isinstance(values, list):
+                continue
+            for value in values:
+                if isinstance(value, str) and value:
+                    pack_ids.append(value)
+        return list(dict.fromkeys(pack_ids))
+
+    active_section: str | None = None
+    for raw_line in result.stdout.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            active_section = None
             continue
-        for value in values:
-            if isinstance(value, str) and value:
-                pack_ids.append(value)
+        section_match = re.match(r"^(Installed|Skipped)\s+\(\d+\):$", stripped)
+        if section_match is not None:
+            active_section = section_match.group(1).lower()
+            continue
+        if active_section not in {"installed", "skipped"}:
+            continue
+        if not raw_line.startswith("  "):
+            active_section = None
+            continue
+        if stripped.lower() == "none":
+            continue
+        pack_ids.append(stripped)
     return list(dict.fromkeys(pack_ids))
 
 
@@ -1137,10 +1199,11 @@ def _run_cli_runtime_smoke(
 ]:
     """Run clean-environment status, pull, and tag checks for one installed CLI."""
 
-    env_overrides = {"ADES_STORAGE_ROOT": str(storage_root)}
-    if extra_env:
-        env_overrides.update(extra_env)
-    smoke_env = _build_clean_runtime_env(overrides=env_overrides)
+    smoke_env = _build_smoke_cli_env(
+        working_dir=working_dir,
+        storage_root=storage_root,
+        extra_env=extra_env,
+    )
 
     status_command = [str(executable), "status"]
     status_result = _run_command_with_env(status_command, cwd=working_dir, env=smoke_env)
@@ -1188,10 +1251,11 @@ def _run_cli_recovery_status_smoke(
     """Delete local metadata and confirm `ades status` bootstraps from on-disk packs."""
 
     _clear_registry_metadata_files(storage_root)
-    env_overrides = {"ADES_STORAGE_ROOT": str(storage_root)}
-    if extra_env:
-        env_overrides.update(extra_env)
-    smoke_env = _build_clean_runtime_env(overrides=env_overrides)
+    smoke_env = _build_smoke_cli_env(
+        working_dir=working_dir,
+        storage_root=storage_root,
+        extra_env=extra_env,
+    )
     status_command = [str(executable), "status"]
     status_result = _run_command_with_env(status_command, cwd=working_dir, env=smoke_env)
     status = _build_command_result(status_command, status_result)
@@ -1213,10 +1277,11 @@ def _run_cli_remove_smoke(
 ]:
     """Prove dependency-removal guardrails and final remaining-pack state."""
 
-    env_overrides = {"ADES_STORAGE_ROOT": str(storage_root)}
-    if extra_env:
-        env_overrides.update(extra_env)
-    smoke_env = _build_clean_runtime_env(overrides=env_overrides)
+    smoke_env = _build_smoke_cli_env(
+        working_dir=working_dir,
+        storage_root=storage_root,
+        extra_env=extra_env,
+    )
     remove_guardrail_command = [
         str(executable),
         "packs",
@@ -1294,10 +1359,11 @@ def _run_cli_service_smoke(
 ]:
     """Run one clean-environment `ades serve` smoke check and probe its endpoints."""
 
-    env_overrides = {"ADES_STORAGE_ROOT": str(storage_root)}
-    if extra_env:
-        env_overrides.update(extra_env)
-    smoke_env = _build_clean_runtime_env(overrides=env_overrides)
+    smoke_env = _build_smoke_cli_env(
+        working_dir=working_dir,
+        storage_root=storage_root,
+        extra_env=extra_env,
+    )
 
     port = _reserve_loopback_port(SMOKE_SERVE_HOST)
     serve_command = [
@@ -1307,7 +1373,7 @@ def _run_cli_service_smoke(
         SMOKE_SERVE_HOST,
         "--port",
         str(port),
-    ] 
+    ]
     healthz_url = f"http://{SMOKE_SERVE_HOST}:{port}/healthz"
     status_url = f"http://{SMOKE_SERVE_HOST}:{port}/v0/status"
     tag_url = f"http://{SMOKE_SERVE_HOST}:{port}/v0/tag"

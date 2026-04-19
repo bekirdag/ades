@@ -169,3 +169,27 @@ def test_hybrid_context_prefers_pack_consistent_candidate(tmp_path: Path) -> Non
     assert linked_entity.link.canonical_text == "Entity Alpha Fund"
     assert linked_entity.provenance is not None
     assert linked_entity.provenance.source_pack == "finance-context-en"
+
+
+def test_hybrid_disabled_skips_document_context_rebuild(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_hybrid_pack(tmp_path)
+
+    monkeypatch.setattr(
+        "ades.pipeline.tagger._build_document_context_signals",
+        lambda extracted: (_ for _ in ()).throw(
+            AssertionError("hybrid-disabled tagging should skip document-context rebuilds")
+        ),
+    )
+
+    response = tag_text(
+        text="Entity Alpha moved.",
+        pack=pack_id,
+        content_type="text/plain",
+        storage_root=tmp_path,
+        hybrid=False,
+    )
+
+    assert response.entities == []

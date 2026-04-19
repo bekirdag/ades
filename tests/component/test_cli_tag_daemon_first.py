@@ -75,18 +75,20 @@ def test_cli_tag_prefers_local_service_when_available(
     assert payload["pack_version"] == "1.2.3"
 
 
-def test_cli_tag_defaults_to_local_service_in_auto_mode(
+def test_cli_tag_defaults_to_in_process_for_custom_storage_root_in_auto_mode(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     PackInstaller(tmp_path).install("finance-en")
     runner = CliRunner()
 
     monkeypatch.delenv("ADES_TAG_SERVICE_MODE", raising=False)
-    monkeypatch.setattr("ades.cli.tag_via_local_service", lambda *args, **kwargs: _tag_response())
     monkeypatch.setattr(
-        "ades.cli.api_tag",
-        lambda *args, **kwargs: pytest.fail("in-process tag fallback should not run in auto mode"),
+        "ades.cli.tag_via_local_service",
+        lambda *args, **kwargs: pytest.fail(
+            "custom storage roots should bypass the warm local service in auto mode"
+        ),
     )
+    monkeypatch.setattr("ades.cli.api_tag", lambda *args, **kwargs: _tag_response())
 
     result = runner.invoke(
         app,
@@ -99,12 +101,11 @@ def test_cli_tag_defaults_to_local_service_in_auto_mode(
     assert payload["pack"] == "finance-en"
 
 
-def test_cli_tag_falls_back_to_in_process_when_service_is_unavailable(
+def test_cli_tag_exits_when_service_is_unavailable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     PackInstaller(tmp_path).install("finance-en")
     runner = CliRunner()
-    fallback_called = {"value": False}
 
     monkeypatch.setattr("ades.cli.should_use_local_service", lambda settings: True)
     monkeypatch.setattr(
@@ -113,12 +114,10 @@ def test_cli_tag_falls_back_to_in_process_when_service_is_unavailable(
             LocalServiceUnavailableError("service unavailable")
         ),
     )
-
-    def fake_api_tag(*args, **kwargs) -> TagResponse:
-        fallback_called["value"] = True
-        return _tag_response(pack="finance-en")
-
-    monkeypatch.setattr("ades.cli.api_tag", fake_api_tag)
+    monkeypatch.setattr(
+        "ades.cli.api_tag",
+        lambda *args, **kwargs: pytest.fail("in-process tag fallback should not run"),
+    )
 
     result = runner.invoke(
         app,
@@ -126,8 +125,8 @@ def test_cli_tag_falls_back_to_in_process_when_service_is_unavailable(
         env={"ADES_STORAGE_ROOT": str(tmp_path)},
     )
 
-    assert result.exit_code == 0
-    assert fallback_called["value"] is True
+    assert result.exit_code == 1
+    assert "service unavailable" in result.stderr
 
 
 def test_cli_tag_files_can_use_local_service(

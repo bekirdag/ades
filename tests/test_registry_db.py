@@ -1,8 +1,11 @@
 import json
+from dataclasses import replace
+import shutil
 import sqlite3
 from pathlib import Path
 
 from ades.packs.installer import PackInstaller
+from ades.packs.manifest import PackManifest
 from ades.packs.registry import PackRegistry
 from ades.storage.backend import MetadataBackend
 from ades.storage.registry_db import (
@@ -159,11 +162,82 @@ def test_pack_metadata_store_connections_use_busy_timeout(tmp_path: Path) -> Non
     assert str(journal_mode).lower() == "wal"
 
 
+def test_pack_metadata_store_creates_pack_exact_alias_lookup_index(tmp_path: Path) -> None:
+    PackInstaller(tmp_path).install("finance-en")
+    layout = build_storage_layout(tmp_path)
+
+    connection = sqlite3.connect(layout.registry_db)
+    try:
+        indexes = {
+            str(row[1]) for row in connection.execute("PRAGMA index_list('pack_aliases')").fetchall()
+        }
+        plan = connection.execute(
+            """
+            EXPLAIN QUERY PLAN
+            SELECT
+                a.pack_id,
+                a.alias_text,
+                a.label,
+                a.canonical_text,
+                a.alias_score,
+                a.generated,
+                a.source_name,
+                a.entity_id,
+                a.source_priority,
+                a.popularity_weight,
+                a.source_domain,
+                p.active
+            FROM pack_aliases AS a
+            JOIN installed_packs AS p ON p.pack_id = a.pack_id
+            WHERE p.active = 1 AND a.pack_id = ? AND a.normalized_alias_text = ?
+            LIMIT ?
+            """,
+            ("finance-en", "ticka", 50),
+        ).fetchall()
+    finally:
+        connection.close()
+
+    assert "idx_pack_aliases_pack_lookup" in indexes
+    assert any("idx_pack_aliases_pack_lookup" in str(row[3]) for row in plan)
+
+
 def test_pack_registry_ignores_hidden_backup_pack_directories(tmp_path: Path) -> None:
     layout = ensure_storage_layout(build_storage_layout(tmp_path))
     create_pack_source(layout.packs_dir, pack_id="general-en", domain="general")
     hidden_backup_dir = layout.packs_dir / ".general-en.backup"
     create_pack_source(hidden_backup_dir.parent, pack_id=hidden_backup_dir.name, domain="general")
+
+    synced: list[str] = []
+
+    class _Store:
+        def sync_pack_from_dir(self, pack_dir: Path):
+            synced.append(pack_dir.name)
+            return None
+
+    registry = object.__new__(PackRegistry)
+    registry.layout = layout
+    registry.store = _Store()
+
+    repaired = PackRegistry._sync_missing_filesystem_packs(registry, [])
+
+    assert repaired is True
+    assert synced == ["general-en"]
+
+
+def test_pack_registry_ignores_noncanonical_backup_named_pack_directories(
+    tmp_path: Path,
+) -> None:
+    layout = ensure_storage_layout(build_storage_layout(tmp_path))
+    create_pack_source(layout.packs_dir, pack_id="general-en", domain="general")
+    backup_dir = layout.packs_dir / "general-en.bak-2026-04-19"
+    create_pack_source(backup_dir.parent, pack_id=backup_dir.name, domain="general")
+
+    backup_manifest_path = backup_dir / "manifest.json"
+    backup_manifest = json.loads(backup_manifest_path.read_text(encoding="utf-8"))
+    backup_manifest["pack_id"] = "general-en"
+    backup_manifest["install_path"] = str(backup_dir)
+    backup_manifest["manifest_path"] = str(backup_manifest_path)
+    backup_manifest_path.write_text(json.dumps(backup_manifest, indent=2) + "\n", encoding="utf-8")
 
     synced: list[str] = []
 
@@ -203,6 +277,89 @@ def test_pack_registry_get_pack_falls_back_to_visible_manifest_without_full_sync
 
     assert manifest is not None
     assert manifest.pack_id == "general-en"
+
+
+def test_pack_registry_get_pack_repairs_stale_noncanonical_path_without_full_sync(
+    tmp_path: Path,
+) -> None:
+    layout = ensure_storage_layout(build_storage_layout(tmp_path))
+    canonical_pack_dir = create_pack_source(layout.packs_dir, pack_id="general-en", domain="general")
+    stale_manifest = PackManifest.load(canonical_pack_dir / "manifest.json")
+    stale_manifest = replace(
+        stale_manifest,
+        install_path=str(layout.packs_dir / "general-en.bak-runtime-stale"),
+        manifest_path=str(layout.packs_dir / "general-en.bak-runtime-stale" / "manifest.json"),
+    )
+    repaired_calls: list[tuple[str, str, str, bool | None]] = []
+    current_manifest = stale_manifest
+
+    class _Store:
+        def get_pack(self, pack_id: str, *, active_only: bool = False):
+            return current_manifest
+
+        def repair_pack_installation_paths(
+            self,
+            pack_id: str,
+            *,
+            install_path: str,
+            manifest_path: str,
+            active: bool | None = None,
+        ) -> bool:
+            nonlocal current_manifest
+            repaired_calls.append((pack_id, install_path, manifest_path, active))
+            current_manifest = replace(
+                current_manifest,
+                install_path=install_path,
+                manifest_path=manifest_path,
+            )
+            return True
+
+        def sync_pack_from_dir(self, pack_dir: Path, *, active: bool | None = None):
+            raise AssertionError("cheap path repair must not trigger full pack sync")
+
+    registry = object.__new__(PackRegistry)
+    registry.layout = layout
+    registry.store = _Store()
+    registry.metadata_backend = MetadataBackend.SQLITE
+
+    manifest = PackRegistry.get_pack(registry, "general-en")
+
+    assert manifest is not None
+    assert repaired_calls == [
+        (
+            "general-en",
+            str(canonical_pack_dir),
+            str(canonical_pack_dir / "manifest.json"),
+            True,
+        )
+    ]
+    assert manifest.install_path == str(canonical_pack_dir)
+    assert manifest.manifest_path == str(canonical_pack_dir / "manifest.json")
+
+
+def test_pack_registry_get_pack_repairs_stale_noncanonical_metadata_path(
+    tmp_path: Path,
+) -> None:
+    layout = ensure_storage_layout(build_storage_layout(tmp_path))
+    canonical_pack_dir = create_pack_source(layout.packs_dir, pack_id="general-en", domain="general")
+    stale_backup_dir = layout.packs_dir / "general-en.bak-runtime-stale"
+    shutil.copytree(canonical_pack_dir, stale_backup_dir)
+
+    store = PackMetadataStore(layout)
+    stale_manifest = store.sync_pack_from_dir(stale_backup_dir)
+    assert stale_manifest is not None
+
+    registry = PackRegistry(tmp_path)
+    manifest = registry.get_pack("general-en")
+
+    assert manifest is not None
+    assert Path(manifest.install_path) == canonical_pack_dir
+    assert Path(manifest.manifest_path) == canonical_pack_dir / "manifest.json"
+
+    repaired = store.get_pack("general-en", active_only=False)
+    assert repaired is not None
+    assert Path(repaired.install_path) == canonical_pack_dir
+    assert Path(repaired.manifest_path) == canonical_pack_dir / "manifest.json"
 
 
 def test_pack_registry_list_installed_packs_uses_manifest_fallback_without_sync_in_postgresql_mode(

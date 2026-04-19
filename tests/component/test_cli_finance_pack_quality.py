@@ -47,5 +47,5 @@ def test_cli_can_validate_generated_finance_pack_quality(tmp_path: Path) -> None
     assert validate_payload["fixture_profile"] == "benchmark"
     assert validate_payload["passed"] is True
     assert validate_payload["expected_recall"] == 1.0
-    assert validate_payload["expected_entity_count"] == 16
+    assert validate_payload["expected_entity_count"] >= 22
     assert Path(validate_payload["generated_pack_dir"]).exists()

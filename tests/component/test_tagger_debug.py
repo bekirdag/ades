@@ -58,6 +58,43 @@ def _install_duplicate_entity_pack(storage_root: Path) -> str:
     return pack_dir.name
 
 
+def _install_duration_alias_pack(storage_root: Path) -> str:
+    layout = ensure_storage_layout(build_storage_layout(storage_root))
+    pack_dir = create_pack_source(
+        layout.packs_dir,
+        pack_id="general-en",
+        domain="general",
+        labels=("organization",),
+    )
+    (pack_dir / "aliases.json").write_text(
+        json.dumps(
+            {
+                "aliases": [
+                    {
+                        "text": "5 min",
+                        "label": "organization",
+                        "canonical_text": "5 min",
+                        "entity_id": "wikidata:Q4641186",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "15 Minutes",
+                        "label": "organization",
+                        "canonical_text": "15 Minutes",
+                        "entity_id": "wikidata:Q115272423",
+                        "source_domain": "general",
+                    },
+                ]
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    PackRegistry(storage_root).sync_pack_from_disk(pack_dir.name)
+    return pack_dir.name
+
+
 def test_tagger_debug_payload_reports_discarded_overlaps(tmp_path: Path) -> None:
     pack_id = _install_overlap_pack(tmp_path)
 
@@ -115,3 +152,24 @@ def test_tagger_merges_duplicate_linked_entities_in_response(tmp_path: Path) -> 
     assert entity.link is not None
     assert entity.link.entity_id == "wikidata:Q123"
     assert response.metrics.entity_count == 1
+
+
+def test_tagger_drops_runtime_generic_duration_aliases(tmp_path: Path) -> None:
+    pack_id = _install_duration_alias_pack(tmp_path)
+
+    response = tag_text(
+        text="5 min and 15 Minutes were mentioned.",
+        pack=pack_id,
+        content_type="text/plain",
+        storage_root=tmp_path,
+        debug=True,
+    )
+
+    assert response.entities == []
+    assert response.metrics.entity_count == 0
+    assert response.debug is not None
+    assert any(
+        item.reason == "runtime_generic_duration_alias"
+        and item.text in {"5 min", "15 Minutes"}
+        for item in response.debug.span_decisions
+    )

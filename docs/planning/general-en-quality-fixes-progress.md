@@ -104,6 +104,51 @@ entity-specific logic.
   - no current repo code path hardcodes a duplicate `/packs/packs` install path
   - historical duplicate live paths appear to be environment-state/stale-root
     issues, not a current installer bug
+- Added another generic precision-and-recall batch in:
+  - [src/ades/packs/alias_analysis.py](/home/wodo/apps/ades/src/ades/packs/alias_analysis.py)
+  - [src/ades/packs/general_bundle.py](/home/wodo/apps/ades/src/ades/packs/general_bundle.py)
+  - [src/ades/packs/general_sources.py](/home/wodo/apps/ades/src/ades/packs/general_sources.py)
+  - [src/ades/packs/generation.py](/home/wodo/apps/ades/src/ades/packs/generation.py)
+  - [src/ades/pipeline/tagger.py](/home/wodo/apps/ades/src/ades/pipeline/tagger.py)
+  - [src/ades/packs/general_quality.py](/home/wodo/apps/ades/src/ades/packs/general_quality.py)
+- Added class-based number-word suppression:
+  - single-token spelled-out numbers such as `Four` are now blocked at
+    build time and runtime
+  - this closes the remaining common-word numeric false-positive class
+- Added structural organization retention for real firm-style names:
+  - organization suffix handling now keeps names ending in
+    `Information`, `Solutions`, `Consulting`, `Technologies`, and
+    similar generic business suffixes
+  - this is structural and suffix-based, not entity-name specific
+- Added structural organization fragment pruning:
+  - if a canonical organization name is multi-token and ends in a
+    structural organization suffix, single-token first/last-token aliases
+    such as `Harbor` are dropped
+  - this closes fragment false positives without disabling valid full
+    organization names
+- Added hyphenated adjectival prefix backfill in
+  [src/ades/pipeline/tagger.py](/home/wodo/apps/ades/src/ades/pipeline/tagger.py):
+  - titleish prefixes in shapes like `Shanghai-based` are recovered as
+    lookup spans
+  - this restores generic geographic recall from hyphenated news prose
+    without introducing substring matching
+- Extended deterministic fixtures and quality gates in:
+  - [tests/general_bundle_helpers.py](/home/wodo/apps/ades/tests/general_bundle_helpers.py)
+  - [tests/pack_generation_helpers.py](/home/wodo/apps/ades/tests/pack_generation_helpers.py)
+  - [src/ades/packs/general_quality.py](/home/wodo/apps/ades/src/ades/packs/general_quality.py)
+  - new benchmark coverage now checks:
+    - number-word false positives
+    - strong country recall for `China` and `Israel`
+    - hyphenated geographic recall for `Shanghai-based`
+    - structured organization recall for `Northwind Solutions`
+      and `Harbor China Information`
+- Updated benchmark expectation surfaces in:
+  - [tests/unit/test_general_pack_quality.py](/home/wodo/apps/ades/tests/unit/test_general_pack_quality.py)
+  - [tests/integration/test_general_pack_quality_api.py](/home/wodo/apps/ades/tests/integration/test_general_pack_quality_api.py)
+  - [tests/api/test_general_pack_quality_endpoint.py](/home/wodo/apps/ades/tests/api/test_general_pack_quality_endpoint.py)
+  - [tests/component/test_cli_general_pack_quality.py](/home/wodo/apps/ades/tests/component/test_cli_general_pack_quality.py)
+- Validated the expanded structural slice:
+  - `93 passed`
 
 ## Checklist
 
@@ -115,6 +160,9 @@ entity-specific logic.
 - [x] Add real-prose quality gates for the remaining failure classes
 - [x] Validate the affected unit/component/api/integration slices
 - [x] Review install/storage cleanup status and record remaining work
+- [x] Block number-word single-token false positives generically
+- [x] Recover hyphenated adjectival geographic aliases generically
+- [x] Retain structural multi-token organization aliases without fragment noise
 
 ## Notes
 

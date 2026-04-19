@@ -69,6 +69,71 @@ def test_skip_single_token_generic_stock_head() -> None:
     )
 
 
+def test_skip_single_token_generic_congress_location() -> None:
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="Congress",
+            candidate_value="Congress",
+            canonical_text="Congress",
+            candidate_label="location",
+            candidate_domain="general",
+        )
+        is True
+    )
+
+
+def test_skip_single_token_generic_many_location() -> None:
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="Many",
+            candidate_value="Many",
+            canonical_text="Many",
+            candidate_label="location",
+            candidate_domain="general",
+        )
+        is True
+    )
+
+
+def test_skip_single_token_generic_linda_location() -> None:
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="Linda",
+            candidate_value="Linda",
+            canonical_text="Linda",
+            candidate_label="location",
+            candidate_domain="general",
+        )
+        is True
+    )
+
+
+def test_skip_single_token_generic_not_org_acronym() -> None:
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="NOT",
+            candidate_value="NOT",
+            canonical_text="Nič od tega",
+            candidate_label="organization",
+            candidate_domain="general",
+        )
+        is True
+    )
+
+
+def test_skip_single_token_generic_u_turn_alias() -> None:
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="U-turn",
+            candidate_value="U-Turn",
+            canonical_text="U-Turn",
+            candidate_label="organization",
+            candidate_domain="general",
+        )
+        is True
+    )
+
+
 def test_skip_article_led_generic_person_phrase() -> None:
     assert (
         _should_skip_multi_token_lookup_candidate(
@@ -76,6 +141,45 @@ def test_skip_article_led_generic_person_phrase() -> None:
             candidate_value="The Founder",
             canonical_text="The Founder",
             candidate_label="person",
+            candidate_domain="general",
+        )
+        is True
+    )
+
+
+def test_skip_article_led_generic_art_phrase() -> None:
+    assert (
+        _should_skip_multi_token_lookup_candidate(
+            matched_text="The Art",
+            candidate_value="The Art",
+            canonical_text="VOF de Kunst",
+            candidate_label="organization",
+            candidate_domain="general",
+        )
+        is True
+    )
+
+
+def test_skip_generic_new_deal_phrase() -> None:
+    assert (
+        _should_skip_multi_token_lookup_candidate(
+            matched_text="new deal",
+            candidate_value="New Deal",
+            canonical_text="New Deal",
+            candidate_label="location",
+            candidate_domain="general",
+        )
+        is True
+    )
+
+
+def test_skip_function_year_alias_phrase() -> None:
+    assert (
+        _should_skip_multi_token_lookup_candidate(
+            matched_text="and 2016",
+            candidate_value="And 2016",
+            canonical_text="Androni Giocattoli-Sidermec 2016",
+            candidate_label="organization",
             candidate_domain="general",
         )
         is True

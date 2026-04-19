@@ -107,12 +107,16 @@ class PackMetadataStore:
                 CREATE INDEX IF NOT EXISTS idx_pack_aliases_lookup
                 ON pack_aliases(normalized_alias_text, label);
 
+                CREATE INDEX IF NOT EXISTS idx_pack_aliases_pack_lookup
+                ON pack_aliases(pack_id, normalized_alias_text);
+
                 CREATE INDEX IF NOT EXISTS idx_pack_rules_lookup
                 ON pack_rules(rule_name, label);
                 """
             )
             self._ensure_search_schema(connection)
             self._ensure_pack_alias_columns(connection)
+            self._ensure_pack_alias_lookup_indexes(connection)
             self._search_index_supported = self._search_index_enabled(connection)
 
     def count_installed_packs(self) -> int:
@@ -262,6 +266,30 @@ class PackMetadataStore:
             cursor = connection.execute(
                 "UPDATE installed_packs SET active = ? WHERE pack_id = ?",
                 (1 if active else 0, pack_id),
+            )
+        return cursor.rowcount > 0
+
+    def repair_pack_installation_paths(
+        self,
+        pack_id: str,
+        *,
+        install_path: str,
+        manifest_path: str,
+        active: bool | None = None,
+    ) -> bool:
+        assignments = [
+            "install_path = ?",
+            "manifest_path = ?",
+        ]
+        params: list[object] = [install_path, manifest_path]
+        if active is not None:
+            assignments.append("active = ?")
+            params.append(1 if active else 0)
+        params.append(pack_id)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"UPDATE installed_packs SET {', '.join(assignments)} WHERE pack_id = ?",
+                params,
             )
         return cursor.rowcount > 0
 
@@ -551,6 +579,66 @@ class PackMetadataStore:
         if exact_alias:
             filters.append("a.normalized_alias_text = ?")
             params.append(normalize_lookup_text(query))
+            where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+            params.append(limit)
+            with self._connect() as connection:
+                rows = connection.execute(
+                    f"""
+                    SELECT
+                        a.pack_id,
+                        a.alias_text,
+                        a.label,
+                        a.canonical_text,
+                        a.alias_score,
+                        a.generated,
+                        a.source_name,
+                        a.entity_id,
+                        a.source_priority,
+                        a.popularity_weight,
+                        a.source_domain,
+                        p.active
+                    FROM pack_aliases AS a
+                    JOIN installed_packs AS p ON p.pack_id = a.pack_id
+                    {where_clause}
+                    LIMIT ?
+                    """,
+                    params,
+                ).fetchall()
+            candidates = [
+                {
+                    "kind": "alias",
+                    "pack_id": str(row["pack_id"]),
+                    "label": str(row["label"]),
+                    "value": str(row["alias_text"]),
+                    "canonical_text": str(row["canonical_text"]),
+                    "generated": bool(row["generated"]),
+                    "source_name": str(row["source_name"]),
+                    "entity_id": str(row["entity_id"]),
+                    "entity_prior": float(row["alias_score"]),
+                    "source_priority": float(row["source_priority"]),
+                    "popularity_weight": float(row["popularity_weight"]),
+                    "pattern": None,
+                    "domain": str(row["source_domain"]),
+                    "active": bool(row["active"]),
+                    "score": self._alias_score(
+                        query,
+                        alias_text=str(row["alias_text"]),
+                        label=str(row["label"]),
+                        source_domain=str(row["source_domain"]),
+                        alias_prior=float(row["alias_score"]),
+                        exact_alias=True,
+                    ),
+                }
+                for row in rows
+            ]
+            candidates.sort(
+                key=lambda item: (
+                    str(item["value"]).lower(),
+                    str(item["label"]).lower(),
+                    str(item["pack_id"]).lower(),
+                )
+            )
+            return candidates[:limit]
         else:
             match_query = self._build_search_match_query(query)
             if self._search_index_supported and match_query is not None:
@@ -1573,3 +1661,12 @@ class PackMetadataStore:
                 if "duplicate column name" in message and column_name in message:
                     continue
                 raise
+
+    @staticmethod
+    def _ensure_pack_alias_lookup_indexes(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_pack_aliases_pack_lookup
+            ON pack_aliases(pack_id, normalized_alias_text)
+            """
+        )

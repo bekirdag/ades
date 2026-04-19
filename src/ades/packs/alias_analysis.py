@@ -17,8 +17,10 @@ import subprocess
 from typing import Any, Callable, Iterable, Iterator
 
 try:
+    from wordfreq import top_n_list as _wordfreq_top_n_list
     from wordfreq import zipf_frequency as _wordfreq_zipf_frequency
 except Exception:  # pragma: no cover - exercised by runtime dependency resolution.
+    _wordfreq_top_n_list = None
     _wordfreq_zipf_frequency = None
 
 
@@ -29,6 +31,11 @@ DEFAULT_RETAINED_ALIAS_AUDIT_TIMEOUT_SECONDS = 120.0
 DEFAULT_GENERAL_RETAINED_ALIAS_EXCLUSIONS_FILENAME = (
     "general-retained-alias-exclusions.jsonl"
 )
+DEFAULT_GENERAL_EXACT_ALIAS_EXCLUSIONS_FILENAME = (
+    "general-exact-alias-exclusions.txt"
+)
+DEFAULT_GENERAL_COMMON_ENGLISH_WORDLIST_FILENAME = "wordfreq-en-top50000.txt"
+DEFAULT_GENERAL_COMMON_ENGLISH_WORDLIST_TOP_N = 50_000
 GENERAL_RETAINED_ALIAS_AUDIT_MODE_ENV = "ADES_GENERAL_ALIAS_AUDIT_MODE"
 GENERAL_RETAINED_ALIAS_AUDIT_COMMAND_ENV = "ADES_GENERAL_ALIAS_AUDIT_COMMAND"
 GENERAL_RETAINED_ALIAS_AUDIT_TIMEOUT_ENV = "ADES_GENERAL_ALIAS_AUDIT_TIMEOUT_SECONDS"
@@ -45,6 +52,29 @@ _GENERAL_RETAINED_ALIAS_AUDIT_ALLOWED_MODES = {
     _GENERAL_RETAINED_ALIAS_AUDIT_MODE_AI_COMMAND,
     _GENERAL_RETAINED_ALIAS_AUDIT_MODE_DETERMINISTIC_COMMON_ENGLISH,
 }
+GENERAL_EXACT_ALIAS_EXPLICIT_WORDS = frozenset(
+    {
+        "ai",
+        "ct",
+        "exclusive",
+        "linda",
+        "many",
+        "new",
+        "not",
+        "queen",
+        "sign",
+        "uk",
+    }
+)
+GENERAL_EXACT_ALIAS_EXPLICIT_PHRASES = frozenset(
+    {
+        "central command",
+        "high school",
+        "new deal",
+        "the art",
+        "u-turn",
+    }
+)
 _EXACT_IDENTIFIER_LABELS = {"cik", "clinical_trial", "gene", "lei", "ticker"}
 _DEFAULT_SOURCE_PRIORITIES = {
     "curated": 0.9,
@@ -287,6 +317,8 @@ _GENERAL_AUDIT_COMMON_SINGLE_TOKEN_WORDS = (
         "reviews",
         "road",
         "roads",
+        "sign",
+        "signs",
         "service",
         "services",
         "side",
@@ -305,6 +337,8 @@ _GENERAL_AUDIT_COMMON_SINGLE_TOKEN_WORDS = (
         "times",
         "town",
         "towns",
+        "new",
+        "exclusive",
         "use",
         "uses",
         "value",
@@ -517,6 +551,8 @@ class AliasAnalysisResult:
     retained_alias_audit_cached_review_count: int = 0
     retained_alias_exclusion_removed_alias_count: int = 0
     retained_alias_exclusion_source_path: str | None = None
+    exact_common_english_alias_removed_alias_count: int = 0
+    exact_common_english_alias_source_path: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -546,6 +582,8 @@ class AliasAnalysisResult:
             "retained_alias_audit_cached_review_count": self.retained_alias_audit_cached_review_count,
             "retained_alias_exclusion_removed_alias_count": self.retained_alias_exclusion_removed_alias_count,
             "retained_alias_exclusion_source_path": self.retained_alias_exclusion_source_path,
+            "exact_common_english_alias_removed_alias_count": self.exact_common_english_alias_removed_alias_count,
+            "exact_common_english_alias_source_path": self.exact_common_english_alias_source_path,
         }
 
 
@@ -878,6 +916,32 @@ def _resolve_cluster(
                 if candidate.label != short_geopolitical_candidate.label
             ],
             reason="strong_short_geopolitical_alias",
+            top_score=top_score,
+            runner_up_score=runner_up_score,
+            candidates=ordered_candidates,
+        )
+    supported_finance_candidate = _select_supported_finance_candidate(
+        alias_key=alias_key,
+        candidates=ordered_candidates,
+    )
+    if supported_finance_candidate is not None:
+        return AliasClusterReport(
+            alias_key=alias_key,
+            lane=lane,
+            candidate_count=candidate_count,
+            label_count=label_count,
+            ambiguous=False,
+            retained_labels=[supported_finance_candidate.label],
+            blocked_labels=[
+                candidate.label
+                for candidate in ordered_candidates
+                if candidate.label != supported_finance_candidate.label
+            ],
+            reason=(
+                "strong_short_finance_alias"
+                if _is_short_token_like(alias_key)
+                else "authoritative_finance_alias"
+            ),
             top_score=top_score,
             runner_up_score=runner_up_score,
             candidates=ordered_candidates,
@@ -2052,6 +2116,88 @@ def _is_strong_runtime_acronym_candidate(
     )
 
 
+def _matches_compact_initialism(*, alias_key: str, canonical_text: str) -> bool:
+    compact = "".join(character for character in alias_key if character.isalnum()).upper()
+    if not (2 <= len(compact) <= 6):
+        return False
+    if not compact.isalpha():
+        return False
+    tokens = _acronym_source_tokens(canonical_text)
+    if len(tokens) < 2:
+        return False
+    initials = "".join(token[0].upper() for token in tokens if token[:1].isalpha())
+    return initials == compact
+
+
+def _is_strong_runtime_finance_short_alias_candidate(
+    *,
+    alias_key: str,
+    candidate: AliasClusterCandidate,
+) -> bool:
+    compact = "".join(character for character in alias_key if character.isalnum())
+    if candidate.label not in {"exchange", "market_index", "ticker"}:
+        return False
+    if not (2 <= len(compact) <= 6):
+        return False
+    if not compact.isalpha():
+        return False
+    if alias_key in _RUNTIME_GENERIC_PHRASE_LEADS:
+        return False
+    if not candidate.display_text.isupper():
+        return False
+    if candidate.features.source_priority < 0.88:
+        return False
+    if candidate.score < 0.55:
+        return False
+    if candidate.label == "ticker":
+        return candidate.display_text.casefold() == candidate.canonical_text.casefold()
+    if not candidate.generated:
+        return True
+    return _matches_compact_initialism(
+        alias_key=alias_key,
+        canonical_text=candidate.canonical_text,
+    )
+
+
+def _select_supported_finance_candidate(
+    *,
+    alias_key: str,
+    candidates: list[AliasClusterCandidate],
+) -> AliasClusterCandidate | None:
+    if not candidates:
+        return None
+    finance_short_candidates = [
+        candidate
+        for candidate in candidates
+        if _is_strong_runtime_finance_short_alias_candidate(
+            alias_key=alias_key,
+            candidate=candidate,
+        )
+    ]
+    if finance_short_candidates:
+        return finance_short_candidates[0]
+    top_candidate = candidates[0]
+    compact = "".join(character for character in alias_key if character.isalnum())
+    if len(compact) <= 6:
+        return None
+    if top_candidate.label not in {"exchange", "market_index"}:
+        return None
+    if top_candidate.source_name != "curated-finance-entities":
+        return None
+    if top_candidate.features.source_priority < 0.88:
+        return None
+    if top_candidate.score < 0.65:
+        return None
+    if len(candidates) == 1:
+        return top_candidate
+    runner_up_candidate = candidates[1]
+    if runner_up_candidate.label not in {"organization", "ticker"}:
+        return None
+    if top_candidate.score - runner_up_candidate.score < 0.02:
+        return None
+    return top_candidate
+
+
 def _is_strong_short_geopolitical_candidate(
     *,
     alias_key: str,
@@ -2133,6 +2279,11 @@ def _should_block_single_label_natural_alias(
     if candidate.lane != "natural":
         return False
     if _is_strong_runtime_acronym_candidate(alias_key=alias_key, candidate=candidate):
+        return False
+    if _is_strong_runtime_finance_short_alias_candidate(
+        alias_key=alias_key,
+        candidate=candidate,
+    ):
         return False
     if _is_strong_short_geopolitical_candidate(
         alias_key=alias_key,
@@ -2266,6 +2417,11 @@ def _resolve_runtime_tier(
         return "runtime_exact_high_precision"
     if _is_strong_runtime_acronym_candidate(alias_key=alias_key, candidate=candidate):
         return "runtime_exact_acronym_high_precision"
+    if _is_strong_runtime_finance_short_alias_candidate(
+        alias_key=alias_key,
+        candidate=candidate,
+    ):
+        return "runtime_exact_high_precision"
     if _is_strong_short_geopolitical_candidate(
         alias_key=alias_key,
         candidate=candidate,
@@ -2745,6 +2901,53 @@ def apply_general_retained_alias_exclusions(
     )
 
 
+def apply_general_exact_alias_exclusions(
+    result: AliasAnalysisResult,
+    *,
+    common_word_list_path: str | Path,
+    explicit_words: set[str] | None = None,
+    chunk_size: int = DEFAULT_RETAINED_ALIAS_AUDIT_CHUNK_SIZE,
+) -> AliasAnalysisResult:
+    """Apply exact common-English alias filtering across all retained general-en aliases."""
+
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive.")
+    resolved_word_list_path = Path(common_word_list_path).expanduser().resolve()
+    if not resolved_word_list_path.exists():
+        raise FileNotFoundError(
+            f"General exact-alias exclusion word list not found: {resolved_word_list_path}"
+        )
+    common_words = load_general_common_english_wordlist(resolved_word_list_path)
+    explicit = {
+        _normalize_general_audit_phrase(word)
+        for word in (
+            explicit_words
+            if explicit_words is not None
+            else GENERAL_EXACT_ALIAS_EXPLICIT_WORDS
+        )
+    }
+    explicit.discard("")
+    if result.retained_aliases_materialized:
+        return _apply_general_exact_alias_exclusions_materialized(
+            result,
+            common_words=common_words,
+            explicit_words=explicit,
+            source_path=resolved_word_list_path,
+        )
+    if not result.database_path:
+        raise ValueError(
+            "database_path is required for DB-backed exact alias exclusion application."
+        )
+    return _apply_general_exact_alias_exclusions_in_db(
+        result,
+        analysis_db_path=Path(result.database_path),
+        common_words=common_words,
+        explicit_words=explicit,
+        source_path=resolved_word_list_path,
+        chunk_size=chunk_size,
+    )
+
+
 def _apply_general_retained_alias_exclusions_materialized(
     result: AliasAnalysisResult,
     *,
@@ -2875,6 +3078,170 @@ def _apply_general_retained_alias_exclusions_in_db(
             retained_label_counts=retained_label_counts,
             retained_alias_exclusion_removed_alias_count=removed_alias_count,
             retained_alias_exclusion_source_path=str(exclusions_path),
+        )
+    finally:
+        connection.close()
+
+
+def _should_drop_general_exact_alias(
+    alias: dict[str, Any],
+    *,
+    common_words: set[str],
+    explicit_words: set[str],
+) -> bool:
+    return (
+        classify_exact_common_english_wordlist_alias(
+            text=str(alias.get("text", "")),
+            label=str(alias.get("label", "")),
+            common_words=common_words,
+            explicit_words=explicit_words,
+        )
+        is not None
+    )
+
+
+def _apply_general_exact_alias_exclusions_materialized(
+    result: AliasAnalysisResult,
+    *,
+    common_words: set[str],
+    explicit_words: set[str],
+    source_path: Path,
+) -> AliasAnalysisResult:
+    kept_aliases: list[dict[str, Any]] = []
+    removed_alias_count = 0
+    for alias in result.retained_aliases:
+        if _should_drop_general_exact_alias(
+            alias,
+            common_words=common_words,
+            explicit_words=explicit_words,
+        ):
+            removed_alias_count += 1
+            continue
+        kept_aliases.append(alias)
+    retained_aliases = sorted(
+        kept_aliases,
+        key=lambda item: (
+            str(item["text"]).casefold(),
+            str(item["text"]),
+            str(item["label"]).casefold(),
+            str(item["label"]),
+        ),
+    )
+    retained_label_counts = _build_retained_label_counts(
+        str(item["label"]) for item in retained_aliases
+    )
+    return replace(
+        result,
+        retained_aliases=retained_aliases,
+        retained_alias_count=len(retained_aliases),
+        retained_label_counts=retained_label_counts,
+        exact_common_english_alias_removed_alias_count=removed_alias_count,
+        exact_common_english_alias_source_path=str(source_path),
+    )
+
+
+def _apply_general_exact_alias_exclusions_in_db(
+    result: AliasAnalysisResult,
+    *,
+    analysis_db_path: Path,
+    common_words: set[str],
+    explicit_words: set[str],
+    source_path: Path,
+    chunk_size: int,
+) -> AliasAnalysisResult:
+    resolved_path = analysis_db_path.expanduser().resolve()
+    if not resolved_path.exists():
+        raise FileNotFoundError(f"Alias analysis database not found: {resolved_path}")
+    connection = sqlite3.connect(str(resolved_path))
+    try:
+        removed_alias_count = 0
+        last_rowid = 0
+        while True:
+            rows = connection.execute(
+                """
+                SELECT
+                    rowid,
+                    display_text,
+                    label,
+                    canonical_text,
+                    entity_id,
+                    source_name,
+                    generated,
+                    score,
+                    source_priority,
+                    popularity_weight,
+                    runtime_tier
+                FROM retained_aliases
+                WHERE rowid > ?
+                ORDER BY rowid ASC
+                LIMIT ?
+                """,
+                (last_rowid, chunk_size),
+            ).fetchall()
+            if not rows:
+                break
+            rowids_to_delete: list[int] = []
+            for (
+                rowid,
+                display_text,
+                label,
+                canonical_text,
+                entity_id,
+                source_name,
+                generated,
+                score,
+                source_priority,
+                popularity_weight,
+                runtime_tier,
+            ) in rows:
+                alias = {
+                    "text": str(display_text),
+                    "label": str(label),
+                    "canonical_text": str(canonical_text),
+                    "entity_id": str(entity_id),
+                    "source_name": str(source_name),
+                    "generated": bool(generated),
+                    "score": float(score),
+                    "source_priority": float(source_priority),
+                    "popularity_weight": float(popularity_weight),
+                    "runtime_tier": str(runtime_tier),
+                }
+                if not _should_drop_general_exact_alias(
+                    alias,
+                    common_words=common_words,
+                    explicit_words=explicit_words,
+                ):
+                    continue
+                rowids_to_delete.append(int(rowid))
+                removed_alias_count += 1
+            if rowids_to_delete:
+                connection.executemany(
+                    "DELETE FROM retained_aliases WHERE rowid = ?",
+                    ((rowid,) for rowid in rowids_to_delete),
+                )
+                connection.commit()
+            last_rowid = int(rows[-1][0])
+
+        retained_alias_count = int(
+            connection.execute("SELECT COUNT(*) FROM retained_aliases").fetchone()[0]
+        )
+        retained_label_counts = {
+            str(label): int(count)
+            for label, count in connection.execute(
+                """
+                SELECT label, COUNT(*)
+                FROM retained_aliases
+                GROUP BY label
+                ORDER BY LOWER(label), label
+                """
+            ).fetchall()
+        }
+        return replace(
+            result,
+            retained_alias_count=retained_alias_count,
+            retained_label_counts=retained_label_counts,
+            exact_common_english_alias_removed_alias_count=removed_alias_count,
+            exact_common_english_alias_source_path=str(source_path),
         )
     finally:
         connection.close()
@@ -3441,6 +3808,80 @@ def _classify_deterministic_common_english_retained_alias(
     return None
 
 
+def export_general_common_english_wordlist(
+    output_path: str | Path,
+    *,
+    top_n: int = DEFAULT_GENERAL_COMMON_ENGLISH_WORDLIST_TOP_N,
+) -> Path:
+    resolved_output_path = Path(output_path).expanduser().resolve()
+    resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [f"{word}\n" for word in _wordfreq_top_n_words_en(top_n)]
+    resolved_output_path.write_text("".join(lines), encoding="utf-8")
+    return resolved_output_path
+
+
+def load_general_common_english_wordlist(path: str | Path) -> set[str]:
+    resolved_path = Path(path).expanduser().resolve()
+    if not resolved_path.exists():
+        raise FileNotFoundError(
+            f"General common-English word list not found: {resolved_path}"
+        )
+    return {
+        normalized
+        for normalized in (
+            _normalize_general_audit_phrase(line)
+            for line in resolved_path.read_text(encoding="utf-8").splitlines()
+        )
+        if normalized
+    }
+
+
+_GENERAL_AUDIT_DURATION_ALIAS_PATTERN = re.compile(
+    r"^\d+\s+(?:sec|secs|second|seconds|min|mins|minute|minutes|hr|hrs|hour|hours)$"
+)
+_GENERAL_AUDIT_FUNCTION_YEAR_ALIAS_PATTERN = re.compile(
+    r"^(?:and|by|for|from|in|of|on|or|the|to|with)\s+(?:19|20)\d{2}$"
+)
+
+
+def classify_exact_common_english_wordlist_alias(
+    *,
+    text: str,
+    label: str,
+    common_words: set[str],
+    explicit_words: set[str] | None = None,
+    explicit_phrases: set[str] | None = None,
+) -> str | None:
+    explicit = explicit_words or set()
+    phrases = explicit_phrases or GENERAL_EXACT_ALIAS_EXPLICIT_PHRASES
+    normalized_text = _normalize_general_audit_phrase(text)
+    if not normalized_text:
+        return None
+    if _GENERAL_AUDIT_DURATION_ALIAS_PATTERN.fullmatch(normalized_text):
+        return "duration_like_alias_match"
+    if _GENERAL_AUDIT_FUNCTION_YEAR_ALIAS_PATTERN.fullmatch(normalized_text):
+        return "function_year_alias_match"
+    if normalized_text in phrases:
+        return "explicit_generic_alias_override"
+    if re.search(r"(?:^|\s)(?:&|and)$", normalized_text):
+        return "trailing_connector_alias_match"
+    tokens = _general_audit_alpha_tokens(text)
+    if len(tokens) != 1:
+        return None
+    token = tokens[0]
+    if normalized_text != token:
+        return None
+    if token in explicit:
+        return "explicit_generic_alias_override"
+    if token in _GENERAL_AUDIT_DROPPABLE_CALENDAR_SINGLE_TOKEN_WORDS:
+        return "common_english_word_list_match"
+    if token in _RUNTIME_NUMBER_SINGLE_TOKEN_WORDS:
+        return "common_english_word_list_match"
+    if label == "organization" and token in common_words:
+        return "common_english_word_list_match"
+    return None
+
+
 @lru_cache(maxsize=200_000)
 def _wordfreq_zipf_frequency_en(text: str) -> float:
     normalized = _normalize_general_audit_phrase(text)
@@ -3451,6 +3892,24 @@ def _wordfreq_zipf_frequency_en(text: str) -> float:
             "wordfreq is required for deterministic common-English retained alias review."
         )
     return float(_wordfreq_zipf_frequency(normalized, "en"))
+
+
+@lru_cache(maxsize=8)
+def _wordfreq_top_n_words_en(top_n: int) -> tuple[str, ...]:
+    if top_n <= 0:
+        return ()
+    if _wordfreq_top_n_list is None:
+        raise RuntimeError(
+            "wordfreq is required for deterministic common-English wordlist export."
+        )
+    return tuple(
+        normalized
+        for normalized in (
+            _normalize_general_audit_phrase(word)
+            for word in _wordfreq_top_n_list("en", top_n)
+        )
+        if normalized and normalized.isalpha()
+    )
 
 
 def _normalize_general_audit_phrase(text: str) -> str:

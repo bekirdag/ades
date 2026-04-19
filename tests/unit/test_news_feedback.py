@@ -452,6 +452,91 @@ def test_detect_live_news_feedback_issues_suppresses_generic_acronym_noise_but_k
     assert "WWF" in acronym_candidates
 
 
+def test_detect_live_news_feedback_issues_suppresses_acronyms_when_long_form_entities_are_already_extracted() -> None:
+    text = (
+        "The Cambodia National Rescue Party (CNRP) criticized the Cambodian People's Party (CPP) "
+        "while the European Union said individual EU member states would respond."
+    )
+    response = TagResponse(
+        version="0.1.0",
+        pack="general-en",
+        pack_version="0.2.9",
+        language="en",
+        content_type="text/plain",
+        timing_ms=12,
+        entities=[
+            EntityMatch(
+                text="Cambodia National Rescue Party",
+                label="organization",
+                start=text.index("Cambodia National Rescue Party"),
+                end=text.index("Cambodia National Rescue Party") + len("Cambodia National Rescue Party"),
+            ),
+            EntityMatch(
+                text="Cambodian People's Party",
+                label="organization",
+                start=text.index("Cambodian People's Party"),
+                end=text.index("Cambodian People's Party") + len("Cambodian People's Party"),
+            ),
+            EntityMatch(
+                text="European Union",
+                label="location",
+                start=text.index("European Union"),
+                end=text.index("European Union") + len("European Union"),
+            ),
+        ],
+    )
+
+    issues = _detect_news_feedback_issues(text, response)
+    acronym_candidates = {
+        issue.candidate_text for issue in issues if issue.issue_type == "missing_acronym_candidate"
+    }
+
+    assert {"CNRP", "CPP", "EU"}.isdisjoint(acronym_candidates)
+
+
+def test_detect_live_news_feedback_issues_suppresses_source_identifier_acronym_noise() -> None:
+    text = (
+        "Editor's note: In our Behind the Scenes series, CNN correspondents shared how the story was covered."
+    )
+    response = TagResponse(
+        version="0.1.0",
+        pack="general-en",
+        pack_version="0.2.9",
+        language="en",
+        content_type="text/plain",
+        timing_ms=12,
+        entities=[],
+    )
+
+    issues = _detect_news_feedback_issues(text, response, source="cnn_dailymail_v3")
+    acronym_candidates = {
+        issue.candidate_text for issue in issues if issue.issue_type == "missing_acronym_candidate"
+    }
+
+    assert "CNN" not in acronym_candidates
+
+
+def test_detect_live_news_feedback_issues_suppresses_adjacent_titleish_name_initialism_noise() -> None:
+    text = "Lil' CJ Kasino released a mixtape while UFC star Michael Bisping spoke later."
+    response = TagResponse(
+        version="0.1.0",
+        pack="general-en",
+        pack_version="0.2.9",
+        language="en",
+        content_type="text/plain",
+        timing_ms=12,
+        entities=[],
+    )
+
+    issues = _detect_news_feedback_issues(text, response)
+    acronym_candidates = {
+        issue.candidate_text for issue in issues if issue.issue_type == "missing_acronym_candidate"
+    }
+
+    assert "CJ" not in acronym_candidates
+    assert "UFC" in acronym_candidates
+
+
 def test_detect_live_news_feedback_issues_suppresses_dateline_acronym_noise() -> None:
     text = "LONDON (Reuters) - British police said a bomb was used during an explosion."
     response = TagResponse(

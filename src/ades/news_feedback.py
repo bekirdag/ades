@@ -352,6 +352,20 @@ _ACRONYM_STOPWORDS = {
     "via",
     "watch",
 }
+_SOURCE_IDENTIFIER_NOISE_STOPWORDS = {
+    "alltime",
+    "archive",
+    "dataset",
+    "default",
+    "rows",
+    "source",
+    "sources",
+    "split",
+    "summary",
+    "test",
+    "train",
+    "validation",
+}
 _ENGLISH_FILTER_COMMON_WORDS = {
     "a",
     "an",
@@ -3250,6 +3264,7 @@ def _detect_news_feedback_issues(
         text,
         extracted_norms,
         extracted_tokens,
+        extracted_entities=extracted_entities,
         source=source,
     ):
         _append_issue(
@@ -3711,6 +3726,7 @@ def _find_missing_acronym_candidates(
     extracted_norms: set[str],
     extracted_tokens: set[str],
     *,
+    extracted_entities: list[EntityMatch] | None = None,
     source: str | None = None,
 ) -> list[str]:
     candidates: list[str] = []
@@ -3722,6 +3738,13 @@ def _find_missing_acronym_candidates(
         if normalized in extracted_norms or normalized in extracted_tokens or normalized in seen:
             continue
         if normalized in _ACRONYM_STOPWORDS or normalized in source_noise_tokens:
+            continue
+        if _has_matching_extracted_acronym_expansion(
+            token,
+            start=match.start(),
+            end=match.end(),
+            extracted_entities=extracted_entities or [],
+        ):
             continue
         if _is_noise_acronym_candidate(text, match.start(), match.end(), source_noise_tokens):
             continue
@@ -4044,11 +4067,54 @@ def _is_noise_partial_span_candidate(candidate: str, *, source: str | None = Non
 def _source_noise_tokens(source: str | None) -> set[str]:
     if not source:
         return set()
-    normalized = normalize_lookup_text(source)
-    tokens = {normalized}
-    if normalized.endswith("news") and len(normalized) > len("news"):
-        tokens.add(normalized[: -len("news")])
-    return {token for token in tokens if token}
+    tokens: set[str] = set()
+    raw_tokens = {
+        normalize_lookup_text(token)
+        for token in re.findall(r"[A-Za-z]{2,}", source)
+    }
+    raw_tokens.update(
+        normalize_lookup_text(token)
+        for token in normalize_lookup_text(source).split()
+    )
+    for token in raw_tokens:
+        if not token or token in _SOURCE_IDENTIFIER_NOISE_STOPWORDS:
+            continue
+        tokens.add(token)
+        if token.endswith("news") and len(token) > len("news") + 2:
+            tokens.add(token[: -len("news")])
+    return tokens
+
+
+def _has_matching_extracted_acronym_expansion(
+    token: str,
+    *,
+    start: int,
+    end: int,
+    extracted_entities: list[EntityMatch],
+) -> bool:
+    del start, end
+    normalized = normalize_lookup_text(token).upper()
+    if len(normalized) < 2:
+        return False
+    for entity in extracted_entities:
+        if entity.label.casefold() not in {"location", "organization"}:
+            continue
+        if _token_count(entity.text) < 2:
+            continue
+        if _entity_acronym_initials(entity.text) != normalized:
+            continue
+        return True
+    return False
+
+
+def _entity_acronym_initials(text: str) -> str:
+    initials: list[str] = []
+    for token in re.findall(r"\b[A-Za-z0-9'’-]+\b", text):
+        normalized = normalize_lookup_text(token)
+        if not normalized or normalized in _LEADING_CONTEXT_STOPWORDS or normalized == "s":
+            continue
+        initials.append(normalized[0].upper())
+    return "".join(initials)
 
 
 def _is_noise_acronym_candidate(
@@ -4080,6 +4146,8 @@ def _is_noise_acronym_candidate(
     if _looks_like_historical_era_acronym(text, start=start, end=end):
         return True
     if _looks_like_generic_technology_acronym(text, start=start, end=end):
+        return True
+    if _looks_like_adjacent_titleish_name_acronym(text, start=start, end=end):
         return True
     if _looks_like_person_initialism_acronym(text, start=start, end=end):
         return True
@@ -4291,6 +4359,31 @@ def _looks_like_person_initialism_acronym(text: str, *, start: int, end: int) ->
     second_lower = normalize_lookup_text(second_following)
     separator = _previous_nonspace_character(text, start)
     return previous_lower in {"and", "or"} or second_lower in {"and", "or"} or separator == ","
+
+
+def _looks_like_adjacent_titleish_name_acronym(text: str, *, start: int, end: int) -> bool:
+    token = text[start:end]
+    normalized = normalize_lookup_text(token)
+    if not token.isupper() or not 2 <= len(normalized) <= 3:
+        return False
+    next_token = _next_inline_token(text, end)
+    next_lower = normalize_lookup_text(next_token)
+    if not _looks_like_person_name_token(next_token):
+        return False
+    if (
+        next_lower in _STRUCTURAL_ORG_SUFFIXES
+        or next_lower in _STRUCTURAL_LOCATION_HEADS
+        or next_lower in _WORK_CONTEXT_TOKENS
+    ):
+        return False
+    previous_token = _previous_inline_token(text, start)
+    previous_lower = normalize_lookup_text(previous_token)
+    if _looks_like_person_name_token(previous_token):
+        return True
+    if previous_lower in {"dj", "dr", "lil", "mc", "mr", "mrs", "ms", "sir"}:
+        return True
+    prefix = text[max(0, start - 3):start]
+    return "'" in prefix or "’" in prefix
 
 
 def _looks_like_known_as_initialism_acronym(text: str, *, start: int, end: int) -> bool:

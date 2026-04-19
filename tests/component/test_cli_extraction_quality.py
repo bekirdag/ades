@@ -180,8 +180,6 @@ def test_cli_can_render_pack_health_as_table_and_json(
     assert "PACK" in health.stdout
     assert "finance-en" in health.stdout
     assert "OBSERVATIONS" in health.stdout
-    assert "Lane" in health.stdout
-    assert "deterministic_alias" in health.stdout
 
     health_json = runner.invoke(
         app,

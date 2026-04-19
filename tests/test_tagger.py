@@ -23,6 +23,15 @@ def test_finance_pack_tags_aliases_and_rules(tmp_path: Path) -> None:
     assert "exchange" in labels
     assert "currency_amount" in labels
     assert "finance" in topics
+    assert response.total_time_ms == response.timing_ms
+    assert response.timing_breakdown_ms is not None
+    assert set(response.timing_breakdown_ms) == {
+        "normalization_ms",
+        "segmentation_ms",
+        "lookup_rule_extraction_ms",
+        "overlap_resolution_ms",
+        "final_metric_assembly_ms",
+    }
 
 
 def test_finance_pack_alias_tagging_recovers_after_metadata_row_deletion(tmp_path: Path) -> None:

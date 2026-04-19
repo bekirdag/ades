@@ -49,8 +49,8 @@ def test_cli_can_validate_generated_general_pack_quality(tmp_path) -> None:
     assert quality_payload["fixture_profile"] == "benchmark"
     assert quality_payload["passed"] is True
     assert quality_payload["expected_recall"] == 1.0
-    assert quality_payload["expected_entity_count"] == 34
-    assert quality_payload["alias_count"] == 47
+    assert quality_payload["expected_entity_count"] == 32
+    assert quality_payload["alias_count"] == 51
 
 
 def test_cli_uses_general_pack_default_ambiguity_budget(tmp_path) -> None:

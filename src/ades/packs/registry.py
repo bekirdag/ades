@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 import shutil
@@ -54,6 +55,12 @@ class PackRegistry:
         known_packs = packs if not active_only else self.store.list_installed_packs(active_only=False)
         if self._sync_missing_filesystem_packs(known_packs):
             return self.store.list_installed_packs(active_only=active_only)
+        repaired_packs = self._repair_noncanonical_pack_metadata_batch(
+            packs,
+            active_only=active_only,
+        )
+        if repaired_packs is not None:
+            return repaired_packs
         if packs or self.store.count_installed_packs() > 0:
             return packs
         self.store.sync_from_filesystem(self.layout.packs_dir)
@@ -64,6 +71,13 @@ class PackRegistry:
 
         pack = self.store.get_pack(pack_id, active_only=active_only)
         if pack is not None:
+            if self._allows_implicit_metadata_repairs():
+                repaired_pack, repaired = self._repair_noncanonical_pack_metadata(pack)
+                if repaired:
+                    refreshed = self.store.get_pack(pack_id, active_only=active_only)
+                    if refreshed is not None:
+                        return refreshed
+                return repaired_pack
             return pack
         if active_only and self.store.get_pack(pack_id, active_only=False) is not None:
             return None
@@ -195,6 +209,80 @@ class PackRegistry:
             self.store.sync_pack_from_dir(pack_dir)
             repaired = True
         return repaired
+
+    def _repair_noncanonical_pack_metadata_batch(
+        self,
+        packs: list[PackManifest],
+        *,
+        active_only: bool,
+    ) -> list[PackManifest] | None:
+        repaired_any = False
+        for pack in packs:
+            _, repaired = self._repair_noncanonical_pack_metadata(pack)
+            repaired_any = repaired_any or repaired
+        if not repaired_any:
+            return None
+        return self.store.list_installed_packs(active_only=active_only)
+
+    def _repair_noncanonical_pack_metadata(
+        self,
+        pack: PackManifest,
+    ) -> tuple[PackManifest, bool]:
+        canonical_pack_dir = self.layout.packs_dir / pack.pack_id
+        canonical_manifest_path = canonical_pack_dir / "manifest.json"
+        if not canonical_manifest_path.exists():
+            return pack, False
+        if self._paths_match(pack.install_path, canonical_pack_dir) and self._paths_match(
+            pack.manifest_path,
+            canonical_manifest_path,
+        ):
+            return pack, False
+        canonical_manifest = PackManifest.load(canonical_manifest_path)
+        if canonical_manifest.pack_id != pack.pack_id:
+            return pack, False
+        if self._can_repair_pack_paths_without_full_sync(pack, canonical_manifest):
+            repair_paths = getattr(self.store, "repair_pack_installation_paths", None)
+            if callable(repair_paths) and repair_paths(
+                pack.pack_id,
+                install_path=str(canonical_pack_dir),
+                manifest_path=str(canonical_manifest_path),
+                active=pack.active,
+            ):
+                return (
+                    replace(
+                        pack,
+                        install_path=str(canonical_pack_dir),
+                        manifest_path=str(canonical_manifest_path),
+                    ),
+                    True,
+                )
+        refreshed = self.store.sync_pack_from_dir(canonical_pack_dir, active=pack.active)
+        return refreshed or pack, True
+
+    @staticmethod
+    def _can_repair_pack_paths_without_full_sync(
+        stored_pack: PackManifest,
+        canonical_manifest: PackManifest,
+    ) -> bool:
+        return (
+            stored_pack.pack_id == canonical_manifest.pack_id
+            and stored_pack.schema_version == canonical_manifest.schema_version
+            and stored_pack.version == canonical_manifest.version
+            and stored_pack.language == canonical_manifest.language
+            and stored_pack.domain == canonical_manifest.domain
+            and stored_pack.tier == canonical_manifest.tier
+            and stored_pack.min_ades_version == canonical_manifest.min_ades_version
+            and (stored_pack.sha256 or None) == (canonical_manifest.sha256 or None)
+        )
+
+    @staticmethod
+    def _paths_match(stored_path: str | Path | None, expected_path: Path) -> bool:
+        if stored_path is None:
+            return False
+        try:
+            return Path(stored_path).resolve(strict=False) == expected_path.resolve(strict=False)
+        except OSError:
+            return Path(stored_path) == expected_path
 
 
 def default_registry_url() -> str:

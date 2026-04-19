@@ -57,7 +57,7 @@ def build_expected_batch_source_paths(working_dir: Path) -> list[str]:
 
 def build_expected_batch_input_sizes() -> list[int]:
     return [
-        len("<p>Issuer Alpha said TICKA rallied.</p>\n".encode("utf-8")),
+        len("<p>Org Beta said TICKA rallied.</p>\n".encode("utf-8")),
         len("<p>EXCHX closed near USD 12.5.</p>\n".encode("utf-8")),
     ]
 
@@ -109,7 +109,7 @@ def _build_fake_batch_source_fingerprint(content: str) -> dict[str, object]:
 
 def build_expected_batch_source_fingerprints() -> list[dict[str, object]]:
     return [
-        _build_fake_batch_source_fingerprint("<p>Issuer Alpha said TICKA rallied.</p>\n"),
+        _build_fake_batch_source_fingerprint("<p>Org Beta said TICKA rallied.</p>\n"),
         _build_fake_batch_source_fingerprint("<p>EXCHX closed near USD 12.5.</p>\n"),
     ]
 
@@ -523,9 +523,9 @@ def build_fake_service_smoke(
                         "language": "en",
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
-                        "input_size_bytes": len("<p>Issuer Alpha said TICKA rallied.</p>\n".encode("utf-8")),
+                        "input_size_bytes": len("<p>Org Beta said TICKA rallied.</p>\n".encode("utf-8")),
                         "source_fingerprint": _build_fake_batch_source_fingerprint(
-                            "<p>Issuer Alpha said TICKA rallied.</p>\n"
+                            "<p>Org Beta said TICKA rallied.</p>\n"
                         ),
                         "saved_output_path": str(
                             (
@@ -649,9 +649,9 @@ def build_fake_service_smoke(
                         "language": "en",
                         "content_type": "text/html",
                         "source_path": str((storage_root.parent / "serve-smoke-batch-alpha.html").resolve()),
-                        "input_size_bytes": len("<p>Issuer Alpha said TICKA rallied.</p>\n".encode("utf-8")),
+                        "input_size_bytes": len("<p>Org Beta said TICKA rallied.</p>\n".encode("utf-8")),
                         "source_fingerprint": _build_fake_batch_source_fingerprint(
-                            "<p>Issuer Alpha said TICKA rallied.</p>\n"
+                            "<p>Org Beta said TICKA rallied.</p>\n"
                         ),
                         "saved_output_path": str(
                             (

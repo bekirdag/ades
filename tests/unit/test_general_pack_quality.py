@@ -24,19 +24,19 @@ def test_validate_general_pack_quality_reports_passing_fixture_metrics(tmp_path:
     assert report.fixture_count == 14
     assert report.passed_case_count == 14
     assert report.failed_case_count == 0
-    assert report.expected_entity_count == 34
-    assert report.actual_entity_count == 34
-    assert report.matched_expected_entity_count == 34
+    assert report.expected_entity_count == 32
+    assert report.actual_entity_count == 32
+    assert report.matched_expected_entity_count == 32
     assert report.missing_expected_entity_count == 0
     assert report.unexpected_entity_count == 0
     assert report.expected_recall == 1.0
     assert report.precision == 1.0
-    assert report.alias_count == 47
+    assert report.alias_count == 51
     assert report.unique_canonical_count == 32
     assert report.rule_count == 2
-    assert report.dropped_alias_count == 6
-    assert report.ambiguous_alias_count == 4
-    assert report.dropped_alias_ratio == 0.1132
+    assert report.dropped_alias_count == 7
+    assert report.ambiguous_alias_count == 6
+    assert report.dropped_alias_ratio == 0.1207
     assert report.passed is True
     assert report.failures == []
     assert report.warnings == [

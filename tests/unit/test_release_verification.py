@@ -4,6 +4,9 @@ from pathlib import Path
 import pytest
 
 from ades.release import (
+    _build_clean_runtime_env,
+    _build_smoke_cli_env,
+    _parse_pull_pack_ids,
     _parse_status_version,
     release_versions,
     sync_release_version,
@@ -81,7 +84,7 @@ def _served_batch_manifest_payload(
     )
     effective_input_sizes = (
         [
-            len("<p>Issuer Alpha said TICKA rallied.</p>\n".encode("utf-8")),
+            len("<p>Org Beta said TICKA rallied.</p>\n".encode("utf-8")),
             len("<p>EXCHX closed near USD 12.5.</p>\n".encode("utf-8")),
         ]
         if input_sizes is None
@@ -184,6 +187,75 @@ def _served_batch_manifest_payload(
     return payload
 
 
+def test_build_clean_runtime_env_strips_inherited_ades_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ADES_CONFIG_FILE", "/tmp/host-ades.toml")
+    monkeypatch.setenv("ADES_RUNTIME_TARGET", "production_server")
+    monkeypatch.setenv("ADES_METADATA_BACKEND", "postgresql")
+    monkeypatch.setenv("ADES_DATABASE_URL", "postgresql://host/config")
+    monkeypatch.setenv("ADES_STORAGE_ROOT", "/tmp/host-storage")
+
+    env = _build_clean_runtime_env()
+
+    assert "ADES_CONFIG_FILE" not in env
+    assert "ADES_RUNTIME_TARGET" not in env
+    assert "ADES_METADATA_BACKEND" not in env
+    assert "ADES_DATABASE_URL" not in env
+    assert "ADES_STORAGE_ROOT" not in env
+
+
+def test_build_smoke_cli_env_writes_explicit_local_sqlite_config(tmp_path: Path) -> None:
+    working_dir = tmp_path / "smoke"
+    working_dir.mkdir()
+    storage_root = tmp_path / "storage"
+
+    env = _build_smoke_cli_env(
+        working_dir=working_dir,
+        storage_root=storage_root,
+        extra_env={"EXTRA_ENV": "ok"},
+    )
+
+    config_path = Path(env["ADES_CONFIG_FILE"])
+    assert config_path.exists()
+    assert env["ADES_STORAGE_ROOT"] == str(storage_root)
+    assert env["EXTRA_ENV"] == "ok"
+    assert config_path.read_text(encoding="utf-8") == "\n".join(
+        [
+            "[ades]",
+            f'storage_root = "{storage_root}"',
+            'runtime_target = "local"',
+            'metadata_backend = "sqlite"',
+            "",
+        ]
+    )
+
+
+def test_parse_pull_pack_ids_accepts_human_readable_cli_summary() -> None:
+    result = ReleaseCommandResult(
+        command=["ades", "pull", "finance-en"],
+        exit_code=0,
+        passed=True,
+        stdout="\n".join(
+            [
+                "Pull complete",
+                "Requested pack: finance-en",
+                "Registry: file:///tmp/registry/index.json",
+                "",
+                "Installed (2):",
+                "  general-en",
+                "  finance-en",
+                "Skipped (0):",
+                "  none",
+                "",
+            ]
+        ),
+        stderr="",
+    )
+
+    assert _parse_pull_pack_ids(result) == ["general-en", "finance-en"]
+
+
 def _served_batch_manifest_replay_payload(
     working_dir: Path,
     *,
@@ -253,7 +325,7 @@ def _served_batch_manifest_replay_payload(
     )
     effective_input_sizes = (
         [
-            len("<p>Issuer Alpha said TICKA rallied.</p>\n".encode("utf-8")),
+            len("<p>Org Beta said TICKA rallied.</p>\n".encode("utf-8")),
             len("<p>EXCHX closed near USD 12.5.</p>\n".encode("utf-8")),
         ]
         if input_sizes is None

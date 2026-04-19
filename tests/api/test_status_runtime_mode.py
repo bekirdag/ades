@@ -9,18 +9,18 @@ from ades.storage.registry_db import PackMetadataStore
 
 def test_status_endpoint_reports_local_sqlite_mode(tmp_path: Path) -> None:
     PackInstaller(tmp_path).install("finance-en")
-    client = TestClient(create_app(storage_root=tmp_path))
+    with TestClient(create_app(storage_root=tmp_path)) as client:
+        response = client.get("/v0/status")
 
-    response = client.get("/v0/status")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["runtime_target"] == "local"
-    assert payload["metadata_backend"] == "sqlite"
-    assert payload["metadata_persistence_backend"] == "sqlite"
-    assert payload["exact_extraction_backend"] == "compiled_matcher"
-    assert payload["operator_lookup_backend"] == "sqlite_search_index"
-    assert "finance-en" in payload["installed_packs"]
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["runtime_target"] == "local"
+        assert payload["metadata_backend"] == "sqlite"
+        assert payload["metadata_persistence_backend"] == "sqlite"
+        assert payload["exact_extraction_backend"] == "compiled_matcher"
+        assert payload["operator_lookup_backend"] == "sqlite_search_index"
+        assert "finance-en" in payload["installed_packs"]
+        assert "finance-en" in payload["prewarmed_packs"]
 
 
 def test_status_endpoint_returns_404_for_missing_explicit_config(
@@ -92,15 +92,17 @@ def test_status_endpoint_reports_production_postgresql_mode(
     monkeypatch.setenv("ADES_METADATA_BACKEND", "postgresql")
     monkeypatch.setenv("ADES_DATABASE_URL", "postgresql://db.example/ades")
     monkeypatch.setattr("ades.api.PackRegistry", _FakeRegistry)
-    client = TestClient(create_app(storage_root=tmp_path))
+    monkeypatch.setattr("ades.service.app.PackRegistry", _FakeRegistry)
+    monkeypatch.setattr("ades.service.app.load_pack_runtime", lambda *args, **kwargs: None)
+    with TestClient(create_app(storage_root=tmp_path)) as client:
+        response = client.get("/v0/status")
 
-    response = client.get("/v0/status")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["runtime_target"] == "production_server"
-    assert payload["metadata_backend"] == "postgresql"
-    assert payload["metadata_persistence_backend"] == "postgresql"
-    assert payload["exact_extraction_backend"] == "compiled_matcher"
-    assert payload["operator_lookup_backend"] == "postgresql_search"
-    assert payload["installed_packs"] == ["general-en"]
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["runtime_target"] == "production_server"
+        assert payload["metadata_backend"] == "postgresql"
+        assert payload["metadata_persistence_backend"] == "postgresql"
+        assert payload["exact_extraction_backend"] == "compiled_matcher"
+        assert payload["operator_lookup_backend"] == "postgresql_search"
+        assert payload["installed_packs"] == ["general-en"]
+        assert payload["prewarmed_packs"] == []

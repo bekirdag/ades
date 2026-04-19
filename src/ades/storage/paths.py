@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Iterator
 
@@ -52,12 +53,19 @@ def ensure_storage_layout(layout: StorageLayout) -> StorageLayout:
 
 
 def iter_pack_manifest_paths(packs_dir: Path) -> Iterator[Path]:
-    """Yield installable pack manifests while skipping hidden backup/work dirs."""
+    """Yield installable pack manifests while skipping hidden or noncanonical dirs."""
 
     if not packs_dir.exists():
         return
     for manifest_path in sorted(packs_dir.glob("*/manifest.json")):
         pack_dir = manifest_path.parent
         if pack_dir.name.startswith("."):
+            continue
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        pack_id = str(payload.get("pack_id", "")).strip()
+        if not pack_id or pack_dir.name != pack_id:
             continue
         yield manifest_path

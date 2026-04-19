@@ -147,6 +147,9 @@ jobs:
       - name: Verify public endpoints
         run: |
           set -euo pipefail
+          curl -fsS https://api.adestool.com/healthz >/dev/null
+          curl -fsS https://api.adestool.com/v0/status >/dev/null
+          curl -fsS https://api.adestool.com/v0/packs/available >/dev/null
           curl -fsS https://adestool.com/healthz >/dev/null
           curl -fsS https://adestool.com/v0/status >/dev/null
           curl -fsS https://adestool.com/v0/packs/available >/dev/null

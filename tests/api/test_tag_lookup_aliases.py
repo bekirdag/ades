@@ -290,12 +290,20 @@ def test_tag_endpoint_backfills_document_defined_acronyms(tmp_path: Path) -> Non
     )
 
     assert response.status_code == 200
-    pairs = {(entity["text"], entity["label"]) for entity in response.json()["entities"]}
+    payload = response.json()
+    pairs = {(entity["text"], entity["label"]) for entity in payload["entities"]}
+    aliases = {
+        entity["text"]: set(entity.get("aliases", [])) for entity in payload["entities"]
+    }
 
     assert ("International Energy Agency", "organization") in pairs
     assert ("United States", "location") in pairs
-    assert ("IEA", "organization") in pairs
-    assert ("US", "location") in pairs
+    assert payload["metrics"]["entity_count"] == 2
+    assert aliases["International Energy Agency"] == {
+        "International Energy Agency",
+        "IEA",
+    }
+    assert aliases["United States"] == {"United States", "US"}
 
 
 def test_tag_endpoint_backfills_contextual_org_acronyms_and_skips_noise(

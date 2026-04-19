@@ -2,7 +2,7 @@
 
 This repository now has a live production deployment with:
 
-- API base URL: `https://adestool.com`
+- API base URL: `https://api.adestool.com`
 - Registry index: `https://repo.adestool.com/index.json`
 - Production runtime: PostgreSQL-backed `ades` service behind `nginx`
 - Registry/static pack host: `repo.adestool.com`
@@ -32,6 +32,12 @@ Deployments are pipeline-owned.
   - move `/mnt/ades/repo/current` to the new registry release
   - restart `ades.service`
   - verify local and public health endpoints
+
+The production API service is expected to be always running under the deploy-owned
+`systemd --user` unit `ades.service`, with the public API exposed on
+`https://api.adestool.com`. `https://adestool.com` may continue to proxy the same
+origin for backward compatibility, but `api.adestool.com` is the canonical API
+hostname going forward.
 
 Required GitHub secrets:
 

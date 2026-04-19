@@ -5,7 +5,7 @@ import urllib.error
 
 import pytest
 
-from ades.config import Settings
+from ades.config import DEFAULT_STORAGE_ROOT, Settings
 from ades.service import client as client_module
 from ades.service.client import (
     SERVICE_MODE_ENV,
@@ -45,19 +45,23 @@ def _production_settings(storage_root: Path) -> Settings:
 def test_should_use_local_service_respects_runtime_target_and_override(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    local_settings = Settings(storage_root=tmp_path)
-    production_settings = _production_settings(tmp_path)
+    local_settings = Settings(storage_root=DEFAULT_STORAGE_ROOT)
+    production_settings = _production_settings(DEFAULT_STORAGE_ROOT)
+    custom_root_settings = Settings(storage_root=tmp_path)
 
     monkeypatch.delenv(SERVICE_MODE_ENV, raising=False)
     assert should_use_local_service(local_settings) is True
     assert should_use_local_service(production_settings) is True
+    assert should_use_local_service(custom_root_settings) is False
 
     monkeypatch.setenv(SERVICE_MODE_ENV, "in_process")
     assert should_use_local_service(local_settings) is False
     assert should_use_local_service(production_settings) is False
+    assert should_use_local_service(custom_root_settings) is False
 
     monkeypatch.setenv(SERVICE_MODE_ENV, "service")
     assert should_use_local_service(local_settings) is True
+    assert should_use_local_service(custom_root_settings) is True
 
 
 def test_tag_via_local_service_serializes_request_and_parses_response(

@@ -519,6 +519,30 @@ class PostgreSQLMetadataStore:
             )
         return cursor.rowcount > 0
 
+    def repair_pack_installation_paths(
+        self,
+        pack_id: str,
+        *,
+        install_path: str,
+        manifest_path: str,
+        active: bool | None = None,
+    ) -> bool:
+        assignments = [
+            "install_path = %s",
+            "manifest_path = %s",
+        ]
+        params: list[object] = [install_path, manifest_path]
+        if active is not None:
+            assignments.append("active = %s")
+            params.append(active)
+        params.append(pack_id)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"UPDATE installed_packs SET {', '.join(assignments)} WHERE pack_id = %s",
+                params,
+            )
+        return cursor.rowcount > 0
+
     def delete_pack(self, pack_id: str) -> bool:
         with self._connect() as connection:
             cursor = connection.execute(

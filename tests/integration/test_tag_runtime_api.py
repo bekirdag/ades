@@ -22,6 +22,8 @@ def test_public_api_tag_returns_metrics_pack_version_and_debug(tmp_path: Path) -
     assert response.metrics is not None
     assert response.metrics.entity_count >= 3
     assert response.debug is not None
+    assert response.total_time_ms == response.timing_ms
+    assert response.timing_breakdown_ms is not None
 
 
 def test_public_api_tag_warns_when_input_is_truncated(tmp_path: Path) -> None:
