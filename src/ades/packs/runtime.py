@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from threading import RLock
 from typing import Pattern
 
 from .registry import PackRegistry
@@ -15,6 +16,11 @@ _DEFAULT_DENSITY_THRESHOLDS = {
     "finance": 0.35,
     "medical": 0.35,
 }
+_PACK_RUNTIME_CACHE: dict[
+    tuple[str, str, str, str, str | None],
+    "PackRuntime | None",
+] = {}
+_PACK_RUNTIME_CACHE_LOCK = RLock()
 
 
 @dataclass(frozen=True)
@@ -64,7 +70,39 @@ def load_pack_runtime(
 ) -> PackRuntime | None:
     """Load the requested installed pack and all dependency data."""
 
-    registry = registry or PackRegistry(storage_root)
+    resolved_root = Path(storage_root).expanduser().resolve()
+    resolved_registry = registry or PackRegistry(resolved_root)
+    database_url = getattr(resolved_registry.store, "database_url", None)
+    cache_key = (
+        str(resolved_root),
+        pack_id,
+        resolved_registry.runtime_target.value,
+        resolved_registry.metadata_backend.value,
+        str(database_url) if database_url else None,
+    )
+    with _PACK_RUNTIME_CACHE_LOCK:
+        if cache_key in _PACK_RUNTIME_CACHE:
+            return _PACK_RUNTIME_CACHE[cache_key]
+    runtime = _build_pack_runtime(pack_id, registry=resolved_registry)
+    with _PACK_RUNTIME_CACHE_LOCK:
+        _PACK_RUNTIME_CACHE[cache_key] = runtime
+    return runtime
+
+
+def clear_pack_runtime_cache() -> None:
+    """Clear the process-local pack runtime cache."""
+
+    with _PACK_RUNTIME_CACHE_LOCK:
+        _PACK_RUNTIME_CACHE.clear()
+
+
+def _build_pack_runtime(
+    pack_id: str,
+    *,
+    registry: PackRegistry,
+) -> PackRuntime | None:
+    """Build the merged runtime view for one installed pack."""
+
     manifest = registry.get_pack(pack_id, active_only=True)
     if manifest is None:
         return None
