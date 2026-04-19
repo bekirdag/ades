@@ -19,8 +19,16 @@ from .distribution import (
 from .packs.installer import InstallResult, PackInstaller
 from .packs.generation import generate_pack_source as run_generate_pack_source
 from .packs.finance_bundle import build_finance_source_bundle as run_build_finance_source_bundle
+from .packs.finance_country import (
+    DEFAULT_FINANCE_COUNTRY_BUNDLE_OUTPUT_ROOT,
+    DEFAULT_FINANCE_COUNTRY_SOURCE_OUTPUT_ROOT,
+    DEFAULT_COUNTRY_SOURCE_FETCH_USER_AGENT,
+    build_finance_country_source_bundles as run_build_finance_country_source_bundles,
+    fetch_finance_country_source_snapshots as run_fetch_finance_country_source_snapshots,
+)
 from .packs.finance_sources import (
     DEFAULT_FINANCE_SOURCE_OUTPUT_ROOT,
+    DEFAULT_SEC_ARCHIVES_BASE_URL,
     DEFAULT_SEC_COMPANIES_URL,
     DEFAULT_SEC_COMPANYFACTS_URL,
     DEFAULT_SEC_SUBMISSIONS_URL,
@@ -90,6 +98,7 @@ from .packs.publish import (
     smoke_test_published_registry as run_smoke_test_published_registry,
 )
 from .packs.registry import PackRegistry, load_registry_index
+from .packs.runtime import PackRuntime, load_pack_runtime
 from .packs.versioning import (
     default_release_thresholds,
     diff_pack_directories,
@@ -124,12 +133,14 @@ from .service.models import (
     RegistryBuildPackSummary,
     RegistryBuildResponse,
     RegistryBuildFinanceBundleResponse,
+    RegistryBuildFinanceCountryBundlesResponse,
     RegistryCompareExtractionQualityResponse,
     RegistryEvaluateExtractionQualityResponse,
     RegistryEvaluateReleaseThresholdsResponse,
     RegistryPackDiffResponse,
     RegistryReleaseThresholdsResponse,
     RegistryPrepareDeployReleaseResponse,
+    RegistryFetchFinanceCountrySourcesResponse,
     RegistryFetchGeneralSourcesResponse,
     RegistryFetchMedicalSourcesResponse,
     RegistryFetchFinanceSourcesResponse,
@@ -700,6 +711,7 @@ def build_finance_source_bundle(
     sec_companyfacts_path: str | Path | None = None,
     symbol_directory_path: str | Path,
     other_listed_path: str | Path | None = None,
+    finance_people_path: str | Path | None = None,
     curated_entities_path: str | Path,
     output_dir: str | Path,
     version: str = "0.2.0",
@@ -712,6 +724,7 @@ def build_finance_source_bundle(
         sec_companyfacts_path=sec_companyfacts_path,
         symbol_directory_path=symbol_directory_path,
         other_listed_path=other_listed_path,
+        finance_people_path=finance_people_path,
         curated_entities_path=curated_entities_path,
         output_dir=output_dir,
         version=version,
@@ -731,6 +744,9 @@ def build_finance_source_bundle(
         rule_record_count=result.rule_record_count,
         sec_issuer_count=result.sec_issuer_count,
         symbol_count=result.symbol_count,
+        person_count=result.person_count,
+        company_equity_ticker_count=result.company_equity_ticker_count,
+        company_name_enriched_issuer_count=result.company_name_enriched_issuer_count,
         curated_entity_count=result.curated_entity_count,
         warnings=result.warnings,
     )
@@ -745,6 +761,10 @@ def fetch_finance_source_snapshot(
     sec_companyfacts_url: str = DEFAULT_SEC_COMPANYFACTS_URL,
     symbol_directory_url: str = DEFAULT_SYMBOL_DIRECTORY_URL,
     other_listed_url: str = DEFAULT_OTHER_LISTED_URL,
+    finance_people_url: str | None = None,
+    derive_finance_people_from_sec: bool = False,
+    finance_people_archive_base_url: str = DEFAULT_SEC_ARCHIVES_BASE_URL,
+    finance_people_max_companies: int | None = None,
     user_agent: str = DEFAULT_SOURCE_FETCH_USER_AGENT,
 ) -> RegistryFetchFinanceSourcesResponse:
     """Download one real finance source snapshot set into the big-data root."""
@@ -757,6 +777,10 @@ def fetch_finance_source_snapshot(
         sec_companyfacts_url=sec_companyfacts_url,
         symbol_directory_url=symbol_directory_url,
         other_listed_url=other_listed_url,
+        finance_people_url=finance_people_url,
+        derive_finance_people_from_sec=derive_finance_people_from_sec,
+        finance_people_archive_base_url=finance_people_archive_base_url,
+        finance_people_max_companies=finance_people_max_companies,
         user_agent=user_agent,
     )
     return RegistryFetchFinanceSourcesResponse(
@@ -769,12 +793,14 @@ def fetch_finance_source_snapshot(
         sec_companyfacts_url=result.sec_companyfacts_url,
         symbol_directory_url=result.symbol_directory_url,
         other_listed_url=result.other_listed_url,
+        finance_people_url=result.finance_people_url,
         source_manifest_path=result.source_manifest_path,
         sec_companies_path=result.sec_companies_path,
         sec_submissions_path=result.sec_submissions_path,
         sec_companyfacts_path=result.sec_companyfacts_path,
         symbol_directory_path=result.symbol_directory_path,
         other_listed_path=result.other_listed_path,
+        finance_people_path=result.finance_people_path,
         curated_entities_path=result.curated_entities_path,
         generated_at=result.generated_at,
         source_count=result.source_count,
@@ -784,7 +810,93 @@ def fetch_finance_source_snapshot(
         sec_companyfacts_sha256=result.sec_companyfacts_sha256,
         symbol_directory_sha256=result.symbol_directory_sha256,
         other_listed_sha256=result.other_listed_sha256,
+        finance_people_sha256=result.finance_people_sha256,
         curated_entities_sha256=result.curated_entities_sha256,
+        warnings=result.warnings,
+    )
+
+
+def fetch_finance_country_source_snapshots(
+    *,
+    output_dir: str | Path = DEFAULT_FINANCE_COUNTRY_SOURCE_OUTPUT_ROOT,
+    snapshot: str | None = None,
+    country_codes: list[str] | tuple[str, ...] | None = None,
+    user_agent: str = DEFAULT_COUNTRY_SOURCE_FETCH_USER_AGENT,
+) -> RegistryFetchFinanceCountrySourcesResponse:
+    """Download official source landing pages for country-scoped finance packs."""
+
+    result = run_fetch_finance_country_source_snapshots(
+        output_dir=output_dir,
+        snapshot=snapshot,
+        country_codes=list(country_codes or []),
+        user_agent=user_agent,
+    )
+    return RegistryFetchFinanceCountrySourcesResponse(
+        output_dir=result.output_dir,
+        snapshot=result.snapshot,
+        snapshot_dir=result.snapshot_dir,
+        generated_at=result.generated_at,
+        country_count=result.country_count,
+        countries=[
+            {
+                "country_code": item.country_code,
+                "country_name": item.country_name,
+                "pack_id": item.pack_id,
+                "snapshot_dir": item.snapshot_dir,
+                "profile_path": item.profile_path,
+                "source_manifest_path": item.source_manifest_path,
+                "curated_entities_path": item.curated_entities_path,
+                "source_count": item.source_count,
+                "curated_entity_count": item.curated_entity_count,
+                "warnings": item.warnings,
+            }
+            for item in result.countries
+        ],
+        warnings=result.warnings,
+    )
+
+
+def build_finance_country_source_bundles(
+    *,
+    snapshot_dir: str | Path,
+    output_dir: str | Path = DEFAULT_FINANCE_COUNTRY_BUNDLE_OUTPUT_ROOT,
+    country_codes: list[str] | tuple[str, ...] | None = None,
+    version: str = "0.2.0",
+) -> RegistryBuildFinanceCountryBundlesResponse:
+    """Build country-scoped finance bundles from downloaded snapshots."""
+
+    result = run_build_finance_country_source_bundles(
+        snapshot_dir=snapshot_dir,
+        output_dir=output_dir,
+        country_codes=list(country_codes or []),
+        version=version,
+    )
+    return RegistryBuildFinanceCountryBundlesResponse(
+        output_dir=result.output_dir,
+        generated_at=result.generated_at,
+        country_count=result.country_count,
+        bundles=[
+            {
+                "country_code": item.country_code,
+                "country_name": item.country_name,
+                "pack_id": item.pack_id,
+                "version": item.version,
+                "bundle_dir": item.bundle_dir,
+                "bundle_manifest_path": item.bundle_manifest_path,
+                "sources_lock_path": item.sources_lock_path,
+                "entities_path": item.entities_path,
+                "rules_path": item.rules_path,
+                "generated_at": item.generated_at,
+                "source_count": item.source_count,
+                "entity_record_count": item.entity_record_count,
+                "rule_record_count": item.rule_record_count,
+                "organization_count": item.organization_count,
+                "exchange_count": item.exchange_count,
+                "market_index_count": item.market_index_count,
+                "warnings": item.warnings,
+            }
+            for item in result.bundles
+        ],
         warnings=result.warnings,
     )
 
@@ -1260,6 +1372,14 @@ def _report_response_from_result(
         labels_path=result.labels_path,
         aliases_path=result.aliases_path,
         rules_path=result.rules_path,
+        matcher_artifact_path=result.matcher_artifact_path,
+        matcher_entries_path=result.matcher_entries_path,
+        matcher_algorithm=result.matcher_algorithm,
+        matcher_entry_count=result.matcher_entry_count,
+        matcher_state_count=result.matcher_state_count,
+        matcher_max_alias_length=result.matcher_max_alias_length,
+        matcher_artifact_sha256=result.matcher_artifact_sha256,
+        matcher_entries_sha256=result.matcher_entries_sha256,
         sources_path=result.sources_path,
         build_path=result.build_path,
         generated_at=result.generated_at,
@@ -2114,16 +2234,23 @@ def tag(
     storage_root: str | Path | None = None,
     debug: bool = False,
     hybrid: bool | None = None,
+    registry: PackRegistry | None = None,
+    runtime: PackRuntime | None = None,
 ) -> TagResponse:
     """Run in-process tagging through the installed local runtime."""
 
     settings = _resolve_settings(storage_root=storage_root)
     resolved_pack = pack or settings.default_pack
-    registry = PackRegistry(
+    registry = registry or PackRegistry(
         settings.storage_root,
         runtime_target=settings.runtime_target,
         metadata_backend=settings.metadata_backend,
         database_url=settings.database_url,
+    )
+    runtime = (
+        runtime
+        if runtime is not None and runtime.pack_id == resolved_pack
+        else load_pack_runtime(settings.storage_root, resolved_pack, registry=registry)
     )
     response = tag_text(
         text=text,
@@ -2133,6 +2260,7 @@ def tag(
         debug=debug,
         hybrid=hybrid,
         registry=registry,
+        runtime=runtime,
     )
     if output_path is not None or output_dir is not None:
         response = persist_tag_response_json(
@@ -2157,16 +2285,23 @@ def tag_file(
     storage_root: str | Path | None = None,
     debug: bool = False,
     hybrid: bool | None = None,
+    registry: PackRegistry | None = None,
+    runtime: PackRuntime | None = None,
 ) -> TagResponse:
     """Run in-process tagging for a local file path."""
 
     settings = _resolve_settings(storage_root=storage_root)
     resolved_pack = pack or settings.default_pack
-    registry = PackRegistry(
+    registry = registry or PackRegistry(
         settings.storage_root,
         runtime_target=settings.runtime_target,
         metadata_backend=settings.metadata_backend,
         database_url=settings.database_url,
+    )
+    runtime = (
+        runtime
+        if runtime is not None and runtime.pack_id == resolved_pack
+        else load_pack_runtime(settings.storage_root, resolved_pack, registry=registry)
     )
     resolved_path, text, resolved_content_type, input_size_bytes, source_fingerprint = load_tag_file(
         path,
@@ -2180,6 +2315,7 @@ def tag_file(
         debug=debug,
         hybrid=hybrid,
         registry=registry,
+        runtime=runtime,
     )
     response = response.model_copy(
         update={
@@ -2225,11 +2361,13 @@ def tag_files(
     manifest_output_path: str | Path | None = None,
     debug: bool = False,
     hybrid: bool | None = None,
+    registry: PackRegistry | None = None,
+    runtime: PackRuntime | None = None,
 ) -> BatchTagResponse:
     """Run in-process tagging for multiple local file paths."""
 
     settings = _resolve_settings(storage_root=storage_root)
-    registry = PackRegistry(
+    registry = registry or PackRegistry(
         settings.storage_root,
         runtime_target=settings.runtime_target,
         metadata_backend=settings.metadata_backend,
@@ -2258,6 +2396,11 @@ def tag_files(
     if repair_missing_reused_outputs and not reuse_unchanged_outputs:
         raise ValueError("repair_missing_reused_outputs requires reuse_unchanged_outputs.")
     resolved_pack = pack or (replay_plan.manifest.pack if replay_plan is not None else None) or settings.default_pack
+    runtime = (
+        runtime
+        if runtime is not None and runtime.pack_id == resolved_pack
+        else load_pack_runtime(settings.storage_root, resolved_pack, registry=registry)
+    )
     if (write_manifest or manifest_output_path is not None) and output_dir is None:
         raise ValueError("Batch manifest export requires output_dir.")
     discovery = discover_tag_file_sources(
@@ -2333,6 +2476,7 @@ def tag_files(
                             debug=debug,
                             hybrid=hybrid,
                             registry=registry,
+                            runtime=runtime,
                         ).model_copy(
                             update={
                                 "content_type": resolved_content_type,
@@ -2368,6 +2512,7 @@ def tag_files(
             debug=debug,
             hybrid=hybrid,
             registry=registry,
+            runtime=runtime,
         )
         response = response.model_copy(
             update={

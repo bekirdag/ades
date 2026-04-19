@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from ades.packs.finance_bundle import build_finance_source_bundle
-from ades.packs.finance_quality import validate_finance_pack_quality
+from ades.packs.finance_quality import _issuer_quality_text, validate_finance_pack_quality
 from tests.finance_bundle_helpers import create_finance_raw_snapshots
 
 
@@ -11,6 +11,7 @@ def test_validate_finance_pack_quality_reports_passing_fixture_metrics(tmp_path:
     bundle = build_finance_source_bundle(
         sec_companies_path=snapshots["sec_companies"],
         symbol_directory_path=snapshots["symbol_directory"],
+        finance_people_path=snapshots["finance_people"],
         curated_entities_path=snapshots["curated_entities"],
         output_dir=tmp_path / "bundles",
     )
@@ -22,19 +23,19 @@ def test_validate_finance_pack_quality_reports_passing_fixture_metrics(tmp_path:
 
     assert report.passed is True
     assert report.fixture_profile == "benchmark"
-    assert report.fixture_count == 5
-    assert report.passed_case_count == 5
+    assert report.fixture_count == 8
+    assert report.passed_case_count == 8
     assert report.failed_case_count == 0
-    assert report.expected_entity_count == 16
-    assert report.actual_entity_count == 16
-    assert report.matched_expected_entity_count == 16
+    assert report.expected_entity_count >= 22
+    assert report.actual_entity_count == report.expected_entity_count
+    assert report.matched_expected_entity_count == report.expected_entity_count
     assert report.missing_expected_entity_count == 0
     assert report.unexpected_entity_count == 0
     assert report.expected_recall == 1.0
     assert report.precision == 1.0
-    assert report.alias_count == 18
-    assert report.unique_canonical_count == 9
-    assert report.rule_count == 2
+    assert report.alias_count >= 30
+    assert report.unique_canonical_count >= 14
+    assert report.rule_count == 5
     assert Path(report.generated_pack_dir).exists()
     assert Path(report.registry_index_path).exists()
     assert Path(report.storage_root).exists()
@@ -45,6 +46,7 @@ def test_validate_finance_pack_quality_flags_unexpected_alias_hits(tmp_path: Pat
     bundle = build_finance_source_bundle(
         sec_companies_path=snapshots["sec_companies"],
         symbol_directory_path=snapshots["symbol_directory"],
+        finance_people_path=snapshots["finance_people"],
         curated_entities_path=snapshots["curated_entities"],
         output_dir=tmp_path / "bundles",
     )
@@ -53,12 +55,12 @@ def test_validate_finance_pack_quality_flags_unexpected_alias_hits(tmp_path: Pat
         handle.write(
             json.dumps(
                 {
-                    "entity_id": "exchange:market",
+                    "entity_id": "exchange:public-market",
                     "entity_type": "exchange",
-                    "canonical_text": "Market",
+                    "canonical_text": "Public Market",
                     "aliases": [],
                     "source_name": "curated-finance-entities",
-                    "source_id": "market",
+                    "source_id": "public-market",
                 }
             )
             + "\n"
@@ -74,4 +76,19 @@ def test_validate_finance_pack_quality_flags_unexpected_alias_hits(tmp_path: Pat
     assert report.unexpected_entity_count >= 1
     assert any("Unexpected entity count" in item for item in report.failures)
     produce_case = next(case for case in report.cases if case.name == "produce-market-non-hit")
-    assert any(entity.text == "market" and entity.label == "exchange" for entity in produce_case.unexpected_entities)
+    assert any(
+        entity.text == "public market" and entity.label == "exchange"
+        for entity in produce_case.unexpected_entities
+    )
+
+
+def test_issuer_quality_text_prefers_human_readable_alias() -> None:
+    assert (
+        _issuer_quality_text(
+            {
+                "canonical_text": "ISSUER ALPHA CORP",
+                "aliases": ["Issuer Alpha Corporation"],
+            }
+        )
+        == "Issuer Alpha Corporation"
+    )

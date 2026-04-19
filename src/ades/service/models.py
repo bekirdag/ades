@@ -35,6 +35,7 @@ _GENERAL_EXECUTIVE_TITLE_ACRONYMS = {
 _GENERAL_OUTPUT_ARTICLE_LEADS = {"the"}
 _GENERAL_OUTPUT_SINGLE_TOKEN_GENERIC_ZIPF_MIN = 5.25
 _GENERAL_OUTPUT_ARTICLE_TAIL_GENERIC_ZIPF_MIN = 4.7
+_GENERAL_OUTPUT_EXACT_NOISE_TEXTS = {"canadian", "cut off", "unknown"}
 
 
 class PackSummary(BaseModel):
@@ -83,6 +84,7 @@ class StatusResponse(BaseModel):
     port: int
     registry_url: str | None = None
     installed_packs: list[str] = Field(default_factory=list)
+    prewarmed_packs: list[str] = Field(default_factory=list)
 
 
 class RegistryBuildPackSummary(BaseModel):
@@ -129,6 +131,7 @@ class RegistryBuildFinanceBundleRequest(BaseModel):
     sec_companyfacts_path: str | None = None
     symbol_directory_path: str
     other_listed_path: str | None = None
+    finance_people_path: str | None = None
     curated_entities_path: str
     output_dir: str
     version: str = "0.2.0"
@@ -151,6 +154,9 @@ class RegistryBuildFinanceBundleResponse(BaseModel):
     rule_record_count: int
     sec_issuer_count: int
     symbol_count: int
+    person_count: int
+    company_equity_ticker_count: int
+    company_name_enriched_issuer_count: int
     curated_entity_count: int
     warnings: list[str] = Field(default_factory=list)
 
@@ -173,6 +179,12 @@ class RegistryFetchFinanceSourcesRequest(BaseModel):
     other_listed_url: str = (
         "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
     )
+    finance_people_url: str | None = None
+    derive_finance_people_from_sec: bool = False
+    finance_people_archive_base_url: str = (
+        "https://www.sec.gov/Archives/edgar/data"
+    )
+    finance_people_max_companies: int | None = None
     user_agent: str = "ades/0.1.0 (ops@adestool.com)"
 
 
@@ -188,12 +200,14 @@ class RegistryFetchFinanceSourcesResponse(BaseModel):
     sec_companyfacts_url: str
     symbol_directory_url: str
     other_listed_url: str
+    finance_people_url: str
     source_manifest_path: str
     sec_companies_path: str
     sec_submissions_path: str
     sec_companyfacts_path: str
     symbol_directory_path: str
     other_listed_path: str
+    finance_people_path: str
     curated_entities_path: str
     generated_at: datetime
     source_count: int
@@ -203,7 +217,85 @@ class RegistryFetchFinanceSourcesResponse(BaseModel):
     sec_companyfacts_sha256: str
     symbol_directory_sha256: str
     other_listed_sha256: str
+    finance_people_sha256: str
     curated_entities_sha256: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegistryFetchFinanceCountrySourcesRequest(BaseModel):
+    """Request body for downloading country-scoped finance source snapshots."""
+
+    output_dir: str = "/mnt/githubActions/ades_big_data/pack_sources/raw/finance-country-en"
+    snapshot: str | None = None
+    country_codes: list[str] = Field(default_factory=list)
+    user_agent: str = "ades/0.1.0 (ops@adestool.com)"
+
+
+class RegistryFinanceCountrySourceItemResponse(BaseModel):
+    """One downloaded country-scoped finance source snapshot set."""
+
+    country_code: str
+    country_name: str
+    pack_id: str
+    snapshot_dir: str
+    profile_path: str
+    source_manifest_path: str
+    curated_entities_path: str
+    source_count: int
+    curated_entity_count: int
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegistryFetchFinanceCountrySourcesResponse(BaseModel):
+    """Response body for downloaded country-scoped finance source snapshots."""
+
+    output_dir: str
+    snapshot: str
+    snapshot_dir: str
+    generated_at: datetime
+    country_count: int
+    countries: list[RegistryFinanceCountrySourceItemResponse] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegistryBuildFinanceCountryBundlesRequest(BaseModel):
+    """Request body for building country-scoped finance bundles."""
+
+    snapshot_dir: str
+    output_dir: str = "/mnt/githubActions/ades_big_data/pack_sources/bundles/finance-country-en"
+    country_codes: list[str] = Field(default_factory=list)
+    version: str = "0.2.0"
+
+
+class RegistryFinanceCountryBundleItemResponse(BaseModel):
+    """One built country-scoped finance bundle."""
+
+    country_code: str
+    country_name: str
+    pack_id: str
+    version: str
+    bundle_dir: str
+    bundle_manifest_path: str
+    sources_lock_path: str
+    entities_path: str
+    rules_path: str
+    generated_at: datetime
+    source_count: int
+    entity_record_count: int
+    rule_record_count: int
+    organization_count: int
+    exchange_count: int
+    market_index_count: int
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegistryBuildFinanceCountryBundlesResponse(BaseModel):
+    """Response body for built country-scoped finance bundles."""
+
+    output_dir: str
+    generated_at: datetime
+    country_count: int
+    bundles: list[RegistryFinanceCountryBundleItemResponse] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -1385,6 +1477,7 @@ class EntityMatch(BaseModel):
     start: int
     end: int
     aliases: list[str] = Field(default_factory=list)
+    mention_count: int = Field(default=1, ge=1)
     confidence: float | None = None
     relevance: float | None = None
     provenance: EntityProvenance | None = None
@@ -1437,10 +1530,12 @@ def _merge_duplicate_linked_entities(entities: list[EntityMatch]) -> tuple[list[
                 alias_values.append(value)
         confidence_values = [item.confidence for item in group if item.confidence is not None]
         relevance_values = [item.relevance for item in group if item.relevance is not None]
+        mention_count = sum(max(item.mention_count, 1) for item in group)
         merged.append(
             representative.model_copy(
                 update={
                     "aliases": alias_values,
+                    "mention_count": mention_count,
                     "confidence": max(confidence_values) if confidence_values else None,
                     "relevance": max(relevance_values) if relevance_values else None,
                 }
@@ -1484,12 +1579,22 @@ def _is_common_english_general_org_alias(entity: EntityMatch) -> bool:
     return False
 
 
+def _is_exact_general_output_noise_alias(entity: EntityMatch) -> bool:
+    normalized_values = {" ".join(entity.text.casefold().split())}
+    if entity.link is not None:
+        normalized_values.add(" ".join(entity.link.canonical_text.casefold().split()))
+    return any(value in _GENERAL_OUTPUT_EXACT_NOISE_TEXTS for value in normalized_values)
+
+
 def _filter_final_output_entities(pack: str, entities: list[EntityMatch]) -> tuple[list[EntityMatch], int]:
     if pack != "general-en":
         return entities, 0
     kept: list[EntityMatch] = []
     removed = 0
     for entity in entities:
+        if _is_exact_general_output_noise_alias(entity):
+            removed += 1
+            continue
         if entity.label == "organization" and (
             _is_generic_general_org_title_alias(entity.text)
             or _is_common_english_general_org_alias(entity)
@@ -1640,10 +1745,14 @@ class TagResponse(BaseModel):
     metrics: TagMetrics | None = None
     debug: TagDebug | None = None
     warnings: list[str] = Field(default_factory=list)
+    total_time_ms: int | None = None
+    timing_breakdown_ms: dict[str, int] | None = None
     timing_ms: int
 
     @model_validator(mode="after")
     def dedupe_linked_entities(self) -> "TagResponse":
+        if self.total_time_ms is None:
+            self.total_time_ms = self.timing_ms
         filtered_entities, filtered_count = _filter_final_output_entities(self.pack, self.entities)
         merged_entities, merged_count = _merge_duplicate_linked_entities(filtered_entities)
         if filtered_count == 0 and merged_count == 0:

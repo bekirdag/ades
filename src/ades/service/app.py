@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 
 from ..api import (
+    _resolve_settings,
     activate_pack,
     benchmark_runtime,
     benchmark_matcher_backends,
     build_finance_source_bundle,
+    build_finance_country_source_bundles,
     fetch_finance_source_snapshot,
+    fetch_finance_country_source_snapshots,
     build_general_source_bundle,
     fetch_general_source_snapshot,
     build_medical_source_bundle,
@@ -49,6 +54,10 @@ from ..api import (
     verify_release,
     write_release_manifest,
 )
+from ..config import Settings
+from ..packs.registry import PackRegistry
+from ..packs.runtime import clear_pack_runtime_cache, load_pack_runtime
+from ..runtime_matcher import clear_runtime_matcher_cache, load_runtime_matcher
 from ..storage import UnsupportedRuntimeConfigurationError
 from ..version import __version__
 from .models import (
@@ -73,8 +82,12 @@ from .models import (
     ReleaseVerificationResponse,
     RegistryBuildFinanceBundleRequest,
     RegistryBuildFinanceBundleResponse,
+    RegistryBuildFinanceCountryBundlesRequest,
+    RegistryBuildFinanceCountryBundlesResponse,
     RegistryFetchFinanceSourcesRequest,
     RegistryFetchFinanceSourcesResponse,
+    RegistryFetchFinanceCountrySourcesRequest,
+    RegistryFetchFinanceCountrySourcesResponse,
     RegistryFetchGeneralSourcesRequest,
     RegistryFetchGeneralSourcesResponse,
     RegistryFetchMedicalSourcesRequest,
@@ -143,10 +156,81 @@ def _raise_configuration_http_exception(exc: Exception) -> None:
     raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@dataclass
+class _ServiceRuntimeState:
+    """Resident settings, registry, and warm-pack state for the local service."""
+
+    storage_root_override: str | Path | None
+    settings: Settings | None = None
+    registry: PackRegistry | None = None
+    prewarmed_packs: set[str] = field(default_factory=set)
+
+    def ensure_registry(self) -> PackRegistry:
+        """Return one resident registry bound to the current service settings."""
+
+        if self.registry is not None:
+            return self.registry
+        settings = _resolve_settings(storage_root=self.storage_root_override)
+        self.settings = settings
+        self.registry = PackRegistry(
+            settings.storage_root,
+            runtime_target=settings.runtime_target,
+            metadata_backend=settings.metadata_backend,
+            database_url=settings.database_url,
+        )
+        return self.registry
+
+    def current_settings(self) -> Settings:
+        """Return the resolved service settings, loading them lazily."""
+
+        if self.settings is None:
+            self.ensure_registry()
+        assert self.settings is not None
+        return self.settings
+
+    def prewarm_pack(self, pack_id: str) -> None:
+        """Load one runtime and warm its matcher sidecars."""
+
+        registry = self.ensure_registry()
+        settings = self.current_settings()
+        runtime = load_pack_runtime(settings.storage_root, pack_id, registry=registry)
+        if runtime is None:
+            self.prewarmed_packs.discard(pack_id)
+            return
+        for matcher in runtime.matchers:
+            load_runtime_matcher(matcher.artifact_path, matcher.entries_path)
+        self.prewarmed_packs.add(pack_id)
+
+    def prewarm_active_packs(self) -> None:
+        """Warm every active installed pack."""
+
+        registry = self.ensure_registry()
+        for pack in registry.list_installed_packs(active_only=True):
+            self.prewarm_pack(pack.pack_id)
+
+    def invalidate(self) -> None:
+        """Drop warm caches after a pack mutation."""
+
+        clear_pack_runtime_cache()
+        clear_runtime_matcher_cache()
+        self.prewarmed_packs.clear()
+
+
 def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     """Create a FastAPI application bound to a storage root."""
 
-    app = FastAPI(title="ades", version=__version__)
+    runtime_state = _ServiceRuntimeState(storage_root)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        try:
+            runtime_state.prewarm_active_packs()
+        except (FileNotFoundError, UnsupportedRuntimeConfigurationError, ValueError):
+            # Preserve request-time config errors on the public endpoints.
+            pass
+        yield
+
+    app = FastAPI(title="ades", version=__version__, lifespan=lifespan)
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
@@ -159,7 +243,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         """Report local runtime status."""
 
         try:
-            return status(storage_root=storage_root)
+            response = status(storage_root=storage_root)
+            return response.model_copy(
+                update={"prewarmed_packs": sorted(runtime_state.prewarmed_packs)}
+            )
         except FileNotFoundError as exc:
             _raise_configuration_http_exception(exc)
         except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
@@ -329,6 +416,11 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             _raise_configuration_http_exception(exc)
         if pack is None:
             raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
+        runtime_state.invalidate()
+        try:
+            runtime_state.prewarm_active_packs()
+        except (FileNotFoundError, UnsupportedRuntimeConfigurationError, ValueError):
+            pass
         return pack
 
     @app.post("/v0/packs/{pack_id}/deactivate", response_model=PackSummary)
@@ -343,6 +435,11 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             _raise_configuration_http_exception(exc)
         if pack is None:
             raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
+        runtime_state.invalidate()
+        try:
+            runtime_state.prewarm_active_packs()
+        except (FileNotFoundError, UnsupportedRuntimeConfigurationError, ValueError):
+            pass
         return pack
 
     @app.delete("/v0/packs/{pack_id}", response_model=PackSummary)
@@ -357,6 +454,11 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             _raise_configuration_http_exception(exc)
         if pack is None:
             raise HTTPException(status_code=404, detail=f"Pack not found: {pack_id}")
+        runtime_state.invalidate()
+        try:
+            runtime_state.prewarm_active_packs()
+        except (FileNotFoundError, UnsupportedRuntimeConfigurationError, ValueError):
+            pass
         return pack
 
     @app.post("/v0/registry/build", response_model=RegistryBuildResponse)
@@ -395,6 +497,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 sec_companyfacts_url=request.sec_companyfacts_url,
                 symbol_directory_url=request.symbol_directory_url,
                 other_listed_url=request.other_listed_url,
+                finance_people_url=request.finance_people_url,
+                derive_finance_people_from_sec=request.derive_finance_people_from_sec,
+                finance_people_archive_base_url=request.finance_people_archive_base_url,
+                finance_people_max_companies=request.finance_people_max_companies,
                 user_agent=request.user_agent,
             )
         except FileNotFoundError as exc:
@@ -424,8 +530,63 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 sec_companyfacts_path=request.sec_companyfacts_path,
                 symbol_directory_path=request.symbol_directory_path,
                 other_listed_path=request.other_listed_path,
+                finance_people_path=request.finance_people_path,
                 curated_entities_path=request.curated_entities_path,
                 output_dir=request.output_dir,
+                version=request.version,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/fetch-finance-country-sources",
+        response_model=RegistryFetchFinanceCountrySourcesResponse,
+    )
+    def runtime_fetch_finance_country_sources(
+        request: RegistryFetchFinanceCountrySourcesRequest,
+    ) -> RegistryFetchFinanceCountrySourcesResponse:
+        """Download official source landing pages for country-scoped finance packs."""
+
+        try:
+            return fetch_finance_country_source_snapshots(
+                output_dir=request.output_dir,
+                snapshot=request.snapshot,
+                country_codes=request.country_codes,
+                user_agent=request.user_agent,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/build-finance-country-bundles",
+        response_model=RegistryBuildFinanceCountryBundlesResponse,
+    )
+    def runtime_build_finance_country_bundles(
+        request: RegistryBuildFinanceCountryBundlesRequest,
+    ) -> RegistryBuildFinanceCountryBundlesResponse:
+        """Build country-scoped finance bundles from downloaded source snapshots."""
+
+        try:
+            return build_finance_country_source_bundles(
+                snapshot_dir=request.snapshot_dir,
+                output_dir=request.output_dir,
+                country_codes=request.country_codes,
                 version=request.version,
             )
         except FileNotFoundError as exc:
@@ -961,9 +1122,11 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         """Tag text through the local in-process pipeline."""
 
         try:
+            resolved_pack = request.pack or runtime_state.current_settings().default_pack
+            runtime_state.prewarm_pack(resolved_pack)
             return tag(
                 request.text,
-                pack=request.pack,
+                pack=resolved_pack,
                 content_type=request.content_type,
                 output_path=request.output.path if request.output else None,
                 output_dir=request.output.directory if request.output else None,
@@ -971,6 +1134,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 storage_root=storage_root,
                 debug=bool(_bool_option(request.options, "debug")),
                 hybrid=_bool_option(request.options, "hybrid"),
+                registry=runtime_state.ensure_registry(),
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -986,9 +1150,11 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         """Tag a local file through the in-process pipeline."""
 
         try:
+            resolved_pack = request.pack or runtime_state.current_settings().default_pack
+            runtime_state.prewarm_pack(resolved_pack)
             return tag_file(
                 request.path,
-                pack=request.pack,
+                pack=resolved_pack,
                 content_type=request.content_type,
                 output_path=request.output.path if request.output else None,
                 output_dir=request.output.directory if request.output else None,
@@ -996,6 +1162,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 storage_root=storage_root,
                 debug=bool(_bool_option(request.options, "debug")),
                 hybrid=_bool_option(request.options, "hybrid"),
+                registry=runtime_state.ensure_registry(),
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1025,6 +1192,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 detail="Batch manifest export requires output.directory.",
             )
         try:
+            if request.pack is not None:
+                runtime_state.prewarm_pack(request.pack)
             return tag_files(
                 request.paths,
                 pack=request.pack,
@@ -1048,6 +1217,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 manifest_output_path=request.output.manifest_path if request.output else None,
                 debug=bool(_bool_option(request.options, "debug")),
                 hybrid=_bool_option(request.options, "hybrid"),
+                registry=runtime_state.ensure_registry(),
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

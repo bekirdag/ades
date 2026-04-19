@@ -20,6 +20,7 @@ def test_finance_bundle_builder_endpoint_creates_bundle_directory(tmp_path: Path
             "sec_companyfacts_path": str(snapshots["sec_companyfacts"]),
             "symbol_directory_path": str(snapshots["symbol_directory"]),
             "other_listed_path": str(snapshots["other_listed"]),
+            "finance_people_path": str(snapshots["finance_people"]),
             "curated_entities_path": str(snapshots["curated_entities"]),
             "output_dir": str(output_dir),
         },
@@ -28,8 +29,11 @@ def test_finance_bundle_builder_endpoint_creates_bundle_directory(tmp_path: Path
     assert response.status_code == 200
     payload = response.json()
     assert payload["pack_id"] == "finance-en"
-    assert payload["entity_record_count"] == 10
+    assert payload["entity_record_count"] == 17
     assert payload["symbol_count"] == 3
+    assert payload["person_count"] == 2
+    assert payload["company_equity_ticker_count"] == 3
+    assert payload["company_name_enriched_issuer_count"] == 2
     assert Path(payload["sources_lock_path"]).exists()
 
     generated = generate_pack_source(

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import csv
 import json
 from pathlib import Path
+import re
 import shutil
 from typing import Any
 import zipfile
@@ -14,6 +15,75 @@ import zipfile
 from .source_lock import build_bundle_source_entry, write_sources_lock
 
 _FINANCE_STOPLISTED_ALIASES = ["N/A", "ON", "USD"]
+_FINANCE_HIGH_RISK_WORD_TICKERS = {
+    "all",
+    "am",
+    "an",
+    "any",
+    "are",
+    "as",
+    "at",
+    "be",
+    "beta",
+    "by",
+    "can",
+    "day",
+    "do",
+    "for",
+    "go",
+    "in",
+    "is",
+    "it",
+    "may",
+    "new",
+    "no",
+    "now",
+    "of",
+    "on",
+    "one",
+    "or",
+    "out",
+    "so",
+    "the",
+    "to",
+    "top",
+    "two",
+    "up",
+    "us",
+}
+_FINANCE_GREEK_TICKER_WORDS = {
+    "alpha",
+    "beta",
+    "gamma",
+    "delta",
+    "epsilon",
+    "zeta",
+    "eta",
+    "theta",
+    "iota",
+    "kappa",
+    "lambda",
+    "mu",
+    "nu",
+    "xi",
+    "omicron",
+    "pi",
+    "rho",
+    "sigma",
+    "tau",
+    "upsilon",
+    "phi",
+    "chi",
+    "psi",
+    "omega",
+}
+_FINANCE_COMPANY_EQUITY_SECURITY_NAME_PATTERNS = (
+    re.compile(
+        r"^(?P<name>.+?)(?:\s+-\s+|\s+)(?:class\s+[A-Z](?:\s+[A-Z])?\s+)?"
+        r"(?:common\s+stock|common\s+shares?|ordinary\s+shares?)$",
+        re.IGNORECASE,
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -34,6 +104,9 @@ class FinanceSourceBundleResult:
     rule_record_count: int
     sec_issuer_count: int
     symbol_count: int
+    person_count: int
+    company_equity_ticker_count: int
+    company_name_enriched_issuer_count: int
     curated_entity_count: int
     warnings: list[str] = field(default_factory=list)
 
@@ -45,6 +118,7 @@ def build_finance_source_bundle(
     sec_companyfacts_path: str | Path | None = None,
     symbol_directory_path: str | Path,
     other_listed_path: str | Path | None = None,
+    finance_people_path: str | Path | None = None,
     curated_entities_path: str | Path,
     output_dir: str | Path,
     version: str = "0.2.0",
@@ -83,6 +157,14 @@ def build_finance_source_bundle(
         if other_listed_path is not None
         else None
     )
+    finance_people_resolved_path = (
+        _resolve_input_file(
+            finance_people_path,
+            label="finance people snapshot",
+        )
+        if finance_people_path is not None
+        else None
+    )
     curated_path = _resolve_input_file(
         curated_entities_path,
         label="curated finance entities snapshot",
@@ -115,31 +197,45 @@ def build_finance_source_bundle(
         if sec_companyfacts_resolved_path is not None
         else {}
     )
-    sec_issuers = _build_sec_company_issuers(
-        sec_company_items,
-        submission_profiles=sec_submission_profiles,
-        companyfacts_profiles=sec_companyfacts_profiles,
-    )
-    primary_symbol_entities = _load_symbol_directory_tickers(
+    primary_symbol_entities, primary_symbol_profiles = _load_symbol_directory_tickers(
         symbol_path,
         source_name="symbol-directory",
     )
-    other_listed_entities = (
+    other_listed_entities, other_listed_profiles = (
         _load_symbol_directory_tickers(
             other_listed_resolved_path,
             source_name="other-listed",
         )
         if other_listed_resolved_path is not None
-        else []
+        else ([], {})
+    )
+    symbol_profiles = _merge_symbol_profiles(
+        [primary_symbol_profiles, other_listed_profiles]
+    )
+    sec_issuers, company_name_enriched_issuer_count = _build_sec_company_issuers(
+        sec_company_items,
+        submission_profiles=sec_submission_profiles,
+        companyfacts_profiles=sec_companyfacts_profiles,
+        symbol_profiles=symbol_profiles,
     )
     symbol_entities = _dedupe_symbol_entities(
         [*primary_symbol_entities, *other_listed_entities]
     )
+    finance_people_entities = (
+        _load_finance_people_entities(finance_people_resolved_path)
+        if finance_people_resolved_path is not None
+        else []
+    )
     curated_entities = _load_curated_finance_entities(curated_path)
     rules = _build_finance_rule_records()
+    company_equity_ticker_count = sum(
+        1
+        for profile in symbol_profiles.values()
+        if profile.get("company_name_candidates")
+    )
 
     entities = sorted(
-        [*sec_issuers, *symbol_entities, *curated_entities],
+        [*sec_issuers, *symbol_entities, *finance_people_entities, *curated_entities],
         key=lambda item: (
             str(item["entity_type"]).casefold(),
             str(item["canonical_text"]).casefold(),
@@ -199,6 +295,15 @@ def build_finance_source_bundle(
                 adapter="delimited_symbol_directory",
             )
         )
+    if finance_people_resolved_path is not None:
+        sources.append(
+            build_bundle_source_entry(
+                name="finance-people",
+                snapshot_path=finance_people_resolved_path,
+                record_count=len(finance_people_entities),
+                adapter="finance_people_entities",
+            )
+        )
     sources.append(
         build_bundle_source_entry(
             name="curated-finance-entities",
@@ -223,11 +328,21 @@ def build_finance_source_bundle(
                 "rules_path": "normalized/rules.jsonl",
                 "label_mappings": {
                     "issuer": "organization",
+                    "organization": "organization",
                     "ticker": "ticker",
+                    "person": "person",
                     "exchange": "exchange",
+                    "market_index": "market_index",
+                    "commodity": "commodity",
                 },
                 "stoplisted_aliases": _FINANCE_STOPLISTED_ALIASES,
                 "allowed_ambiguous_aliases": [],
+                "coverage": {
+                    "sec_issuer_count": len(sec_issuers),
+                    "person_count": len(finance_people_entities),
+                    "company_equity_ticker_count": company_equity_ticker_count,
+                    "company_name_enriched_issuer_count": company_name_enriched_issuer_count,
+                },
                 "sources": sources,
             },
             indent=2,
@@ -269,6 +384,9 @@ def build_finance_source_bundle(
         rule_record_count=len(rules),
         sec_issuer_count=len(sec_issuers),
         symbol_count=len(symbol_entities),
+        person_count=len(finance_people_entities),
+        company_equity_ticker_count=company_equity_ticker_count,
+        company_name_enriched_issuer_count=company_name_enriched_issuer_count,
         curated_entity_count=len(curated_entities),
         warnings=warnings,
     )
@@ -299,8 +417,10 @@ def _build_sec_company_issuers(
     *,
     submission_profiles: dict[str, dict[str, Any]],
     companyfacts_profiles: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]]:
+    symbol_profiles: dict[str, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
     records: list[dict[str, Any]] = []
+    enriched_issuer_count = 0
     for item in items:
         canonical_text = _clean_text(
             item.get("title") or item.get("name") or item.get("issuer")
@@ -332,6 +452,34 @@ def _build_sec_company_issuers(
         submission_tickers = submission_profile.get("tickers", [])
         if submission_tickers and "ticker" not in metadata:
             metadata["ticker"] = submission_tickers[0]
+        ticker_candidates = _dedupe_preserving_order(
+            [
+                ticker_value
+                for ticker_value in [
+                    _clean_text(metadata.get("ticker")),
+                    *submission_tickers,
+                ]
+                if ticker_value
+            ]
+        )
+        symbol_company_names: list[str] = []
+        for ticker_value in ticker_candidates:
+            profile = symbol_profiles.get(ticker_value.upper(), {})
+            symbol_company_names.extend(profile.get("company_name_candidates", []))
+        symbol_company_names = _dedupe_preserving_order(symbol_company_names)
+        if symbol_company_names:
+            metadata["company_names"] = symbol_company_names
+            aliases = _dedupe_preserving_order(
+                [
+                    *aliases,
+                    *[
+                        company_name
+                        for company_name in symbol_company_names
+                        if company_name.casefold() != canonical_text.casefold()
+                    ],
+                ]
+            )
+            enriched_issuer_count += 1
         record = {
             "entity_id": f"sec-cik:{source_id}",
             "entity_type": "issuer",
@@ -349,7 +497,7 @@ def _build_sec_company_issuers(
         if blocked_aliases:
             record["blocked_aliases"] = list(blocked_aliases)
         records.append(record)
-    return records
+    return records, enriched_issuer_count
 
 
 def _derive_issuer_blocked_aliases(
@@ -435,12 +583,13 @@ def _load_symbol_directory_tickers(
     path: Path,
     *,
     source_name: str,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
     first_line = path.read_text(encoding="utf-8").splitlines()[0]
     delimiter = "|" if "|" in first_line else ","
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle, delimiter=delimiter)
         records: list[dict[str, Any]] = []
+        profiles: dict[str, dict[str, Any]] = {}
         for row in reader:
             symbol = _clean_text(
                 row.get("Symbol")
@@ -458,17 +607,50 @@ def _load_symbol_directory_tickers(
                 or row.get("Name")
             )
             aliases = [security_name] if security_name else []
-            records.append(
-                {
-                    "entity_id": f"ticker:{symbol.upper()}",
-                    "entity_type": "ticker",
-                    "canonical_text": symbol.upper(),
-                    "aliases": aliases,
-                    "source_name": source_name,
-                    "source_id": symbol.upper(),
-                }
+            company_name = _extract_company_name_from_security_name(
+                security_name,
+                row=row,
             )
-    return records
+            metadata: dict[str, Any] = {}
+            if security_name:
+                metadata["security_name"] = security_name
+            if company_name:
+                metadata["company_name"] = company_name
+                metadata["company_core"] = True
+            record = {
+                "entity_id": f"ticker:{symbol.upper()}",
+                "entity_type": "ticker",
+                "canonical_text": symbol.upper(),
+                "aliases": aliases,
+                "source_name": source_name,
+                "source_id": symbol.upper(),
+            }
+            if metadata:
+                record["metadata"] = metadata
+            blocked_aliases = _derive_ticker_blocked_aliases(symbol.upper())
+            if blocked_aliases:
+                record["blocked_aliases"] = blocked_aliases
+            records.append(record)
+            profiles[symbol.upper()] = {
+                "company_name_candidates": [company_name] if company_name else []
+            }
+    return records, profiles
+
+
+def _merge_symbol_profiles(
+    profile_sets: list[dict[str, dict[str, Any]]],
+) -> dict[str, dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    for profile_set in profile_sets:
+        for symbol, profile in profile_set.items():
+            target = merged.setdefault(symbol, {"company_name_candidates": []})
+            target["company_name_candidates"] = _dedupe_preserving_order(
+                [
+                    *target.get("company_name_candidates", []),
+                    *profile.get("company_name_candidates", []),
+                ]
+            )
+    return merged
 
 
 def _dedupe_symbol_entities(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -485,7 +667,50 @@ def _dedupe_symbol_entities(records: list[dict[str, Any]]) -> list[dict[str, Any
             [*existing.get("aliases", []), *item.get("aliases", [])]
         )
         existing["aliases"] = aliases
+        existing_blocked_aliases = existing.get("blocked_aliases", [])
+        incoming_blocked_aliases = item.get("blocked_aliases", [])
+        if existing_blocked_aliases or incoming_blocked_aliases:
+            existing["blocked_aliases"] = _dedupe_preserving_order(
+                [
+                    *existing_blocked_aliases,
+                    *incoming_blocked_aliases,
+                ]
+            )
     return list(deduped.values())
+
+
+def _derive_ticker_blocked_aliases(symbol: str) -> list[str]:
+    normalized = _clean_text(symbol).upper()
+    if not normalized or not normalized.isalpha():
+        return []
+    if len(normalized) <= 2:
+        return [normalized]
+    normalized_key = normalized.casefold()
+    if normalized_key in _FINANCE_HIGH_RISK_WORD_TICKERS:
+        return [normalized]
+    if normalized_key in _FINANCE_GREEK_TICKER_WORDS:
+        return [normalized]
+    return []
+
+
+def _extract_company_name_from_security_name(
+    security_name: str,
+    *,
+    row: dict[str, Any],
+) -> str | None:
+    normalized_security_name = _clean_text(security_name)
+    if not normalized_security_name:
+        return None
+    if _truthy_like(row.get("ETF")):
+        return None
+    for pattern in _FINANCE_COMPANY_EQUITY_SECURITY_NAME_PATTERNS:
+        match = pattern.match(normalized_security_name)
+        if match is None:
+            continue
+        company_name = _clean_text(match.group("name"))
+        if company_name:
+            return company_name.rstrip(" -")
+    return None
 
 
 def _read_targeted_zip_json_records(
@@ -520,15 +745,33 @@ def _format_sec_source_id(value: Any) -> str:
 
 
 def _dedupe_preserving_order(values: list[str]) -> list[str]:
-    seen: set[str] = set()
+    seen_indices: dict[str, int] = {}
     deduped: list[str] = []
     for value in values:
         key = value.casefold()
-        if key in seen:
+        existing_index = seen_indices.get(key)
+        if existing_index is not None:
+            if _finance_display_text_quality(value) > _finance_display_text_quality(
+                deduped[existing_index]
+            ):
+                deduped[existing_index] = value
             continue
-        seen.add(key)
+        seen_indices[key] = len(deduped)
         deduped.append(value)
     return deduped
+
+
+def _finance_display_text_quality(value: str) -> int:
+    score = 0
+    if any(character.islower() for character in value):
+        score += 3
+    if any(character.isupper() for character in value) and any(
+        character.islower() for character in value
+    ):
+        score += 1
+    if value.isupper():
+        score -= 1
+    return score
 
 
 def _load_curated_finance_entities(path: Path) -> list[dict[str, Any]]:
@@ -560,35 +803,226 @@ def _load_curated_finance_entities(path: Path) -> list[dict[str, Any]]:
             aliases = []
         if not isinstance(aliases, list):
             raise ValueError("Curated finance entity aliases must be a list.")
+        blocked_aliases = item.get("blocked_aliases", [])
+        if blocked_aliases is None:
+            blocked_aliases = []
+        if not isinstance(blocked_aliases, list):
+            raise ValueError("Curated finance entity blocked_aliases must be a list.")
+        metadata = item.get("metadata")
+        if metadata is not None and not isinstance(metadata, dict):
+            raise ValueError("Curated finance entity metadata must be an object.")
+        normalized_record: dict[str, Any] = {
+            "entity_id": str(
+                item.get("entity_id")
+                or f"curated:{entity_type.casefold()}:{_slugify(canonical_text)}"
+            ),
+            "entity_type": entity_type,
+            "canonical_text": canonical_text,
+            "aliases": [_clean_text(alias) for alias in aliases if _clean_text(alias)],
+            "source_name": str(item.get("source_name") or "curated-finance-entities"),
+            "source_id": str(item.get("source_id") or canonical_text),
+        }
+        cleaned_blocked_aliases = [
+            _clean_text(alias) for alias in blocked_aliases if _clean_text(alias)
+        ]
+        if cleaned_blocked_aliases:
+            normalized_record["blocked_aliases"] = cleaned_blocked_aliases
+        if _truthy_like(item.get("build_only")):
+            normalized_record["build_only"] = True
+        if metadata:
+            normalized_record["metadata"] = metadata
         normalized.append(
-            {
-                "entity_id": str(
-                    item.get("entity_id")
-                    or f"curated:{entity_type.casefold()}:{_slugify(canonical_text)}"
-                ),
-                "entity_type": entity_type,
-                "canonical_text": canonical_text,
-                "aliases": [_clean_text(alias) for alias in aliases if _clean_text(alias)],
-                "source_name": str(item.get("source_name") or "curated-finance-entities"),
-                "source_id": str(item.get("source_id") or canonical_text),
-            }
+            normalized_record
         )
     return normalized
+
+
+_FINANCE_PERSON_TITLE_WORDS = {
+    "chair",
+    "chairman",
+    "chairwoman",
+    "chief",
+    "co-chair",
+    "cochair",
+    "director",
+    "executive",
+    "founder",
+    "head",
+    "interim",
+    "lead",
+    "officer",
+    "president",
+    "principal",
+    "vice",
+}
+_FINANCE_PERSON_SUFFIXES = {
+    "ii",
+    "iii",
+    "iv",
+    "jr",
+    "jr.",
+    "md",
+    "phd",
+    "sr",
+    "sr.",
+}
+
+
+def _load_finance_people_entities(path: Path) -> list[dict[str, Any]]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        records = payload.get("entities")
+        if not isinstance(records, list):
+            records = payload.get("people", [])
+        if not isinstance(records, list):
+            raise ValueError("Finance people snapshot entities must be a list.")
+    elif isinstance(payload, list):
+        records = payload
+    else:
+        raise ValueError(f"Unsupported finance people snapshot structure: {path}")
+
+    normalized: list[dict[str, Any]] = []
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        canonical_text = _clean_text(
+            item.get("canonical_text") or item.get("name") or item.get("person_name")
+        )
+        if not _is_valid_finance_person_name(canonical_text):
+            continue
+        aliases = item.get("aliases", [])
+        if aliases is None:
+            aliases = []
+        if not isinstance(aliases, list):
+            raise ValueError("Finance people aliases must be a list.")
+        blocked_aliases = item.get("blocked_aliases", [])
+        if blocked_aliases is None:
+            blocked_aliases = []
+        if not isinstance(blocked_aliases, list):
+            raise ValueError("Finance people blocked_aliases must be a list.")
+        metadata = _normalize_finance_person_metadata(item)
+        normalized_aliases = _dedupe_preserving_order(
+            [
+                alias
+                for alias in [_clean_text(alias) for alias in aliases]
+                if _is_valid_finance_person_name(alias)
+                and alias.casefold() != canonical_text.casefold()
+            ]
+        )
+        source_name = _clean_text(item.get("source_name")) or "finance-people"
+        source_id = _clean_text(item.get("source_id"))
+        if not source_id:
+            employer_scope = (
+                _clean_text(metadata.get("employer_cik"))
+                or _clean_text(metadata.get("employer_ticker"))
+                or _clean_text(metadata.get("employer_name"))
+                or source_name
+            )
+            source_id = f"{employer_scope}:{_slugify(canonical_text)}"
+        normalized_record: dict[str, Any] = {
+            "entity_id": str(
+                item.get("entity_id") or f"finance-person:{_slugify(source_id)}"
+            ),
+            "entity_type": "person",
+            "canonical_text": canonical_text,
+            "aliases": normalized_aliases,
+            "source_name": source_name,
+            "source_id": source_id,
+        }
+        cleaned_blocked_aliases = [
+            _clean_text(alias) for alias in blocked_aliases if _clean_text(alias)
+        ]
+        if cleaned_blocked_aliases:
+            normalized_record["blocked_aliases"] = cleaned_blocked_aliases
+        if _truthy_like(item.get("build_only")):
+            normalized_record["build_only"] = True
+        if metadata:
+            normalized_record["metadata"] = metadata
+        normalized.append(normalized_record)
+    return normalized
+
+
+def _normalize_finance_person_metadata(item: dict[str, Any]) -> dict[str, Any]:
+    metadata = item.get("metadata")
+    if metadata is None:
+        normalized: dict[str, Any] = {}
+    elif isinstance(metadata, dict):
+        normalized = dict(metadata)
+    else:
+        raise ValueError("Finance people metadata must be an object.")
+    for key in (
+        "employer_name",
+        "employer_ticker",
+        "employer_cik",
+        "role_title",
+        "role_class",
+        "source_form",
+        "effective_date",
+        "source_url",
+    ):
+        value = _clean_text(item.get(key))
+        if value and key not in normalized:
+            normalized[key] = value
+    return normalized
+
+
+def _is_valid_finance_person_name(value: str) -> bool:
+    normalized = _clean_text(value)
+    if not normalized:
+        return False
+    tokens = [
+        token.strip(" ,.;:()[]{}\"'")
+        for token in normalized.split()
+        if token.strip(" ,.;:()[]{}\"'")
+    ]
+    if len(tokens) < 2:
+        return False
+    alpha_tokens = [
+        token for token in tokens if any(character.isalpha() for character in token)
+    ]
+    if len(alpha_tokens) < 2:
+        return False
+    if any(token.casefold() in _FINANCE_PERSON_TITLE_WORDS for token in alpha_tokens):
+        return False
+    if all(len(token) == 1 for token in alpha_tokens):
+        return False
+    last_token = alpha_tokens[-1].casefold()
+    if last_token in _FINANCE_PERSON_SUFFIXES and len(alpha_tokens) < 3:
+        return False
+    return True
 
 
 def _build_finance_rule_records() -> list[dict[str, str]]:
     return [
         {
-            "name": "currency_amount",
+            "name": "currency_amount_code",
             "label": "currency_amount",
             "kind": "regex",
-            "pattern": r"(USD|EUR|GBP|TRY)\s?[0-9]+(?:\.[0-9]+)?",
+            "pattern": r"\b(?:USD|EUR|GBP|TRY|JPY|CNY|CNH|CHF|CAD|AUD|NZD|HKD|SGD|SEK|NOK|DKK|INR|KRW|TWD|MXN|BRL|ZAR|RUB)\b\s?[0-9]+(?:\.[0-9]+)?(?:\s?(?:million|billion|trillion|mn|bn|tn|m|b|t))?",
+        },
+        {
+            "name": "currency_amount_symbol",
+            "label": "currency_amount",
+            "kind": "regex",
+            "pattern": r"(?:US|C|A|HK|NZ|S)?[$€£¥₹]\s?[0-9]+(?:\.[0-9]+)?(?:\s?(?:million|billion|trillion|mn|bn|tn|m|b|t))?",
         },
         {
             "name": "ticker_symbol",
             "label": "ticker",
             "kind": "regex",
             "pattern": r"\$[A-Z]{1,5}",
+        },
+        {
+            "name": "percentage",
+            "label": "percentage",
+            "kind": "regex",
+            "pattern": r"[-+]?[0-9]+(?:\.[0-9]+)?%",
+        },
+        {
+            "name": "basis_points",
+            "label": "basis_points",
+            "kind": "regex",
+            "pattern": r"[-+]?[0-9]+(?:\.[0-9]+)?\s?(?:bp|bps|basis points?)",
         },
     ]
 

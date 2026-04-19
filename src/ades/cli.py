@@ -15,6 +15,7 @@ from .api import activate_pack as api_activate_pack
 from .api import benchmark_runtime as api_benchmark_runtime
 from .api import benchmark_matcher_backends as api_benchmark_matcher_backends
 from .api import build_finance_source_bundle as api_build_finance_source_bundle
+from .api import build_finance_country_source_bundles as api_build_finance_country_source_bundles
 from .api import build_general_source_bundle as api_build_general_source_bundle
 from .api import build_medical_source_bundle as api_build_medical_source_bundle
 from .api import build_registry as api_build_registry
@@ -25,6 +26,7 @@ from .api import evaluate_extraction_quality as api_evaluate_extraction_quality
 from .api import evaluate_live_news_feedback as api_evaluate_live_news_feedback
 from .api import evaluate_extraction_release_thresholds as api_evaluate_extraction_release_thresholds
 from .api import fetch_finance_source_snapshot as api_fetch_finance_source_snapshot
+from .api import fetch_finance_country_source_snapshots as api_fetch_finance_country_source_snapshots
 from .api import fetch_general_source_snapshot as api_fetch_general_source_snapshot
 from .api import fetch_medical_source_snapshot as api_fetch_medical_source_snapshot
 from .api import generate_pack_source as api_generate_pack_source
@@ -447,18 +449,15 @@ def _tag_text_response(
 
     settings = get_settings()
     if should_use_local_service(settings):
-        try:
-            return tag_via_local_service(
-                text,
-                pack=pack,
-                content_type=content_type,
-                output_path=output_path,
-                output_dir=output_dir,
-                pretty_output=pretty_output,
-                settings=settings,
-            )
-        except LocalServiceUnavailableError:
-            pass
+        return tag_via_local_service(
+            text,
+            pack=pack,
+            content_type=content_type,
+            output_path=output_path,
+            output_dir=output_dir,
+            pretty_output=pretty_output,
+            settings=settings,
+        )
     return api_tag(
         text,
         pack=pack,
@@ -482,18 +481,15 @@ def _tag_file_response(
 
     settings = get_settings()
     if should_use_local_service(settings):
-        try:
-            return tag_file_via_local_service(
-                path,
-                pack=pack,
-                content_type=content_type,
-                output_path=output_path,
-                output_dir=output_dir,
-                pretty_output=pretty_output,
-                settings=settings,
-            )
-        except LocalServiceUnavailableError:
-            pass
+        return tag_file_via_local_service(
+            path,
+            pack=pack,
+            content_type=content_type,
+            output_path=output_path,
+            output_dir=output_dir,
+            pretty_output=pretty_output,
+            settings=settings,
+        )
     return api_tag_file(
         path,
         pack=pack,
@@ -530,31 +526,28 @@ def _tag_files_response(
 
     settings = get_settings()
     if should_use_local_service(settings):
-        try:
-            return tag_files_via_local_service(
-                files,
-                pack=pack,
-                content_type=content_type,
-                output_dir=output_dir,
-                pretty_output=pretty_output,
-                settings=settings,
-                directories=directories,
-                glob_patterns=glob_patterns,
-                manifest_input_path=manifest_input,
-                manifest_replay_mode=manifest_mode,
-                skip_unchanged=skip_unchanged,
-                reuse_unchanged_outputs=reuse_unchanged_outputs,
-                repair_missing_reused_outputs=repair_missing_reused_outputs,
-                recursive=recursive,
-                include_patterns=include_patterns,
-                exclude_patterns=exclude_patterns,
-                max_files=max_files,
-                max_input_bytes=max_input_bytes,
-                write_manifest=write_manifest,
-                manifest_output_path=manifest_output,
-            )
-        except LocalServiceUnavailableError:
-            pass
+        return tag_files_via_local_service(
+            files,
+            pack=pack,
+            content_type=content_type,
+            output_dir=output_dir,
+            pretty_output=pretty_output,
+            settings=settings,
+            directories=directories,
+            glob_patterns=glob_patterns,
+            manifest_input_path=manifest_input,
+            manifest_replay_mode=manifest_mode,
+            skip_unchanged=skip_unchanged,
+            reuse_unchanged_outputs=reuse_unchanged_outputs,
+            repair_missing_reused_outputs=repair_missing_reused_outputs,
+            recursive=recursive,
+            include_patterns=include_patterns,
+            exclude_patterns=exclude_patterns,
+            max_files=max_files,
+            max_input_bytes=max_input_bytes,
+            write_manifest=write_manifest,
+            manifest_output_path=manifest_output,
+        )
     return api_tag_files(
         files,
         pack=pack,
@@ -1708,6 +1701,27 @@ def registry_fetch_finance_sources(
         "--other-listed-url",
         help="URL or file path for the Nasdaq other-listed snapshot.",
     ),
+    finance_people_url: str | None = typer.Option(
+        None,
+        "--finance-people-url",
+        help="Optional URL or file path for a finance people snapshot JSON or JSONL file.",
+    ),
+    derive_finance_people_from_sec: bool = typer.Option(
+        False,
+        "--derive-finance-people-from-sec/--no-derive-finance-people-from-sec",
+        help="Derive finance people from recent SEC proxy filings when no explicit finance people snapshot is provided.",
+    ),
+    finance_people_archive_base_url: str = typer.Option(
+        "https://www.sec.gov/Archives/edgar/data",
+        "--finance-people-archive-base-url",
+        help="Base archive URL used when deriving finance people from SEC proxy filings.",
+    ),
+    finance_people_max_companies: int | None = typer.Option(
+        None,
+        "--finance-people-max-companies",
+        min=1,
+        help="Optional limit on companies scanned when deriving finance people from SEC proxy filings.",
+    ),
     user_agent: str = typer.Option(
         "ades/0.1.0 (ops@adestool.com)",
         "--user-agent",
@@ -1725,6 +1739,10 @@ def registry_fetch_finance_sources(
             sec_companyfacts_url=sec_companyfacts_url,
             symbol_directory_url=symbol_directory_url,
             other_listed_url=other_listed_url,
+            finance_people_url=finance_people_url,
+            derive_finance_people_from_sec=derive_finance_people_from_sec,
+            finance_people_archive_base_url=finance_people_archive_base_url,
+            finance_people_max_companies=finance_people_max_companies,
             user_agent=user_agent,
         )
     except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
@@ -1759,6 +1777,11 @@ def registry_build_finance_bundle(
         "--other-listed",
         help="Optional path to the other-listed delimited file.",
     ),
+    finance_people: Path | None = typer.Option(
+        None,
+        "--finance-people",
+        help="Optional path to a finance people snapshot JSON or JSONL file.",
+    ),
     curated_entities: Path = typer.Option(
         ...,
         "--curated-entities",
@@ -1784,8 +1807,83 @@ def registry_build_finance_bundle(
             sec_companyfacts_path=sec_companyfacts,
             symbol_directory_path=symbol_directory,
             other_listed_path=other_listed,
+            finance_people_path=finance_people,
             curated_entities_path=curated_entities,
             output_dir=output_dir,
+            version=version,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("fetch-finance-country-sources")
+def registry_fetch_finance_country_sources(
+    output_dir: Path = typer.Option(
+        Path("/mnt/githubActions/ades_big_data/pack_sources/raw/finance-country-en"),
+        "--output-dir",
+        help="Directory where immutable country-finance source snapshots should be written.",
+    ),
+    snapshot: str | None = typer.Option(
+        None,
+        "--snapshot",
+        help="Snapshot date in YYYY-MM-DD format. Defaults to today.",
+    ),
+    country_code: list[str] = typer.Option(
+        None,
+        "--country-code",
+        help="Restrict the fetch to specific two-letter country codes. Repeat for multiple countries.",
+    ),
+    user_agent: str = typer.Option(
+        "ades/0.1.0 (ops@adestool.com)",
+        "--user-agent",
+        help="User-Agent header for HTTP source fetches.",
+    ),
+) -> None:
+    """Download official source landing pages for country-scoped finance packs."""
+
+    try:
+        response = api_fetch_finance_country_source_snapshots(
+            output_dir=output_dir,
+            snapshot=snapshot,
+            country_codes=country_code or None,
+            user_agent=user_agent,
+        )
+    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("build-finance-country-bundles")
+def registry_build_finance_country_bundles(
+    snapshot_dir: Path = typer.Option(
+        ...,
+        "--snapshot-dir",
+        help="Directory containing one downloaded country-finance snapshot set.",
+    ),
+    output_dir: Path = typer.Option(
+        Path("/mnt/githubActions/ades_big_data/pack_sources/bundles/finance-country-en"),
+        "--output-dir",
+        help="Directory where normalized country-finance bundles should be written.",
+    ),
+    country_code: list[str] = typer.Option(
+        None,
+        "--country-code",
+        help="Restrict the bundle build to specific two-letter country codes. Repeat for multiple countries.",
+    ),
+    version: str = typer.Option(
+        "0.2.0",
+        "--version",
+        help="Pack version to record in the generated bundle manifests.",
+    ),
+) -> None:
+    """Build country-scoped finance bundles from downloaded source snapshots."""
+
+    try:
+        response = api_build_finance_country_source_bundles(
+            snapshot_dir=snapshot_dir,
+            output_dir=output_dir,
+            country_codes=country_code or None,
             version=version,
         )
     except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
@@ -2281,6 +2379,7 @@ def tag(
         _exit_with_cli_error(exc)
     except (
         InvalidConfigurationError,
+        LocalServiceUnavailableError,
         LocalServiceRequestError,
         UnsupportedRuntimeConfigurationError,
         ValueError,
@@ -2422,6 +2521,7 @@ def tag_files(
         _exit_with_cli_error(exc)
     except (
         InvalidConfigurationError,
+        LocalServiceUnavailableError,
         LocalServiceRequestError,
         UnsupportedRuntimeConfigurationError,
         ValueError,

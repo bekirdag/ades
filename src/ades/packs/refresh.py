@@ -56,6 +56,7 @@ class GeneratedPackRefreshResult:
 def refresh_generated_pack_registry(
     bundle_dirs: list[str | Path],
     *,
+    dependency_bundle_dirs: list[str | Path] | None = None,
     output_dir: str | Path,
     general_bundle_dir: str | Path | None = None,
     materialize_registry: bool = False,
@@ -96,6 +97,18 @@ def refresh_generated_pack_registry(
         resolved_bundle_dirs.append(resolved_bundle_dir)
         manifests_by_dir[resolved_bundle_dir] = manifest
         bundle_dirs_by_pack_id[manifest.pack_id] = resolved_bundle_dir
+    for raw_bundle_dir in dependency_bundle_dirs or []:
+        resolved_bundle_dir = _resolve_bundle_dir(raw_bundle_dir)
+        manifest = SourceBundleManifest.from_path(resolved_bundle_dir / "bundle.json")
+        existing_bundle_dir = bundle_dirs_by_pack_id.get(manifest.pack_id)
+        if existing_bundle_dir is not None:
+            if existing_bundle_dir != resolved_bundle_dir:
+                raise ValueError(
+                    f"Duplicate pack id in generated-pack refresh dependencies: {manifest.pack_id}"
+                )
+            continue
+        manifests_by_dir[resolved_bundle_dir] = manifest
+        bundle_dirs_by_pack_id[manifest.pack_id] = resolved_bundle_dir
 
     resolved_general_bundle_dir = _resolve_general_bundle_dir(
         general_bundle_dir=general_bundle_dir,
@@ -110,6 +123,7 @@ def refresh_generated_pack_registry(
         quality = _validate_quality_for_pack(
             manifest=manifest,
             bundle_dir=resolved_bundle_dir,
+            bundle_dirs_by_pack_id=bundle_dirs_by_pack_id,
             general_bundle_dir=resolved_general_bundle_dir,
             output_dir=quality_dir,
             min_expected_recall=min_expected_recall,
@@ -198,6 +212,7 @@ def _validate_quality_for_pack(
     *,
     manifest: SourceBundleManifest,
     bundle_dir: Path,
+    bundle_dirs_by_pack_id: dict[str, Path],
     general_bundle_dir: Path | None,
     output_dir: Path,
     min_expected_recall: float,
@@ -209,10 +224,21 @@ def _validate_quality_for_pack(
         manifest.pack_id,
         max_ambiguous_aliases=max_ambiguous_aliases,
     )
-    if manifest.pack_id == "finance-en":
+    dependency_bundle_dirs = tuple(
+        bundle_dirs_by_pack_id[dependency]
+        for dependency in manifest.dependencies
+        if dependency in bundle_dirs_by_pack_id and dependency != manifest.pack_id
+    )
+    if manifest.pack_id == "finance-en" or (
+        manifest.pack_id.startswith("finance-") and manifest.pack_id.endswith("-en")
+    ):
         return validate_finance_pack_quality(
             str(bundle_dir),
             output_dir=str(output_dir),
+            fixture_profile=(
+                "benchmark" if manifest.pack_id == "finance-en" else "regional"
+            ),
+            dependency_bundle_dirs=dependency_bundle_dirs,
             min_expected_recall=min_expected_recall,
             max_unexpected_hits=max_unexpected_hits,
             max_ambiguous_aliases=resolved_max_ambiguous_aliases,
@@ -278,7 +304,9 @@ def _resolve_max_ambiguous_aliases(
 ) -> int:
     if max_ambiguous_aliases is not None:
         return max_ambiguous_aliases
-    if pack_id == "finance-en":
+    if pack_id == "finance-en" or (
+        pack_id.startswith("finance-") and pack_id.endswith("-en")
+    ):
         return DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES
     if pack_id == "medical-en":
         return DEFAULT_MEDICAL_MAX_AMBIGUOUS_ALIASES
