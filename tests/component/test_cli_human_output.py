@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import click
 from typer.testing import CliRunner
 
 from ades.cli import app
@@ -156,10 +157,11 @@ def test_cli_help_command_supports_nested_command_paths() -> None:
     runner = CliRunner()
 
     result = runner.invoke(app, ["help", "list", "packs"])
+    plain_output = click.unstyle(result.stdout)
 
     assert result.exit_code == 0
-    assert "Usage:" in result.stdout
-    assert "ades list packs [OPTIONS]" in result.stdout
-    assert "ades ades" not in result.stdout
-    assert "List packs with available registry packs as the default view." in result.stdout
-    assert "--json" in result.stdout
+    assert "Usage:" in plain_output
+    assert "ades list packs [OPTIONS]" in plain_output
+    assert "ades ades" not in plain_output
+    assert "List packs with available registry packs as the default view." in plain_output
+    assert "--json" in plain_output
