@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wheel_path="$(ls dist/ades-*.whl | head -n 1)"
+          wheel_path="$(ls dist/ades_tool-*.whl | head -n 1)"
           release_id="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_SHA::12}"
           echo "wheel_path=$wheel_path" >> "$GITHUB_OUTPUT"
           echo "wheel_name=$(basename "$wheel_path")" >> "$GITHUB_OUTPUT"
