@@ -11,7 +11,7 @@ import mmap
 from pathlib import Path
 import re
 import struct
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 from .text_processing import normalize_lookup_text, normalize_text
 
@@ -189,20 +189,13 @@ class RuntimeMatcher:
     token_state_store: TokenTrieStateStore | None = None
 
 
-def build_matcher_artifact_from_aliases_json(
-    aliases_path: str | Path,
+def build_matcher_artifact_from_alias_payloads(
+    alias_payloads: Iterable[dict[str, Any]],
     *,
     output_dir: str | Path,
     algorithm: str = MATCHER_DEFAULT_ALGORITHM,
-    include_runtime_tiers: set[str] | None = None,
 ) -> MatcherArtifactResult:
-    """Compile a deterministic exact matcher artifact from aliases.json."""
-
-    resolved_aliases_path = Path(aliases_path).expanduser().resolve()
-    if not resolved_aliases_path.exists():
-        raise FileNotFoundError(f"Alias payload not found: {resolved_aliases_path}")
-    if not resolved_aliases_path.is_file():
-        raise FileExistsError(f"Alias payload is not a file: {resolved_aliases_path}")
+    """Compile a deterministic exact matcher artifact from normalized alias records."""
 
     resolved_output_dir = Path(output_dir).expanduser().resolve()
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
@@ -230,12 +223,7 @@ def build_matcher_artifact_from_aliases_json(
 
     if algorithm == MATCHER_JSON_AHO_ALGORITHM:
         with entries_path.open("w", encoding="utf-8") as handle:
-            for entry_index, alias_payload in enumerate(
-                _iter_alias_payloads_from_aliases_json(
-                    resolved_aliases_path,
-                    include_runtime_tiers=include_runtime_tiers,
-                )
-            ):
+            for entry_index, alias_payload in enumerate(alias_payloads):
                 normalized_entry = _normalize_alias_payload(alias_payload)
                 handle.write(json.dumps(normalized_entry, sort_keys=True) + "\n")
                 entry_count += 1
@@ -262,12 +250,7 @@ def build_matcher_artifact_from_aliases_json(
             with index_path.open("wb") as index_handle:
                 index_handle.write(_TOKEN_TRIE_INDEX_MAGIC)
                 index_handle.write(struct.pack(">II", _TOKEN_TRIE_INDEX_VERSION, 0))
-                for entry_index, alias_payload in enumerate(
-                    _iter_alias_payloads_from_aliases_json(
-                        resolved_aliases_path,
-                        include_runtime_tiers=include_runtime_tiers,
-                    )
-                ):
+                for entry_index, alias_payload in enumerate(alias_payloads):
                     normalized_entry = _normalize_alias_payload(alias_payload)
                     index_handle.write(struct.pack(">Q", handle.tell()))
                     _write_token_trie_entry_payload(handle, normalized_entry)
@@ -316,6 +299,30 @@ def build_matcher_artifact_from_aliases_json(
         max_alias_length=max_alias_length,
         artifact_sha256=_sha256_file(artifact_path),
         entries_sha256=_sha256_file(entries_path),
+    )
+
+
+def build_matcher_artifact_from_aliases_json(
+    aliases_path: str | Path,
+    *,
+    output_dir: str | Path,
+    algorithm: str = MATCHER_DEFAULT_ALGORITHM,
+    include_runtime_tiers: set[str] | None = None,
+) -> MatcherArtifactResult:
+    """Compile a deterministic exact matcher artifact from aliases.json."""
+
+    resolved_aliases_path = Path(aliases_path).expanduser().resolve()
+    if not resolved_aliases_path.exists():
+        raise FileNotFoundError(f"Alias payload not found: {resolved_aliases_path}")
+    if not resolved_aliases_path.is_file():
+        raise FileExistsError(f"Alias payload is not a file: {resolved_aliases_path}")
+    return build_matcher_artifact_from_alias_payloads(
+        _iter_alias_payloads_from_aliases_json(
+            resolved_aliases_path,
+            include_runtime_tiers=include_runtime_tiers,
+        ),
+        output_dir=output_dir,
+        algorithm=algorithm,
     )
 
 

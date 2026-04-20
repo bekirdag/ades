@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 
 from .fetch import normalize_source_url, read_text
+from .matcher_repair import ensure_pack_matcher_artifacts
 from ..storage.backend import (
     MetadataBackend,
     RuntimeTarget,
@@ -125,6 +126,14 @@ class PackRegistry:
         """Refresh one installed pack from its on-disk metadata when present."""
 
         pack_dir = self.layout.packs_dir / pack_id
+        manifest_path = pack_dir / "manifest.json"
+        if manifest_path.exists():
+            manifest = PackManifest.load(manifest_path)
+            ensure_pack_matcher_artifacts(
+                pack_dir,
+                manifest,
+                metadata_store=self.store,
+            )
         return self.store.sync_pack_from_dir(pack_dir, active=active) is not None
 
     def set_pack_active(self, pack_id: str, active: bool) -> bool:

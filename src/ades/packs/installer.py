@@ -15,6 +15,7 @@ from uuid import uuid4
 from .fetch import normalize_source_url, read_bytes, read_text
 from .general_structure import evaluate_general_pack_structure
 from .manifest import PackManifest, RegistryIndex, RegistryPack
+from .matcher_repair import ensure_pack_matcher_artifacts
 from .registry import PackRegistry, default_registry_url
 from .rule_validation import validate_rules_payload
 from ..storage.backend import MetadataBackend, RuntimeTarget
@@ -211,6 +212,7 @@ class PackInstaller:
 
     @staticmethod
     def _validate_extracted_pack(pack_dir: Path, pack_id: str) -> None:
+        manifest = PackManifest.load(pack_dir / "manifest.json")
         rules_path = pack_dir / "rules.json"
         if not rules_path.exists():
             patterns: list[object] = []
@@ -227,6 +229,11 @@ class PackInstaller:
                 raise ValueError(
                     f"Installed pack contains unsafe regex rules: {pack_id}: {exc}"
                 ) from exc
+        ensure_pack_matcher_artifacts(
+            pack_dir,
+            manifest,
+            metadata_store=None,
+        )
         if pack_id != "general-en":
             return
         build_path = pack_dir / "build.json"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Iterator, Protocol
 
 if TYPE_CHECKING:
     from ..packs.manifest import PackManifest
@@ -89,6 +89,13 @@ class MetadataStore(Protocol):
     def list_pack_rules(self, pack_id: str) -> list[dict[str, str]]: ...
 
     def list_pack_aliases(self, pack_id: str) -> list[dict[str, str]]: ...
+
+    def count_pack_aliases(self, pack_id: str) -> int: ...
+
+    def iter_pack_aliases(
+        self,
+        pack_id: str,
+    ) -> Iterator[dict[str, str | float | bool]]: ...
 
     def lookup_candidates(
         self,

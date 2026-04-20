@@ -737,6 +737,55 @@ class PostgreSQLMetadataStore:
             for row in rows
         ]
 
+    def count_pack_aliases(self, pack_id: str) -> int:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM pack_aliases
+                WHERE pack_id = %s
+                """,
+                (pack_id,),
+            ).fetchone()
+        if row is None:
+            return 0
+        return int(row["count"])
+
+    def iter_pack_aliases(
+        self,
+        pack_id: str,
+    ) -> Iterator[dict[str, str | float | bool]]:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                SELECT alias_text, label, normalized_alias_text, canonical_text, alias_score,
+                       generated, source_name, entity_id, source_priority, popularity_weight,
+                       source_domain
+                FROM pack_aliases
+                WHERE pack_id = %s
+                ORDER BY alias_text ASC, label ASC
+                """,
+                (pack_id,),
+            )
+            while True:
+                rows = cursor.fetchmany(10_000)
+                if not rows:
+                    break
+                for row in rows:
+                    yield {
+                        "text": str(row["alias_text"]),
+                        "label": str(row["label"]),
+                        "normalized_text": str(row["normalized_alias_text"]),
+                        "canonical_text": str(row["canonical_text"]),
+                        "alias_score": float(row["alias_score"]),
+                        "generated": bool(row["generated"]),
+                        "source_name": str(row["source_name"]),
+                        "entity_id": str(row["entity_id"]),
+                        "source_priority": float(row["source_priority"]),
+                        "popularity_weight": float(row["popularity_weight"]),
+                        "source_domain": str(row["source_domain"]),
+                    }
+
     def lookup_candidates(
         self,
         query: str,
