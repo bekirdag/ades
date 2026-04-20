@@ -13,9 +13,61 @@ This repository now has a live production deployment with:
 - Runtime storage root: `/mnt/ades/storage`
 - Shared virtualenv: `/mnt/ades/app/shared/.venv`
 - Service unit: `deploy` user `systemd --user` service `ades.service`
+- Vector service root: `/home/deploy/.local/share/qdrant`
+- Vector service unit: `deploy` user `systemd --user` service `qdrant.service`
 - Wheel releases: `/mnt/ades/app/releases/<release_id>/`
 - Registry releases: `/mnt/ades/repo/releases/<release_id>/`
 - Active registry symlink: `/mnt/ades/repo/current`
+
+## Production Vector Runtime
+
+Hosted vector enrichment is part of the live production runtime and is not enabled by
+default merely by switching `runtime_target` to `production_server`.
+
+The production host must provide all of the following:
+
+- a running local Qdrant HTTP endpoint on `127.0.0.1:6333`
+- a published collection alias named `ades-qids-current`
+- the following `ades` config values in `/etc/ades/config.toml`:
+  - `vector_search_enabled = true`
+  - `vector_search_url = "http://127.0.0.1:6333"`
+  - `vector_search_collection_alias = "ades-qids-current"`
+  - optional tuning such as `vector_search_related_limit`
+
+Recommended verification commands on the production host:
+
+```bash
+curl -fsS http://127.0.0.1:6333/collections/ades-qids-current
+python3 - <<'PY'
+import json
+import urllib.request
+
+request = urllib.request.Request(
+    "http://127.0.0.1:8734/v0/tag",
+    data=json.dumps(
+        {
+            "text": "Anthropic announced a partnership with Amazon in San Francisco.",
+            "pack": "general-en",
+            "options": {
+                "include_related_entities": True,
+                "include_graph_support": True,
+                "refine_links": True,
+                "refinement_depth": "deep",
+            },
+        }
+    ).encode("utf-8"),
+    headers={"content-type": "application/json"},
+    method="POST",
+)
+with urllib.request.urlopen(request, timeout=60) as response:
+    payload = json.load(response)
+print(json.dumps(payload.get("graph_support"), indent=2, sort_keys=True))
+PY
+```
+
+The `/v0/tag` HTTP surface reads vector switches from the request `options` object.
+Sending `include_related_entities` or `include_graph_support` as top-level JSON fields
+does not activate the hosted vector lane on the service endpoint.
 
 ## CI/CD Model
 
@@ -31,7 +83,8 @@ Deployments are pipeline-owned.
   - install wheel into `/mnt/ades/app/shared/.venv`
   - move `/mnt/ades/repo/current` to the new registry release
   - restart `ades.service`
-  - verify local and public health endpoints
+  - verify local API health plus the live vector alias/tag smoke
+  - verify public health endpoints
 
 The production API service is expected to be always running under the deploy-owned
 `systemd --user` unit `ades.service`, with the public API exposed on

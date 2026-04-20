@@ -2098,3 +2098,37 @@ class VectorIndexBuildResponse(BaseModel):
     matched_statement_count: int
     allowed_predicates: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+
+
+class QidGraphStoreBuildRequest(BaseModel):
+    """Request body for building one explicit QID graph store."""
+
+    bundle_dirs: list[str] = Field(default_factory=list)
+    truthy_path: str
+    output_dir: str
+    predicate: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_bundle_dirs(self) -> "QidGraphStoreBuildRequest":
+        if not self.bundle_dirs:
+            raise ValueError("At least one bundle directory is required.")
+        return self
+
+
+class QidGraphStoreBuildResponse(BaseModel):
+    """Stable result payload for one offline explicit QID graph store build."""
+
+    output_dir: str
+    manifest_path: str
+    artifact_path: str
+    target_node_count: int
+    stored_node_count: int
+    stored_edge_count: int
+    bundle_count: int
+    bundle_dirs: list[str] = Field(default_factory=list)
+    pack_ids: list[str] = Field(default_factory=list)
+    truthy_path: str
+    processed_line_count: int
+    matched_statement_count: int
+    allowed_predicates: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)

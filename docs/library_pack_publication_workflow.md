@@ -163,6 +163,94 @@ aws s3 sync \
 The first live publication rehearsal used the shipped helper and wrote `22` reviewed objects under `s3://ades/generated-pack-releases/finance-general-medical-2026-04-10/`.
 The shipped helper also returns direct HTTPS registry candidates, and the preferred live consumer URL is already working: `https://ades.fsn1.your-objectstorage.com/generated-pack-releases/finance-general-medical-2026-04-10/index.json`.
 
+## Keeping `finance-de-en` Up To Date
+
+`finance-de-en` is currently a partially automated Germany pack. Its intended scope is public-market issuer entities plus public people linked to those issuers, especially management board members, supervisory board members, and issuer-facing contacts. It is not a full employee directory.
+
+### Current Germany sources used in the build
+
+The Germany pack is currently derived from these official source lanes:
+
+- Deutsche Börse listed companies workbook seed:
+  `https://www.cashmarket.deutsche-boerse.com/cash-en/Data-Tech/statistics/listed-companies`
+- Börse München `m:access` issuer table:
+  `https://www.boerse-muenchen.de/maccess/gelistete-unternehmen`
+- Börse Düsseldorf Primärmarkt issuer table:
+  `https://www.boerse-duesseldorf.de/aktien-primaermarkt/`
+- Tradegate order-book pages for ISIN-based ticker and WKN backfill:
+  `https://www.tradegate.de/orderbuch.php?isin={isin}&lang=en`
+- Deutsche Börse issuer company-details pages for board and executive extraction:
+  `https://live.deutsche-boerse.com/equity/{isin}/company-details`
+- Unternehmensregister register-information search and detail pages for register metadata and board/governance names:
+  `https://www.unternehmensregister.de/en/search/register-information`
+- BaFin company-database CSV export for Germany-domiciled regulated institutions and Germany branches:
+  `https://portal.mvp.bafin.de/database/InstInfo/sucheForm.do?6578706f7274=1&sucheButtonInstitut=Suche&institutName=&d-4012550-e=1`
+- Wikidata entity resolution for issuer and person QIDs:
+  `https://www.wikidata.org/w/api.php`
+
+### What must be refreshed each time
+
+To keep `finance-de-en` current, each Germany refresh should do all of the following:
+
+1. Pull a fresh Germany snapshot with `ades registry fetch-finance-country-sources --country-code de`.
+2. Re-seed the issuer universe from the latest Deutsche Börse workbook, then extend it with the latest Börse München `m:access` and Börse Düsseldorf Primärmarkt issuer lists.
+3. Re-fetch the BaFin company-database export and merge Germany-domiciled institutions plus Germany branches into the issuer set.
+4. Re-run Tradegate ISIN lookups to fill missing ticker and WKN identifiers for issuers not fully covered by the seed workbook.
+5. Re-fetch Deutsche Börse company-details pages and Unternehmensregister register-information pages so board, executive, former-name, and register metadata stay current.
+6. Re-run Wikidata resolution so issuer and person QIDs remain attached to the latest entity set.
+7. Rebuild the normalized Germany bundle, generate the runtime pack, compose a static registry, and smoke-test clean pull plus tagging before promotion.
+
+### Recommended refresh loop
+
+Use the country-pack pipeline rather than hand-editing generated pack files:
+
+```bash
+ades registry fetch-finance-country-sources \
+  --output-dir /mnt/githubActions/ades_big_data/pack_sources/raw/finance-country-en \
+  --snapshot YYYY-MM-DD \
+  --country-code de
+
+ades registry build-finance-country-bundles \
+  --snapshot-dir /mnt/githubActions/ades_big_data/pack_sources/raw/finance-country-en/YYYY-MM-DD \
+  --output-dir /mnt/githubActions/ades_big_data/pack_sources/bundles \
+  --country-code de \
+  --version 0.2.0
+
+ades registry generate-pack \
+  /mnt/githubActions/ades_big_data/pack_sources/bundles/finance-de-en-bundle \
+  --output-dir /mnt/githubActions/ades_big_data/generated_runtime_packs
+```
+
+After pack generation, build or update a static registry, then verify a clean consumer install from that registry before promotion.
+
+### Germany-specific checks before promotion
+
+Because Germany is still `partial` automation, each refresh should explicitly review these conditions:
+
+- the Deutsche Börse workbook still downloads and parses into the expected issuer seed set
+- the BaFin export still downloads as CSV and produces a non-empty Germany institution slice
+- headless Chrome is available for `live.deutsche-boerse.com` company-details rendering
+- Unternehmensregister requests are not timing out broadly enough to collapse the people lane
+- Wikidata resolution produced a real snapshot instead of an empty or warning-only result
+- spot checks still work for both issuers and people across the main German listing lanes
+
+Recommended spot checks:
+
+- one Frankfurt/Xetra issuer
+- one Börse München `m:access` issuer
+- one Börse Düsseldorf Primärmarkt issuer
+- one BaFin-only regulated institution
+- one known board member from a large issuer
+
+### Current quality bar
+
+`finance-de-en` is good enough to ship, but it should still be treated as an actively maintained pack rather than a finished one. The highest-value next improvements are:
+
+- improve exact issuer alias coverage for some large German companies
+- harden the Unternehmensregister lane against slow or unstable responses
+- extend BaFin coverage beyond institution metadata into public principal / officer relationships where official sources make that durable
+- keep the Germany people lane focused on public officers and board members rather than trying to model all employees
+
 ## Consumer Smoke
 
 The published generated release is not review-only anymore. A clean local runtime can already consume it directly:

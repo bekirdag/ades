@@ -129,6 +129,7 @@ from .service.models import (
     NpmInstallerInfo,
     PackSummary,
     PackHealthResponse,
+    QidGraphStoreBuildResponse,
     ReleaseVerificationResponse,
     RegistryBuildPackSummary,
     RegistryBuildResponse,
@@ -199,6 +200,7 @@ from .vector.builder import (
     DEFAULT_QID_GRAPH_DIMENSIONS,
     build_qid_graph_index as run_build_qid_graph_index,
 )
+from .vector.graph_builder import build_qid_graph_store as run_build_qid_graph_store
 from .vector.evaluation import (
     default_vector_release_thresholds,
     evaluate_vector_golden_set,
@@ -3105,6 +3107,23 @@ def build_qid_graph_index(
     )
     _record_vector_build_state_if_supported(settings, response)
     return response
+
+
+def build_qid_graph_store(
+    bundle_dirs: Iterable[str | Path],
+    *,
+    truthy_path: str | Path,
+    output_dir: str | Path,
+    allowed_predicates: Iterable[str] | None = None,
+) -> QidGraphStoreBuildResponse:
+    """Build one explicit QID graph store artifact for exact graph queries."""
+
+    return run_build_qid_graph_store(
+        bundle_dirs,
+        truthy_path=truthy_path,
+        output_dir=output_dir,
+        allowed_predicates=allowed_predicates,
+    )
 
 
 def _record_vector_build_state_if_supported(

@@ -146,3 +146,57 @@ def test_build_qid_graph_index_can_publish_to_qdrant(tmp_path: Path, monkeypatch
     assert captured["collection_name"] == "ades-qids-20260419"
     assert captured["alias_name"] == "ades-qids-current"
     assert len(captured["points"]) == 2
+
+
+def test_iter_text_lines_prefers_pigz_over_rapidgzip(tmp_path: Path, monkeypatch) -> None:
+    gzip_path = tmp_path / "sample.txt.gz"
+    gzip_path.write_bytes(b"placeholder")
+    popen_calls: list[list[str]] = []
+
+    class _FakeStream:
+        def __iter__(self):
+            yield "hello\n"
+
+        def close(self) -> None:
+            return None
+
+        def read(self) -> str:
+            return ""
+
+    class _FakeProcess:
+        def __init__(self, args: list[str], **_: object) -> None:
+            popen_calls.append(args)
+            self.stdout = _FakeStream()
+            self.stderr = _FakeStream()
+
+        def kill(self) -> None:
+            return None
+
+        def wait(self) -> int:
+            return 0
+
+    def fake_which(name: str) -> str | None:
+        if name == "pigz":
+            return "/usr/bin/pigz"
+        if name == "rapidgzip":
+            return "/home/wodo/.local/bin/rapidgzip"
+        return None
+
+    monkeypatch.setattr(builder_module.shutil, "which", fake_which)
+    monkeypatch.setattr(builder_module.subprocess, "Popen", _FakeProcess)
+
+    assert list(builder_module._iter_text_lines(gzip_path)) == ["hello\n"]
+    assert popen_calls == [["/usr/bin/pigz", "-dc", str(gzip_path)]]
+
+
+def test_iter_text_lines_falls_back_to_python_gzip(tmp_path: Path, monkeypatch) -> None:
+    gzip_path = tmp_path / "sample.txt.gz"
+    with gzip.open(gzip_path, "wt", encoding="utf-8") as handle:
+        handle.write("hello\nworld\n")
+
+    monkeypatch.setattr(builder_module.shutil, "which", lambda _: None)
+
+    assert list(builder_module._iter_text_lines(gzip_path)) == [
+        "hello\n",
+        "world\n",
+    ]

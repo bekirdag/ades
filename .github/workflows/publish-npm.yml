@@ -1,0 +1,58 @@
+name: Publish npm Package (Manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install release tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Validate release artifacts
+        id: validate
+        run: |
+          mkdir -p dist/release-validation
+          ades release validate --output-dir dist/release-validation > dist/release-validation/validation.json
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path("dist/release-validation/validation.json").read_text())
+          manifest_path = payload["manifest_path"]
+          tarball_path = payload["manifest"]["verification"]["npm_tarball"]["path"]
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
+              fh.write(f"manifest_path={manifest_path}\n")
+              fh.write(f"tarball_path={tarball_path}\n")
+          PY
+
+      - name: Upload validation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-release-validation
+          path: dist/release-validation/
+
+      - name: Publish npm package
+        run: npm publish "${{ steps.validate.outputs.tarball_path }}"

@@ -13,7 +13,7 @@ def test_npm_installer_endpoint_reports_bootstrap_metadata() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["npm_package"] == "ades-cli"
+    assert payload["npm_package"] == "@bekirdag/ades"
     assert payload["command"] == "ades"
     assert payload["wrapper_version"] == __version__
     assert payload["python_package_spec"] == f"ades=={__version__}"

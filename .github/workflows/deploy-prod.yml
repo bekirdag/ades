@@ -142,6 +142,49 @@ jobs:
           curl -fsS http://127.0.0.1:8734/healthz >/dev/null
           curl -fsS http://127.0.0.1:8734/v0/status >/dev/null
           curl -fsS http://127.0.0.1:8734/v0/packs/available >/dev/null
+          curl -fsS http://127.0.0.1:6333/collections/ades-qids-current >/dev/null
+          python3 - <<'PY'
+          import json
+          import urllib.request
+
+          request = urllib.request.Request(
+              "http://127.0.0.1:8734/v0/tag",
+              data=json.dumps(
+                  {
+                      "text": "Anthropic announced a partnership with Amazon in San Francisco.",
+                      "pack": "general-en",
+                      "options": {
+                          "include_related_entities": True,
+                          "include_graph_support": True,
+                          "refine_links": True,
+                          "refinement_depth": "deep",
+                      },
+                  }
+              ).encode("utf-8"),
+              headers={"content-type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=60) as response:
+              payload = json.load(response)
+
+          graph_support = payload.get("graph_support") or {}
+          warnings = list(graph_support.get("warnings") or [])
+          if not graph_support.get("requested"):
+              raise SystemExit("vector smoke check did not request graph support")
+          disallowed = {
+              "vector_search_disabled",
+              "vector_search_url_missing",
+              "vector_search_production_only",
+          }
+          if disallowed.intersection(warnings):
+              raise SystemExit(
+                  f"vector smoke check reported disabled production vector search: {warnings}"
+              )
+          if any(str(item).startswith("vector_search_failed:") for item in warnings):
+              raise SystemExit(
+                  f"vector smoke check reported qdrant failure: {warnings}"
+              )
+          PY
           EOF
 
       - name: Verify public endpoints

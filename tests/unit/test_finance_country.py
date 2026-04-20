@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from urllib.parse import urlparse
 
 import ades.packs.finance_country as finance_country_module
 from ades.packs.finance_bundle import build_finance_source_bundle
@@ -14,6 +15,185 @@ from tests.finance_bundle_helpers import (
     create_finance_raw_snapshots,
 )
 from tests.general_bundle_helpers import create_general_raw_snapshots
+
+
+_GERMANY_WIKIDATA_SEARCH_FIXTURES = {
+    "ABO Energy GmbH & Co. KGaA": [
+        {"id": "Q33354510", "label": "ABO Wind", "description": "German renewable energy company"},
+        {"id": "Q131641235", "label": "Abo Energy Gmbh & Co. Kgaa", "description": None},
+    ],
+    "Advanced Blockchain AG": [
+        {"id": "Q119889189", "label": "Advanced Blockchain AG", "description": None},
+    ],
+    "Deutsche Boerse AG": [
+        {"id": "Q157852", "label": "Deutsche Börse", "description": "financial services company of Germany"},
+    ],
+    "Mercedes-Benz Group AG": [
+        {"id": "Q27530", "label": "Mercedes-Benz Group", "description": "German automotive manufacturer"},
+    ],
+    "Britta Seeger": [
+        {"id": "Q50387551", "label": "Britta Seeger", "description": "German business executive"},
+    ],
+    "Harald Wilhelm": [
+        {"id": "Q62090160", "label": "Harald Wilhelm", "description": "German manager"},
+    ],
+    "Martin Brudermuller": [
+        {
+            "id": "Q15834173",
+            "label": "Martin Brudermüller",
+            "description": "German top manager in the chemical industry and trained chemist",
+        },
+    ],
+    "Ola Kallenius": [
+        {"id": "Q19297571", "label": "Ola Källenius", "description": "Swedish manager"},
+    ],
+    "Sabine Kohleisen": [
+        {"id": "Q111281602", "label": "Sabine Kohleisen", "description": "German manager"},
+    ],
+}
+
+_GERMANY_WIKIDATA_ENTITY_FIXTURES = {
+    "Q111281602": {
+        "labels": {
+            "en": {"value": "Sabine Kohleisen"},
+            "de": {"value": "Sabine Kohleisen"},
+        },
+        "aliases": {},
+        "descriptions": {"en": {"value": "German manager"}},
+        "claims": {},
+    },
+    "Q119889189": {
+        "labels": {
+            "en": {"value": "Advanced Blockchain AG"},
+            "de": {"value": "Advanced Blockchain AG"},
+        },
+        "aliases": {},
+        "descriptions": {},
+        "claims": {
+            "P946": [{"mainsnak": {"datavalue": {"value": "DE000A0M93V6"}}}],
+        },
+    },
+    "Q131641235": {
+        "labels": {
+            "en": {"value": "Abo Energy Gmbh & Co. Kgaa"},
+            "de": {"value": "ABO Energy GmbH & Co. KGaA"},
+        },
+        "aliases": {},
+        "descriptions": {},
+        "claims": {},
+    },
+    "Q157852": {
+        "labels": {
+            "en": {"value": "Deutsche Börse"},
+            "de": {"value": "Deutsche Börse"},
+        },
+        "aliases": {
+            "en": [{"value": "Deutsche Börse AG"}, {"value": "Deutsche Boerse AG"}],
+        },
+        "descriptions": {"en": {"value": "financial services company of Germany"}},
+        "claims": {
+            "P946": [{"mainsnak": {"datavalue": {"value": "DE0005810055"}}}],
+        },
+    },
+    "Q19297571": {
+        "labels": {
+            "en": {"value": "Ola Källenius"},
+            "de": {"value": "Ola Källenius"},
+        },
+        "aliases": {},
+        "descriptions": {"en": {"value": "Swedish manager"}},
+        "claims": {
+            "P108": [{"mainsnak": {"datavalue": {"value": {"id": "Q27530"}}}}],
+        },
+    },
+    "Q27530": {
+        "labels": {
+            "en": {"value": "Mercedes-Benz Group"},
+            "de": {"value": "Mercedes-Benz Group"},
+        },
+        "aliases": {
+            "en": [{"value": "Daimler AG"}, {"value": "MBG"}],
+        },
+        "descriptions": {"en": {"value": "German automotive manufacturer"}},
+        "claims": {
+            "P946": [{"mainsnak": {"datavalue": {"value": "DE0007100000"}}}],
+        },
+    },
+    "Q33354510": {
+        "labels": {
+            "en": {"value": "ABO Wind"},
+            "de": {"value": "ABO Wind"},
+        },
+        "aliases": {"en": [{"value": "ABO Wind AG"}]},
+        "descriptions": {"en": {"value": "German renewable energy company"}},
+        "claims": {
+            "P946": [{"mainsnak": {"datavalue": {"value": "DE0005760029"}}}],
+        },
+    },
+    "Q50387551": {
+        "labels": {
+            "en": {"value": "Britta Seeger"},
+            "de": {"value": "Britta Seeger"},
+        },
+        "aliases": {},
+        "descriptions": {"en": {"value": "German business executive"}},
+        "claims": {
+            "P108": [{"mainsnak": {"datavalue": {"value": {"id": "Q27530"}}}}],
+        },
+    },
+    "Q62090160": {
+        "labels": {
+            "en": {"value": "Harald Wilhelm"},
+            "de": {"value": "Harald Wilhelm"},
+        },
+        "aliases": {},
+        "descriptions": {"en": {"value": "German manager"}},
+        "claims": {
+            "P108": [{"mainsnak": {"datavalue": {"value": {"id": "Q27530"}}}}],
+        },
+    },
+    "Q15834173": {
+        "labels": {
+            "en": {"value": "Martin Brudermüller"},
+            "de": {"value": "Martin Brudermüller"},
+        },
+        "aliases": {
+            "de": [{"value": "Dr. Martin Brudermüller"}],
+        },
+        "descriptions": {
+            "en": {
+                "value": "German top manager in the chemical industry and trained chemist"
+            }
+        },
+        "claims": {},
+    },
+}
+
+
+def _fake_germany_wikidata_api_json(*, params: dict[str, str], user_agent: str) -> dict[str, object]:
+    del user_agent
+    action = params["action"]
+    if action == "wbsearchentities":
+        return {
+            "search": _GERMANY_WIKIDATA_SEARCH_FIXTURES.get(
+                str(params.get("search", "")),
+                [],
+            )
+        }
+    if action == "wbgetentities":
+        entity_ids = [
+            entity_id.strip()
+            for entity_id in str(params.get("ids", "")).split("|")
+            if entity_id.strip()
+        ]
+        return {
+            "entities": {
+                entity_id: _GERMANY_WIKIDATA_ENTITY_FIXTURES[entity_id]
+                for entity_id in entity_ids
+                if entity_id in _GERMANY_WIKIDATA_ENTITY_FIXTURES
+            }
+        }
+    raise AssertionError(f"Unexpected Wikidata action in test: {action}")
 
 
 def test_finance_country_download_source_follows_http_redirects(
@@ -110,6 +290,13 @@ def test_finance_country_download_source_follows_html_js_redirect(
         "https://example.com/download",
         "https://example.com/live.csv",
     ]
+
+
+def test_finance_country_source_destination_filename_keeps_xlsx_extension() -> None:
+    assert finance_country_module._source_destination_filename(
+        source_name="deutsche-boerse-listed-companies",
+        source_url="https://example.com/data/Listed-companies.xlsx",
+    ) == "deutsche-boerse-listed-companies.xlsx"
 
 
 def test_finance_country_fetch_and_build_round_trip(
@@ -334,6 +521,21 @@ def test_finance_country_people_source_plan_covers_g20_and_marks_turkiye_impleme
     assert set(plans) == set(finance_country_module.available_finance_country_codes())
     turkiye_plan = finance_country_module.finance_country_people_source_plan("tr")
     assert turkiye_plan["automation_status"] == "implemented"
+    germany_plan = finance_country_module.finance_country_people_source_plan("de")
+    assert germany_plan["automation_status"] == "partial"
+    assert any(
+        source["source_url"]
+        == "https://www.cashmarket.deutsche-boerse.com/cash-en/Data-Tech/statistics/listed-companies"
+        for source in germany_plan["sources"]
+    )
+    assert any(
+        source["source_url"]
+        == (
+            "https://portal.mvp.bafin.de/database/InstInfo/"
+            "sucheForm.do?6578706f7274=1&sucheButtonInstitut=Suche&institutName=&d-4012550-e=1"
+        )
+        for source in germany_plan["sources"]
+    )
     assert any(
         source["source_url"] == "https://www.kap.org.tr/en/bist-sirketler"
         for source in turkiye_plan["sources"]
@@ -417,6 +619,955 @@ def test_extract_asx_listed_company_entities_builds_issuers_and_tickers(
     asx_issuer = next(entity for entity in issuers if entity["canonical_text"] == "ASX Limited")
     assert "ASX" in asx_issuer["aliases"]
     assert asx_issuer["metadata"]["industry_group"] == "Diversified Financials"
+
+
+def test_extract_deutsche_boerse_listed_company_records_filters_german_rows(
+    tmp_path: Path,
+) -> None:
+    profile = create_finance_country_profiles(tmp_path / "remote-country-sources")["de"]
+    workbook_source = next(
+        source
+        for source in profile["sources"]
+        if source["name"] == "deutsche-boerse-listed-companies"
+    )
+    workbook_path = Path(urlparse(str(workbook_source["source_url"])).path)
+
+    records = finance_country_module._extract_deutsche_boerse_listed_company_records(
+        workbook_path
+    )
+
+    assert [record["company_name"] for record in records] == [
+        "Adcapital AG",
+        "Advanced Blockchain AG",
+        "Deutsche Boerse AG",
+        "Mercedes-Benz Group AG",
+    ]
+    mercedes = next(record for record in records if record["ticker"] == "MBG")
+    assert mercedes["isin"] == "DE0007100000"
+    assert mercedes["listing_segment"] == "Prime Standard"
+    assert mercedes["indices"] == ["DAX"]
+
+
+def test_extract_boerse_muenchen_maccess_issuer_records_parses_isin_and_wkn(
+    tmp_path: Path,
+) -> None:
+    profile = create_finance_country_profiles(tmp_path / "remote-country-sources")["de"]
+    source = next(
+        source
+        for source in profile["sources"]
+        if source["name"] == "boerse-muenchen-maccess-listed-companies"
+    )
+    html_text = Path(urlparse(str(source["source_url"])).path).read_text(encoding="utf-8")
+
+    records = finance_country_module._extract_boerse_muenchen_maccess_issuer_records(
+        html_text
+    )
+
+    assert [record["company_name"] for record in records] == [
+        "ABO Energy GmbH & Co. KGaA",
+        "Advanced Blockchain AG",
+    ]
+    abo_energy = next(
+        record for record in records if record["company_name"] == "ABO Energy GmbH & Co. KGaA"
+    )
+    assert abo_energy["isin"] == "DE0005760029"
+    assert abo_energy["wkn"] == "576002"
+    assert abo_energy["listing_segment"] == "m:access"
+    assert abo_energy["sector"] == "Technologie"
+    assert abo_energy["issuer_website"] == "https://www.aboenergy.com/de/index.php"
+
+
+def test_extract_boerse_duesseldorf_primary_market_issuer_records_parses_issuer_rows(
+    tmp_path: Path,
+) -> None:
+    profile = create_finance_country_profiles(tmp_path / "remote-country-sources")["de"]
+    source = next(
+        source
+        for source in profile["sources"]
+        if source["name"] == "boerse-duesseldorf-primary-market"
+    )
+    html_text = Path(urlparse(str(source["source_url"])).path).read_text(encoding="utf-8")
+
+    records = (
+        finance_country_module._extract_boerse_duesseldorf_primary_market_issuer_records(
+            html_text
+        )
+    )
+
+    assert [record["company_name"] for record in records] == [
+        "123fahrschule SE",
+        "Advanced Blockchain AG",
+    ]
+    driving_school = next(
+        record for record in records if record["company_name"] == "123fahrschule SE"
+    )
+    assert driving_school["isin"] == "DE000A2P4HL9"
+    assert driving_school["listing_segment"] == "Primärmarkt"
+    assert driving_school["instrument_exchange"] == "Börse Düsseldorf"
+
+
+def test_extract_tradegate_order_book_identifiers_parses_code_and_wkn(
+    tmp_path: Path,
+) -> None:
+    fixture_root = tmp_path / "remote-country-sources"
+    create_finance_country_profiles(fixture_root)
+    html_text = (fixture_root / "de-tradegate-abo-energy-order-book.html").read_text(
+        encoding="utf-8"
+    )
+
+    identifiers = finance_country_module._extract_tradegate_order_book_identifiers(
+        html_text
+    )
+
+    assert identifiers == {
+        "wkn": "576002",
+        "code": "AB9",
+        "isin": "DE0005760029",
+    }
+
+
+def test_build_germany_company_aliases_emits_short_forms_and_variants() -> None:
+    aliases = finance_country_module._build_germany_company_aliases(
+        "Mercedes-Benz Group AG",
+        "ING BANK N.V.",
+        "ABO Energy GmbH & Co. KGaA",
+    )
+
+    assert "Mercedes-Benz Group AG" in aliases
+    assert "Mercedes Benz Group AG" in aliases
+    assert "Mercedes-Benz Group" in aliases
+    assert "ING BANK N.V." in aliases
+    assert "ING BANK NV" in aliases
+    assert "ING BANK" in aliases
+    assert "ABO Energy GmbH & Co. KGaA" in aliases
+    assert "ABO Energy GmbH & Co KGaA" in aliases
+    assert "ABO Energy" in aliases
+
+
+def test_extract_bafin_company_database_records_filters_to_germany_scope(
+    tmp_path: Path,
+) -> None:
+    fixture_root = tmp_path / "remote-country-sources"
+    profile = create_finance_country_profiles(fixture_root)["de"]
+    source = next(
+        source
+        for source in profile["sources"]
+        if source["name"] == "bafin-company-database-export"
+    )
+    csv_path = Path(urlparse(str(source["source_url"])).path)
+
+    records = finance_country_module._extract_bafin_company_database_records(csv_path)
+
+    assert [str(record["company_name"]) for record in records] == [
+        "Commerzbank AG",
+        "Ing Bank N.V.",
+    ]
+    commerzbank = next(
+        record for record in records if record["company_name"] == "Commerzbank AG"
+    )
+    assert commerzbank["country"] == "Deutschland"
+    assert commerzbank["trade_names"] == ["Commerzbank"]
+    assert commerzbank["institution_types"] == [
+        "Kreditinstitut",
+        "Wertpapierinstitut",
+    ]
+    assert commerzbank["cross_border_credit_service_countries"] == [
+        "Österreich",
+        "Frankreich",
+    ]
+    assert commerzbank["detail_url"] == (
+        "https://portal.mvp.bafin.de/database/InstInfo/"
+        "institutDetails.do?cmd=loadInstitutAction&institutId=10010010"
+    )
+    assert commerzbank["activities"] == [
+        {"activity": "Kreditgeschäft", "granted_on": "01.01.1970"},
+        {"activity": "Depotgeschäft", "granted_on": "01.01.1970"},
+    ]
+    ing = next(record for record in records if record["company_name"] == "Ing Bank N.V.")
+    assert ing["country"] == "Niederlande"
+    assert ing["germany_branch"] == "ING Bank N.V. Frankfurt Branch"
+    assert ing["trade_names"] == ["ING-DiBa AG"]
+    assert not any(record["company_name"] == "Banque Exemple SA" for record in records)
+
+
+def test_merge_germany_bafin_institutions_enriches_matching_issuer_and_ticker(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "bafin-company-database.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                (
+                    "NAME;BAK NR;REG NR;BAFIN-ID;LEI;"
+                    "NATIONALE IDENTIFIKATIONSNUMMER DER BEHÖRDE DES HERKUNFTSMITGLIEDSTAATES;"
+                    "PLZ;ORT;STRASSE;LAND;GATTUNG;SCHLICHTUNGSSTELLE;HANDELSNAMEN;"
+                    "ZWEIGNIEDERLASSUNG IN DEUTSCHLAND;KONTAKTDATEN FÜR VERBRAUCHERBESCHWERDEN;"
+                    "GRENZÜBERSCHREITENDE ERBRINGUNG VON KREDITDIENSTLEISTUNGEN IN;"
+                    "ERLAUBNISSE/ZULASSUNG/TÄTIGKEITEN;ERTEILUNGSDATUM;ENDE AM;ENDEGRUND"
+                ),
+                (
+                    "COMMERZBANK AG;10010010;HRB12345;50070001;851WYGNLUQLFZBSYGB56;;60311;"
+                    "Frankfurt am Main;Kaiserplatz 16;Deutschland;Kreditinstitut;"
+                    "Ombudsmann der privaten Banken;Commerzbank;;;Österreich;Kreditgeschäft;"
+                    "01.01.1970;;"
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    issuer_entities = [
+        {
+            "entity_type": "organization",
+            "canonical_text": "Commerzbank AG",
+            "aliases": ["CBK"],
+            "entity_id": "finance-de-issuer:DE000CBK1001",
+            "metadata": {
+                "country_code": "de",
+                "category": "issuer",
+                "ticker": "CBK",
+                "isin": "DE000CBK1001",
+            },
+        }
+    ]
+    ticker_entities = [
+        {
+            "entity_type": "ticker",
+            "canonical_text": "CBK",
+            "aliases": ["Commerzbank AG"],
+            "entity_id": "finance-de-ticker:CBK",
+            "metadata": {
+                "country_code": "de",
+                "category": "ticker",
+                "ticker": "CBK",
+                "isin": "DE000CBK1001",
+            },
+        }
+    ]
+    warnings: list[str] = []
+
+    finance_country_module._merge_germany_bafin_institutions(
+        bafin_csv_path=csv_path,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        warnings=warnings,
+    )
+
+    assert warnings == []
+    assert len(issuer_entities) == 1
+    assert len(ticker_entities) == 1
+    issuer = issuer_entities[0]
+    ticker = ticker_entities[0]
+    assert issuer["metadata"]["regulated_institution"] is True
+    assert issuer["metadata"]["lei"] == "851WYGNLUQLFZBSYGB56"
+    assert issuer["metadata"]["bafin_bak_nrs"] == ["10010010"]
+    assert issuer["metadata"]["bafin_ids"] == ["50070001"]
+    assert issuer["metadata"]["bafin_activities"] == ["Kreditgeschäft"]
+    assert "Commerzbank" in issuer["aliases"]
+    assert ticker["metadata"]["regulated_institution"] is True
+    assert ticker["metadata"]["bafin_categories"] == ["Kreditinstitut"]
+
+
+def test_score_germany_issuer_wikidata_candidate_prefers_isin_backed_match() -> None:
+    entity = {
+        "entity_type": "organization",
+        "canonical_text": "ABO Energy GmbH & Co. KGaA",
+        "aliases": ["ABO Energy GmbH & Co. KGaA", "576002"],
+        "entity_id": "finance-de-issuer:DE0005760029",
+        "metadata": {
+            "country_code": "de",
+            "category": "issuer",
+            "isin": "DE0005760029",
+            "wkn": "576002",
+        },
+    }
+
+    exact_name_without_isin_score = finance_country_module._score_germany_issuer_wikidata_candidate(
+        entity=entity,
+        candidate_payload=_GERMANY_WIKIDATA_ENTITY_FIXTURES["Q131641235"],
+    )
+    old_name_with_isin_score = finance_country_module._score_germany_issuer_wikidata_candidate(
+        entity=entity,
+        candidate_payload=_GERMANY_WIKIDATA_ENTITY_FIXTURES["Q33354510"],
+    )
+
+    assert old_name_with_isin_score > exact_name_without_isin_score
+
+
+def test_build_germany_wikidata_entity_aliases_filters_ticker_like_org_aliases() -> None:
+    aliases = finance_country_module._build_germany_wikidata_entity_aliases(
+        _GERMANY_WIKIDATA_ENTITY_FIXTURES["Q27530"],
+        entity_type="organization",
+    )
+
+    assert "Daimler AG" in aliases
+    assert "Daimler" in aliases
+    assert "Mercedes-Benz Group" in aliases
+    assert "MBG" not in aliases
+
+
+def test_extract_german_governance_people_entities_parses_sections_and_matches_issuer() -> None:
+    issuer_lookup = finance_country_module._build_germany_issuer_lookup(
+        [
+            {
+                "isin": "DE0007100000",
+                "ticker": "MBG",
+                "company_name": "Mercedes-Benz Group AG",
+                "listing_segment": "Prime Standard",
+                "sector": "Automobile",
+                "subsector": "Automobiles",
+                "instrument_exchange": "XETRA + FRANKFURT",
+                "indices": ["DAX"],
+            }
+        ]
+    )
+    html = """
+    <html>
+      <head><title>Supervisory Board | Mercedes-Benz Group AG</title></head>
+      <body>
+        <h1>Supervisory Board</h1>
+        <table>
+          <tr><th>Dr. Martin Brudermuller</th><td>Chairman</td></tr>
+        </table>
+        <h1>Board of Management</h1>
+        <h2>Ola Kallenius</h2>
+        <p>Chairman of the Board of Management</p>
+      </body>
+    </html>
+    """
+
+    entities = finance_country_module._extract_german_governance_people_entities(
+        html,
+        issuer_lookup=issuer_lookup,
+        source_name="mercedes-governance",
+    )
+
+    assert {entity["canonical_text"] for entity in entities} == {
+        "Martin Brudermuller",
+        "Ola Kallenius",
+    }
+    martin = next(
+        entity for entity in entities if entity["canonical_text"] == "Martin Brudermuller"
+    )
+    assert "Dr. Martin Brudermuller" in martin["aliases"]
+    assert martin["metadata"]["category"] == "director"
+    assert martin["metadata"]["employer_ticker"] == "MBG"
+    ola = next(entity for entity in entities if entity["canonical_text"] == "Ola Kallenius")
+    assert ola["metadata"]["category"] == "executive_officer"
+    assert ola["metadata"]["source_name"] == "mercedes-governance"
+
+
+def test_extract_deutsche_boerse_company_details_people_entities_parses_board_rows(
+    tmp_path: Path,
+) -> None:
+    profile = create_finance_country_profiles(tmp_path / "remote-country-sources")["de"]
+    company_details_source = next(
+        source for source in profile["sources"] if source["name"] == "mercedes-company-details"
+    )
+    company_details_html = Path(
+        urlparse(str(company_details_source["source_url"])).path
+    ).read_text(encoding="utf-8")
+
+    entities = finance_country_module._extract_deutsche_boerse_company_details_people_entities(
+        company_details_html,
+        issuer_record={
+            "isin": "DE0007100000",
+            "ticker": "MBG",
+            "company_name": "Mercedes-Benz Group AG",
+            "listing_segment": "Prime Standard",
+            "sector": "Automobile",
+            "subsector": "Automobiles",
+            "instrument_exchange": "XETRA + FRANKFURT",
+            "indices": ["DAX"],
+        },
+    )
+
+    assert {entity["canonical_text"] for entity in entities} == {
+        "Harald Wilhelm",
+        "Martin Brudermuller",
+        "Ola Kallenius",
+        "Sabine Kohleisen",
+    }
+    harald = next(
+        entity for entity in entities if entity["canonical_text"] == "Harald Wilhelm"
+    )
+    assert harald["metadata"]["category"] == "executive_officer"
+    assert harald["metadata"]["role_title"] == "Finance & Controlling"
+    martin = next(
+        entity for entity in entities if entity["canonical_text"] == "Martin Brudermuller"
+    )
+    assert "Dr. Martin Brudermuller" in martin["aliases"]
+    sabine = next(
+        entity for entity in entities if entity["canonical_text"] == "Sabine Kohleisen"
+    )
+    assert sabine["metadata"]["category"] == "director"
+    assert sabine["metadata"]["employee_representative"] is True
+
+
+def test_extract_deutsche_boerse_company_details_aliases_parses_former_names(
+    tmp_path: Path,
+) -> None:
+    profile = create_finance_country_profiles(tmp_path / "remote-country-sources")["de"]
+    company_details_source = next(
+        source for source in profile["sources"] if source["name"] == "mercedes-company-details"
+    )
+    company_details_html = Path(
+        urlparse(str(company_details_source["source_url"])).path
+    ).read_text(encoding="utf-8")
+
+    aliases = finance_country_module._extract_deutsche_boerse_company_details_aliases(
+        company_details_html,
+        company_name="Mercedes-Benz Group AG",
+    )
+
+    assert "Mercedes-Benz Group AG" in aliases
+    assert "Mercedes Benz Group AG" in aliases
+    assert "Mercedes-Benz Group" in aliases
+    assert "Daimler AG" in aliases
+    assert "Daimler" in aliases
+
+
+def test_extract_unternehmensregister_register_information_search_result_matches_company_row(
+    tmp_path: Path,
+) -> None:
+    fixture_root = tmp_path / "remote-country-sources"
+    create_finance_country_profiles(fixture_root)
+    search_html = (fixture_root / "de-unternehmensregister-search-results.html").read_text(
+        encoding="utf-8"
+    )
+
+    result = finance_country_module._extract_unternehmensregister_register_information_search_result(
+        search_html,
+        company_name="Mercedes-Benz Group AG",
+    )
+
+    assert result == {
+        "company_name": "Mercedes-Benz Group AG",
+        "detail_url": (
+            "https://www.unternehmensregister.de/en/register-information/company/"
+            "mercedes-benz-group-ag?court=Stuttgart&number=19360&type=HRB"
+        ),
+        "register_court": "Stuttgart",
+        "register_number": "19360",
+        "register_type": "HRB",
+    }
+
+
+def test_extract_german_governance_people_entities_parses_register_information_lists_and_definitions(
+    tmp_path: Path,
+) -> None:
+    fixture_root = tmp_path / "remote-country-sources"
+    create_finance_country_profiles(fixture_root)
+    issuer_lookup = finance_country_module._build_germany_issuer_lookup(
+        [
+            {
+                "isin": "DE0007100000",
+                "ticker": "MBG",
+                "company_name": "Mercedes-Benz Group AG",
+                "listing_segment": "Prime Standard",
+                "sector": "Automobile",
+                "subsector": "Automobiles",
+                "instrument_exchange": "XETRA + FRANKFURT",
+                "indices": ["DAX"],
+            }
+        ]
+    )
+    register_information_html = (
+        fixture_root / "de-unternehmensregister-register-information.html"
+    ).read_text(encoding="utf-8")
+
+    entities = finance_country_module._extract_german_governance_people_entities(
+        register_information_html,
+        issuer_lookup=issuer_lookup,
+        source_name="unternehmensregister-register-information",
+    )
+
+    assert {entity["canonical_text"] for entity in entities} == {
+        "Britta Seeger",
+        "Martin Brudermuller",
+        "Ola Kallenius",
+    }
+    britta = next(
+        entity for entity in entities if entity["canonical_text"] == "Britta Seeger"
+    )
+    assert britta["metadata"]["category"] == "executive_officer"
+    assert britta["metadata"]["employer_ticker"] == "MBG"
+    martin = next(
+        entity
+        for entity in entities
+        if entity["canonical_text"] == "Martin Brudermuller"
+    )
+    assert martin["metadata"]["category"] == "director"
+    assert martin["metadata"]["role_title"] == "Chairman"
+
+
+def test_derive_germany_deutsche_boerse_entities_emits_issuers_tickers_and_people(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    country_dir = tmp_path / "de"
+    country_dir.mkdir(parents=True, exist_ok=True)
+    fixture_root = tmp_path / "remote-country-sources"
+    profile = create_finance_country_profiles(fixture_root)["de"]
+    company_details_source = next(
+        source for source in profile["sources"] if source["name"] == "mercedes-company-details"
+    )
+    company_details_fixture_path = Path(
+        urlparse(str(company_details_source["source_url"])).path
+    )
+    company_registry_search_fixture_path = (
+        fixture_root / "de-unternehmensregister-search-results.html"
+    )
+    company_registry_detail_fixture_path = (
+        fixture_root / "de-unternehmensregister-register-information.html"
+    )
+    company_registry_search_abo_fixture_path = (
+        fixture_root / "de-unternehmensregister-search-results-abo-energy.html"
+    )
+    company_registry_detail_abo_fixture_path = (
+        fixture_root / "de-unternehmensregister-register-information-abo-energy.html"
+    )
+    tradegate_abo_fixture_path = fixture_root / "de-tradegate-abo-energy-order-book.html"
+    downloaded_sources: list[dict[str, object]] = []
+    for source in profile["sources"]:
+        source_url = str(source["source_url"])
+        source_path = Path(urlparse(source_url).path)
+        destination = country_dir / finance_country_module._source_destination_filename(
+            source_name=str(source["name"]),
+            source_url=source_url,
+        )
+        destination.write_bytes(source_path.read_bytes())
+        downloaded_sources.append(
+            {
+                "name": str(source["name"]),
+                "source_url": source_url,
+                "path": destination.name,
+                "category": str(source["category"]),
+            }
+        )
+
+    requested_company_details_urls: list[str] = []
+    requested_register_information_urls: list[str] = []
+    requested_tradegate_urls: list[str] = []
+
+    def fake_download_company_details(
+        source_url: str | Path,
+        destination: Path,
+        *,
+        user_agent: str,
+    ) -> str:
+        del user_agent
+        requested_company_details_urls.append(str(source_url))
+        if str(source_url).endswith("/DE0007100000/company-details"):
+            destination.write_bytes(company_details_fixture_path.read_bytes())
+        else:
+            destination.write_text("<html><body>Company details unavailable</body></html>\n", encoding="utf-8")
+        return str(source_url)
+
+    def fake_download_register_information_search(
+        source_url: str | Path,
+        destination: Path,
+        *,
+        user_agent: str,
+    ) -> str:
+        del user_agent
+        source_url_text = str(source_url)
+        requested_register_information_urls.append(source_url_text)
+        if "abo+energy+gmbh+%26+co.+kgaa" in source_url_text.casefold():
+            destination.write_bytes(company_registry_search_abo_fixture_path.read_bytes())
+        else:
+            destination.write_bytes(company_registry_search_fixture_path.read_bytes())
+        return str(source_url)
+
+    def fake_download_register_information_detail(
+        source_url: str | Path,
+        destination: Path,
+        *,
+        user_agent: str,
+    ) -> str:
+        del user_agent
+        source_url_text = str(source_url)
+        requested_register_information_urls.append(source_url_text)
+        if "abo-energy-gmbh-co-kgaa" in source_url_text.casefold():
+            destination.write_bytes(company_registry_detail_abo_fixture_path.read_bytes())
+        else:
+            destination.write_bytes(company_registry_detail_fixture_path.read_bytes())
+        return str(source_url)
+
+    def fake_download_source(
+        source_url: str | Path,
+        destination: Path,
+        *,
+        user_agent: str,
+    ) -> str:
+        del user_agent
+        source_url_text = str(source_url)
+        if source_url_text.startswith("https://www.tradegate.de/orderbuch.php?isin="):
+            requested_tradegate_urls.append(source_url_text)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if "DE0005760029" in source_url_text:
+                destination.write_bytes(tradegate_abo_fixture_path.read_bytes())
+            else:
+                destination.write_text(
+                    "<html><body>Tradegate order book unavailable</body></html>\n",
+                    encoding="utf-8",
+                )
+            return source_url_text
+        raise AssertionError(f"Unexpected source download in test: {source_url_text}")
+
+    monkeypatch.setattr(
+        finance_country_module,
+        "_download_deutsche_boerse_company_details_page",
+        fake_download_company_details,
+    )
+    monkeypatch.setattr(
+        finance_country_module,
+        "_download_unternehmensregister_register_information_search_page",
+        fake_download_register_information_search,
+    )
+    monkeypatch.setattr(
+        finance_country_module,
+        "_download_unternehmensregister_register_information_detail_page",
+        fake_download_register_information_detail,
+    )
+    monkeypatch.setattr(finance_country_module, "_download_source", fake_download_source)
+    monkeypatch.setattr(
+        finance_country_module,
+        "_fetch_wikidata_api_json",
+        _fake_germany_wikidata_api_json,
+    )
+
+    derived_files = finance_country_module._derive_germany_deutsche_boerse_entities(
+        country_dir=country_dir,
+        downloaded_sources=downloaded_sources,
+        user_agent="ades-test/0.1.0",
+    )
+
+    assert {item["name"] for item in derived_files} == {
+        "derived-finance-de-issuers",
+        "derived-finance-de-tickers",
+        "derived-finance-de-people",
+    }
+    issuers = finance_country_module._load_curated_entities(
+        country_dir / "derived_issuer_entities.json"
+    )
+    assert {entity["canonical_text"] for entity in issuers} == {
+        "123fahrschule SE",
+        "ABO Energy GmbH & Co. KGaA",
+        "Adcapital AG",
+        "Advanced Blockchain AG",
+        "Commerzbank AG",
+        "Deutsche Boerse AG",
+        "Ing Bank N.V.",
+        "Mercedes-Benz Group AG",
+    }
+    mercedes_issuer = next(
+        entity for entity in issuers if entity["canonical_text"] == "Mercedes-Benz Group AG"
+    )
+    assert "Daimler AG" in mercedes_issuer["aliases"]
+    assert mercedes_issuer["metadata"]["register_court"] == "Stuttgart"
+    assert mercedes_issuer["metadata"]["register_number"] == "19360"
+    assert mercedes_issuer["metadata"]["register_type"] == "HRB"
+    assert mercedes_issuer["metadata"]["wikidata_qid"] == "Q27530"
+    assert mercedes_issuer["metadata"]["wikidata_entity_id"] == "wikidata:Q27530"
+    assert mercedes_issuer["metadata"]["wikidata_url"] == "https://www.wikidata.org/wiki/Q27530"
+    abo_energy_issuer = next(
+        entity
+        for entity in issuers
+        if entity["canonical_text"] == "ABO Energy GmbH & Co. KGaA"
+    )
+    assert "576002" in abo_energy_issuer["aliases"]
+    assert "ABO Energy" in abo_energy_issuer["aliases"]
+    assert abo_energy_issuer["metadata"]["ticker"] == "AB9"
+    assert abo_energy_issuer["metadata"]["wkn"] == "576002"
+    assert abo_energy_issuer["metadata"]["issuer_website"] == (
+        "https://www.aboenergy.com/de/index.php"
+    )
+    assert abo_energy_issuer["metadata"]["wikidata_qid"] == "Q33354510"
+    assert "ABO Wind AG" in abo_energy_issuer["aliases"]
+    assert "ABO Wind" in abo_energy_issuer["aliases"]
+    assert "Tradegate Exchange" in abo_energy_issuer["metadata"]["instrument_exchanges"]
+    assert "m:access" in abo_energy_issuer["metadata"]["listing_segments"]
+    commerzbank_issuer = next(
+        entity for entity in issuers if entity["canonical_text"] == "Commerzbank AG"
+    )
+    assert commerzbank_issuer["metadata"]["regulated_institution"] is True
+    assert commerzbank_issuer["metadata"]["bafin_bak_nrs"] == ["10010010"]
+    assert commerzbank_issuer["metadata"]["lei"] == "851WYGNLUQLFZBSYGB56"
+    assert commerzbank_issuer["metadata"]["bafin_activities"] == [
+        "Kreditgeschäft",
+        "Depotgeschäft",
+    ]
+    assert "Commerzbank" in commerzbank_issuer["aliases"]
+    assert "Mercedes-Benz Group" in mercedes_issuer["aliases"]
+    assert "Mercedes Benz Group AG" in mercedes_issuer["aliases"]
+    ing_issuer = next(entity for entity in issuers if entity["canonical_text"] == "Ing Bank N.V.")
+    assert ing_issuer["metadata"]["regulated_institution"] is True
+    assert ing_issuer["metadata"]["country"] == "Niederlande"
+    assert ing_issuer["metadata"]["germany_branch"] == "ING Bank N.V. Frankfurt Branch"
+    assert "Ing Bank" in ing_issuer["aliases"]
+    assert "ING-DiBa AG" in ing_issuer["aliases"]
+    tickers = finance_country_module._load_curated_entities(
+        country_dir / "derived_ticker_entities.json"
+    )
+    assert {entity["canonical_text"] for entity in tickers} == {
+        "AB9",
+        "ADC",
+        "ABX",
+        "DB1",
+        "MBG",
+    }
+    mercedes_ticker = next(entity for entity in tickers if entity["canonical_text"] == "MBG")
+    assert "Daimler AG" in mercedes_ticker["aliases"]
+    assert mercedes_ticker["metadata"]["register_court"] == "Stuttgart"
+    assert mercedes_ticker["metadata"]["wikidata_qid"] == "Q27530"
+    people = finance_country_module._load_curated_entities(
+        country_dir / "derived_people_entities.json"
+    )
+    assert {entity["canonical_text"] for entity in people} == {
+        "Alexander Koffka",
+        "Andreas Höllinger",
+        "Britta Seeger",
+        "Harald Wilhelm",
+        "Jochen Stotmeister",
+        "Martin Brudermuller",
+        "Ola Kallenius",
+        "Sabine Kohleisen",
+    }
+    martin = next(
+        entity for entity in people if entity["canonical_text"] == "Martin Brudermuller"
+    )
+    assert martin["metadata"]["category"] == "director"
+    assert martin["metadata"]["employer_ticker"] == "MBG"
+    assert martin["metadata"]["wikidata_qid"] == "Q15834173"
+    assert "Martin Brudermüller" in martin["aliases"]
+    assert "Dr. Martin Brudermüller" in martin["aliases"]
+    jochen = next(
+        entity for entity in people if entity["canonical_text"] == "Jochen Stotmeister"
+    )
+    assert jochen["metadata"]["category"] == "executive_officer"
+    assert jochen["metadata"]["employer_ticker"] == "AB9"
+    ola = next(entity for entity in people if entity["canonical_text"] == "Ola Kallenius")
+    assert ola["metadata"]["wikidata_qid"] == "Q19297571"
+    sabine = next(entity for entity in people if entity["canonical_text"] == "Sabine Kohleisen")
+    assert sabine["metadata"]["wikidata_qid"] == "Q111281602"
+    assert any(
+        url.endswith("/DE0007100000/company-details")
+        for url in requested_company_details_urls
+    )
+    assert any("DE0005760029" in url for url in requested_tradegate_urls)
+    assert any(
+        "registerPortalAdvice?" in url
+        for url in requested_register_information_urls
+    )
+    assert any(
+        "abo+energy+gmbh+%26+co.+kgaa" in url.casefold()
+        for url in requested_register_information_urls
+    )
+    assert any(
+        "register-information/company/mercedes-benz-group-ag" in url
+        for url in requested_register_information_urls
+    )
+    assert any(
+        str(source["name"]).startswith("deutsche-boerse-company-details-")
+        and str(source["path"]).startswith("deutsche-boerse-company-details/")
+        for source in downloaded_sources
+    )
+    assert any(
+        str(source["name"]).startswith("unternehmensregister-register-information-search-")
+        and str(source["path"]).startswith("unternehmensregister-register-information-search/")
+        for source in downloaded_sources
+    )
+    assert any(
+        str(source["name"]).startswith("unternehmensregister-register-information-")
+        and str(source["path"]).startswith("unternehmensregister-register-information/")
+        for source in downloaded_sources
+    )
+    assert any(
+        str(source["name"]).startswith("tradegate-order-book-")
+        and str(source["path"]).startswith("tradegate-order-book/")
+        for source in downloaded_sources
+    )
+    assert any(
+        str(source["name"]) == "wikidata-germany-entity-resolution"
+        and str(source["path"]) == "wikidata-germany-entity-resolution.json"
+        for source in downloaded_sources
+    )
+
+
+def test_fetch_finance_country_snapshot_records_deutsche_boerse_company_details_sources(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    fixture_root = tmp_path / "remote-country-sources"
+    profiles = create_finance_country_profiles(fixture_root)
+    monkeypatch.setattr(finance_country_module, "FINANCE_COUNTRY_PROFILES", profiles)
+    profile = profiles["de"]
+    company_details_source = next(
+        source for source in profile["sources"] if source["name"] == "mercedes-company-details"
+    )
+    company_details_fixture_path = Path(
+        urlparse(str(company_details_source["source_url"])).path
+    )
+    company_registry_search_fixture_path = (
+        fixture_root / "de-unternehmensregister-search-results.html"
+    )
+    company_registry_detail_fixture_path = (
+        fixture_root / "de-unternehmensregister-register-information.html"
+    )
+    company_registry_search_abo_fixture_path = (
+        fixture_root / "de-unternehmensregister-search-results-abo-energy.html"
+    )
+    company_registry_detail_abo_fixture_path = (
+        fixture_root / "de-unternehmensregister-register-information-abo-energy.html"
+    )
+    tradegate_abo_fixture_path = fixture_root / "de-tradegate-abo-energy-order-book.html"
+    original_download_source = finance_country_module._download_source
+
+    def fake_download_company_details(
+        source_url: str | Path,
+        destination: Path,
+        *,
+        user_agent: str,
+    ) -> str:
+        del user_agent
+        if str(source_url).endswith("/DE0007100000/company-details"):
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(company_details_fixture_path.read_bytes())
+        else:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text("<html><body>Company details unavailable</body></html>\n", encoding="utf-8")
+        return str(source_url)
+
+    def fake_download_register_information_search(
+        source_url: str | Path,
+        destination: Path,
+        *,
+        user_agent: str,
+    ) -> str:
+        del user_agent
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        source_url_text = str(source_url)
+        if "abo+energy+gmbh+%26+co.+kgaa" in source_url_text.casefold():
+            destination.write_bytes(company_registry_search_abo_fixture_path.read_bytes())
+        else:
+            destination.write_bytes(company_registry_search_fixture_path.read_bytes())
+        return source_url_text
+
+    def fake_download_register_information_detail(
+        source_url: str | Path,
+        destination: Path,
+        *,
+        user_agent: str,
+    ) -> str:
+        del user_agent
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        source_url_text = str(source_url)
+        if "abo-energy-gmbh-co-kgaa" in source_url_text.casefold():
+            destination.write_bytes(company_registry_detail_abo_fixture_path.read_bytes())
+        else:
+            destination.write_bytes(company_registry_detail_fixture_path.read_bytes())
+        return source_url_text
+
+    def wrapped_download_source(source_url: str | Path, destination: Path, *, user_agent: str) -> str:
+        source_url_text = str(source_url)
+        if source_url_text.startswith("https://live.deutsche-boerse.com/equity/"):
+            return fake_download_company_details(source_url, destination, user_agent=user_agent)
+        if source_url_text.startswith("https://www.tradegate.de/orderbuch.php?isin="):
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if "DE0005760029" in source_url_text:
+                destination.write_bytes(tradegate_abo_fixture_path.read_bytes())
+            else:
+                destination.write_text(
+                    "<html><body>Tradegate order book unavailable</body></html>\n",
+                    encoding="utf-8",
+                )
+            return source_url_text
+        return original_download_source(source_url, destination, user_agent=user_agent)
+
+    monkeypatch.setattr(
+        finance_country_module,
+        "_download_deutsche_boerse_company_details_page",
+        fake_download_company_details,
+    )
+    monkeypatch.setattr(
+        finance_country_module,
+        "_download_unternehmensregister_register_information_search_page",
+        fake_download_register_information_search,
+    )
+    monkeypatch.setattr(
+        finance_country_module,
+        "_download_unternehmensregister_register_information_detail_page",
+        fake_download_register_information_detail,
+    )
+    monkeypatch.setattr(finance_country_module, "_download_source", wrapped_download_source)
+    monkeypatch.setattr(
+        finance_country_module,
+        "_fetch_wikidata_api_json",
+        _fake_germany_wikidata_api_json,
+    )
+
+    fetch_result = fetch_finance_country_source_snapshots(
+        output_dir=tmp_path / "raw" / "finance-country-en",
+        snapshot="2026-04-19",
+        country_codes=["de"],
+    )
+
+    assert fetch_result.country_count == 1
+    de_item = fetch_result.countries[0]
+    manifest = json.loads(Path(de_item.source_manifest_path).read_text(encoding="utf-8"))
+    company_detail_sources = [
+        source
+        for source in manifest["sources"]
+        if str(source["name"]).startswith("deutsche-boerse-company-details-")
+    ]
+    assert company_detail_sources
+    assert any(
+        str(source["path"]).startswith("deutsche-boerse-company-details/de0007100000")
+        for source in company_detail_sources
+    )
+    company_register_sources = [
+        source
+        for source in manifest["sources"]
+        if str(source["name"]).startswith("unternehmensregister-register-information-")
+    ]
+    assert company_register_sources
+    assert any(
+        str(source["name"]).startswith("unternehmensregister-register-information-search-")
+        and str(source["path"]).startswith(
+            "unternehmensregister-register-information-search/de0007100000"
+        )
+        for source in company_register_sources
+    )
+    assert any(
+        str(source["path"]).startswith("unternehmensregister-register-information/de0007100000")
+        for source in company_register_sources
+    )
+    tradegate_sources = [
+        source
+        for source in manifest["sources"]
+        if str(source["name"]).startswith("tradegate-order-book-")
+    ]
+    assert tradegate_sources
+    assert any(
+        str(source["path"]).startswith("tradegate-order-book/de0005760029")
+        for source in tradegate_sources
+    )
+    wikidata_sources = [
+        source
+        for source in manifest["sources"]
+        if str(source["name"]) == "wikidata-germany-entity-resolution"
+    ]
+    assert len(wikidata_sources) == 1
+    assert wikidata_sources[0]["path"] == "wikidata-germany-entity-resolution.json"
+    bafin_sources = [
+        source
+        for source in manifest["sources"]
+        if str(source["name"]) == "bafin-company-database-export"
+    ]
+    assert len(bafin_sources) == 1
+    assert str(bafin_sources[0]["path"]).endswith(".csv")
+
 
 
 def test_extract_uk_official_list_commercial_company_records_filters_company_rows(

@@ -42,9 +42,48 @@ def test_cli_list_packs_defaults_to_human_readable_table(tmp_path: Path) -> None
 
     assert result.exit_code == 0
     assert "Available packs (2)" in result.stdout
+    assert "╭" in result.stdout
     assert "PACK ID" in result.stdout
+    assert "Registry:" in result.stdout
     assert "finance-en" in result.stdout
     assert "general-en" in result.stdout
+    assert '"mode"' not in result.stdout
+
+
+def test_cli_list_group_defaults_to_available_pack_table(tmp_path: Path) -> None:
+    general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
+    registry_dir = tmp_path / "registry"
+    runner = CliRunner()
+
+    build_result = runner.invoke(
+        app,
+        [
+            "registry",
+            "build",
+            str(general_dir),
+            str(finance_dir),
+            "--output-dir",
+            str(registry_dir),
+        ],
+    )
+
+    assert build_result.exit_code == 0
+    registry_index = json.loads(build_result.stdout)["index_url"]
+
+    result = runner.invoke(
+        app,
+        [
+            "list",
+            "--registry-url",
+            registry_index,
+        ],
+        env={"ADES_STORAGE_ROOT": str(tmp_path / "install")},
+    )
+
+    assert result.exit_code == 0
+    assert "Available packs (2)" in result.stdout
+    assert "╭" in result.stdout
+    assert "finance-en" in result.stdout
     assert '"mode"' not in result.stdout
 
 
@@ -78,9 +117,45 @@ def test_cli_list_installed_defaults_to_human_readable_table(tmp_path: Path) -> 
 
     assert result.exit_code == 0
     assert "Installed packs (2)" in result.stdout
+    assert "╭" in result.stdout
     assert "ACTIVE" in result.stdout
     assert "finance-en" in result.stdout
     assert "general-en" in result.stdout
+    assert '"mode"' not in result.stdout
+
+
+def test_cli_packs_group_defaults_to_installed_pack_table(tmp_path: Path) -> None:
+    general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
+    registry_dir = tmp_path / "registry"
+    install_root = tmp_path / "install"
+    runner = CliRunner()
+
+    build_result = runner.invoke(
+        app,
+        [
+            "registry",
+            "build",
+            str(general_dir),
+            str(finance_dir),
+            "--output-dir",
+            str(registry_dir),
+        ],
+    )
+
+    assert build_result.exit_code == 0
+    registry_index = json.loads(build_result.stdout)["index_url"]
+    PackInstaller(install_root, registry_url=registry_index).install("finance-en")
+
+    result = runner.invoke(
+        app,
+        ["packs"],
+        env={"ADES_STORAGE_ROOT": str(install_root)},
+    )
+
+    assert result.exit_code == 0
+    assert "Installed packs (2)" in result.stdout
+    assert "╭" in result.stdout
+    assert "finance-en" in result.stdout
     assert '"mode"' not in result.stdout
 
 
@@ -151,6 +226,24 @@ def test_cli_help_command_prints_root_help() -> None:
     assert "packs" in result.stdout
     assert "pull" in result.stdout
     assert "help" in result.stdout
+
+
+def test_cli_version_option_prints_version() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.stdout.strip().startswith("ades ")
+
+
+def test_cli_short_version_option_prints_version() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["-V"])
+
+    assert result.exit_code == 0
+    assert result.stdout.strip().startswith("ades ")
 
 
 def test_cli_help_command_supports_nested_command_paths() -> None:

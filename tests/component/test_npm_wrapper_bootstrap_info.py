@@ -22,7 +22,7 @@ def test_npm_wrapper_reports_bootstrap_info_with_overrides(tmp_path: Path) -> No
 
     assert result.returncode == 0
     payload = json.loads(result.stdout)
-    assert payload["npmPackage"] == "ades-cli"
+    assert payload["npmPackage"] == "@bekirdag/ades"
     assert payload["command"] == "ades"
     assert payload["runtimeDir"] == str(runtime_dir.resolve())
     assert payload["pythonPackageSpec"] == str((tmp_path / "local-package").resolve())

@@ -21,6 +21,7 @@ from ..api import (
     fetch_general_source_snapshot,
     build_medical_source_bundle,
     fetch_medical_source_snapshot,
+    build_qid_graph_store,
     build_registry,
     compare_extraction_quality_reports,
     deactivate_pack,
@@ -71,6 +72,8 @@ from .models import (
     NpmInstallerInfo,
     PackSummary,
     PackHealthResponse,
+    QidGraphStoreBuildRequest,
+    QidGraphStoreBuildResponse,
     ReleaseManifestRequest,
     ReleaseManifestResponse,
     ReleasePublishRequest,
@@ -492,6 +495,27 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except NotADirectoryError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/build-qid-graph-store",
+        response_model=QidGraphStoreBuildResponse,
+    )
+    def runtime_build_qid_graph_store(
+        request: QidGraphStoreBuildRequest,
+    ) -> QidGraphStoreBuildResponse:
+        """Build one explicit QID graph store from local bundle directories."""
+
+        try:
+            return build_qid_graph_store(
+                request.bundle_dirs,
+                truthy_path=request.truthy_path,
+                output_dir=request.output_dir,
+                allowed_predicates=request.predicate or None,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

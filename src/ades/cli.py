@@ -9,6 +9,11 @@ from pathlib import Path
 import click
 import httpx
 import typer
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 from typer.main import get_command
 
 from .api import activate_pack as api_activate_pack
@@ -19,6 +24,7 @@ from .api import build_finance_country_source_bundles as api_build_finance_count
 from .api import build_general_source_bundle as api_build_general_source_bundle
 from .api import build_medical_source_bundle as api_build_medical_source_bundle
 from .api import build_qid_graph_index as api_build_qid_graph_index
+from .api import build_qid_graph_store as api_build_qid_graph_store
 from .api import build_registry as api_build_registry
 from .api import compare_extraction_quality_reports as api_compare_extraction_quality_reports
 from .api import deactivate_pack as api_deactivate_pack
@@ -70,17 +76,48 @@ from .service.client import (
 )
 from .storage import UnsupportedRuntimeConfigurationError
 from .storage.paths import build_storage_layout, ensure_storage_layout
+from .version import __version__
 
+_RICH_CONSOLE = Console(highlight=False)
 
 app = typer.Typer(help="ades local semantic enrichment CLI", no_args_is_help=True)
-list_app = typer.Typer(help="List available or installed ades resources.")
-packs_app = typer.Typer(help="Inspect installed ades packs.")
+list_app = typer.Typer(
+    help="List available or installed ades resources.",
+    invoke_without_command=True,
+)
+packs_app = typer.Typer(
+    help="Inspect installed ades packs.",
+    invoke_without_command=True,
+)
 registry_app = typer.Typer(help="Build static pack registries for external distribution.")
 release_app = typer.Typer(help="Build and verify local release artifacts.")
 app.add_typer(list_app, name="list")
 app.add_typer(packs_app, name="packs")
 app.add_typer(registry_app, name="registry")
 app.add_typer(release_app, name="release")
+
+
+def _version_callback(ctx: typer.Context, value: bool) -> None:
+    """Print the installed ades version and exit."""
+
+    if not value or ctx.resilient_parsing:
+        return
+    typer.echo(f"ades {__version__}")
+    raise typer.Exit()
+
+
+@app.callback()
+def app_callback(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the installed ades version and exit.",
+    ),
+) -> None:
+    """ades local semantic enrichment CLI."""
 
 
 def _echo_json(payload: object) -> None:
@@ -127,6 +164,46 @@ def _render_text_table(headers: list[str], rows: list[list[str]]) -> str:
     lines = [render_row(headers), render_row(divider)]
     lines.extend(render_row(row) for row in rows)
     return "\n".join(lines)
+
+
+def _render_rich_pack_table(
+    *,
+    headers: list[str],
+    rows: list[list[str]],
+    title: str,
+    subtitle: str | None = None,
+) -> None:
+    """Render one Rich-styled pack listing for human-facing CLI output."""
+
+    _RICH_CONSOLE.print(
+        Panel(
+            Text(subtitle or "", style="dim"),
+            title=title,
+            border_style="cyan",
+            padding=(0, 1),
+        )
+    )
+    table = Table(
+        box=box.ROUNDED,
+        header_style="bold cyan",
+        expand=True,
+        pad_edge=False,
+        show_lines=False,
+    )
+    for header in headers:
+        column_kwargs: dict[str, object] = {}
+        if header in {"PACK ID", "VERSION", "DOMAIN", "TIER", "LANG", "ACTIVE"}:
+            column_kwargs["no_wrap"] = True
+        if header == "DESCRIPTION":
+            column_kwargs["ratio"] = 3
+            column_kwargs["overflow"] = "fold"
+        elif header == "DEPS":
+            column_kwargs["ratio"] = 2
+            column_kwargs["overflow"] = "fold"
+        table.add_column(header, **column_kwargs)
+    for row in rows:
+        table.add_row(*row)
+    _RICH_CONSOLE.print(table)
 
 
 def _exit_with_cli_error(exc: Exception) -> None:
@@ -176,11 +253,15 @@ def _echo_pack_listing_table(
     """Render one installed or available pack listing as a human-readable table."""
 
     if mode == "available":
-        typer.echo(f"Available packs ({len(packs)})")
-        if registry_url is not None:
-            typer.echo(f"Registry: {registry_url}")
         if not packs:
-            typer.echo("No packs are available from the configured registry.")
+            _RICH_CONSOLE.print(
+                Panel(
+                    "No packs are available from the configured registry.",
+                    title=f"Available packs ({len(packs)})",
+                    subtitle=registry_url or "",
+                    border_style="cyan",
+                )
+            )
             return
         headers = [
             "PACK ID",
@@ -188,7 +269,7 @@ def _echo_pack_listing_table(
             "DOMAIN",
             "TIER",
             "LANG",
-            "DEPENDENCIES",
+            "DEPS",
             "DESCRIPTION",
         ]
         rows = [
@@ -203,16 +284,27 @@ def _echo_pack_listing_table(
             ]
             for pack in packs
         ]
-        typer.echo(_render_text_table(headers, rows))
+        subtitle = f"Registry: {registry_url}" if registry_url is not None else None
+        _render_rich_pack_table(
+            headers=headers,
+            rows=rows,
+            title=f"Available packs ({len(packs)})",
+            subtitle=subtitle,
+        )
         return
 
     title = "Installed packs"
     if active_only:
         title += " (active only)"
     title += f" ({len(packs)})"
-    typer.echo(title)
     if not packs:
-        typer.echo("No packs are installed yet. Run `ades pull general-en` or `ades pull <pack-id>` to add one.")
+        _RICH_CONSOLE.print(
+            Panel(
+                "No packs are installed yet. Run `ades pull general-en` or `ades pull <pack-id>` to add one.",
+                title=title,
+                border_style="cyan",
+            )
+        )
         return
     headers = [
         "PACK ID",
@@ -235,7 +327,7 @@ def _echo_pack_listing_table(
         ]
         for pack in packs
     ]
-    typer.echo(_render_text_table(headers, rows))
+    _render_rich_pack_table(headers=headers, rows=rows, title=title)
 
 
 def _echo_pull_summary(result: InstallResult) -> None:
@@ -634,6 +726,62 @@ def help_command(
     """Show help for the CLI or one nested command."""
 
     _echo_help(command_path)
+
+
+@list_app.callback()
+def list_default(
+    ctx: typer.Context,
+    installed: bool = typer.Option(
+        False,
+        "--installed",
+        help="List installed packs instead of available registry packs.",
+    ),
+    active_only: bool = typer.Option(
+        False,
+        "--active-only",
+        help="List only active installed packs when using --installed.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable table."),
+    registry_url: str | None = typer.Option(
+        None,
+        "--registry-url",
+        help="Override the registry URL or file path for available-pack listings.",
+    ),
+) -> None:
+    """List packs with available registry packs as the default view."""
+
+    if ctx.invoked_subcommand is not None:
+        return
+    _render_pack_listing(
+        available=not installed,
+        active_only=active_only,
+        registry_url=registry_url,
+        json_output=json_output,
+    )
+
+
+@packs_app.callback()
+def packs_default(
+    ctx: typer.Context,
+    available: bool = typer.Option(False, "--available", help="List registry packs instead."),
+    active_only: bool = typer.Option(False, "--active-only", help="List only active installed packs."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable table."),
+    registry_url: str | None = typer.Option(
+        None,
+        "--registry-url",
+        help="Override the registry URL or file path when listing --available packs.",
+    ),
+) -> None:
+    """List installed packs or available registry packs."""
+
+    if ctx.invoked_subcommand is not None:
+        return
+    _render_pack_listing(
+        available=available,
+        active_only=active_only,
+        registry_url=registry_url,
+        json_output=json_output,
+    )
 
 
 @packs_app.command("list")
@@ -2164,6 +2312,43 @@ def registry_build_qid_graph_index(
             qdrant_api_key=qdrant_api_key,
             collection_name=collection_name,
             publish_alias=publish_alias,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("build-qid-graph-store")
+def registry_build_qid_graph_store(
+    bundle_dirs: list[Path] = typer.Option(
+        ...,
+        "--bundle-dir",
+        help="Normalized bundle directory with bundle.json. Repeat for multiple packs.",
+    ),
+    truthy_path: Path = typer.Option(
+        ...,
+        "--truthy-path",
+        help="Wikidata truthy RDF dump path (.nt or .nt.gz).",
+    ),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the explicit QID graph store and manifest should be written.",
+    ),
+    predicate: list[str] = typer.Option(
+        None,
+        "--predicate",
+        help="Allowed Wikidata property id. Repeat to override the default predicate set.",
+    ),
+) -> None:
+    """Build one explicit QID graph store for exact path and ancestor queries."""
+
+    try:
+        response = api_build_qid_graph_store(
+            bundle_dirs,
+            truthy_path=truthy_path,
+            output_dir=output_dir,
+            allowed_predicates=predicate or None,
         )
     except (FileNotFoundError, ValueError) as exc:
         _exit_with_cli_error(exc)

@@ -6,6 +6,7 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import shutil
+import sqlite3
 
 from .fetch import normalize_source_url, read_text
 from ..storage.backend import (
@@ -49,38 +50,64 @@ class PackRegistry:
     def list_installed_packs(self, *, active_only: bool = False) -> list[PackManifest]:
         """Return all installed packs that have a manifest."""
 
-        packs = self.store.list_installed_packs(active_only=active_only)
+        try:
+            packs = self.store.list_installed_packs(active_only=active_only)
+        except sqlite3.OperationalError as exc:
+            if self._is_sqlite_lock_error(exc):
+                return self._merge_visible_filesystem_packs([], active_only=active_only)
+            raise
         if not self._allows_implicit_metadata_repairs():
             return self._merge_visible_filesystem_packs(packs, active_only=active_only)
-        known_packs = packs if not active_only else self.store.list_installed_packs(active_only=False)
-        if self._sync_missing_filesystem_packs(known_packs):
+        try:
+            known_packs = packs if not active_only else self.store.list_installed_packs(active_only=False)
+            if self._sync_missing_filesystem_packs(known_packs):
+                return self.store.list_installed_packs(active_only=active_only)
+            repaired_packs = self._repair_noncanonical_pack_metadata_batch(
+                packs,
+                active_only=active_only,
+            )
+            if repaired_packs is not None:
+                return repaired_packs
+            if packs or self.store.count_installed_packs() > 0:
+                return packs
+            self.store.sync_from_filesystem(self.layout.packs_dir)
             return self.store.list_installed_packs(active_only=active_only)
-        repaired_packs = self._repair_noncanonical_pack_metadata_batch(
-            packs,
-            active_only=active_only,
-        )
-        if repaired_packs is not None:
-            return repaired_packs
-        if packs or self.store.count_installed_packs() > 0:
-            return packs
-        self.store.sync_from_filesystem(self.layout.packs_dir)
-        return self.store.list_installed_packs(active_only=active_only)
+        except sqlite3.OperationalError as exc:
+            if self._is_sqlite_lock_error(exc):
+                return self._merge_visible_filesystem_packs(packs, active_only=active_only)
+            raise
 
     def get_pack(self, pack_id: str, *, active_only: bool = False) -> PackManifest | None:
         """Return a single pack if it is installed."""
 
-        pack = self.store.get_pack(pack_id, active_only=active_only)
+        try:
+            pack = self.store.get_pack(pack_id, active_only=active_only)
+        except sqlite3.OperationalError as exc:
+            if self._is_sqlite_lock_error(exc):
+                pack = None
+            else:
+                raise
         if pack is not None:
             if self._allows_implicit_metadata_repairs():
-                repaired_pack, repaired = self._repair_noncanonical_pack_metadata(pack)
-                if repaired:
-                    refreshed = self.store.get_pack(pack_id, active_only=active_only)
-                    if refreshed is not None:
-                        return refreshed
-                return repaired_pack
+                try:
+                    repaired_pack, repaired = self._repair_noncanonical_pack_metadata(pack)
+                    if repaired:
+                        refreshed = self.store.get_pack(pack_id, active_only=active_only)
+                        if refreshed is not None:
+                            return refreshed
+                    return repaired_pack
+                except sqlite3.OperationalError as exc:
+                    if not self._is_sqlite_lock_error(exc):
+                        raise
+                    return pack
             return pack
-        if active_only and self.store.get_pack(pack_id, active_only=False) is not None:
-            return None
+        if active_only:
+            try:
+                if self.store.get_pack(pack_id, active_only=False) is not None:
+                    return None
+            except sqlite3.OperationalError as exc:
+                if not self._is_sqlite_lock_error(exc):
+                    raise
         pack_dir = self.layout.packs_dir / pack_id
         if not (pack_dir / "manifest.json").exists():
             return None
@@ -143,41 +170,55 @@ class PackRegistry:
     ) -> list[dict[str, str | float | bool | None]]:
         """Return deterministic metadata candidates from the configured store."""
 
-        candidates = self.store.lookup_candidates(
-            query,
-            pack_id=pack_id,
-            exact_alias=exact_alias,
-            fuzzy=fuzzy,
-            active_only=active_only,
-            limit=limit,
-        )
+        try:
+            candidates = self.store.lookup_candidates(
+                query,
+                pack_id=pack_id,
+                exact_alias=exact_alias,
+                fuzzy=fuzzy,
+                active_only=active_only,
+                limit=limit,
+            )
+        except sqlite3.OperationalError as exc:
+            if self._is_sqlite_lock_error(exc):
+                return []
+            raise
         if candidates:
             return candidates
         if not self._allows_implicit_metadata_repairs():
             if pack_id is not None and self.get_pack(pack_id, active_only=active_only) is None:
                 return []
             return []
-        if pack_id is not None:
-            if self.get_pack(pack_id, active_only=active_only) is None:
+        try:
+            if pack_id is not None:
+                if self.get_pack(pack_id, active_only=active_only) is None:
+                    return []
+            else:
+                known_packs = self.store.list_installed_packs(active_only=False)
+                if not self._sync_missing_filesystem_packs(known_packs):
+                    return []
+            return self.store.lookup_candidates(
+                query,
+                pack_id=pack_id,
+                exact_alias=exact_alias,
+                fuzzy=fuzzy,
+                active_only=active_only,
+                limit=limit,
+            )
+        except sqlite3.OperationalError as exc:
+            if self._is_sqlite_lock_error(exc):
                 return []
-        else:
-            known_packs = self.store.list_installed_packs(active_only=False)
-            if not self._sync_missing_filesystem_packs(known_packs):
-                return []
-        return self.store.lookup_candidates(
-            query,
-            pack_id=pack_id,
-            exact_alias=exact_alias,
-            fuzzy=fuzzy,
-            active_only=active_only,
-            limit=limit,
-        )
+            raise
 
     def _bootstrap_if_needed(self) -> None:
         if not self._allows_implicit_metadata_repairs():
             return
-        if self.store.count_installed_packs() == 0:
-            self.store.sync_from_filesystem(self.layout.packs_dir)
+        try:
+            if self.store.count_installed_packs() == 0:
+                self.store.sync_from_filesystem(self.layout.packs_dir)
+        except sqlite3.OperationalError as exc:
+            if not self._is_sqlite_lock_error(exc):
+                raise
 
     def _allows_implicit_metadata_repairs(self) -> bool:
         return self.metadata_backend == MetadataBackend.SQLITE
@@ -283,6 +324,10 @@ class PackRegistry:
             return Path(stored_path).resolve(strict=False) == expected_path.resolve(strict=False)
         except OSError:
             return Path(stored_path) == expected_path
+
+    @staticmethod
+    def _is_sqlite_lock_error(exc: sqlite3.OperationalError) -> bool:
+        return "database is locked" in str(exc).lower()
 
 
 def default_registry_url() -> str:

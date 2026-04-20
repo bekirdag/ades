@@ -6,7 +6,7 @@
 - Product type: local-first semantic enrichment service and Python library
 - Primary commands: `ades pull <pack>`, `ades serve`, `ades tag <text>`
 - Primary package language: Python
-- Distribution targets: PyPI package `ades` and npm CLI wrapper `ades-cli`
+- Distribution targets: PyPI package `ades-tool` and npm CLI wrapper `@bekirdag/ades`
 - Current delivery target: `v0.1.0`
 
 ## Mission

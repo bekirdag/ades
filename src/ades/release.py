@@ -20,6 +20,7 @@ import urllib.request
 
 from .distribution import (
     NPM_COMMAND_NAME,
+    NPM_PACKAGE_NAME,
     NPM_PYTHON_BIN_ENV,
     NPM_PYTHON_PACKAGE_SPEC_ENV,
     NPM_RUNTIME_DIR_ENV,
@@ -50,7 +51,7 @@ NPM_PUBLISH_COMMAND = ["npm", "publish"]
 DEFAULT_RELEASE_TEST_COMMAND = [sys.executable, "-m", "pytest", "-q"]
 VERSION_FILE_RELATIVE_PATH = Path("src/ades/version.py")
 PYPROJECT_RELATIVE_PATH = Path("pyproject.toml")
-NPM_PACKAGE_JSON_RELATIVE_PATH = Path("npm/ades-cli/package.json")
+NPM_PACKAGE_JSON_RELATIVE_PATH = Path("npm/ades/package.json")
 VERSION_ASSIGNMENT_PATTERN = re.compile(r'(__version__\s*=\s*")([^"]+)(")')
 PYPROJECT_VERSION_PATTERN = re.compile(r'(?m)^(version\s*=\s*")([^"]+)(")$')
 TWINE_USERNAME_ALIAS_ENV = "ADES_RELEASE_TWINE_USERNAME"
@@ -3626,7 +3627,7 @@ def verify_release_artifacts(
         output_dir=str(resolved_output_dir),
         python_package=PYTHON_PACKAGE_NAME,
         python_version=version_state.version_file_version,
-        npm_package="ades-cli",
+        npm_package=NPM_PACKAGE_NAME,
         npm_version=version_state.npm_version,
         version_state=version_state,
         versions_match=version_state.synchronized,

@@ -4,8 +4,8 @@ import textwrap
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-NPM_WRAPPER_BIN = REPO_ROOT / "npm" / "ades-cli" / "bin" / "ades.cjs"
-NPM_PACKAGE_JSON = REPO_ROOT / "npm" / "ades-cli" / "package.json"
+NPM_WRAPPER_BIN = REPO_ROOT / "npm" / "ades" / "bin" / "ades.cjs"
+NPM_PACKAGE_JSON = REPO_ROOT / "npm" / "ades" / "package.json"
 
 
 def create_fake_python_environment(root: Path) -> tuple[Path, Path]:

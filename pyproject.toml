@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ades"
+name = "ades-tool"
 version = "0.1.0"
 description = "Local-first semantic enrichment service and Python library."
 readme = "README.md"
@@ -44,7 +44,7 @@ packages = ["src/ades"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "/npm/ades-cli",
+  "/npm/ades",
   "/src/ades",
 ]
 

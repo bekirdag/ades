@@ -6,15 +6,19 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 import codecs
 import csv
+import html
 import httpx
 import json
 from pathlib import Path
 import re
 import shutil
+import subprocess
 from typing import Any
 import unicodedata
 import urllib.request
-from urllib.parse import quote, urljoin, urlparse
+from urllib.parse import quote, urlencode, urljoin, urlparse
+import xml.etree.ElementTree as ET
+import zipfile
 
 from .fetch import normalize_source_url
 from .finance_bundle import (
@@ -69,6 +73,101 @@ _ASX_BIO_PATTERN = re.compile(
     r'<div class="bio__heading"><h3>(?P<name>.*?)</h3>\s*<p>(?P<title>.*?)</p>',
     re.IGNORECASE | re.DOTALL,
 )
+_DEUTSCHE_BOERSE_LISTED_COMPANIES_URL = (
+    "https://www.cashmarket.deutsche-boerse.com/cash-en/Data-Tech/statistics/listed-companies"
+)
+_BOERSE_MUENCHEN_MACCESS_LISTED_COMPANIES_URL = (
+    "https://www.boerse-muenchen.de/maccess/gelistete-unternehmen"
+)
+_BOERSE_DUESSELDORF_PRIMARY_MARKET_URL = (
+    "https://www.boerse-duesseldorf.de/aktien-primaermarkt/"
+)
+_TRADEGATE_ORDER_BOOK_URL_TEMPLATE = (
+    "https://www.tradegate.de/orderbuch.php?isin={isin}&lang=en"
+)
+_BAFIN_COMPANY_DATABASE_PORTAL_URL = "https://portal.mvp.bafin.de/database/InstInfo/"
+_BAFIN_COMPANY_DATABASE_SEARCH_URL = (
+    "https://portal.mvp.bafin.de/database/InstInfo/sucheForm.do"
+)
+_BAFIN_COMPANY_DATABASE_EXPORT_CSV_URL = (
+    "https://portal.mvp.bafin.de/database/InstInfo/sucheForm.do"
+    "?6578706f7274=1&sucheButtonInstitut=Suche&institutName=&d-4012550-e=1"
+)
+_WIKIDATA_API_URL = "https://www.wikidata.org/w/api.php"
+_WIKIDATA_ENTITY_URL_TEMPLATE = "https://www.wikidata.org/wiki/{qid}"
+_WIKIDATA_SEARCH_LIMIT = 5
+_WIKIDATA_GETENTITIES_BATCH_SIZE = 50
+_DEUTSCHE_BOERSE_COMPANY_DETAILS_URL_TEMPLATE = (
+    "https://live.deutsche-boerse.com/equity/{identifier}/company-details"
+)
+_DEUTSCHE_BOERSE_COMPANY_DETAILS_RENDER_BUDGET_MS = 20_000
+_DEUTSCHE_BOERSE_HEADLESS_CHROME_CANDIDATES = (
+    "google-chrome",
+    "chromium",
+    "chromium-browser",
+)
+_UNTERNEHMENSREGISTER_REGISTER_INFORMATION_URL = (
+    "https://www.unternehmensregister.de/en/search/register-information"
+)
+_UNTERNEHMENSREGISTER_REGISTER_PORTAL_ADVICE_URL = (
+    "https://www.unternehmensregister.de/en/registerPortalAdvice"
+)
+_DEUTSCHE_BOERSE_LISTED_COMPANIES_LINK_PATTERN = re.compile(
+    r'(?P<url>(?:https?://|/)[^"\']*Listed-companies\.xlsx)',
+    re.IGNORECASE,
+)
+_DEUTSCHE_BOERSE_COMPANY_DETAILS_ROW_ROLE_CLASS = {
+    "executive board": "executive_officer",
+    "supervisory board": "director",
+}
+_DEUTSCHE_BOERSE_COMPANY_DETAILS_DEFAULT_ROLE_TITLE = {
+    "executive board": "Executive Board Member",
+    "supervisory board": "Supervisory Board Member",
+}
+_GERMANY_MARKET_TABLE_CELL_PATTERN = re.compile(
+    r"<td[^>]*>(?P<cell>.*?)</td>",
+    re.IGNORECASE | re.DOTALL,
+)
+_GERMANY_MARKET_LINK_ISIN_PATTERN = re.compile(
+    r'href="(?P<path>/akti(?:e|en)/(?P<isin>[A-Z0-9]{12})/[^"]*)"',
+    re.IGNORECASE,
+)
+_GERMANY_MARKET_SUB_INFO_PATTERN = re.compile(
+    r"<span[^>]*class=\"[^\"]*sub-info[^\"]*\"[^>]*>.*?</span>",
+    re.IGNORECASE | re.DOTALL,
+)
+_TRADEGATE_ORDER_BOOK_IDENTIFIER_PATTERN = re.compile(
+    r"<th>\s*WKN\s*</th>\s*"
+    r"<th>\s*Code\s*</th>\s*"
+    r"<th>\s*ISIN\s*</th>\s*"
+    r"<th>\s*Trading Currency\s*</th>.*?"
+    r"<tr>\s*"
+    r"<td[^>]*>(?P<wkn>.*?)</td>\s*"
+    r"<td[^>]*>(?P<code>.*?)</td>\s*"
+    r"<td[^>]*>(?P<isin>.*?)</td>",
+    re.IGNORECASE | re.DOTALL,
+)
+_GERMAN_GOVERNANCE_TABLE_ROW_PATTERN = re.compile(
+    r"<tr[^>]*>(?P<row>.*?)</tr>",
+    re.IGNORECASE | re.DOTALL,
+)
+_GERMAN_GOVERNANCE_CARD_PATTERN = re.compile(
+    r"<h[2-6][^>]*>(?P<name>.*?)</h[2-6]>\s*<p[^>]*>(?P<role>.*?)</p>",
+    re.IGNORECASE | re.DOTALL,
+)
+_GERMAN_GOVERNANCE_ROLE_HEADINGS = {
+    "director": ("supervisory board", "aufsichtsrat"),
+    "executive_officer": (
+        "board of management",
+        "management board",
+        "executive board",
+        "managing directors",
+        "managing director",
+        "geschäftsführer",
+        "vorstand",
+    ),
+    "investor_relations": ("investor relations",),
+}
 _FCA_OFFICIAL_LIST_LIVE_URL = "https://marketsecurities.fca.org.uk/downloadOfficiallist/live"
 _COMPANIES_HOUSE_SEARCH_URL_TEMPLATE = (
     "https://find-and-update.company-information.service.gov.uk/search/companies?q={query}"
@@ -96,6 +195,18 @@ _COMPANIES_HOUSE_COMPANY_SUFFIX_TOKENS = frozenset(
         "secretaries",
         "services",
     }
+)
+_GERMANY_COMPANY_LEGAL_SUFFIX_PATTERNS = (
+    re.compile(r",?\s+gmbh\s*&\s*co\.?\s*kgaa$", re.IGNORECASE),
+    re.compile(r",?\s+gmbh\s*&\s*co\.?\s*kg$", re.IGNORECASE),
+    re.compile(r",?\s+ag\s*&\s*co\.?\s*kgaa$", re.IGNORECASE),
+    re.compile(r",?\s+kgaa$", re.IGNORECASE),
+    re.compile(r",?\s+gmbh$", re.IGNORECASE),
+    re.compile(r",?\s+ag$", re.IGNORECASE),
+    re.compile(r",?\s+se$", re.IGNORECASE),
+    re.compile(r",?\s+n\.?\s*v\.?$", re.IGNORECASE),
+    re.compile(r",?\s+sa$", re.IGNORECASE),
+    re.compile(r",?\s+plc$", re.IGNORECASE),
 )
 _COMPANIES_HOUSE_HONORIFIC_SUFFIXES = frozenset(
     {"mr", "mrs", "ms", "miss", "sir", "dr", "prof", "professor", "lord", "lady"}
@@ -537,6 +648,45 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
                 "https://www.xetra.com/xetra-en/",
                 category="exchange",
             ),
+            _source(
+                "boerse-muenchen",
+                "https://www.boerse-muenchen.de/",
+                category="exchange",
+            ),
+            _source(
+                "boerse-duesseldorf",
+                "https://www.boerse-duesseldorf.de/",
+                category="exchange",
+            ),
+            _source(
+                "tradegate-exchange",
+                "https://www.tradegate.de/",
+                category="exchange",
+            ),
+            _source(
+                "bafin-company-database-export",
+                _BAFIN_COMPANY_DATABASE_EXPORT_CSV_URL,
+                category="institution_register",
+                notes="Use the official BaFin company-database CSV export to add Germany-domiciled regulated institutions and Germany branches with BaFin metadata.",
+            ),
+            _source(
+                "deutsche-boerse-listed-companies",
+                _DEUTSCHE_BOERSE_LISTED_COMPANIES_URL,
+                category="issuer_directory",
+                notes="Use the Deutsche Borse listed-companies workbook as the issuer and ticker seed set.",
+            ),
+            _source(
+                "boerse-muenchen-maccess-listed-companies",
+                _BOERSE_MUENCHEN_MACCESS_LISTED_COMPANIES_URL,
+                category="issuer_directory",
+                notes="Use the official m:access issuer table to extend Germany small-cap issuer coverage beyond the Deutsche Borse workbook.",
+            ),
+            _source(
+                "boerse-duesseldorf-primary-market",
+                _BOERSE_DUESSELDORF_PRIMARY_MARKET_URL,
+                category="issuer_directory",
+                notes="Use the official Primarmarkt table to extend Germany issuer coverage for companies listed in Dusseldorf's quality segment.",
+            ),
         ),
         entities=(
             _entity(
@@ -565,6 +715,27 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
                 "Xetra",
                 aliases=(),
                 entity_id="finance-de:xetra",
+                metadata={"country_code": "de", "category": "exchange"},
+            ),
+            _entity(
+                "exchange",
+                "Börse München",
+                aliases=("Munich Stock Exchange", "Borse Munchen"),
+                entity_id="finance-de:boerse-muenchen",
+                metadata={"country_code": "de", "category": "exchange"},
+            ),
+            _entity(
+                "exchange",
+                "Börse Düsseldorf",
+                aliases=("Dusseldorf Stock Exchange", "Borse Dusseldorf"),
+                entity_id="finance-de:boerse-duesseldorf",
+                metadata={"country_code": "de", "category": "exchange"},
+            ),
+            _entity(
+                "exchange",
+                "Tradegate Exchange",
+                aliases=("Tradegate",),
+                entity_id="finance-de:tradegate-exchange",
                 metadata={"country_code": "de", "category": "exchange"},
             ),
             _entity(
@@ -1397,17 +1568,21 @@ FINANCE_COUNTRY_PEOPLE_SOURCE_PLANS: dict[str, dict[str, object]] = {
     "de": {
         "country_code": "de",
         "country_name": "Germany",
-        "automation_status": "planned",
+        "automation_status": "partial",
         "scope": "listed-company management board members, supervisory board members, issuer contacts, and regulated institution principals",
         "update_strategy": [
-            "Refresh Unternehmensregister issuer filings and Börse Frankfurt/Xetra issuer pages.",
+            "Refresh the Deutsche Borse listed-companies workbook to seed issuer and ticker coverage.",
+            "Refresh the official Borse Munchen m:access table and Borse Dusseldorf Primarmarkt table to extend issuer coverage beyond Frankfurt/Xetra.",
+            "Refresh Unternehmensregister issuer filings, Deutsche Borse company-details pages, and official German issuer governance pages.",
+            "Refresh the BaFin company-database CSV export and merge Germany-domiciled institutions plus Germany branches into the pack.",
             "Extract people from annual reports, corporate-governance statements, and issuer profile disclosures.",
-            "Add BaFin institution and company registers for bank/insurer principals after access review.",
         ],
         "sources": [
+            _source("deutsche-boerse-listed-companies", _DEUTSCHE_BOERSE_LISTED_COMPANIES_URL, category="issuer_directory", notes="Primary issuer and ticker seed source for listed German companies."),
+            _source("boerse-muenchen-maccess-listed-companies", _BOERSE_MUENCHEN_MACCESS_LISTED_COMPANIES_URL, category="issuer_directory", notes="Official m:access issuer table for additional listed German SMEs."),
+            _source("boerse-duesseldorf-primary-market", _BOERSE_DUESSELDORF_PRIMARY_MARKET_URL, category="issuer_directory", notes="Official Primarmarkt issuer table for Dusseldorf-listed companies."),
             _source("unternehmensregister-filings", "https://www.unternehmensregister.de/ureg/?submitaction=language&language=en", category="filing_system", notes="Primary official filing source for governance and board disclosures."),
-            _source("boerse-frankfurt-listed-companies", "https://www.boerse-frankfurt.de/equity", category="issuer_directory", notes="Use issuer pages for listed-company joins and linked reports."),
-            _source("bafin-company-database", "https://www.bafin.de/EN/Homepage/homepage_node_en.html", category="institution_register", notes="Use for institution principals outside listed issuers."),
+            _source("bafin-company-database-export", _BAFIN_COMPANY_DATABASE_EXPORT_CSV_URL, category="institution_register", notes="Official BaFin company-database CSV export for Germany-domiciled institutions and Germany branches."),
         ],
     },
     "fr": {
@@ -2103,7 +2278,7 @@ def _resolve_snapshot(snapshot: str | None) -> str:
 def _source_destination_filename(*, source_name: str, source_url: str) -> str:
     parsed = urlparse(normalize_source_url(source_url))
     suffix = Path(parsed.path).suffix.lower()
-    if suffix not in {".html", ".htm", ".xml", ".json", ".csv", ".txt", ".pdf"}:
+    if suffix not in {".html", ".htm", ".xml", ".json", ".csv", ".txt", ".pdf", ".xlsx"}:
         suffix = ".html"
     safe_name = re.sub(r"[^a-z0-9]+", "-", source_name.casefold()).strip("-")
     return f"{safe_name}{suffix}"
@@ -2472,6 +2647,844 @@ def _derive_australia_asx_entities(
     return derived_files
 
 
+def _derive_germany_deutsche_boerse_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    source_paths = {
+        str(source.get("name")): country_dir / str(source.get("path"))
+        for source in downloaded_sources
+    }
+    issuer_warnings: list[str] = []
+    people_warnings: list[str] = []
+    issuer_records: list[dict[str, str | list[str]]] = []
+    listed_companies_path = source_paths.get("deutsche-boerse-listed-companies")
+    if listed_companies_path is not None and listed_companies_path.exists():
+        workbook_path = _resolve_deutsche_boerse_listed_companies_workbook(
+            source_path=listed_companies_path,
+            source_url=next(
+                (
+                    str(source.get("source_url"))
+                    for source in downloaded_sources
+                    if str(source.get("name")) == "deutsche-boerse-listed-companies"
+                ),
+                _DEUTSCHE_BOERSE_LISTED_COMPANIES_URL,
+            ),
+            country_dir=country_dir,
+            user_agent=user_agent,
+        )
+        if workbook_path is not None:
+            issuer_records.extend(
+                _extract_deutsche_boerse_listed_company_records(workbook_path)
+            )
+    maccess_path = source_paths.get("boerse-muenchen-maccess-listed-companies")
+    if maccess_path is not None and maccess_path.exists():
+        issuer_records.extend(
+            _extract_boerse_muenchen_maccess_issuer_records(
+                maccess_path.read_text(encoding="utf-8", errors="ignore")
+            )
+        )
+    duesseldorf_path = source_paths.get("boerse-duesseldorf-primary-market")
+    if duesseldorf_path is not None and duesseldorf_path.exists():
+        issuer_records.extend(
+            _extract_boerse_duesseldorf_primary_market_issuer_records(
+                duesseldorf_path.read_text(encoding="utf-8", errors="ignore")
+            )
+        )
+    issuer_records = _merge_germany_issuer_records(issuer_records)
+    bafin_company_database_path = source_paths.get("bafin-company-database-export")
+    if issuer_records:
+        _backfill_germany_tradegate_identifiers(
+            issuer_records=issuer_records,
+            country_dir=country_dir,
+            downloaded_sources=downloaded_sources,
+            user_agent=user_agent,
+            warnings=issuer_warnings,
+        )
+
+    issuer_entities = [
+        _build_germany_deutsche_boerse_issuer_entity(record)
+        for record in issuer_records
+    ]
+    ticker_entities = [
+        _build_germany_deutsche_boerse_ticker_entity(record)
+        for record in issuer_records
+        if record["ticker"]
+    ]
+    issuer_entities_by_isin = {
+        str(entity.get("metadata", {}).get("isin", "")): entity for entity in issuer_entities
+    }
+    ticker_entities_by_ticker = {
+        str(entity["canonical_text"]): entity for entity in ticker_entities
+    }
+
+    issuer_lookup = _build_germany_issuer_lookup(issuer_records)
+    people_entities: list[dict[str, object]] = []
+    unternehmensregister_search_dir = (
+        country_dir / "unternehmensregister-register-information-search"
+    )
+    unternehmensregister_detail_dir = country_dir / "unternehmensregister-register-information"
+    unternehmensregister_search_dir.mkdir(parents=True, exist_ok=True)
+    unternehmensregister_detail_dir.mkdir(parents=True, exist_ok=True)
+    for source in downloaded_sources:
+        if str(source.get("category")) != "issuer_profile":
+            continue
+        source_path = country_dir / str(source.get("path"))
+        if not source_path.exists():
+            continue
+        people_entities.extend(
+            _extract_german_governance_people_entities(
+                source_path.read_text(encoding="utf-8", errors="ignore"),
+                issuer_lookup=issuer_lookup,
+                source_name=str(source.get("name", "issuer-profile")),
+            )
+        )
+    for record in issuer_records:
+        search_url = _build_unternehmensregister_register_information_search_url(
+            company_name=str(record["company_name"])
+        )
+        search_path = unternehmensregister_search_dir / f"{str(record['isin']).casefold()}.html"
+        try:
+            _download_unternehmensregister_register_information_search_page(
+                search_url,
+                search_path,
+                user_agent=user_agent,
+            )
+        except Exception as exc:
+            warning_text = str(exc)
+            if warning_text and warning_text not in people_warnings and len(people_warnings) < 5:
+                people_warnings.append(warning_text)
+            continue
+        search_source_name = (
+            f"unternehmensregister-register-information-search-{str(record['isin']).casefold()}"
+        )
+        downloaded_sources.append(
+            {
+                "name": search_source_name,
+                "source_url": search_url,
+                "path": str(search_path.relative_to(country_dir)),
+                "category": "filing_system",
+                "notes": f"isin={record['isin']}",
+            }
+        )
+        search_html = search_path.read_text(encoding="utf-8", errors="ignore")
+        search_result = _extract_unternehmensregister_register_information_search_result(
+            search_html,
+            company_name=str(record["company_name"]),
+            base_url=search_url,
+        )
+        _merge_unternehmensregister_search_result_metadata(
+            issuer_entity=issuer_entities_by_isin.get(str(record["isin"])),
+            ticker_entity=ticker_entities_by_ticker.get(str(record["ticker"])),
+            search_result=search_result,
+        )
+        search_page_people = _extract_german_governance_people_entities(
+            search_html,
+            issuer_lookup=issuer_lookup,
+            source_name=search_source_name,
+        )
+        if search_page_people:
+            people_entities.extend(search_page_people)
+            continue
+        detail_url = (
+            str(search_result.get("detail_url", "")).strip()
+            if isinstance(search_result, dict)
+            else ""
+        )
+        if not detail_url:
+            continue
+        detail_path = unternehmensregister_detail_dir / f"{str(record['isin']).casefold()}.html"
+        try:
+            _download_unternehmensregister_register_information_detail_page(
+                detail_url,
+                detail_path,
+                user_agent=user_agent,
+            )
+        except Exception as exc:
+            warning_text = str(exc)
+            if warning_text and warning_text not in people_warnings and len(people_warnings) < 5:
+                people_warnings.append(warning_text)
+            continue
+        detail_source_name = (
+            f"unternehmensregister-register-information-{str(record['isin']).casefold()}"
+        )
+        downloaded_sources.append(
+            {
+                "name": detail_source_name,
+                "source_url": detail_url,
+                "path": str(detail_path.relative_to(country_dir)),
+                "category": "issuer_profile",
+                "notes": f"isin={record['isin']}",
+            }
+        )
+        people_entities.extend(
+            _extract_german_governance_people_entities(
+                detail_path.read_text(encoding="utf-8", errors="ignore"),
+                issuer_lookup=issuer_lookup,
+                source_name=detail_source_name,
+            )
+        )
+    company_details_dir = country_dir / "deutsche-boerse-company-details"
+    company_details_dir.mkdir(parents=True, exist_ok=True)
+    for record in issuer_records:
+        company_details_url = _DEUTSCHE_BOERSE_COMPANY_DETAILS_URL_TEMPLATE.format(
+            identifier=str(record["isin"])
+        )
+        company_details_path = company_details_dir / f"{str(record['isin']).casefold()}.html"
+        try:
+            _download_deutsche_boerse_company_details_page(
+                company_details_url,
+                company_details_path,
+                user_agent=user_agent,
+            )
+        except RuntimeError as exc:
+            warning_text = str(exc)
+            if warning_text not in people_warnings and len(people_warnings) < 5:
+                people_warnings.append(warning_text)
+            if "headless chrome not available" in warning_text.casefold():
+                break
+            continue
+        except Exception:
+            continue
+        downloaded_sources.append(
+            {
+                "name": f"deutsche-boerse-company-details-{str(record['isin']).casefold()}",
+                "source_url": company_details_url,
+                "path": str(company_details_path.relative_to(country_dir)),
+                "category": "issuer_profile",
+                "notes": f"isin={record['isin']}",
+            }
+        )
+        company_details_html = company_details_path.read_text(
+            encoding="utf-8",
+            errors="ignore",
+        )
+        alias_candidates = _extract_deutsche_boerse_company_details_aliases(
+            company_details_html,
+            company_name=str(record["company_name"]),
+        )
+        issuer_entity = issuer_entities_by_isin.get(str(record["isin"]))
+        if issuer_entity is not None and alias_candidates:
+            issuer_entity["aliases"] = _unique_aliases(
+                [
+                    *[
+                        alias
+                        for alias in issuer_entity.get("aliases", [])
+                        if isinstance(alias, str)
+                    ],
+                    *alias_candidates,
+                ]
+            )
+        ticker_entity = ticker_entities_by_ticker.get(str(record["ticker"]))
+        if ticker_entity is not None and alias_candidates:
+            ticker_entity["aliases"] = _unique_aliases(
+                [
+                    *[
+                        alias
+                        for alias in ticker_entity.get("aliases", [])
+                        if isinstance(alias, str)
+                    ],
+                    *alias_candidates,
+                ]
+            )
+        people_entities.extend(
+            _extract_deutsche_boerse_company_details_people_entities(
+                company_details_html,
+                issuer_record=record,
+            )
+        )
+
+    _merge_germany_bafin_institutions(
+        bafin_csv_path=bafin_company_database_path,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        warnings=issuer_warnings,
+    )
+
+    issuer_entities = _dedupe_entities(issuer_entities)
+    ticker_entities = _dedupe_entities(ticker_entities)
+    people_entities = _dedupe_entities(people_entities)
+    wikidata_warnings = _enrich_germany_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 5:
+            issuer_warnings.append(warning)
+        if warning not in people_warnings and len(people_warnings) < 5:
+            people_warnings.append(warning)
+
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-de-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "germany_public_market_and_bafin_sources",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-de-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "deutsche_boerse_listed_companies_xlsx",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-de-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "official_governance_pages",
+                "warnings": people_warnings,
+            }
+        )
+    return derived_files
+
+
+def _merge_germany_bafin_institutions(
+    *,
+    bafin_csv_path: Path | None,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    warnings: list[str],
+) -> None:
+    if bafin_csv_path is None or not bafin_csv_path.exists():
+        return
+    try:
+        bafin_records = _extract_bafin_company_database_records(bafin_csv_path)
+    except Exception as exc:
+        warning_text = f"Failed to parse BaFin company database export: {exc}"
+        if warning_text not in warnings and len(warnings) < 5:
+            warnings.append(warning_text)
+        return
+    if not bafin_records:
+        return
+    issuer_lookup = _build_germany_company_entity_lookup(issuer_entities)
+    ticker_lookup = {
+        _normalize_whitespace(str(entity.get("canonical_text", ""))).upper(): entity
+        for entity in ticker_entities
+    }
+    for record in bafin_records:
+        matched_entity = _find_matching_germany_entity_for_bafin_record(
+            record=record,
+            issuer_lookup=issuer_lookup,
+        )
+        if matched_entity is not None:
+            _merge_bafin_record_into_germany_entity(
+                entity=matched_entity,
+                record=record,
+            )
+            matched_ticker = ticker_lookup.get(
+                _normalize_whitespace(str(matched_entity.get("metadata", {}).get("ticker", ""))).upper()
+            )
+            if matched_ticker is not None:
+                _merge_bafin_record_into_germany_entity(
+                    entity=matched_ticker,
+                    record=record,
+                )
+            _register_germany_company_entity_aliases(issuer_lookup, matched_entity)
+            continue
+        institution_entity = _build_germany_bafin_institution_entity(record)
+        issuer_entities.append(institution_entity)
+        _register_germany_company_entity_aliases(issuer_lookup, institution_entity)
+
+
+def _extract_bafin_company_database_records(
+    csv_path: Path,
+) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    current_record: dict[str, object] | None = None
+    with csv_path.open("r", encoding="utf-8-sig", errors="ignore", newline="") as handle:
+        reader = csv.reader(handle, delimiter=";")
+        header = next(reader, None)
+        if not header:
+            return []
+        expected_columns = len(header)
+        for row in reader:
+            if len(row) < expected_columns:
+                row = [*row, *([""] * (expected_columns - len(row)))]
+            row_map = {
+                header[index]: _normalize_whitespace(row[index])
+                for index in range(expected_columns)
+            }
+            if not any(value for value in row_map.values()):
+                continue
+            if row_map.get("NAME"):
+                if current_record is not None and _is_relevant_bafin_company_database_record(
+                    current_record
+                ):
+                    records.append(current_record)
+                raw_name = str(row_map.get("NAME", ""))
+                company_name = _normalize_whitespace(
+                    _smart_titlecase_company_name(raw_name)
+                )
+                current_record = {
+                    "company_name": company_name or raw_name,
+                    "raw_company_name": raw_name,
+                    "bak_nr": str(row_map.get("BAK NR", "")),
+                    "reg_nr": str(row_map.get("REG NR", "")),
+                    "bafin_id": str(row_map.get("BAFIN-ID", "")),
+                    "lei": str(row_map.get("LEI", "")),
+                    "home_state_authority_id": str(
+                        row_map.get(
+                            "NATIONALE IDENTIFIKATIONSNUMMER DER BEHÖRDE DES HERKUNFTSMITGLIEDSTAATES",
+                            "",
+                        )
+                    ),
+                    "postal_code": str(row_map.get("PLZ", "")),
+                    "city": str(row_map.get("ORT", "")),
+                    "street": str(row_map.get("STRASSE", "")),
+                    "country": str(row_map.get("LAND", "")),
+                    "institution_type": str(row_map.get("GATTUNG", "")),
+                    "institution_types": _split_bafin_company_database_values(
+                        str(row_map.get("GATTUNG", "")),
+                        split_commas=True,
+                    ),
+                    "ombudsman": str(row_map.get("SCHLICHTUNGSSTELLE", "")),
+                    "trade_names": _split_bafin_company_database_values(
+                        str(row_map.get("HANDELSNAMEN", "")),
+                        split_commas=False,
+                    ),
+                    "germany_branch": str(
+                        row_map.get("ZWEIGNIEDERLASSUNG IN DEUTSCHLAND", "")
+                    ),
+                    "consumer_complaint_contacts": str(
+                        row_map.get(
+                            "KONTAKTDATEN FÜR VERBRAUCHERBESCHWERDEN",
+                            "",
+                        )
+                    ),
+                    "cross_border_credit_service_countries": (
+                        _split_bafin_company_database_values(
+                            str(
+                                row_map.get(
+                                    "GRENZÜBERSCHREITENDE ERBRINGUNG VON KREDITDIENSTLEISTUNGEN IN",
+                                    "",
+                                )
+                            ),
+                            split_commas=True,
+                        )
+                    ),
+                    "activities": [],
+                    "detail_url": "",
+                }
+                detail_id = _normalize_whitespace(str(current_record["bak_nr"]))
+                if detail_id and detail_id != "---":
+                    current_record["detail_url"] = (
+                        f"{_BAFIN_COMPANY_DATABASE_PORTAL_URL}"
+                        f"institutDetails.do?cmd=loadInstitutAction&institutId={quote(detail_id)}"
+                    )
+            if current_record is None:
+                continue
+            activity = _extract_bafin_company_database_activity(row_map)
+            if activity is not None:
+                activities = current_record.get("activities")
+                if isinstance(activities, list):
+                    activities.append(activity)
+    if current_record is not None and _is_relevant_bafin_company_database_record(
+        current_record
+    ):
+        records.append(current_record)
+    return records
+
+
+def _extract_bafin_company_database_activity(
+    row_map: dict[str, str],
+) -> dict[str, str] | None:
+    activity_name = _normalize_whitespace(
+        row_map.get("ERLAUBNISSE/ZULASSUNG/TÄTIGKEITEN", "")
+    )
+    if not activity_name:
+        return None
+    activity: dict[str, str] = {"activity": activity_name}
+    granted_on = _normalize_whitespace(row_map.get("ERTEILUNGSDATUM", ""))
+    ended_on = _normalize_whitespace(row_map.get("ENDE AM", ""))
+    end_reason = _normalize_whitespace(row_map.get("ENDEGRUND", ""))
+    if granted_on:
+        activity["granted_on"] = granted_on
+    if ended_on and ended_on != "---":
+        activity["ended_on"] = ended_on
+    if end_reason and end_reason != "---":
+        activity["end_reason"] = end_reason
+    return activity
+
+
+def _split_bafin_company_database_values(
+    value: str,
+    *,
+    split_commas: bool,
+) -> list[str]:
+    normalized = _normalize_whitespace(value)
+    if not normalized or normalized == "---":
+        return []
+    separators = ["\n", "|", ";", "\t"]
+    if split_commas:
+        separators.append(",")
+    pattern = "|".join(re.escape(separator) for separator in separators)
+    return _unique_aliases(
+        [
+            candidate
+            for candidate in (
+                _normalize_whitespace(part)
+                for part in re.split(pattern, normalized)
+            )
+            if candidate and candidate != "---"
+        ]
+    )
+
+
+def _is_relevant_bafin_company_database_record(record: dict[str, object]) -> bool:
+    country = _normalize_whitespace(str(record.get("country", ""))).casefold()
+    germany_branch = _normalize_whitespace(str(record.get("germany_branch", "")))
+    institution_type = _normalize_whitespace(
+        str(record.get("institution_type", ""))
+    ).casefold()
+    return (
+        country == "deutschland"
+        or bool(germany_branch)
+        or "in deutschland" in institution_type
+        or "zweigniederlassung" in institution_type
+        or "repräsentanz" in institution_type
+    )
+
+
+def _build_germany_company_entity_lookup(
+    entities: list[dict[str, object]],
+) -> dict[str, dict[str, object]]:
+    lookup: dict[str, dict[str, object]] = {}
+    for entity in entities:
+        _register_germany_company_entity_aliases(lookup, entity)
+    return lookup
+
+
+def _register_germany_company_entity_aliases(
+    lookup: dict[str, dict[str, object]],
+    entity: dict[str, object],
+) -> None:
+    alias_candidates = [
+        str(entity.get("canonical_text", "")),
+        *[
+            alias
+            for alias in entity.get("aliases", [])
+            if isinstance(alias, str)
+        ],
+    ]
+    for candidate in alias_candidates:
+        for key in (
+            _normalize_company_name_for_match(candidate),
+            _normalize_company_name_for_match(candidate, drop_suffixes=True),
+        ):
+            if key and key not in lookup:
+                lookup[key] = entity
+
+
+def _find_matching_germany_entity_for_bafin_record(
+    *,
+    record: dict[str, object],
+    issuer_lookup: dict[str, dict[str, object]],
+) -> dict[str, object] | None:
+    for candidate in _bafin_company_database_alias_candidates(record):
+        for key in (
+            _normalize_company_name_for_match(candidate),
+            _normalize_company_name_for_match(candidate, drop_suffixes=True),
+        ):
+            if key and key in issuer_lookup:
+                return issuer_lookup[key]
+    return None
+
+
+def _bafin_company_database_alias_candidates(
+    record: dict[str, object],
+) -> list[str]:
+    candidates = [
+        _normalize_whitespace(str(record.get("company_name", ""))),
+        _normalize_whitespace(str(record.get("raw_company_name", ""))),
+        *[
+            trade_name
+            for trade_name in record.get("trade_names", [])
+            if isinstance(trade_name, str)
+        ],
+    ]
+    aliases: list[str] = []
+    for candidate in candidates:
+        if not candidate:
+            continue
+        aliases.extend(_build_germany_company_aliases(candidate))
+    return _unique_aliases(aliases)
+
+
+def _merge_bafin_record_into_germany_entity(
+    *,
+    entity: dict[str, object],
+    record: dict[str, object],
+) -> None:
+    aliases = [
+        alias
+        for alias in entity.get("aliases", [])
+        if isinstance(alias, str)
+    ]
+    entity["aliases"] = _unique_aliases(
+        [*aliases, *_bafin_company_database_alias_candidates(record)]
+    )
+    metadata = entity.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        entity["metadata"] = metadata
+    metadata["regulated_institution"] = True
+    if not metadata.get("lei") and _normalize_whitespace(str(record.get("lei", ""))):
+        metadata["lei"] = _normalize_whitespace(str(record.get("lei", "")))
+    metadata["bafin_categories"] = _unique_aliases(
+        [
+            *[
+                value
+                for value in metadata.get("bafin_categories", [])
+                if isinstance(value, str)
+            ],
+            str(record.get("institution_type", "")),
+            *[
+                value
+                for value in record.get("institution_types", [])
+                if isinstance(value, str)
+            ],
+        ]
+    )
+    metadata["bafin_bak_nrs"] = _unique_aliases(
+        [
+            *[
+                value
+                for value in metadata.get("bafin_bak_nrs", [])
+                if isinstance(value, str)
+            ],
+            str(record.get("bak_nr", "")),
+        ]
+    )
+    metadata["bafin_ids"] = _unique_aliases(
+        [
+            *[
+                value
+                for value in metadata.get("bafin_ids", [])
+                if isinstance(value, str)
+            ],
+            str(record.get("bafin_id", "")),
+        ]
+    )
+    metadata["bafin_reg_nrs"] = _unique_aliases(
+        [
+            *[
+                value
+                for value in metadata.get("bafin_reg_nrs", [])
+                if isinstance(value, str)
+            ],
+            str(record.get("reg_nr", "")),
+        ]
+    )
+    metadata["bafin_detail_urls"] = _unique_aliases(
+        [
+            *[
+                value
+                for value in metadata.get("bafin_detail_urls", [])
+                if isinstance(value, str)
+            ],
+            str(record.get("detail_url", "")),
+        ]
+    )
+    metadata["bafin_trade_names"] = _unique_aliases(
+        [
+            *[
+                value
+                for value in metadata.get("bafin_trade_names", [])
+                if isinstance(value, str)
+            ],
+            *[
+                value
+                for value in record.get("trade_names", [])
+                if isinstance(value, str)
+            ],
+        ]
+    )
+    metadata["bafin_activities"] = _unique_aliases(
+        [
+            *[
+                value
+                for value in metadata.get("bafin_activities", [])
+                if isinstance(value, str)
+            ],
+            *[
+                str(activity.get("activity", ""))
+                for activity in record.get("activities", [])
+                if isinstance(activity, dict)
+            ],
+        ]
+    )
+    existing_records = [
+        item
+        for item in metadata.get("bafin_records", [])
+        if isinstance(item, dict)
+    ]
+    record_key = (
+        _normalize_whitespace(str(record.get("bak_nr", "")))
+        or _normalize_whitespace(str(record.get("bafin_id", "")))
+        or _normalize_whitespace(str(record.get("company_name", "")))
+    )
+    if record_key and not any(
+        (
+            _normalize_whitespace(str(item.get("bak_nr", "")))
+            or _normalize_whitespace(str(item.get("bafin_id", "")))
+            or _normalize_whitespace(str(item.get("company_name", "")))
+        )
+        == record_key
+        for item in existing_records
+    ):
+        existing_records.append(_build_bafin_company_database_record_summary(record))
+    metadata["bafin_records"] = existing_records
+    metadata["bafin_record_count"] = len(existing_records)
+
+
+def _build_bafin_company_database_record_summary(
+    record: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "company_name": str(record.get("company_name", "")),
+        "bak_nr": str(record.get("bak_nr", "")),
+        "reg_nr": str(record.get("reg_nr", "")),
+        "bafin_id": str(record.get("bafin_id", "")),
+        "lei": str(record.get("lei", "")),
+        "country": str(record.get("country", "")),
+        "postal_code": str(record.get("postal_code", "")),
+        "city": str(record.get("city", "")),
+        "street": str(record.get("street", "")),
+        "institution_type": str(record.get("institution_type", "")),
+        "institution_types": [
+            value
+            for value in record.get("institution_types", [])
+            if isinstance(value, str)
+        ],
+        "ombudsman": str(record.get("ombudsman", "")),
+        "trade_names": [
+            value
+            for value in record.get("trade_names", [])
+            if isinstance(value, str)
+        ],
+        "germany_branch": str(record.get("germany_branch", "")),
+        "consumer_complaint_contacts": str(
+            record.get("consumer_complaint_contacts", "")
+        ),
+        "cross_border_credit_service_countries": [
+            value
+            for value in record.get("cross_border_credit_service_countries", [])
+            if isinstance(value, str)
+        ],
+        "activities": [
+            activity
+            for activity in record.get("activities", [])
+            if isinstance(activity, dict)
+        ],
+        "detail_url": str(record.get("detail_url", "")),
+    }
+
+
+def _build_germany_bafin_institution_entity(
+    record: dict[str, object],
+) -> dict[str, object]:
+    canonical_text = _normalize_whitespace(str(record.get("company_name", "")))
+    identifier = (
+        _normalize_whitespace(str(record.get("bak_nr", "")))
+        or _normalize_whitespace(str(record.get("bafin_id", "")))
+        or _slug(canonical_text)
+    )
+    metadata = {
+        "country_code": "de",
+        "category": "regulated_institution",
+        "regulated_institution": True,
+        "lei": _normalize_whitespace(str(record.get("lei", ""))),
+        "institution_type": _normalize_whitespace(
+            str(record.get("institution_type", ""))
+        ),
+        "institution_types": [
+            value
+            for value in record.get("institution_types", [])
+            if isinstance(value, str)
+        ],
+        "postal_code": _normalize_whitespace(str(record.get("postal_code", ""))),
+        "city": _normalize_whitespace(str(record.get("city", ""))),
+        "street": _normalize_whitespace(str(record.get("street", ""))),
+        "country": _normalize_whitespace(str(record.get("country", ""))),
+        "ombudsman": _normalize_whitespace(str(record.get("ombudsman", ""))),
+        "detail_url": _normalize_whitespace(str(record.get("detail_url", ""))),
+        "bafin_bak_nrs": _unique_aliases([str(record.get("bak_nr", ""))]),
+        "bafin_ids": _unique_aliases([str(record.get("bafin_id", ""))]),
+        "bafin_reg_nrs": _unique_aliases([str(record.get("reg_nr", ""))]),
+        "bafin_categories": _unique_aliases(
+            [
+                str(record.get("institution_type", "")),
+                *[
+                    value
+                    for value in record.get("institution_types", [])
+                    if isinstance(value, str)
+                ],
+            ]
+        ),
+        "bafin_detail_urls": _unique_aliases([str(record.get("detail_url", ""))]),
+        "bafin_trade_names": [
+            value
+            for value in record.get("trade_names", [])
+            if isinstance(value, str)
+        ],
+        "bafin_activities": _unique_aliases(
+            [
+                str(activity.get("activity", ""))
+                for activity in record.get("activities", [])
+                if isinstance(activity, dict)
+            ]
+        ),
+        "bafin_records": [_build_bafin_company_database_record_summary(record)],
+        "bafin_record_count": 1,
+    }
+    germany_branch = _normalize_whitespace(str(record.get("germany_branch", "")))
+    if germany_branch:
+        metadata["germany_branch"] = germany_branch
+    consumer_contacts = _normalize_whitespace(
+        str(record.get("consumer_complaint_contacts", ""))
+    )
+    if consumer_contacts:
+        metadata["consumer_complaint_contacts"] = consumer_contacts
+    cross_border_countries = [
+        value
+        for value in record.get("cross_border_credit_service_countries", [])
+        if isinstance(value, str)
+    ]
+    if cross_border_countries:
+        metadata["cross_border_credit_service_countries"] = cross_border_countries
+    if not metadata["lei"]:
+        metadata.pop("lei")
+    return {
+        "entity_type": "organization",
+        "canonical_text": canonical_text,
+        "aliases": _bafin_company_database_alias_candidates(record),
+        "entity_id": f"finance-de-institution:bafin:{identifier}",
+        "metadata": metadata,
+    }
+
+
 def _derive_united_kingdom_fca_companies_house_entities(
     *,
     country_dir: Path,
@@ -2709,6 +3722,2011 @@ def _extract_asx_listed_company_entities(
             }
         )
     return issuer_entities, ticker_entities
+
+
+def _resolve_deutsche_boerse_listed_companies_workbook(
+    *,
+    source_path: Path,
+    source_url: str,
+    country_dir: Path,
+    user_agent: str,
+) -> Path | None:
+    if zipfile.is_zipfile(source_path):
+        return source_path
+    html_text = source_path.read_text(encoding="utf-8", errors="ignore")
+    match = _DEUTSCHE_BOERSE_LISTED_COMPANIES_LINK_PATTERN.search(html_text)
+    if match is None:
+        return None
+    workbook_url = urljoin(source_url, match.group("url"))
+    workbook_path = country_dir / "deutsche-boerse-listed-companies.xlsx"
+    try:
+        _download_source(workbook_url, workbook_path, user_agent=user_agent)
+    except Exception:
+        return None
+    if not zipfile.is_zipfile(workbook_path):
+        return None
+    return workbook_path
+
+
+def _extract_deutsche_boerse_listed_company_records(
+    workbook_path: Path,
+) -> list[dict[str, str | list[str]]]:
+    if not zipfile.is_zipfile(workbook_path):
+        return []
+    records: dict[str, dict[str, str | list[str]]] = {}
+    with zipfile.ZipFile(workbook_path) as archive:
+        shared_strings = _load_xlsx_shared_strings(archive)
+        for sheet_name, worksheet_path in _load_xlsx_sheet_targets(archive):
+            if sheet_name.casefold() == "cover":
+                continue
+            header: list[str] | None = None
+            exchange_index: int | None = None
+            for row in _iter_xlsx_sheet_rows(
+                archive,
+                worksheet_path=worksheet_path,
+                shared_strings=shared_strings,
+            ):
+                if header is None:
+                    if _is_deutsche_boerse_header_row(row):
+                        header = row
+                        exchange_index = next(
+                            (
+                                index
+                                for index, value in enumerate(header)
+                                if value.casefold() == "instrument exchange"
+                            ),
+                            None,
+                        )
+                    continue
+                row_map = {
+                    header[index].casefold(): row[index].strip()
+                    for index in range(min(len(header), len(row)))
+                    if header[index].strip()
+                }
+                if str(row_map.get("country", "")).strip().casefold() != "germany":
+                    continue
+                raw_company_name = str(row_map.get("company", "")).strip()
+                ticker = str(row_map.get("trading symbol", "")).strip().upper()
+                isin = str(row_map.get("isin", "")).strip().upper()
+                if not raw_company_name or not ticker or not isin:
+                    continue
+                company_name = _normalize_whitespace(
+                    _smart_titlecase_company_name(raw_company_name)
+                )
+                indices: list[str] = []
+                if exchange_index is not None:
+                    indices = [
+                        value.strip()
+                        for value in row[exchange_index + 1 :]
+                        if value.strip() and value.strip() != "-"
+                    ]
+                records.setdefault(
+                    isin,
+                    {
+                        "isin": isin,
+                        "ticker": ticker,
+                        "company_name": company_name,
+                        "listing_segment": sheet_name,
+                        "sector": str(row_map.get("sector", "")).strip(),
+                        "subsector": str(row_map.get("subsector", "")).strip(),
+                        "instrument_exchange": str(
+                            row_map.get("instrument exchange", "")
+                        ).strip(),
+                        "indices": indices,
+                    },
+                )
+    return sorted(
+        records.values(),
+        key=lambda item: (
+            str(item["company_name"]).casefold(),
+            str(item["ticker"]).casefold(),
+        ),
+    )
+
+
+def _extract_germany_market_table_cells(row_html: str) -> list[str]:
+    return [
+        match.group("cell")
+        for match in _GERMANY_MARKET_TABLE_CELL_PATTERN.finditer(row_html)
+    ]
+
+
+def _merge_germany_issuer_records(
+    records: list[dict[str, str | list[str]]],
+) -> list[dict[str, str | list[str]]]:
+    merged: dict[str, dict[str, str | list[str]]] = {}
+    for record in records:
+        isin = _normalize_whitespace(str(record.get("isin", ""))).upper()
+        if not isin:
+            continue
+        listing_segment = _normalize_whitespace(str(record.get("listing_segment", "")))
+        instrument_exchange = _normalize_whitespace(
+            str(record.get("instrument_exchange", ""))
+        )
+        source_directory = _normalize_whitespace(str(record.get("source_directory", "")))
+        indices = [
+            _normalize_whitespace(value)
+            for value in record.get("indices", [])
+            if isinstance(value, str) and _normalize_whitespace(value)
+        ]
+        current = merged.get(isin)
+        if current is None:
+            current = {}
+            for key, value in record.items():
+                if isinstance(value, list):
+                    current[key] = [
+                        item
+                        for item in (_normalize_whitespace(entry) for entry in value if isinstance(entry, str))
+                        if item
+                    ]
+                    continue
+                current[key] = _normalize_whitespace(str(value))
+            current["isin"] = isin
+            current["indices"] = _unique_aliases(indices)
+            if listing_segment:
+                current["listing_segments"] = [listing_segment]
+            if instrument_exchange:
+                current["instrument_exchanges"] = [instrument_exchange]
+            if source_directory:
+                current["source_directories"] = [source_directory]
+            merged[isin] = current
+            continue
+
+        for key in (
+            "ticker",
+            "company_name",
+            "sector",
+            "subsector",
+            "wkn",
+            "listed_since",
+            "issuer_website",
+        ):
+            incoming_value = _normalize_whitespace(str(record.get(key, "")))
+            current_value = _normalize_whitespace(str(current.get(key, "")))
+            if incoming_value and not current_value:
+                current[key] = incoming_value
+
+        current_indices = [
+            value
+            for value in current.get("indices", [])
+            if isinstance(value, str) and _normalize_whitespace(value)
+        ]
+        current["indices"] = _unique_aliases([*current_indices, *indices])
+
+        if listing_segment:
+            current_segments = [
+                value
+                for value in current.get("listing_segments", [])
+                if isinstance(value, str) and _normalize_whitespace(value)
+            ]
+            current["listing_segments"] = _unique_aliases(
+                [*current_segments, listing_segment]
+            )
+            if not _normalize_whitespace(str(current.get("listing_segment", ""))):
+                current["listing_segment"] = listing_segment
+        if instrument_exchange:
+            current_exchanges = [
+                value
+                for value in current.get("instrument_exchanges", [])
+                if isinstance(value, str) and _normalize_whitespace(value)
+            ]
+            current["instrument_exchanges"] = _unique_aliases(
+                [*current_exchanges, instrument_exchange]
+            )
+            if not _normalize_whitespace(str(current.get("instrument_exchange", ""))):
+                current["instrument_exchange"] = instrument_exchange
+        if source_directory:
+            current_directories = [
+                value
+                for value in current.get("source_directories", [])
+                if isinstance(value, str) and _normalize_whitespace(value)
+            ]
+            current["source_directories"] = _unique_aliases(
+                [*current_directories, source_directory]
+            )
+            if not _normalize_whitespace(str(current.get("source_directory", ""))):
+                current["source_directory"] = source_directory
+
+    return sorted(
+        merged.values(),
+        key=lambda item: (
+            str(item.get("company_name", "")).casefold(),
+            str(item.get("ticker", "")).casefold(),
+            str(item.get("isin", "")).casefold(),
+        ),
+    )
+
+
+def _extract_boerse_muenchen_maccess_issuer_records(
+    html_text: str,
+) -> list[dict[str, str | list[str]]]:
+    records: list[dict[str, str | list[str]]] = []
+    for match in _GERMAN_GOVERNANCE_TABLE_ROW_PATTERN.finditer(html_text):
+        cells = _extract_germany_market_table_cells(match.group("row"))
+        if len(cells) < 4:
+            continue
+        security_match = _GERMANY_MARKET_LINK_ISIN_PATTERN.search(cells[1])
+        if security_match is None:
+            continue
+        company_name = _normalize_whitespace(
+            html.unescape(_smart_titlecase_company_name(_strip_html(cells[0])))
+        )
+        if not company_name:
+            continue
+        website_match = re.search(r'href="(?P<url>https?://[^"]+)"', cells[0], re.IGNORECASE)
+        wkn = _normalize_whitespace(_strip_html(cells[1])).upper()
+        sector = _normalize_whitespace(_strip_html(cells[2]))
+        listed_since = _normalize_whitespace(_strip_html(cells[3]))
+        records.append(
+            {
+                "isin": _normalize_whitespace(security_match.group("isin")).upper(),
+                "ticker": "",
+                "company_name": company_name,
+                "listing_segment": "m:access",
+                "sector": sector,
+                "subsector": "",
+                "instrument_exchange": "Börse München",
+                "indices": [],
+                "wkn": wkn,
+                "listed_since": listed_since,
+                "issuer_website": (
+                    _normalize_whitespace(website_match.group("url"))
+                    if website_match is not None
+                    else ""
+                ),
+                "source_directory": "boerse-muenchen-maccess-listed-companies",
+            }
+        )
+    return _merge_germany_issuer_records(records)
+
+
+def _extract_boerse_duesseldorf_primary_market_issuer_records(
+    html_text: str,
+) -> list[dict[str, str | list[str]]]:
+    records: list[dict[str, str | list[str]]] = []
+    for match in _GERMAN_GOVERNANCE_TABLE_ROW_PATTERN.finditer(html_text):
+        cells = _extract_germany_market_table_cells(match.group("row"))
+        if not cells:
+            continue
+        security_match = _GERMANY_MARKET_LINK_ISIN_PATTERN.search(cells[0])
+        if security_match is None:
+            continue
+        company_html = _GERMANY_MARKET_SUB_INFO_PATTERN.sub(" ", cells[0])
+        company_name = _normalize_whitespace(
+            html.unescape(_smart_titlecase_company_name(_strip_html(company_html)))
+        )
+        if not company_name:
+            continue
+        records.append(
+            {
+                "isin": _normalize_whitespace(security_match.group("isin")).upper(),
+                "ticker": "",
+                "company_name": company_name,
+                "listing_segment": "Primärmarkt",
+                "sector": "",
+                "subsector": "",
+                "instrument_exchange": "Börse Düsseldorf",
+                "indices": [],
+                "source_directory": "boerse-duesseldorf-primary-market",
+            }
+        )
+    return _merge_germany_issuer_records(records)
+
+
+def _extract_tradegate_order_book_identifiers(
+    html_text: str,
+) -> dict[str, str] | None:
+    match = _TRADEGATE_ORDER_BOOK_IDENTIFIER_PATTERN.search(html_text)
+    if match is None:
+        return None
+    identifiers = {
+        "wkn": _normalize_whitespace(_strip_html(match.group("wkn"))).upper(),
+        "code": _normalize_whitespace(_strip_html(match.group("code"))).upper(),
+        "isin": _normalize_whitespace(_strip_html(match.group("isin"))).upper(),
+    }
+    if not identifiers["isin"]:
+        return None
+    return identifiers
+
+
+def _backfill_germany_tradegate_identifiers(
+    *,
+    issuer_records: list[dict[str, str | list[str]]],
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+    warnings: list[str],
+) -> None:
+    tradegate_dir = country_dir / "tradegate-order-book"
+    tradegate_dir.mkdir(parents=True, exist_ok=True)
+    for record in issuer_records:
+        isin = _normalize_whitespace(str(record.get("isin", ""))).upper()
+        ticker = _normalize_whitespace(str(record.get("ticker", ""))).upper()
+        if not isin or ticker:
+            continue
+        tradegate_url = _TRADEGATE_ORDER_BOOK_URL_TEMPLATE.format(isin=isin)
+        tradegate_path = tradegate_dir / f"{isin.casefold()}.html"
+        try:
+            resolved_url = _download_source(
+                tradegate_url,
+                tradegate_path,
+                user_agent=user_agent,
+            )
+        except Exception as exc:
+            warning_text = str(exc)
+            if warning_text and warning_text not in warnings and len(warnings) < 5:
+                warnings.append(warning_text)
+            continue
+        downloaded_sources.append(
+            {
+                "name": f"tradegate-order-book-{isin.casefold()}",
+                "source_url": resolved_url,
+                "path": str(tradegate_path.relative_to(country_dir)),
+                "category": "issuer_directory",
+                "notes": f"isin={isin}",
+            }
+        )
+        identifiers = _extract_tradegate_order_book_identifiers(
+            tradegate_path.read_text(encoding="utf-8", errors="ignore")
+        )
+        if identifiers is None or identifiers["isin"] != isin:
+            continue
+        code = identifiers.get("code", "")
+        wkn = identifiers.get("wkn", "")
+        if code:
+            record["ticker"] = code
+        if wkn and not _normalize_whitespace(str(record.get("wkn", ""))):
+            record["wkn"] = wkn
+        exchanges = [
+            value
+            for value in record.get("instrument_exchanges", [])
+            if isinstance(value, str) and _normalize_whitespace(value)
+        ]
+        exchanges = _unique_aliases([*exchanges, "Tradegate Exchange"])
+        record["instrument_exchanges"] = exchanges
+        if not _normalize_whitespace(str(record.get("instrument_exchange", ""))):
+            record["instrument_exchange"] = "Tradegate Exchange"
+
+
+def _enrich_germany_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    resolution_payload, resolution_path, warnings = _build_germany_wikidata_resolution_snapshot(
+        issuer_entities=issuer_entities,
+        people_entities=people_entities,
+        country_dir=country_dir,
+        user_agent=user_agent,
+    )
+    if resolution_path is None:
+        return warnings
+    downloaded_sources.append(
+        {
+            "name": "wikidata-germany-entity-resolution",
+            "source_url": _WIKIDATA_API_URL,
+            "path": str(resolution_path.relative_to(country_dir)),
+            "category": "knowledge_graph",
+            "notes": "Wikidata QID resolution snapshot for Germany issuers and related people.",
+        }
+    )
+    issuer_matches = resolution_payload.get("issuers", {})
+    if isinstance(issuer_matches, dict):
+        for entity in issuer_entities:
+            metadata = entity.get("metadata")
+            if not isinstance(metadata, dict):
+                continue
+            isin = _normalize_whitespace(str(metadata.get("isin", ""))).upper()
+            match = issuer_matches.get(isin)
+            if isinstance(match, dict):
+                _merge_wikidata_metadata(entity=entity, match=match)
+        for entity in ticker_entities:
+            metadata = entity.get("metadata")
+            if not isinstance(metadata, dict):
+                continue
+            isin = _normalize_whitespace(str(metadata.get("isin", ""))).upper()
+            match = issuer_matches.get(isin)
+            if isinstance(match, dict):
+                _merge_wikidata_metadata(entity=entity, match=match)
+    people_matches = resolution_payload.get("people", {})
+    if isinstance(people_matches, dict):
+        for entity in people_entities:
+            match = people_matches.get(str(entity.get("entity_id", "")))
+            if isinstance(match, dict):
+                _merge_wikidata_metadata(entity=entity, match=match)
+    return warnings
+
+
+def _build_germany_wikidata_resolution_snapshot(
+    *,
+    issuer_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    country_dir: Path,
+    user_agent: str,
+) -> tuple[dict[str, object], Path | None, list[str]]:
+    warnings: list[str] = []
+    issuer_matches, issuer_warnings = _resolve_germany_issuer_wikidata_matches(
+        issuer_entities=issuer_entities,
+        user_agent=user_agent,
+    )
+    warnings.extend(issuer_warnings)
+    people_matches, people_warnings = _resolve_germany_person_wikidata_matches(
+        people_entities=people_entities,
+        issuer_matches=issuer_matches,
+        user_agent=user_agent,
+    )
+    warnings.extend(people_warnings)
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "country_code": "de",
+        "generated_at": _utc_timestamp(),
+        "issuers": issuer_matches,
+        "people": people_matches,
+    }
+    if not issuer_matches and not people_matches:
+        return payload, None, warnings
+    resolution_path = country_dir / "wikidata-germany-entity-resolution.json"
+    resolution_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return payload, resolution_path, warnings
+
+
+def _resolve_germany_issuer_wikidata_matches(
+    *,
+    issuer_entities: list[dict[str, object]],
+    user_agent: str,
+) -> tuple[dict[str, dict[str, object]], list[str]]:
+    search_cache: dict[str, list[dict[str, Any]]] = {}
+    target_candidates: dict[str, list[str]] = {}
+    warnings: list[str] = []
+    for entity in issuer_entities:
+        metadata = entity.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        isin = _normalize_whitespace(str(metadata.get("isin", ""))).upper()
+        if not isin:
+            continue
+        candidates: list[str] = []
+        for query in _build_germany_wikidata_search_queries(entity, entity_type="issuer"):
+            if query not in search_cache:
+                try:
+                    search_cache[query] = _search_wikidata_entities(
+                        query,
+                        user_agent=user_agent,
+                    )
+                except Exception as exc:
+                    warning_text = f"Wikidata issuer search failed for {query}: {exc}"
+                    if warning_text not in warnings and len(warnings) < 5:
+                        warnings.append(warning_text)
+                    search_cache[query] = []
+            candidates.extend(
+                str(item.get("id", "")).strip()
+                for item in search_cache[query]
+                if isinstance(item, dict)
+            )
+            if candidates:
+                break
+        if candidates:
+            target_candidates[isin] = _unique_aliases(candidates)
+    entity_payloads = _fetch_wikidata_entity_payloads(
+        entity_ids=[
+            candidate_id
+            for candidate_ids in target_candidates.values()
+            for candidate_id in candidate_ids
+        ],
+        user_agent=user_agent,
+        warnings=warnings,
+    )
+    matches: dict[str, dict[str, object]] = {}
+    for entity in issuer_entities:
+        metadata = entity.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        isin = _normalize_whitespace(str(metadata.get("isin", ""))).upper()
+        candidate_ids = target_candidates.get(isin, [])
+        if not candidate_ids:
+            continue
+        match = _select_best_germany_issuer_wikidata_match(
+            entity=entity,
+            candidate_ids=candidate_ids,
+            entity_payloads=entity_payloads,
+        )
+        if match is not None:
+            matches[isin] = match
+    return matches, warnings
+
+
+def _resolve_germany_person_wikidata_matches(
+    *,
+    people_entities: list[dict[str, object]],
+    issuer_matches: dict[str, dict[str, object]],
+    user_agent: str,
+) -> tuple[dict[str, dict[str, object]], list[str]]:
+    search_cache: dict[str, list[dict[str, Any]]] = {}
+    target_candidates: dict[str, list[str]] = {}
+    warnings: list[str] = []
+    for entity in people_entities:
+        entity_id = str(entity.get("entity_id", "")).strip()
+        if not entity_id:
+            continue
+        candidates: list[str] = []
+        for query in _build_germany_wikidata_search_queries(entity, entity_type="person"):
+            if query not in search_cache:
+                try:
+                    search_cache[query] = _search_wikidata_entities(
+                        query,
+                        user_agent=user_agent,
+                    )
+                except Exception as exc:
+                    warning_text = f"Wikidata people search failed for {query}: {exc}"
+                    if warning_text not in warnings and len(warnings) < 5:
+                        warnings.append(warning_text)
+                    search_cache[query] = []
+            candidates.extend(
+                str(item.get("id", "")).strip()
+                for item in search_cache[query]
+                if isinstance(item, dict)
+            )
+            if _has_exact_wikidata_person_search_hit(entity, search_cache[query]):
+                break
+        if candidates:
+            target_candidates[entity_id] = _unique_aliases(candidates)
+    entity_payloads = _fetch_wikidata_entity_payloads(
+        entity_ids=[
+            candidate_id
+            for candidate_ids in target_candidates.values()
+            for candidate_id in candidate_ids
+        ],
+        user_agent=user_agent,
+        warnings=warnings,
+    )
+    matches: dict[str, dict[str, object]] = {}
+    for entity in people_entities:
+        entity_id = str(entity.get("entity_id", "")).strip()
+        candidate_ids = target_candidates.get(entity_id, [])
+        if not candidate_ids:
+            continue
+        match = _select_best_germany_person_wikidata_match(
+            entity=entity,
+            candidate_ids=candidate_ids,
+            entity_payloads=entity_payloads,
+            issuer_matches=issuer_matches,
+        )
+        if match is not None:
+            matches[entity_id] = match
+    return matches, warnings
+
+
+def _build_germany_wikidata_search_queries(
+    entity: dict[str, object],
+    *,
+    entity_type: str,
+) -> list[str]:
+    queries: list[str] = []
+    canonical_text = _normalize_whitespace(str(entity.get("canonical_text", "")))
+    if canonical_text:
+        queries.append(canonical_text)
+    for alias in entity.get("aliases", []):
+        if not isinstance(alias, str):
+            continue
+        cleaned_alias = _normalize_whitespace(alias)
+        if not cleaned_alias or cleaned_alias in queries:
+            continue
+        if entity_type == "issuer":
+            if cleaned_alias.isupper() or len(cleaned_alias) <= 4:
+                continue
+        queries.append(cleaned_alias)
+        if len(queries) >= 4:
+            break
+    return queries
+
+
+def _has_exact_wikidata_person_search_hit(
+    entity: dict[str, object],
+    search_results: list[dict[str, Any]],
+) -> bool:
+    target_keys = _build_germany_person_match_keys(entity)
+    return any(
+        _normalize_person_name_for_match(str(item.get("label", ""))) in target_keys
+        for item in search_results
+        if isinstance(item, dict)
+    )
+
+
+def _select_best_germany_issuer_wikidata_match(
+    *,
+    entity: dict[str, object],
+    candidate_ids: list[str],
+    entity_payloads: dict[str, dict[str, Any]],
+) -> dict[str, object] | None:
+    scored_candidates: list[tuple[int, str]] = []
+    for candidate_id in candidate_ids:
+        payload = entity_payloads.get(candidate_id)
+        if payload is None:
+            continue
+        score = _score_germany_issuer_wikidata_candidate(
+            entity=entity,
+            candidate_payload=payload,
+        )
+        if score > 0:
+            scored_candidates.append((score, candidate_id))
+    if not scored_candidates:
+        return None
+    scored_candidates.sort(key=lambda item: (-item[0], item[1]))
+    best_score, best_qid = scored_candidates[0]
+    second_score = scored_candidates[1][0] if len(scored_candidates) > 1 else 0
+    if best_score < 100 and (best_score < 70 or best_score - second_score < 20):
+        return None
+    return _build_wikidata_resolution_match(
+        best_qid,
+        entity_payloads.get(best_qid),
+        entity_type="organization",
+    )
+
+
+def _select_best_germany_person_wikidata_match(
+    *,
+    entity: dict[str, object],
+    candidate_ids: list[str],
+    entity_payloads: dict[str, dict[str, Any]],
+    issuer_matches: dict[str, dict[str, object]],
+) -> dict[str, object] | None:
+    scored_candidates: list[tuple[int, str]] = []
+    for candidate_id in candidate_ids:
+        payload = entity_payloads.get(candidate_id)
+        if payload is None:
+            continue
+        score = _score_germany_person_wikidata_candidate(
+            entity=entity,
+            candidate_payload=payload,
+            issuer_matches=issuer_matches,
+        )
+        if score > 0:
+            scored_candidates.append((score, candidate_id))
+    if not scored_candidates:
+        return None
+    scored_candidates.sort(key=lambda item: (-item[0], item[1]))
+    best_score, best_qid = scored_candidates[0]
+    second_score = scored_candidates[1][0] if len(scored_candidates) > 1 else 0
+    if best_score < 100:
+        return None
+    if len(scored_candidates) > 1 and best_score - second_score < 20:
+        return None
+    return _build_wikidata_resolution_match(
+        best_qid,
+        entity_payloads.get(best_qid),
+        entity_type="person",
+    )
+
+
+def _score_germany_issuer_wikidata_candidate(
+    *,
+    entity: dict[str, object],
+    candidate_payload: dict[str, Any],
+) -> int:
+    metadata = entity.get("metadata")
+    if not isinstance(metadata, dict):
+        return 0
+    score = 0
+    target_full = _normalize_company_name_for_match(str(entity.get("canonical_text", "")))
+    target_core = _normalize_company_name_for_match(
+        str(entity.get("canonical_text", "")),
+        drop_suffixes=True,
+    )
+    target_keys = {
+        key
+        for key in {
+            target_full,
+            target_core,
+            *(
+                _normalize_company_name_for_match(alias)
+                for alias in entity.get("aliases", [])
+                if isinstance(alias, str)
+            ),
+            *(
+                _normalize_company_name_for_match(alias, drop_suffixes=True)
+                for alias in entity.get("aliases", [])
+                if isinstance(alias, str)
+            ),
+        }
+        if key
+    }
+    candidate_keys = _extract_wikidata_organization_match_keys(candidate_payload)
+    if target_full and target_full in candidate_keys:
+        score += 60
+    elif target_core and target_core in candidate_keys:
+        score += 40
+    string_values = _extract_wikidata_string_claim_values(candidate_payload)
+    isin = _normalize_whitespace(str(metadata.get("isin", ""))).upper()
+    if isin and isin in string_values:
+        score += 100
+    wkn = _normalize_whitespace(str(metadata.get("wkn", ""))).upper()
+    if wkn and wkn in string_values:
+        score += 30
+    ticker = _normalize_whitespace(str(metadata.get("ticker", ""))).upper()
+    if ticker and ticker in string_values:
+        score += 15
+    candidate_description = _extract_wikidata_description(candidate_payload).casefold()
+    if any(keyword in candidate_description for keyword in ("company", "manufacturer", "exchange", "services")):
+        score += 5
+    return score
+
+
+def _score_germany_person_wikidata_candidate(
+    *,
+    entity: dict[str, object],
+    candidate_payload: dict[str, Any],
+    issuer_matches: dict[str, dict[str, object]],
+) -> int:
+    metadata = entity.get("metadata")
+    if not isinstance(metadata, dict):
+        return 0
+    score = 0
+    target_keys = _build_germany_person_match_keys(entity)
+    candidate_keys = _extract_wikidata_person_match_keys(candidate_payload)
+    canonical_key = _normalize_person_name_for_match(str(entity.get("canonical_text", "")))
+    if canonical_key and canonical_key in candidate_keys:
+        score += 100
+    elif target_keys.intersection(candidate_keys):
+        score += 90
+    employer_isin = _normalize_whitespace(str(metadata.get("employer_isin", ""))).upper()
+    employer_qid = (
+        str(issuer_matches.get(employer_isin, {}).get("qid", "")).strip()
+        if employer_isin
+        else ""
+    )
+    if employer_qid:
+        entity_claim_ids = _extract_wikidata_entity_claim_ids(candidate_payload)
+        if employer_qid in entity_claim_ids:
+            score += 40
+    candidate_description = _extract_wikidata_description(candidate_payload).casefold()
+    if any(
+        keyword in candidate_description
+        for keyword in ("manager", "executive", "business", "chief", "board", "banker")
+    ):
+        score += 10
+    return score
+
+
+def _build_germany_person_match_keys(entity: dict[str, object]) -> set[str]:
+    keys = {
+        _normalize_person_name_for_match(str(entity.get("canonical_text", ""))),
+    }
+    keys.update(
+        _normalize_person_name_for_match(alias)
+        for alias in entity.get("aliases", [])
+        if isinstance(alias, str)
+    )
+    return {key for key in keys if key}
+
+
+def _extract_wikidata_organization_match_keys(
+    payload: dict[str, Any],
+) -> set[str]:
+    texts = _extract_wikidata_entity_text_values(payload)
+    keys = {
+        _normalize_company_name_for_match(text)
+        for text in texts
+    }
+    keys.update(
+        _normalize_company_name_for_match(text, drop_suffixes=True)
+        for text in texts
+    )
+    return {key for key in keys if key}
+
+
+def _extract_wikidata_person_match_keys(
+    payload: dict[str, Any],
+) -> set[str]:
+    return {
+        key
+        for key in (
+            _normalize_person_name_for_match(text)
+            for text in _extract_wikidata_entity_text_values(payload)
+        )
+        if key
+    }
+
+
+def _extract_wikidata_entity_text_values(payload: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for collection_name in ("labels", "aliases"):
+        collection = payload.get(collection_name)
+        if not isinstance(collection, dict):
+            continue
+        for language_value in collection.values():
+            if isinstance(language_value, dict):
+                text = _normalize_whitespace(str(language_value.get("value", "")))
+                if text:
+                    values.append(text)
+            elif isinstance(language_value, list):
+                for item in language_value:
+                    if not isinstance(item, dict):
+                        continue
+                    text = _normalize_whitespace(str(item.get("value", "")))
+                    if text:
+                        values.append(text)
+    return _unique_aliases(values)
+
+
+def _extract_wikidata_description(payload: dict[str, Any]) -> str:
+    descriptions = payload.get("descriptions")
+    if not isinstance(descriptions, dict):
+        return ""
+    for language in ("en", "de"):
+        description = descriptions.get(language)
+        if isinstance(description, dict):
+            text = _normalize_whitespace(str(description.get("value", "")))
+            if text:
+                return text
+    for description in descriptions.values():
+        if isinstance(description, dict):
+            text = _normalize_whitespace(str(description.get("value", "")))
+            if text:
+                return text
+    return ""
+
+
+def _extract_wikidata_string_claim_values(payload: dict[str, Any]) -> set[str]:
+    values: set[str] = set()
+    claims = payload.get("claims")
+    if not isinstance(claims, dict):
+        return values
+    for claim_list in claims.values():
+        if not isinstance(claim_list, list):
+            continue
+        for claim in claim_list:
+            if not isinstance(claim, dict):
+                continue
+            mainsnak = claim.get("mainsnak")
+            if not isinstance(mainsnak, dict):
+                continue
+            datavalue = mainsnak.get("datavalue")
+            if not isinstance(datavalue, dict):
+                continue
+            value = datavalue.get("value")
+            if isinstance(value, str):
+                normalized = _normalize_whitespace(value).upper()
+                if normalized:
+                    values.add(normalized)
+    return values
+
+
+def _extract_wikidata_entity_claim_ids(payload: dict[str, Any]) -> set[str]:
+    values: set[str] = set()
+    claims = payload.get("claims")
+    if not isinstance(claims, dict):
+        return values
+    for claim_list in claims.values():
+        if not isinstance(claim_list, list):
+            continue
+        for claim in claim_list:
+            if not isinstance(claim, dict):
+                continue
+            mainsnak = claim.get("mainsnak")
+            if not isinstance(mainsnak, dict):
+                continue
+            datavalue = mainsnak.get("datavalue")
+            if not isinstance(datavalue, dict):
+                continue
+            value = datavalue.get("value")
+            if not isinstance(value, dict):
+                continue
+            entity_id = str(value.get("id", "")).strip()
+            if entity_id:
+                values.add(entity_id)
+    return values
+
+
+def _normalize_person_name_for_match(value: str) -> str:
+    normalized = _normalize_whitespace(_ascii_fold_alias(value) or value).casefold()
+    return " ".join(re.findall(r"[a-z]+", normalized))
+
+
+def _build_germany_wikidata_entity_aliases(
+    payload: dict[str, Any],
+    *,
+    entity_type: str,
+) -> list[str]:
+    aliases: list[str] = []
+    for text in _extract_wikidata_entity_text_values(payload):
+        normalized_text = _normalize_whitespace(text)
+        if not normalized_text or normalized_text.isdigit():
+            continue
+        if entity_type == "person":
+            _, person_aliases = _normalize_person_name_aliases(normalized_text)
+            aliases.extend(person_aliases)
+            continue
+        if normalized_text.isupper() and len(normalized_text) <= 5:
+            continue
+        aliases.extend(_build_germany_company_aliases(normalized_text))
+    return _unique_aliases(aliases)
+
+
+def _build_wikidata_resolution_match(
+    qid: str,
+    payload: dict[str, Any] | None,
+    *,
+    entity_type: str,
+) -> dict[str, object]:
+    label = ""
+    aliases: list[str] = []
+    if isinstance(payload, dict):
+        for language in ("en", "de"):
+            labels = payload.get("labels")
+            if isinstance(labels, dict):
+                language_value = labels.get(language)
+                if isinstance(language_value, dict):
+                    label = _normalize_whitespace(str(language_value.get("value", "")))
+                    if label:
+                        break
+        if not label:
+            texts = _extract_wikidata_entity_text_values(payload)
+            label = texts[0] if texts else ""
+        aliases = _build_germany_wikidata_entity_aliases(
+            payload,
+            entity_type=entity_type,
+        )
+    return {
+        "qid": qid,
+        "entity_id": f"wikidata:{qid}",
+        "url": _WIKIDATA_ENTITY_URL_TEMPLATE.format(qid=qid),
+        "label": label,
+        "aliases": aliases,
+    }
+
+
+def _merge_wikidata_metadata(
+    *,
+    entity: dict[str, object],
+    match: dict[str, object],
+) -> None:
+    metadata = entity.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        entity["metadata"] = metadata
+    qid = _normalize_whitespace(str(match.get("qid", "")))
+    url = _normalize_whitespace(str(match.get("url", "")))
+    if qid:
+        metadata["wikidata_qid"] = qid
+        metadata["wikidata_entity_id"] = f"wikidata:{qid}"
+    if url:
+        metadata["wikidata_url"] = url
+    label = _normalize_whitespace(str(match.get("label", "")))
+    if label:
+        metadata["wikidata_label"] = label
+    wikidata_aliases = [
+        alias
+        for alias in match.get("aliases", [])
+        if isinstance(alias, str) and _normalize_whitespace(alias)
+    ]
+    if wikidata_aliases:
+        existing_aliases = [
+            alias
+            for alias in entity.get("aliases", [])
+            if isinstance(alias, str) and _normalize_whitespace(alias)
+        ]
+        entity_type = str(entity.get("entity_type", "")).strip().casefold()
+        if entity_type in {"organization", "ticker"}:
+            entity["aliases"] = _unique_aliases(
+                [
+                    *existing_aliases,
+                    *[
+                        alias
+                        for wikidata_alias in wikidata_aliases
+                        for alias in _build_germany_company_aliases(wikidata_alias)
+                    ],
+                ]
+            )
+        else:
+            entity["aliases"] = _unique_aliases([*existing_aliases, *wikidata_aliases])
+
+
+def _search_wikidata_entities(
+    query: str,
+    *,
+    user_agent: str,
+) -> list[dict[str, Any]]:
+    payload = _fetch_wikidata_api_json(
+        params={
+            "action": "wbsearchentities",
+            "format": "json",
+            "language": "en",
+            "type": "item",
+            "limit": str(_WIKIDATA_SEARCH_LIMIT),
+            "search": query,
+        },
+        user_agent=user_agent,
+    )
+    search_results = payload.get("search")
+    if not isinstance(search_results, list):
+        return []
+    return [item for item in search_results if isinstance(item, dict)]
+
+
+def _fetch_wikidata_entity_payloads(
+    *,
+    entity_ids: list[str],
+    user_agent: str,
+    warnings: list[str],
+) -> dict[str, dict[str, Any]]:
+    resolved_ids = _unique_aliases(
+        [
+            entity_id
+            for entity_id in entity_ids
+            if entity_id.startswith("Q")
+        ]
+    )
+    payloads: dict[str, dict[str, Any]] = {}
+    for index in range(0, len(resolved_ids), _WIKIDATA_GETENTITIES_BATCH_SIZE):
+        batch = resolved_ids[index : index + _WIKIDATA_GETENTITIES_BATCH_SIZE]
+        try:
+            payload = _fetch_wikidata_api_json(
+                params={
+                    "action": "wbgetentities",
+                    "format": "json",
+                    "ids": "|".join(batch),
+                    "languages": "en|de",
+                    "props": "labels|aliases|descriptions|claims",
+                },
+                user_agent=user_agent,
+            )
+        except Exception as exc:
+            warning_text = f"Wikidata entity batch fetch failed: {exc}"
+            if warning_text not in warnings and len(warnings) < 5:
+                warnings.append(warning_text)
+            continue
+        entities = payload.get("entities")
+        if not isinstance(entities, dict):
+            continue
+        for entity_id, entity_payload in entities.items():
+            if isinstance(entity_payload, dict):
+                payloads[str(entity_id)] = entity_payload
+    return payloads
+
+
+def _fetch_wikidata_api_json(
+    *,
+    params: dict[str, str],
+    user_agent: str,
+) -> dict[str, Any]:
+    with httpx.Client(
+        headers={
+            "Accept": "application/json",
+            "User-Agent": user_agent,
+        },
+        follow_redirects=True,
+        timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+    ) as client:
+        response = client.get(_WIKIDATA_API_URL, params=params)
+        response.raise_for_status()
+        payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError("Wikidata API returned a non-object payload")
+    return payload
+
+
+def _load_xlsx_shared_strings(archive: zipfile.ZipFile) -> list[str]:
+    try:
+        root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+    except KeyError:
+        return []
+    namespace = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    values: list[str] = []
+    for item in root.findall("x:si", namespace):
+        values.append("".join(text.text or "" for text in item.iterfind(".//x:t", namespace)))
+    return values
+
+
+def _load_xlsx_sheet_targets(archive: zipfile.ZipFile) -> list[tuple[str, str]]:
+    workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+    rels = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+    workbook_ns = {
+        "x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+        "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    }
+    rel_ns = {"p": "http://schemas.openxmlformats.org/package/2006/relationships"}
+    relationship_targets = {
+        relationship.attrib["Id"]: relationship.attrib["Target"]
+        for relationship in rels.findall("p:Relationship", rel_ns)
+    }
+    sheets: list[tuple[str, str]] = []
+    for sheet in workbook.findall("x:sheets/x:sheet", workbook_ns):
+        relationship_id = sheet.attrib.get(
+            "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+        )
+        if not relationship_id:
+            continue
+        target = relationship_targets.get(relationship_id)
+        if not target:
+            continue
+        sheets.append((sheet.attrib.get("name", ""), f"xl/{target}"))
+    return sheets
+
+
+def _iter_xlsx_sheet_rows(
+    archive: zipfile.ZipFile,
+    *,
+    worksheet_path: str,
+    shared_strings: list[str],
+) -> list[list[str]]:
+    namespace = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    worksheet = ET.fromstring(archive.read(worksheet_path))
+    rows: list[list[str]] = []
+    for row in worksheet.findall("x:sheetData/x:row", namespace):
+        values: list[str] = []
+        expected_index = 0
+        for cell in row.findall("x:c", namespace):
+            reference = str(cell.attrib.get("r", ""))
+            column_letters = "".join(character for character in reference if character.isalpha())
+            column_index = _xlsx_column_index(column_letters) if column_letters else expected_index
+            while len(values) < column_index:
+                values.append("")
+            values.append(_decode_xlsx_cell_value(cell, namespace, shared_strings))
+            expected_index = column_index + 1
+        rows.append(values)
+    return rows
+
+
+def _decode_xlsx_cell_value(
+    cell: ET.Element,
+    namespace: dict[str, str],
+    shared_strings: list[str],
+) -> str:
+    cell_type = str(cell.attrib.get("t", ""))
+    value_node = cell.find("x:v", namespace)
+    if cell_type == "s" and value_node is not None and value_node.text is not None:
+        try:
+            return shared_strings[int(value_node.text)]
+        except (IndexError, ValueError):
+            return ""
+    if cell_type == "inlineStr":
+        inline_node = cell.find("x:is", namespace)
+        if inline_node is None:
+            return ""
+        return "".join(text.text or "" for text in inline_node.iterfind(".//x:t", namespace))
+    if value_node is None or value_node.text is None:
+        return ""
+    return value_node.text
+
+
+def _xlsx_column_index(column_letters: str) -> int:
+    index = 0
+    for character in column_letters.upper():
+        index = (index * 26) + (ord(character) - ord("A") + 1)
+    return max(index - 1, 0)
+
+
+def _is_deutsche_boerse_header_row(row: list[str]) -> bool:
+    normalized = [_normalize_whitespace(value).casefold() for value in row if value.strip()]
+    required = {"isin", "trading symbol", "company", "country", "instrument exchange"}
+    return required.issubset(set(normalized))
+
+
+def _build_germany_deutsche_boerse_issuer_entity(
+    record: dict[str, str | list[str]],
+) -> dict[str, object]:
+    company_name = str(record["company_name"])
+    ticker = _normalize_whitespace(str(record.get("ticker", ""))).upper()
+    isin = str(record["isin"])
+    aliases = [*_build_germany_company_aliases(company_name), isin]
+    if ticker:
+        aliases.append(ticker)
+    wkn = _normalize_whitespace(str(record.get("wkn", ""))).upper()
+    if wkn:
+        aliases.append(wkn)
+    metadata: dict[str, object] = {
+        "country_code": "de",
+        "category": "issuer",
+        "isin": isin,
+        "listing_segment": str(record["listing_segment"]),
+        "sector": str(record["sector"]),
+        "subsector": str(record["subsector"]),
+        "instrument_exchange": str(record["instrument_exchange"]),
+    }
+    if ticker:
+        metadata["ticker"] = ticker
+    if wkn:
+        metadata["wkn"] = wkn
+    indices = [value for value in record.get("indices", []) if isinstance(value, str)]
+    if indices:
+        metadata["indices"] = indices
+    listing_segments = [
+        value for value in record.get("listing_segments", []) if isinstance(value, str)
+    ]
+    if listing_segments:
+        metadata["listing_segments"] = listing_segments
+    instrument_exchanges = [
+        value
+        for value in record.get("instrument_exchanges", [])
+        if isinstance(value, str)
+    ]
+    if instrument_exchanges:
+        metadata["instrument_exchanges"] = instrument_exchanges
+    issuer_website = _normalize_whitespace(str(record.get("issuer_website", "")))
+    if issuer_website:
+        metadata["issuer_website"] = issuer_website
+    listed_since = _normalize_whitespace(str(record.get("listed_since", "")))
+    if listed_since:
+        metadata["listed_since"] = listed_since
+    source_directories = [
+        value
+        for value in record.get("source_directories", [])
+        if isinstance(value, str)
+    ]
+    if source_directories:
+        metadata["source_directories"] = source_directories
+    return {
+        "entity_type": "organization",
+        "canonical_text": company_name,
+        "aliases": _unique_aliases(aliases),
+        "entity_id": f"finance-de-issuer:{isin}",
+        "metadata": metadata,
+    }
+
+
+def _build_germany_deutsche_boerse_ticker_entity(
+    record: dict[str, str | list[str]],
+) -> dict[str, object]:
+    company_name = str(record["company_name"])
+    ticker = _normalize_whitespace(str(record.get("ticker", ""))).upper()
+    isin = str(record["isin"])
+    aliases = [ticker, *_build_germany_company_aliases(company_name), isin]
+    wkn = _normalize_whitespace(str(record.get("wkn", ""))).upper()
+    if wkn:
+        aliases.append(wkn)
+    metadata: dict[str, object] = {
+        "country_code": "de",
+        "category": "ticker",
+        "issuer_name": company_name,
+        "isin": isin,
+        "listing_segment": str(record["listing_segment"]),
+        "sector": str(record["sector"]),
+        "subsector": str(record["subsector"]),
+        "instrument_exchange": str(record["instrument_exchange"]),
+    }
+    if wkn:
+        metadata["wkn"] = wkn
+    indices = [value for value in record.get("indices", []) if isinstance(value, str)]
+    if indices:
+        metadata["indices"] = indices
+    listing_segments = [
+        value for value in record.get("listing_segments", []) if isinstance(value, str)
+    ]
+    if listing_segments:
+        metadata["listing_segments"] = listing_segments
+    instrument_exchanges = [
+        value
+        for value in record.get("instrument_exchanges", [])
+        if isinstance(value, str)
+    ]
+    if instrument_exchanges:
+        metadata["instrument_exchanges"] = instrument_exchanges
+    listed_since = _normalize_whitespace(str(record.get("listed_since", "")))
+    if listed_since:
+        metadata["listed_since"] = listed_since
+    source_directories = [
+        value
+        for value in record.get("source_directories", [])
+        if isinstance(value, str)
+    ]
+    if source_directories:
+        metadata["source_directories"] = source_directories
+    return {
+        "entity_type": "ticker",
+        "canonical_text": ticker,
+        "aliases": _unique_aliases(aliases),
+        "entity_id": f"finance-de-ticker:{ticker}",
+        "metadata": metadata,
+    }
+
+
+def _build_germany_issuer_lookup(
+    issuer_records: list[dict[str, str | list[str]]],
+) -> dict[str, dict[str, str | list[str]]]:
+    lookup: dict[str, dict[str, str | list[str]]] = {}
+    for record in issuer_records:
+        company_name = str(record["company_name"])
+        for alias in _build_germany_company_aliases(company_name):
+            for key in {
+                _normalize_company_name_for_match(alias),
+                _normalize_company_name_for_match(alias, drop_suffixes=True),
+            }:
+                if key:
+                    lookup.setdefault(key, record)
+    return lookup
+
+
+def _download_deutsche_boerse_company_details_page(
+    source_url: str | Path,
+    destination: Path,
+    *,
+    user_agent: str,
+) -> str:
+    normalized_source_url = normalize_source_url(source_url)
+    parsed = urlparse(normalized_source_url)
+    if (
+        parsed.scheme in {"http", "https"}
+        and parsed.netloc.casefold() == "live.deutsche-boerse.com"
+    ):
+        chrome_binary = _find_headless_chrome_binary()
+        if chrome_binary is None:
+            raise RuntimeError(
+                "Headless Chrome not available; skipped live.deutsche-boerse company-details enrichment"
+            )
+        rendered_html = _render_dynamic_page_with_headless_chrome(
+            chrome_binary=chrome_binary,
+            source_url=normalized_source_url,
+            user_agent=user_agent,
+        )
+        destination.write_text(rendered_html, encoding="utf-8")
+        return normalized_source_url
+    return _download_source(normalized_source_url, destination, user_agent=user_agent)
+
+
+def _build_unternehmensregister_register_information_search_url(
+    *,
+    company_name: str,
+) -> str:
+    query_params = {
+        "companyName": company_name,
+        "companyNameExactMatch": "true",
+        "formType": "REGISTER_INFORMATION",
+    }
+    return (
+        f"{_UNTERNEHMENSREGISTER_REGISTER_PORTAL_ADVICE_URL}?"
+        f"{urlencode(query_params)}"
+    )
+
+
+def _download_unternehmensregister_register_information_search_page(
+    source_url: str | Path,
+    destination: Path,
+    *,
+    user_agent: str,
+) -> str:
+    return _download_source(source_url, destination, user_agent=user_agent)
+
+
+def _download_unternehmensregister_register_information_detail_page(
+    source_url: str | Path,
+    destination: Path,
+    *,
+    user_agent: str,
+) -> str:
+    return _download_source(source_url, destination, user_agent=user_agent)
+
+
+def _extract_unternehmensregister_register_information_search_result(
+    search_html: str,
+    *,
+    company_name: str,
+    base_url: str = _UNTERNEHMENSREGISTER_REGISTER_INFORMATION_URL,
+) -> dict[str, str] | None:
+    target_full = _normalize_company_name_for_match(company_name)
+    target_core = _normalize_company_name_for_match(
+        company_name,
+        drop_suffixes=True,
+    )
+
+    def _matches_company_name(value: str) -> bool:
+        result_full = _normalize_company_name_for_match(value)
+        result_core = _normalize_company_name_for_match(
+            value,
+            drop_suffixes=True,
+        )
+        return result_full == target_full or (target_core and result_core == target_core)
+
+    try:
+        payload = json.loads(search_html)
+    except Exception:
+        payload = None
+    if isinstance(payload, dict):
+        items = payload.get("items")
+        if isinstance(items, list):
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                item_name = _normalize_whitespace(
+                    str(item.get("company_name") or item.get("title") or "")
+                )
+                if not item_name or not _matches_company_name(item_name):
+                    continue
+                detail_url = _normalize_whitespace(
+                    str(
+                        item.get("detail_url")
+                        or item.get("href")
+                        or item.get("url")
+                        or ""
+                    )
+                )
+                return {
+                    "company_name": item_name,
+                    "detail_url": urljoin(base_url, detail_url) if detail_url else "",
+                    "register_court": _normalize_whitespace(
+                        str(item.get("register_court") or item.get("court") or "")
+                    ),
+                    "register_number": _normalize_whitespace(
+                        str(item.get("register_number") or item.get("number") or "")
+                    ),
+                    "register_type": _normalize_whitespace(
+                        str(item.get("register_type") or item.get("type") or "")
+                    ),
+                }
+    for row_match in _GERMAN_GOVERNANCE_TABLE_ROW_PATTERN.finditer(search_html):
+        row_html = row_match.group("row")
+        cells = re.findall(
+            r"<t[hd][^>]*>(.*?)</t[hd]>",
+            row_html,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if len(cells) < 2:
+            continue
+        cell_texts = [_normalize_whitespace(_strip_html(cell)) for cell in cells]
+        matched_name = next(
+            (value for value in cell_texts if value and _matches_company_name(value)),
+            None,
+        )
+        if matched_name is None:
+            continue
+        href_match = re.search(
+            r'href=["\'](?P<href>[^"\']+)["\']',
+            row_html,
+            re.IGNORECASE,
+        )
+        register_court = cell_texts[1] if len(cell_texts) > 1 else ""
+        register_number = cell_texts[2] if len(cell_texts) > 2 else ""
+        register_type = cell_texts[3] if len(cell_texts) > 3 else ""
+        if not register_type and register_number:
+            register_match = re.match(
+                r"(?P<type>[A-Z]{2,4})\s+(?P<number>.+)",
+                register_number,
+            )
+            if register_match is not None:
+                register_type = _normalize_whitespace(register_match.group("type"))
+                register_number = _normalize_whitespace(register_match.group("number"))
+        return {
+            "company_name": matched_name,
+            "detail_url": (
+                urljoin(base_url, href_match.group("href"))
+                if href_match is not None
+                else ""
+            ),
+            "register_court": register_court,
+            "register_number": register_number,
+            "register_type": register_type,
+        }
+    for anchor_match in re.finditer(
+        r'<a[^>]+href=["\'](?P<href>[^"\']+)["\'][^>]*>(?P<name>.*?)</a>',
+        search_html,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        matched_name = _normalize_whitespace(_strip_html(anchor_match.group("name")))
+        if matched_name and _matches_company_name(matched_name):
+            return {
+                "company_name": matched_name,
+                "detail_url": urljoin(base_url, anchor_match.group("href")),
+                "register_court": "",
+                "register_number": "",
+                "register_type": "",
+            }
+    return None
+
+
+def _merge_unternehmensregister_search_result_metadata(
+    *,
+    issuer_entity: dict[str, object] | None,
+    ticker_entity: dict[str, object] | None,
+    search_result: dict[str, str] | None,
+) -> None:
+    if not search_result:
+        return
+    register_metadata = {
+        key: value
+        for key, value in {
+            "register_court": _normalize_whitespace(search_result.get("register_court", "")),
+            "register_number": _normalize_whitespace(search_result.get("register_number", "")),
+            "register_type": _normalize_whitespace(search_result.get("register_type", "")),
+        }.items()
+        if value
+    }
+    if not register_metadata:
+        return
+    for entity in (issuer_entity, ticker_entity):
+        if entity is None:
+            continue
+        metadata = entity.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        metadata.update(register_metadata)
+
+
+def _find_headless_chrome_binary() -> str | None:
+    for candidate in _DEUTSCHE_BOERSE_HEADLESS_CHROME_CANDIDATES:
+        binary = shutil.which(candidate)
+        if binary:
+            return binary
+    return None
+
+
+def _render_dynamic_page_with_headless_chrome(
+    *,
+    chrome_binary: str,
+    source_url: str,
+    user_agent: str,
+) -> str:
+    command = [
+        chrome_binary,
+        "--headless=new",
+        "--disable-gpu",
+        f"--virtual-time-budget={_DEUTSCHE_BOERSE_COMPANY_DETAILS_RENDER_BUDGET_MS}",
+        f"--user-agent={user_agent}",
+        "--dump-dom",
+        source_url,
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=max(
+                DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS * 2,
+                _DEUTSCHE_BOERSE_COMPANY_DETAILS_RENDER_BUDGET_MS / 1000 + 10,
+            ),
+        )
+    except (OSError, subprocess.SubprocessError, TimeoutError) as exc:
+        raise RuntimeError(
+            f"Failed to render live.deutsche-boerse company-details page: {exc}"
+        ) from exc
+    if completed.returncode != 0:
+        stderr = _normalize_whitespace(completed.stderr)
+        raise RuntimeError(
+            "Failed to render live.deutsche-boerse company-details page"
+            + (f": {stderr}" if stderr else "")
+        )
+    rendered_html = completed.stdout.strip()
+    if not rendered_html:
+        raise RuntimeError(
+            "Failed to render live.deutsche-boerse company-details page: empty DOM dump"
+        )
+    return f"{rendered_html}\n"
+
+
+def _extract_deutsche_boerse_company_details_people_entities(
+    html_text: str,
+    *,
+    issuer_record: dict[str, str | list[str]],
+    source_name: str = "deutsche-boerse-company-details",
+) -> list[dict[str, object]]:
+    company_name = str(issuer_record["company_name"])
+    ticker = str(issuer_record["ticker"])
+    isin = str(issuer_record["isin"])
+    entities: list[dict[str, object]] = []
+    for row_label, row_html in _iter_deutsche_boerse_company_details_rows(html_text):
+        role_class = _DEUTSCHE_BOERSE_COMPANY_DETAILS_ROW_ROLE_CLASS.get(
+            row_label.casefold()
+        )
+        if role_class is None:
+            continue
+        default_role_title = _DEUTSCHE_BOERSE_COMPANY_DETAILS_DEFAULT_ROLE_TITLE.get(
+            row_label.casefold(),
+            row_label,
+        )
+        for person_entry in _split_deutsche_boerse_company_details_people(row_html):
+            raw_name = person_entry["name"]
+            canonical_name, aliases = _normalize_person_name_aliases(raw_name)
+            if not canonical_name:
+                continue
+            role_title = _normalize_whitespace(
+                str(person_entry.get("role_title") or default_role_title)
+            )
+            metadata: dict[str, object] = {
+                "country_code": "de",
+                "category": role_class,
+                "role_title": role_title,
+                "employer_name": company_name,
+                "employer_ticker": ticker,
+                "employer_isin": isin,
+                "source_name": source_name,
+                "section_name": row_label,
+            }
+            if person_entry.get("employee_representative"):
+                metadata["employee_representative"] = True
+            entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_text": canonical_name,
+                    "aliases": _unique_aliases(aliases),
+                    "entity_id": (
+                        f"finance-de-person:{ticker}:{_slug(canonical_name)}:{_slug(role_class)}"
+                    ),
+                    "metadata": metadata,
+                }
+            )
+    return entities
+
+
+def _extract_deutsche_boerse_company_details_aliases(
+    html_text: str,
+    *,
+    company_name: str,
+) -> list[str]:
+    aliases = _build_germany_company_aliases(company_name)
+    heading_alias = _extract_deutsche_boerse_company_details_heading_alias(html_text)
+    if heading_alias:
+        aliases.extend(_build_germany_company_aliases(heading_alias))
+    for former_name in _extract_deutsche_boerse_company_details_former_names(html_text):
+        aliases.extend(_build_germany_company_aliases(former_name))
+    return _unique_aliases(aliases)
+
+
+def _extract_deutsche_boerse_company_details_heading_alias(html_text: str) -> str | None:
+    match = re.search(
+        r'<h1[^>]*class="[^"]*instrument-name[^"]*"[^>]*>(?P<value>.*?)</h1>',
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if match is None:
+        return None
+    heading_text = _normalize_whitespace(_strip_html(match.group("value")))
+    former_match = re.search(
+        r"\((?:former|formerly)\s+(?P<value>[^)]+)\)",
+        heading_text,
+        re.IGNORECASE,
+    )
+    if former_match is None:
+        return None
+    return _clean_german_governance_employer_candidate(former_match.group("value"))
+
+
+def _extract_deutsche_boerse_company_details_former_names(
+    html_text: str,
+) -> list[str]:
+    names: list[str] = []
+    for row_label, row_html in _iter_deutsche_boerse_company_details_rows(html_text):
+        if row_label.casefold() != "further information":
+            continue
+        row_text = _normalize_whitespace(_strip_html(row_html))
+        for match in re.finditer(
+            r"company name until\s+\d{2}/\d{2}/\d{4}\s*:\s*(?P<value>[^.;]+)",
+            row_text,
+            re.IGNORECASE,
+        ):
+            cleaned = _clean_german_governance_employer_candidate(match.group("value"))
+            if cleaned:
+                names.append(cleaned)
+    return _unique_aliases(names)
+
+
+def _iter_deutsche_boerse_company_details_rows(
+    html_text: str,
+) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    for match in _GERMAN_GOVERNANCE_TABLE_ROW_PATTERN.finditer(html_text):
+        cells = re.findall(
+            r"<t[hd][^>]*>(.*?)</t[hd]>",
+            match.group("row"),
+            re.IGNORECASE | re.DOTALL,
+        )
+        if len(cells) < 2:
+            continue
+        row_label = _normalize_whitespace(_strip_html(cells[0]))
+        if not row_label:
+            continue
+        rows.append((row_label, cells[1]))
+    return rows
+
+
+def _split_deutsche_boerse_company_details_people(
+    value_html: str,
+) -> list[dict[str, object]]:
+    text = re.sub(r"<br\s*/?>", "\n", value_html, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = text.replace("\xa0", " ")
+    text = "\n".join(
+        _normalize_whitespace(line) for line in text.splitlines() if line.strip()
+    )
+    lines = [
+        line
+        for line in text.splitlines()
+        if line and not line.lstrip().startswith("*")
+    ]
+    entries: list[dict[str, object]] = []
+    for item in _split_on_commas_outside_parentheses(" ".join(lines)):
+        candidate = _normalize_whitespace(item)
+        if not candidate:
+            continue
+        employee_representative = candidate.endswith("*")
+        if employee_representative:
+            candidate = candidate[:-1].rstrip()
+        match = re.fullmatch(r"(?P<name>.+?)\s*\((?P<role>.+)\)", candidate)
+        role_title = _normalize_whitespace(match.group("role")) if match else None
+        raw_name = _normalize_whitespace(match.group("name") if match else candidate)
+        if not raw_name:
+            continue
+        entries.append(
+            {
+                "name": raw_name,
+                "role_title": role_title,
+                "employee_representative": employee_representative,
+            }
+        )
+    return entries
+
+
+def _split_on_commas_outside_parentheses(value: str) -> list[str]:
+    parts: list[str] = []
+    current: list[str] = []
+    depth = 0
+    for character in value:
+        if character == "(":
+            depth += 1
+        elif character == ")" and depth > 0:
+            depth -= 1
+        if character == "," and depth == 0:
+            part = "".join(current).strip()
+            if part:
+                parts.append(part)
+            current = []
+            continue
+        current.append(character)
+    tail = "".join(current).strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _extract_german_governance_people_entities(
+    html_text: str,
+    *,
+    issuer_lookup: dict[str, dict[str, str | list[str]]] | None = None,
+    source_name: str = "official-governance-page",
+) -> list[dict[str, object]]:
+    employer_name = _extract_german_governance_employer_name(html_text)
+    employer_record = (
+        _lookup_germany_issuer_record(employer_name, issuer_lookup)
+        if employer_name and issuer_lookup
+        else None
+    )
+    resolved_employer_name = (
+        str(employer_record["company_name"])
+        if employer_record is not None
+        else employer_name
+    )
+    employer_ticker = str(employer_record["ticker"]) if employer_record is not None else None
+    employer_isin = str(employer_record["isin"]) if employer_record is not None else None
+    if not resolved_employer_name:
+        return []
+
+    entities: list[dict[str, object]] = []
+    for section_title, role_class, section_body in _iter_german_governance_sections(
+        html_text
+    ):
+        for raw_name, raw_role in _extract_german_governance_pairs(section_body):
+            canonical_name, aliases = _normalize_person_name_aliases(raw_name)
+            if not canonical_name:
+                continue
+            role_title = _normalize_whitespace(raw_role or section_title) or section_title
+            metadata: dict[str, object] = {
+                "country_code": "de",
+                "category": role_class,
+                "role_title": role_title,
+                "employer_name": resolved_employer_name,
+                "source_name": source_name,
+                "section_name": section_title,
+            }
+            if employer_ticker:
+                metadata["employer_ticker"] = employer_ticker
+            if employer_isin:
+                metadata["employer_isin"] = employer_isin
+            entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_text": canonical_name,
+                    "aliases": _unique_aliases(aliases),
+                    "entity_id": (
+                        f"finance-de-person:{(employer_ticker or employer_isin or _slug(resolved_employer_name))}:"
+                        f"{_slug(canonical_name)}:{_slug(role_class)}"
+                    ),
+                    "metadata": metadata,
+                }
+            )
+    return entities
+
+
+def _iter_german_governance_sections(
+    html_text: str,
+) -> list[tuple[str, str, str]]:
+    heading_pattern = re.compile(
+        r"<h[1-6][^>]*>(?P<heading>.*?)</h[1-6]>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    governance_headings: list[tuple[int, int, str, str]] = []
+    for match in heading_pattern.finditer(html_text):
+        section_title = _normalize_whitespace(_strip_html(match.group("heading")))
+        role_class = _role_class_for_german_governance_heading(section_title)
+        if role_class is None:
+            continue
+        governance_headings.append(
+            (match.start(), match.end(), section_title, role_class)
+        )
+    sections: list[tuple[str, str, str]] = []
+    for index, (_, body_start, section_title, role_class) in enumerate(governance_headings):
+        body_end = (
+            governance_headings[index + 1][0]
+            if index + 1 < len(governance_headings)
+            else len(html_text)
+        )
+        sections.append((section_title, role_class, html_text[body_start:body_end]))
+    return sections
+
+
+def _extract_german_governance_employer_name(html_text: str) -> str | None:
+    for pattern in (
+        r"<title[^>]*>(?P<value>.*?)</title>",
+        r"<h1[^>]*>(?P<value>.*?)</h1>",
+    ):
+        match = re.search(pattern, html_text, re.IGNORECASE | re.DOTALL)
+        if match is None:
+            continue
+        value = _normalize_whitespace(_strip_html(match.group("value")))
+        for candidate in [segment.strip() for segment in value.split("|")] + [value]:
+            cleaned = _clean_german_governance_employer_candidate(candidate)
+            if cleaned:
+                return cleaned
+    return None
+
+
+def _clean_german_governance_employer_candidate(value: str) -> str | None:
+    candidate = _normalize_whitespace(value)
+    if not candidate:
+        return None
+    cleaned = re.sub(
+        (
+            r"^(?:register information|register details)\s*(?:of|for|at|der|des|:|-)?\s+"
+        ),
+        "",
+        candidate,
+        flags=re.IGNORECASE,
+    ).strip()
+    if cleaned != candidate:
+        return cleaned or None
+    cleaned = re.sub(
+        (
+            r"^(?:supervisory board|board of management|management board|executive board|"
+            r"managing directors?|geschäftsführer|"
+            r"investor relations|aufsichtsrat|vorstand)\s+(?:of|for|at|der|des)\s+"
+        ),
+        "",
+        candidate,
+        flags=re.IGNORECASE,
+    ).strip()
+    if cleaned != candidate:
+        return cleaned or None
+    normalized = candidate.casefold()
+    if normalized in {"register information", "register details"}:
+        return None
+    if any(
+        heading in normalized
+        for headings in _GERMAN_GOVERNANCE_ROLE_HEADINGS.values()
+        for heading in headings
+    ):
+        return None
+    return candidate
+
+
+def _lookup_germany_issuer_record(
+    employer_name: str,
+    issuer_lookup: dict[str, dict[str, str | list[str]]] | None,
+) -> dict[str, str | list[str]] | None:
+    if not issuer_lookup:
+        return None
+    for key in (
+        _normalize_company_name_for_match(employer_name),
+        _normalize_company_name_for_match(employer_name, drop_suffixes=True),
+    ):
+        if key and key in issuer_lookup:
+            return issuer_lookup[key]
+    return None
+
+
+def _role_class_for_german_governance_heading(section_title: str) -> str | None:
+    normalized = section_title.casefold()
+    for role_class, headings in _GERMAN_GOVERNANCE_ROLE_HEADINGS.items():
+        if any(heading in normalized for heading in headings):
+            return role_class
+    return None
+
+
+def _extract_german_governance_pairs(section_body: str) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def _append_pair(raw_name: str, raw_role: str) -> None:
+        name = _normalize_whitespace(raw_name)
+        role = _normalize_whitespace(raw_role)
+        if not name or not _looks_like_person_name(name):
+            return
+        pair = (name, role)
+        if pair in seen:
+            return
+        seen.add(pair)
+        pairs.append(pair)
+
+    for row_match in _GERMAN_GOVERNANCE_TABLE_ROW_PATTERN.finditer(section_body):
+        cells = [
+            _normalize_whitespace(_strip_html(cell))
+            for cell in re.findall(
+                r"<t[hd][^>]*>(.*?)</t[hd]>",
+                row_match.group("row"),
+                re.IGNORECASE | re.DOTALL,
+            )
+        ]
+        if len(cells) < 2:
+            continue
+        _append_pair(cells[0], cells[1])
+    for card_match in _GERMAN_GOVERNANCE_CARD_PATTERN.finditer(section_body):
+        raw_name = _normalize_whitespace(_strip_html(card_match.group("name")))
+        raw_role = _normalize_whitespace(_strip_html(card_match.group("role")))
+        if not raw_name or not raw_role:
+            continue
+        _append_pair(raw_name, raw_role)
+    for definition_match in re.finditer(
+        r"<dt[^>]*>(?P<name>.*?)</dt>\s*<dd[^>]*>(?P<role>.*?)</dd>",
+        section_body,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        _append_pair(
+            _strip_html(definition_match.group("name")),
+            _strip_html(definition_match.group("role")),
+        )
+    for item_match in re.finditer(
+        r"<li[^>]*>(?P<item>.*?)</li>",
+        section_body,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        parsed_pair = _split_german_governance_list_item(
+            _normalize_whitespace(_strip_html(item_match.group("item")))
+        )
+        if parsed_pair is None:
+            continue
+        _append_pair(*parsed_pair)
+    if not pairs:
+        for person_entry in _split_deutsche_boerse_company_details_people(section_body):
+            _append_pair(
+                str(person_entry.get("name", "")),
+                str(person_entry.get("role_title", "")),
+            )
+    return pairs
+
+
+def _split_german_governance_list_item(item_text: str) -> tuple[str, str] | None:
+    if not item_text:
+        return None
+    parentheses_match = re.fullmatch(r"(?P<name>.+?)\s*\((?P<role>.+)\)", item_text)
+    if parentheses_match is not None:
+        name = _normalize_whitespace(parentheses_match.group("name"))
+        role = _normalize_whitespace(parentheses_match.group("role"))
+        if name and role and _looks_like_person_name(name):
+            return name, role
+    for separator in (",", " - ", " – ", ": "):
+        if separator not in item_text:
+            continue
+        name, role = item_text.split(separator, 1)
+        name = _normalize_whitespace(name)
+        role = _normalize_whitespace(role)
+        if name and role and _looks_like_person_name(name):
+            return name, role
+    return None
 
 
 def _extract_asx_people_entities(
@@ -3207,6 +6225,63 @@ def _smart_titlecase_name(value: str) -> str:
     return "".join(piece.title() if not piece.isspace() else piece for piece in pieces)
 
 
+_PERSON_HONORIFIC_PREFIXES = {
+    "dame",
+    "dipling",
+    "dipljur",
+    "diplkfm",
+    "diploec",
+    "diplvolksw",
+    "doktor",
+    "dr",
+    "dring",
+    "frau",
+    "herr",
+    "miss",
+    "mr",
+    "mrs",
+    "ms",
+    "prof",
+    "professor",
+    "sir",
+}
+
+
+def _normalize_person_name_aliases(raw_name: str) -> tuple[str | None, list[str]]:
+    normalized_raw_name = _normalize_whitespace(raw_name)
+    titled_name = _normalize_whitespace(_smart_titlecase_name(normalized_raw_name))
+    canonical_name = _strip_person_honorific_prefixes(titled_name) or titled_name
+    if not canonical_name or not _looks_like_person_name(canonical_name):
+        return None, []
+    aliases = [canonical_name]
+    for candidate in (titled_name, normalized_raw_name):
+        if candidate and candidate.casefold() != canonical_name.casefold():
+            aliases.append(candidate)
+    for alias in tuple(aliases):
+        ascii_alias = _ascii_fold_alias(alias)
+        if ascii_alias and ascii_alias.casefold() != alias.casefold():
+            aliases.append(ascii_alias)
+    return canonical_name, _unique_aliases(aliases)
+
+
+def _strip_person_honorific_prefixes(value: str) -> str | None:
+    parts = [part for part in re.split(r"\s+", value) if part]
+    index = 0
+    while index < len(parts) - 1:
+        normalized = re.sub(r"[^a-z]", "", parts[index].casefold())
+        if normalized not in _PERSON_HONORIFIC_PREFIXES:
+            break
+        index += 1
+    if index == 0:
+        return None
+    stripped = " ".join(parts[index:])
+    if not stripped or stripped.casefold() == value.casefold():
+        return None
+    if not _looks_like_person_name(stripped):
+        return None
+    return stripped
+
+
 def _smart_titlecase_company_name(value: str) -> str:
     if not value:
         return value
@@ -3214,7 +6289,23 @@ def _smart_titlecase_company_name(value: str) -> str:
         return value
     lowered = unicodedata.normalize("NFC", value.casefold()).replace("i̇", "i")
     pieces = re.split(r"(\s+)", lowered)
-    uppercase_tokens = {"plc", "ltd", "llp", "lp", "sa", "ag", "nv", "se", "uk"}
+    uppercase_tokens = {
+        "plc",
+        "ltd",
+        "llp",
+        "lp",
+        "sa",
+        "ag",
+        "nv",
+        "se",
+        "uk",
+        "gmbh",
+        "kgaa",
+        "kg",
+        "na",
+        "eo",
+        "o.n",
+    }
     transformed: list[str] = []
     for piece in pieces:
         if piece.isspace():
@@ -3232,6 +6323,54 @@ def _smart_titlecase_company_name(value: str) -> str:
             continue
         transformed.append(piece.title())
     return "".join(transformed)
+
+
+def _build_germany_company_aliases(*values: str) -> list[str]:
+    aliases: list[str] = []
+    pending = [
+        _normalize_whitespace(value)
+        for value in values
+        if _normalize_whitespace(value)
+    ]
+    seen: set[str] = set()
+    while pending:
+        candidate = pending.pop(0)
+        key = candidate.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        aliases.append(candidate)
+        variants: list[str] = []
+        ascii_alias = _ascii_fold_alias(candidate)
+        if ascii_alias and ascii_alias.casefold() != key:
+            variants.append(_normalize_whitespace(ascii_alias))
+        if "-" in candidate:
+            variants.append(_normalize_whitespace(candidate.replace("-", " ")))
+        if "." in candidate:
+            variants.append(_normalize_whitespace(candidate.replace(".", "")))
+        stripped = _strip_germany_company_legal_suffix(candidate)
+        if stripped and stripped.casefold() != key:
+            variants.append(stripped)
+        for variant in variants:
+            normalized_variant = _normalize_whitespace(variant)
+            if normalized_variant and normalized_variant.casefold() not in seen:
+                pending.append(normalized_variant)
+    return aliases
+
+
+def _strip_germany_company_legal_suffix(value: str) -> str | None:
+    candidate = _normalize_whitespace(value).rstrip(",")
+    previous = ""
+    while candidate and candidate.casefold() != previous.casefold():
+        previous = candidate
+        for pattern in _GERMANY_COMPANY_LEGAL_SUFFIX_PATTERNS:
+            updated = _normalize_whitespace(pattern.sub("", candidate)).rstrip(",")
+            if updated != candidate:
+                candidate = updated
+                break
+        else:
+            break
+    return candidate or None
 
 
 def _normalize_company_name_for_match(
@@ -3305,6 +6444,7 @@ def _strip_html(value: str) -> str:
     text = re.sub(r"<br\s*/?>", ", ", value, flags=re.IGNORECASE)
     text = re.sub(r"<[^>]+>", " ", text)
     text = text.replace("\xa0", " ")
+    text = html.unescape(text)
     return _normalize_whitespace(text)
 
 
@@ -3318,11 +6458,18 @@ def _looks_like_person_name(value: str) -> bool:
         return False
     if any(len(part) == 1 for part in parts):
         return False
-    return all(re.fullmatch(r"[A-Za-z][A-Za-z.'-]*", part) for part in parts)
+    for part in parts:
+        normalized = part.replace(".", "").replace("'", "").replace("-", "")
+        if not normalized or not normalized[0].isalpha():
+            return False
+        if not all(character.isalpha() for character in normalized):
+            return False
+    return True
 
 
 _COUNTRY_ENTITY_DERIVERS: dict[str, Any] = {
     "au": _derive_australia_asx_entities,
+    "de": _derive_germany_deutsche_boerse_entities,
     "tr": _derive_turkiye_kap_entities,
     "uk": _derive_united_kingdom_fca_companies_house_entities,
     "us": _derive_united_states_sec_entities,

@@ -560,7 +560,7 @@ result = tagger.tag("Org Alpha CEO Person Alpha announced quarterly earnings..."
 
 Given that Docdex already runs locally and you're thinking about MSwarm agents, I'd build two distribution modes:
 
-**Mode 1 — Embedded library** (`pip install ades`) for Docdex and Mcoda integration. 2–4 GB, runs in-process, no HTTP server, domain-filtered KB. This is what Docdex agents call directly.
+**Mode 1 — Embedded library** (`pip install ades-tool`) for Docdex and Mcoda integration. 2–4 GB, runs in-process, no HTTP server, domain-filtered KB. This is what Docdex agents call directly.
 
 **Mode 2 — Local server** (`ades serve`) for MSwarm and BDYA Capital where multiple agents need to share one running instance. 16 GB full download, localhost REST API, persistent SQLite storage.
 

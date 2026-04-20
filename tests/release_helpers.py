@@ -126,7 +126,7 @@ def create_release_project(
     project_root = root.resolve()
     version_path = project_root / "src" / "ades" / "version.py"
     pyproject_path = project_root / "pyproject.toml"
-    npm_package_json_path = project_root / "npm" / "ades-cli" / "package.json"
+    npm_package_json_path = project_root / "npm" / "ades" / "package.json"
     version_path.parent.mkdir(parents=True, exist_ok=True)
     npm_package_json_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -138,7 +138,7 @@ def create_release_project(
         "\n".join(
             [
                 "[project]",
-                'name = "ades"',
+                'name = "ades-tool"',
                 f'version = "{pyproject_version}"',
                 "",
             ]
@@ -148,7 +148,7 @@ def create_release_project(
     npm_package_json_path.write_text(
         json.dumps(
             {
-                "name": "ades-cli",
+                "name": "@bekirdag/ades",
                 "version": npm_version,
                 "bin": {"ades": "bin/ades.cjs"},
             },
@@ -236,7 +236,7 @@ def build_fake_release_runner(
             )
         if len(command) >= 2 and command[:2] == ["npm", "pack"]:
             outdir = Path(command[command.index("--pack-destination") + 1])
-            tarball_name = f"ades-cli-{npm_version}.tgz"
+            tarball_name = f"ades-{npm_version}.tgz"
             tarball_path = outdir / tarball_name
             _write_artifact(tarball_path, b"fake npm tarball")
             payload = json.dumps([{"filename": tarball_name}])

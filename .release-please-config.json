@@ -1,0 +1,15 @@
+{
+  "release-type": "python",
+  "packages": {
+    ".": {
+      "package-name": "ades-tool",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "npm/ades/package.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}

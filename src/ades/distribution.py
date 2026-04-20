@@ -11,7 +11,7 @@ from typing import Any
 from .version import __version__
 
 
-NPM_PACKAGE_NAME = "ades-cli"
+NPM_PACKAGE_NAME = "@bekirdag/ades"
 NPM_COMMAND_NAME = "ades"
 NPM_RUNTIME_DIR_ENV = "ADES_NPM_RUNTIME_DIR"
 NPM_PYTHON_BIN_ENV = "ADES_PYTHON_BIN"
@@ -34,7 +34,7 @@ def build_npm_python_package_spec() -> str:
 def resolve_npm_package_dir() -> Path:
     """Return the source checkout npm wrapper directory."""
 
-    return resolve_project_root() / "npm" / "ades-cli"
+    return resolve_project_root() / "npm" / "ades"
 
 
 def load_npm_package_json(*, package_dir: str | Path | None = None) -> dict[str, Any]:

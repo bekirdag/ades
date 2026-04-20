@@ -10,6 +10,8 @@ import json
 import math
 from pathlib import Path
 import re
+import shutil
+import subprocess
 from typing import Any, Iterable, Iterator
 
 from ..service.models import VectorIndexBuildResponse
@@ -69,10 +71,74 @@ def _add_feature(
 
 
 def _iter_text_lines(path: Path) -> Iterator[str]:
-    opener = gzip.open if path.suffix == ".gz" else open
-    with opener(path, "rt", encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            yield line
+    if path.suffix.casefold() == ".gz":
+        pigz_path = shutil.which("pigz")
+        if pigz_path is not None:
+            process = subprocess.Popen(
+                [
+                    pigz_path,
+                    "-dc",
+                    str(path),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            if process.stdout is None or process.stderr is None:
+                process.kill()
+                raise RuntimeError(f"Unable to stream gzip file with pigz: {path}")
+            try:
+                yield from process.stdout
+            finally:
+                process.stdout.close()
+                stderr_output = process.stderr.read()
+                process.stderr.close()
+                return_code = process.wait()
+                if return_code != 0:
+                    raise RuntimeError(
+                        f"pigz failed while streaming {path}: {stderr_output.strip() or return_code}"
+                    )
+            return
+        rapidgzip_path = shutil.which("rapidgzip")
+        if rapidgzip_path is not None:
+            process = subprocess.Popen(
+                [
+                    rapidgzip_path,
+                    "-d",
+                    "-c",
+                    "-P",
+                    "0",
+                    "--no-verify",
+                    str(path),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            if process.stdout is None or process.stderr is None:
+                process.kill()
+                raise RuntimeError(f"Unable to stream gzip file with rapidgzip: {path}")
+            try:
+                yield from process.stdout
+            finally:
+                process.stdout.close()
+                stderr_output = process.stderr.read()
+                process.stderr.close()
+                return_code = process.wait()
+                if return_code != 0:
+                    raise RuntimeError(
+                        f"rapidgzip failed while streaming {path}: {stderr_output.strip() or return_code}"
+                    )
+            return
+        with gzip.open(path, "rt", encoding="utf-8", errors="replace") as handle:
+            yield from handle
+        return
+    with path.open("r", encoding="utf-8") as handle:
+        yield from handle
 
 
 def _load_bundle_manifest(bundle_dir: Path) -> dict[str, Any]:

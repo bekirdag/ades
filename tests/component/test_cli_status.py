@@ -1,10 +1,12 @@
 import json
 from pathlib import Path
+import sqlite3
 
 from typer.testing import CliRunner
 
 from ades.cli import app
 from ades.storage.registry_db import PackMetadataStore
+from tests.pack_registry_helpers import create_pack_source
 
 
 def test_cli_status_reports_missing_explicit_config(tmp_path: Path) -> None:
@@ -103,4 +105,33 @@ def test_cli_status_reports_production_postgresql_mode(
     assert payload["metadata_persistence_backend"] == "postgresql"
     assert payload["exact_extraction_backend"] == "compiled_matcher"
     assert payload["operator_lookup_backend"] == "postgresql_search"
+    assert payload["installed_packs"] == ["general-en"]
+
+
+def test_cli_status_falls_back_to_filesystem_packs_when_sqlite_repair_is_locked(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner = CliRunner()
+    create_pack_source(tmp_path / "packs", pack_id="general-en", domain="general")
+
+    def locked_sync(
+        self: PackMetadataStore,
+        pack_dir: Path,
+        *,
+        active: bool | None = None,
+    ) -> None:
+        del self, pack_dir, active
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(PackMetadataStore, "sync_pack_from_dir", locked_sync)
+
+    result = runner.invoke(
+        app,
+        ["status"],
+        env={"ADES_STORAGE_ROOT": str(tmp_path)},
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
     assert payload["installed_packs"] == ["general-en"]

@@ -5,8 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import islice
 from typing import Any, Iterable, Iterator
+from uuid import UUID, uuid5
 
 import httpx
+
+_QDRANT_POINT_NAMESPACE = UUID("f18d3d89-1572-4b8f-8b66-a89ce7330705")
 
 
 class QdrantVectorSearchError(RuntimeError):
@@ -76,6 +79,35 @@ def _payload_filter_json(filter_payload: dict[str, object] | None) -> dict[str, 
     if not must:
         return None
     return {"must": must}
+
+
+def _qdrant_point_id(value: str | int | UUID) -> str | int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, UUID):
+        return str(value)
+    normalized = str(value).strip()
+    if normalized == "":
+        raise ValueError("Qdrant point IDs must not be empty.")
+    if normalized.isdigit():
+        return int(normalized)
+    try:
+        return str(UUID(normalized))
+    except ValueError:
+        return str(uuid5(_QDRANT_POINT_NAMESPACE, normalized))
+
+
+def _normalized_qdrant_point(point: dict[str, Any]) -> dict[str, Any]:
+    normalized_point = dict(point)
+    raw_id = normalized_point.get("id")
+    normalized_point["id"] = _qdrant_point_id(raw_id)
+    payload = normalized_point.get("payload")
+    payload_dict = dict(payload) if isinstance(payload, dict) else {}
+    if isinstance(raw_id, str) and raw_id.strip():
+        payload_dict.setdefault("entity_id", raw_id.strip())
+    if payload_dict:
+        normalized_point["payload"] = payload_dict
+    return normalized_point
 
 
 class QdrantVectorSearchClient:
@@ -178,7 +210,7 @@ class QdrantVectorSearchClient:
                 "PUT",
                 f"/collections/{collection_name}/points",
                 params={"wait": "true"},
-                json_body={"points": chunk},
+                json_body={"points": [_normalized_qdrant_point(point) for point in chunk]},
             )
 
     def list_aliases(self) -> dict[str, str]:
@@ -223,7 +255,7 @@ class QdrantVectorSearchClient:
         filter_payload: dict[str, object] | None = None,
     ) -> list[QdrantNearestPoint]:
         request_body: dict[str, Any] = {
-            "query": point_id,
+            "query": _qdrant_point_id(point_id),
             "limit": limit,
             "with_payload": True,
         }
@@ -248,9 +280,16 @@ class QdrantVectorSearchClient:
                 continue
             payload_item = item.get("payload")
             score = item.get("score")
+            resolved_point_id = ""
+            if isinstance(payload_item, dict):
+                entity_id = payload_item.get("entity_id")
+                if isinstance(entity_id, str) and entity_id.strip():
+                    resolved_point_id = entity_id.strip()
+            if not resolved_point_id:
+                resolved_point_id = str(raw_id)
             points.append(
                 QdrantNearestPoint(
-                    point_id=str(raw_id),
+                    point_id=resolved_point_id,
                     score=float(score or 0.0),
                     payload=payload_item if isinstance(payload_item, dict) else {},
                 )

@@ -1,8 +1,16 @@
 {
-  "name": "ades-cli",
+  "name": "@bekirdag/ades",
   "version": "0.1.0",
   "description": "npm wrapper for the Python-based ades local semantic enrichment runtime",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bekirdag/ades.git"
+  },
+  "homepage": "https://github.com/bekirdag/ades#readme",
+  "bugs": {
+    "url": "https://github.com/bekirdag/ades/issues"
+  },
   "bin": {
     "ades": "bin/ades.cjs"
   },
@@ -10,6 +18,9 @@
     "README.md",
     "bin"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   },
