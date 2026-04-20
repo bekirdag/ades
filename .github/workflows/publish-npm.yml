@@ -1,6 +1,9 @@
-name: Publish npm Package (Manual)
+name: Publish npm Package
 
 on:
+  release:
+    types:
+      - published
   workflow_dispatch:
 
 permissions:
@@ -13,6 +16,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -23,7 +28,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "24"
-          registry-url: "https://registry.npmjs.org"
 
       - name: Install release tooling
         run: |
@@ -55,4 +59,4 @@ jobs:
           path: dist/release-validation/
 
       - name: Publish npm package
-        run: npm publish "${{ steps.validate.outputs.tarball_path }}"
+        run: npm publish --provenance "${{ steps.validate.outputs.tarball_path }}"
