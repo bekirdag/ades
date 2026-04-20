@@ -13,6 +13,7 @@ from .version import __version__
 
 NPM_PACKAGE_NAME = "@bekirdag/ades"
 NPM_COMMAND_NAME = "ades"
+PYTHON_DISTRIBUTION_NAME = "ades-tool"
 NPM_RUNTIME_DIR_ENV = "ADES_NPM_RUNTIME_DIR"
 NPM_PYTHON_BIN_ENV = "ADES_PYTHON_BIN"
 NPM_PYTHON_PACKAGE_SPEC_ENV = "ADES_PYTHON_PACKAGE_SPEC"
@@ -28,7 +29,7 @@ def resolve_project_root() -> Path:
 def build_npm_python_package_spec() -> str:
     """Return the default Python package spec used by the npm wrapper."""
 
-    return f"ades=={__version__}"
+    return f"{PYTHON_DISTRIBUTION_NAME}=={__version__}"
 
 
 def resolve_npm_package_dir() -> Path:

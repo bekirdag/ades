@@ -1,3 +1,5 @@
+from importlib.metadata import version as installed_version
+
 from ades import __version__
 from ades.packs.installer import PackInstaller
 from ades.packs.registry import load_registry_index
@@ -5,7 +7,8 @@ from ades.storage.paths import build_storage_layout
 
 
 def test_version_is_set() -> None:
-    assert __version__ == "0.1.0"
+    assert __version__
+    assert installed_version("ades-tool") == __version__
 
 
 def test_storage_layout_uses_expected_folders(tmp_path) -> None:

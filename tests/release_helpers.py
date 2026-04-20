@@ -222,8 +222,8 @@ def build_fake_release_runner(
             )
         if len(command) >= 3 and command[1:3] == ["-m", "build"]:
             outdir = Path(command[command.index("--outdir") + 1])
-            wheel_path = outdir / f"ades-{python_version}-py3-none-any.whl"
-            sdist_path = outdir / f"ades-{python_version}.tar.gz"
+            wheel_path = outdir / f"ades_tool-{python_version}-py3-none-any.whl"
+            sdist_path = outdir / f"ades_tool-{python_version}.tar.gz"
             _write_artifact(wheel_path, b"fake wheel artifact")
             _write_artifact(sdist_path, b"fake sdist artifact")
             return subprocess.CompletedProcess(command, 0, stdout="built", stderr="")

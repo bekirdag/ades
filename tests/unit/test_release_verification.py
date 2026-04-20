@@ -1314,16 +1314,19 @@ def test_verify_release_artifacts_reports_serve_smoke_failures(
                     command=["GET", "http://127.0.0.1:8734/healthz"],
                     exit_code=0,
                     passed=True,
-                    stdout='{"status":"ok","version":"0.1.0"}',
+                    stdout=json.dumps({"status": "ok", "version": __version__}),
                     stderr="",
                 ),
                 ReleaseCommandResult(
                     command=["GET", "http://127.0.0.1:8734/v0/status"],
                     exit_code=0,
                     passed=True,
-                    stdout=(
-                        '{"service":"ades","version":"0.1.0","installed_packs":'
-                        '["general-en","finance-en"]}'
+                    stdout=json.dumps(
+                        {
+                            "service": "ades",
+                            "version": __version__,
+                            "installed_packs": ["general-en", "finance-en"],
+                        }
                     ),
                     stderr="",
                 ),
@@ -4264,17 +4267,17 @@ def test_parse_status_version_accepts_wrapper_logs_before_json() -> None:
         exit_code=0,
         passed=True,
         stdout=(
-            "Collecting ades==0.1.0\n"
-            "Successfully installed ades-0.1.0\n"
+            f"Collecting ades-tool=={__version__}\n"
+            f"Successfully installed ades-tool-{__version__}\n"
             "{\n"
             '  "service": "ades",\n'
-            '  "version": "0.1.0"\n'
+            f'  "version": "{__version__}"\n'
             "}\n"
         ),
         stderr="",
     )
 
-    assert _parse_status_version(result) == "0.1.0"
+    assert _parse_status_version(result) == __version__
 
 
 def test_write_release_manifest_can_sync_then_persist_manifest(

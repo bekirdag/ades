@@ -12,6 +12,7 @@ const packageJson = JSON.parse(
 const NPM_PACKAGE_NAME = packageJson.name;
 const WRAPPER_VERSION = packageJson.version;
 const COMMAND_NAME = "ades";
+const PYTHON_DISTRIBUTION_NAME = "ades-tool";
 const RUNTIME_DIR_ENV = "ADES_NPM_RUNTIME_DIR";
 const PYTHON_BIN_ENV = "ADES_PYTHON_BIN";
 const PACKAGE_SPEC_ENV = "ADES_PYTHON_PACKAGE_SPEC";
@@ -55,7 +56,10 @@ function buildBootstrapInfo(runtimeDir) {
 }
 
 function resolvePythonPackageSpec() {
-  return process.env[PACKAGE_SPEC_ENV] || `ades==${WRAPPER_VERSION}`;
+  return (
+    process.env[PACKAGE_SPEC_ENV] ||
+    `${PYTHON_DISTRIBUTION_NAME}==${WRAPPER_VERSION}`
+  );
 }
 
 function resolveRuntimeDir() {

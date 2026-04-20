@@ -23,6 +23,7 @@ from .distribution import (
     NPM_PACKAGE_NAME,
     NPM_PYTHON_BIN_ENV,
     NPM_PYTHON_PACKAGE_SPEC_ENV,
+    PYTHON_DISTRIBUTION_NAME,
     NPM_RUNTIME_DIR_ENV,
     load_npm_package_json,
     resolve_npm_package_dir,
@@ -43,7 +44,6 @@ from .service.models import (
 )
 
 
-PYTHON_PACKAGE_NAME = "ades"
 PYTHON_BUILD_COMMAND = [sys.executable, "-m", "build", "--wheel", "--sdist"]
 NPM_PACK_COMMAND = ["npm", "pack", "--json"]
 PYTHON_PUBLISH_COMMAND = [sys.executable, "-m", "twine", "upload", "--non-interactive"]
@@ -339,6 +339,12 @@ def _replace_pyproject_version(text: str, version: str) -> str:
     if count != 1:
         raise ValueError("Could not update project.version in pyproject.toml.")
     return updated
+
+
+def _python_distribution_artifact_prefix() -> str:
+    """Return the normalized filename prefix used by built Python artifacts."""
+
+    return re.sub(r"[-_.]+", "_", PYTHON_DISTRIBUTION_NAME).lower()
 
 
 def _ensure_project_layout(project_root: Path, npm_package_dir: Path) -> None:
@@ -1670,12 +1676,12 @@ def _build_python_artifacts(
     _raise_on_failure(result, command=command, cwd=project_root)
     wheel = _resolve_single_artifact(
         directory=output_dir,
-        prefix=f"{PYTHON_PACKAGE_NAME}-{version_state.pyproject_version}",
+        prefix=f"{_python_distribution_artifact_prefix()}-{version_state.pyproject_version}",
         suffixes=(".whl",),
     )
     sdist = _resolve_single_artifact(
         directory=output_dir,
-        prefix=f"{PYTHON_PACKAGE_NAME}-{version_state.pyproject_version}",
+        prefix=f"{_python_distribution_artifact_prefix()}-{version_state.pyproject_version}",
         suffixes=(".tar.gz", ".zip"),
     )
     return wheel, sdist
@@ -3625,7 +3631,7 @@ def verify_release_artifacts(
     return ReleaseVerificationResponse(
         project_root=str(resolved_project_root),
         output_dir=str(resolved_output_dir),
-        python_package=PYTHON_PACKAGE_NAME,
+        python_package=PYTHON_DISTRIBUTION_NAME,
         python_version=version_state.version_file_version,
         npm_package=NPM_PACKAGE_NAME,
         npm_version=version_state.npm_version,
