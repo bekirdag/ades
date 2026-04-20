@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.2...ades-tool-v0.2.3) (2026-04-20)
+
+
+### Bug Fixes
+
+* publish npm from dedicated workflow ([ba57337](https://github.com/bekirdag/ades/commit/ba57337a0031a4466aa851b67e24eb640035e566))
+
 ## [0.2.2](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.1...ades-tool-v0.2.2) (2026-04-20)
 
 
