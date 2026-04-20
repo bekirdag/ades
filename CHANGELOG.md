@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.1...ades-tool-v0.2.2) (2026-04-20)
+
+
+### Bug Fixes
+
+* make release validation artifact staging idempotent ([e58eab7](https://github.com/bekirdag/ades/commit/e58eab77d4f8b78abe61eee9e0fd9ac4b2d813c5))
+
 ## [0.2.1](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.0...ades-tool-v0.2.1) (2026-04-20)
 
 
