@@ -117,6 +117,13 @@ jobs:
           import shutil
           from pathlib import Path
 
+          def stage_artifact(source_path: str, destination_dir: Path) -> Path:
+              source = Path(source_path)
+              destination = destination_dir / source.name
+              if source.resolve() != destination.resolve():
+                  shutil.copy2(source, destination)
+              return destination
+
           payload = json.loads(Path("dist/release-validation/validation.json").read_text())
           manifest_path = payload["manifest_path"]
           wheel_path = payload["manifest"]["verification"]["wheel"]["path"]
@@ -124,12 +131,9 @@ jobs:
           tarball_path = payload["manifest"]["verification"]["npm_tarball"]["path"]
           python_dir = Path("dist/release-validation/python")
           npm_dir = Path("dist/release-validation/npm")
-          copied_wheel_path = python_dir / Path(wheel_path).name
-          copied_sdist_path = python_dir / Path(sdist_path).name
-          copied_tarball_path = npm_dir / Path(tarball_path).name
-          shutil.copy2(wheel_path, copied_wheel_path)
-          shutil.copy2(sdist_path, copied_sdist_path)
-          shutil.copy2(tarball_path, copied_tarball_path)
+          copied_wheel_path = stage_artifact(wheel_path, python_dir)
+          copied_sdist_path = stage_artifact(sdist_path, python_dir)
+          copied_tarball_path = stage_artifact(tarball_path, npm_dir)
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
               fh.write(f"manifest_path={manifest_path}\n")
               fh.write(f"wheel_path={copied_wheel_path}\n")
