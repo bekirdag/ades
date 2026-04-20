@@ -1,0 +1,16 @@
+# Changelog
+
+## [0.2.0](https://github.com/bekirdag/ades/compare/ades-tool-v0.1.0...ades-tool-v0.2.0) (2026-04-20)
+
+
+### Features
+
+* add graph-backed pack tooling and automated releases ([98c2b9d](https://github.com/bekirdag/ades/commit/98c2b9dc79b7a31ce979f45cfa5a92cf04c0af6f))
+* add hosted vector qid graph refinement ([9def043](https://github.com/bekirdag/ades/commit/9def0430be14570bfc43432d246f27041dd37157))
+
+
+### Bug Fixes
+
+* restore green main for production deploy ([0558592](https://github.com/bekirdag/ades/commit/0558592f5a03bbe47a6440db976630ea931dbce0))
+* restore pack runtime cache helper ([b290b2d](https://github.com/bekirdag/ades/commit/b290b2d6a013f4dfc71bb86c9a59413277a86b03))
+* stabilize colored cli help assertions ([edcd246](https://github.com/bekirdag/ades/commit/edcd246d3eccdf892cc47b88572fbf82e1aeb117))
