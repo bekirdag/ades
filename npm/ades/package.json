@@ -1,6 +1,6 @@
 {
   "name": "@bekirdag/ades",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "npm wrapper for the Python-based ades local semantic enrichment runtime",
   "license": "MIT",
   "repository": {
