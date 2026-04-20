@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.0...ades-tool-v0.2.1) (2026-04-20)
+
+
+### Bug Fixes
+
+* repair release validation after package rename ([0ec94f1](https://github.com/bekirdag/ades/commit/0ec94f1e210122552561a637f29f57f66db81a9f))
+* update deploy workflow wheel glob ([f7bb6f0](https://github.com/bekirdag/ades/commit/f7bb6f0abeb847d3fc1ba788636a0a05cb962e68))
+
 ## [0.2.0](https://github.com/bekirdag/ades/compare/ades-tool-v0.1.0...ades-tool-v0.2.0) (2026-04-20)
 
 
