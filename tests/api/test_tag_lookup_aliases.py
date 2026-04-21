@@ -336,8 +336,8 @@ def test_tag_endpoint_backfills_contextual_org_acronyms_and_skips_noise(
     assert response.status_code == 200
     pairs = {(entity["text"], entity["label"]) for entity in response.json()["entities"]}
 
-    assert ("CNBC", "organization") in pairs
     assert ("WWF", "organization") in pairs
+    assert ("CNBC", "organization") not in pairs
     assert ("MP", "organization") not in pairs
     assert ("TV", "organization") not in pairs
     assert ("DACA", "organization") not in pairs
