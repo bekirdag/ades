@@ -12,6 +12,8 @@ import tarfile
 from pathlib import Path
 from uuid import uuid4
 
+import httpx
+
 from .fetch import normalize_source_url, read_bytes, read_text
 from .general_structure import evaluate_general_pack_structure
 from .manifest import PackManifest, RegistryIndex, RegistryPack
@@ -51,6 +53,7 @@ class PackInstaller:
         )
         self.registry_url = normalize_source_url(registry_url or default_registry_url())
         self._index: RegistryIndex | None = None
+        self._fallback_index: RegistryIndex | None = None
 
     def install(self, pack_id: str) -> InstallResult:
         """Install a pack and its dependencies into local storage."""
@@ -85,7 +88,7 @@ class PackInstaller:
 
         visiting.add(pack_id)
         try:
-            manifest = self._load_manifest(entry.manifest_url)
+            manifest = self._load_manifest_with_fallback(pack_id, entry.manifest_url)
             for dependency in manifest.dependencies:
                 self._install_recursive(dependency, result=result, visiting=visiting)
 
@@ -122,6 +125,27 @@ class PackInstaller:
     def _load_manifest(self, manifest_url: str) -> PackManifest:
         data = json.loads(read_text(manifest_url))
         return PackManifest.from_dict(data, base_url=manifest_url)
+
+    def _load_manifest_with_fallback(self, pack_id: str, manifest_url: str) -> PackManifest:
+        try:
+            return self._load_manifest(manifest_url)
+        except (FileNotFoundError, ValueError, httpx.HTTPError):
+            fallback_entry = self._load_fallback_index().get(pack_id)
+            if fallback_entry is None:
+                raise
+            return self._load_manifest(fallback_entry.manifest_url)
+
+    def _load_fallback_index(self) -> RegistryIndex:
+        fallback_registry_url = normalize_source_url(default_registry_url())
+        if fallback_registry_url == self.registry_url:
+            return RegistryIndex(schema_version=1, generated_at="", packs={})
+        if self._fallback_index is None:
+            data = json.loads(read_text(fallback_registry_url))
+            self._fallback_index = RegistryIndex.from_dict(
+                data,
+                base_url=fallback_registry_url,
+            )
+        return self._fallback_index
 
     def _install_manifest(self, manifest: PackManifest) -> None:
         artifact = self._choose_artifact(manifest)
