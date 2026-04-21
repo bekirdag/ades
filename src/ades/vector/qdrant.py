@@ -15,6 +15,10 @@ _QDRANT_POINT_NAMESPACE = UUID("f18d3d89-1572-4b8f-8b66-a89ce7330705")
 class QdrantVectorSearchError(RuntimeError):
     """Raised when one Qdrant request fails."""
 
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 @dataclass(frozen=True)
 class QdrantNearestPoint:
@@ -156,7 +160,8 @@ class QdrantVectorSearchClient:
             if not detail:
                 detail = response.text.strip() or str(exc)
             raise QdrantVectorSearchError(
-                f"Qdrant request failed ({response.status_code}): {detail}"
+                f"Qdrant request failed ({response.status_code}): {detail}",
+                status_code=response.status_code,
             ) from exc
 
     def _request(

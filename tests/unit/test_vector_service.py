@@ -2,6 +2,7 @@ from ades.config import Settings
 from ades.service.models import EntityLink, EntityMatch, TagResponse
 from ades.storage.backend import MetadataBackend, RuntimeTarget
 from ades.vector import service as vector_service
+from ades.vector.qdrant import QdrantVectorSearchError
 
 
 def _response_with_linked_entities() -> TagResponse:
@@ -233,3 +234,73 @@ def test_enrich_tag_response_with_related_entities_warns_when_disabled() -> None
     assert enriched.related_entities == []
     assert enriched.graph_support is not None
     assert enriched.graph_support.warnings == ["vector_search_disabled"]
+
+
+def test_enrich_tag_response_with_related_entities_skips_missing_seed_points(
+    monkeypatch,
+) -> None:
+    response = _response_with_linked_entities()
+    settings = Settings(
+        runtime_target=RuntimeTarget.PRODUCTION_SERVER,
+        metadata_backend=MetadataBackend.POSTGRESQL,
+        database_url="postgresql://local/test",
+        vector_search_enabled=True,
+        vector_search_url="http://qdrant.local:6333",
+        vector_search_related_limit=3,
+        vector_search_collection_alias="ades-qids-current",
+    )
+
+    class _FakeClient:
+        def __init__(self, base_url: str, *, api_key: str | None = None) -> None:
+            assert base_url == "http://qdrant.local:6333"
+            assert api_key is None
+
+        def __enter__(self) -> "_FakeClient":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def query_similar_by_id(
+            self,
+            collection_name: str,
+            *,
+            point_id: str,
+            limit: int,
+            filter_payload=None,
+        ):
+            assert collection_name == "ades-qids-current"
+            assert filter_payload == {"packs": ["general-en"]}
+            if point_id == "wikidata:Q1":
+                return [
+                    vector_service.QdrantNearestPoint("wikidata:Q1", 1.0, {}),
+                    vector_service.QdrantNearestPoint(
+                        "wikidata:Q9",
+                        0.82,
+                        {
+                            "canonical_text": "Sam Altman",
+                            "entity_type": "person",
+                            "packs": ["general-en"],
+                            "source_name": "wikidata-general-entities",
+                        },
+                    ),
+                ]
+            raise QdrantVectorSearchError(
+                "Qdrant request failed (404): {'error': 'Not found: No point with id missing found'}",
+                status_code=404,
+            )
+
+    monkeypatch.setattr(vector_service, "QdrantVectorSearchClient", _FakeClient)
+
+    enriched = vector_service.enrich_tag_response_with_related_entities(
+        response,
+        settings=settings,
+        include_related_entities=True,
+        include_graph_support=True,
+    )
+
+    assert enriched.graph_support is not None
+    assert enriched.graph_support.applied is True
+    assert enriched.graph_support.seed_entity_ids == ["wikidata:Q1", "wikidata:Q2"]
+    assert enriched.graph_support.warnings == ["vector_search_seed_missing:wikidata:Q2"]
+    assert [item.entity_id for item in enriched.related_entities] == ["wikidata:Q9"]

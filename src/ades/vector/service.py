@@ -332,14 +332,25 @@ def enrich_tag_response_with_related_entities(
             api_key=settings.vector_search_api_key,
         ) as client:
             for seed_entity_id in seed_entity_ids:
-                results_by_seed[seed_entity_id] = client.query_similar_by_id(
-                    settings.vector_search_collection_alias,
-                    point_id=seed_entity_id,
-                    limit=query_limit,
-                    filter_payload=filter_payload,
-                )
+                try:
+                    results_by_seed[seed_entity_id] = client.query_similar_by_id(
+                        settings.vector_search_collection_alias,
+                        point_id=seed_entity_id,
+                        limit=query_limit,
+                        filter_payload=filter_payload,
+                    )
+                except QdrantVectorSearchError as exc:
+                    if exc.status_code == 404:
+                        graph_support.warnings.append(
+                            f"vector_search_seed_missing:{seed_entity_id}"
+                        )
+                        continue
+                    raise
     except QdrantVectorSearchError as exc:
         graph_support.warnings.append(f"vector_search_failed:{exc}")
+        return response.model_copy(update={"graph_support": graph_support})
+    if not results_by_seed:
+        graph_support.warnings.append("vector_search_no_available_seed_points")
         return response.model_copy(update={"graph_support": graph_support})
 
     related_entities = (

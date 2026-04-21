@@ -1,3 +1,5 @@
+import httpx
+
 from ades.vector.qdrant import QdrantVectorSearchClient, _qdrant_point_id
 
 
@@ -118,3 +120,23 @@ def test_query_similar_by_id_prefers_payload_entity_id() -> None:
         "entity_id": "wikidata:Q1",
         "canonical_text": "Anthropic",
     }
+
+
+def test_raise_for_status_preserves_http_status_code() -> None:
+    client = object.__new__(QdrantVectorSearchClient)
+    request = httpx.Request("POST", "http://qdrant.local/collections/test/points/query")
+    response = httpx.Response(
+        404,
+        request=request,
+        json={"error": "Not found: No point with id missing found"},
+    )
+
+    try:
+        client._raise_for_status(response)
+    except Exception as exc:
+        assert str(exc) == (
+            'Qdrant request failed (404): {"error":"Not found: No point with id missing found"}'
+        )
+        assert getattr(exc, "status_code", None) == 404
+    else:  # pragma: no cover - defensive check for the explicit failure path
+        raise AssertionError("Expected QdrantVectorSearchError to be raised.")
