@@ -1085,6 +1085,7 @@ def _extract_hyphenated_lookup_alias_entities_with_matchers(
         return extracted
     matcher_entry_cache: dict[tuple[str, str], tuple[MatcherEntryPayload, ...]] = {}
     for matcher in runtime.matchers:
+        matcher_domain = getattr(matcher, "source_domain", "") or runtime.domain
         compiled_matcher = load_runtime_matcher(
             matcher.artifact_path,
             matcher.entries_path,
@@ -1102,7 +1103,7 @@ def _extract_hyphenated_lookup_alias_entities_with_matchers(
                 _build_lookup_alias_entities_from_matcher_entries(
                     entries=list(entry_payloads),
                     pack_id=matcher.pack_id,
-                    runtime_domain=runtime.domain,
+                    matcher_domain=matcher_domain,
                     segment_text_value=segment_text_value,
                     matched_text=segment_text_value[start:end],
                     start=start,
@@ -1126,6 +1127,7 @@ def _extract_lookup_alias_entities_with_matchers(
     extracted: list[ExtractedCandidate] = []
     token_starts, token_ends = _build_token_boundary_maps(segment_text_value)
     for matcher in runtime.matchers:
+        matcher_domain = getattr(matcher, "source_domain", "") or runtime.domain
         compiled_matcher = load_runtime_matcher(
             matcher.artifact_path,
             matcher.entries_path,
@@ -1146,7 +1148,7 @@ def _extract_lookup_alias_entities_with_matchers(
                     _build_lookup_alias_entities_from_matcher_entries(
                         entries=entry_payloads,
                         pack_id=matcher.pack_id,
-                        runtime_domain=runtime.domain,
+                        matcher_domain=matcher_domain,
                         segment_text_value=segment_text_value,
                         matched_text=candidate_text,
                         start=start,
@@ -1212,7 +1214,7 @@ def _build_lookup_alias_entities_from_matcher_entries(
     *,
     entries: list[MatcherEntryPayload],
     pack_id: str,
-    runtime_domain: str,
+    matcher_domain: str,
     segment_text_value: str,
     matched_text: str,
     start: int,
@@ -1222,7 +1224,7 @@ def _build_lookup_alias_entities_from_matcher_entries(
 ) -> list[ExtractedCandidate]:
     extracted: list[ExtractedCandidate] = []
     for entry in entries:
-        entry_domain = entry.source_domain or runtime_domain
+        entry_domain = entry.source_domain or matcher_domain
         if _should_skip_single_token_lookup_candidate(
             matched_text=matched_text,
             candidate_value=entry.text,

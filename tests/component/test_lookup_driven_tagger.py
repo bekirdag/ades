@@ -334,6 +334,26 @@ def test_tagger_resolves_hyphenated_matcher_entries_without_registry_exact_looku
     assert ("North Harbor", "location") in pairs
 
 
+def test_dependency_matcher_entries_keep_their_source_domain(tmp_path: Path) -> None:
+    PackInstaller(tmp_path).install("finance-en")
+
+    response = tag_text(
+        text="Org Beta said TICKA traded on EXCHX after USD 12.5 guidance.",
+        pack="finance-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+        debug=True,
+    )
+
+    organization = next(
+        item for item in response.entities if item.text == "Org Beta" and item.label == "organization"
+    )
+
+    assert organization.provenance is not None
+    assert organization.provenance.source_pack == "general-en"
+    assert organization.provenance.source_domain == "general"
+
+
 def test_tagger_uses_pre_resolved_general_pack_aliases(tmp_path: Path) -> None:
     bundle_dir = create_pre_resolved_general_generation_bundle(tmp_path / "bundle")
     generated = generate_pack_source(
