@@ -159,8 +159,8 @@ This file records the implementation progress of `ades` as the project moves tow
 
 ### 22. npm wrapper and local install bootstrap flow
 
-- Added the `npm/ades-cli` wrapper package so the Node distribution target now exists as a real installable npm surface instead of documentation only.
-- Implemented first-run bootstrap logic in the npm bin wrapper so `ades-cli` creates a user-local Python virtual environment, installs the matching `ades` Python package, writes a runtime marker, and then delegates all CLI arguments to the Python `ades` command.
+- Added the `npm/ades` wrapper package so the Node distribution target now exists as a real installable npm surface instead of documentation only.
+- Implemented first-run bootstrap logic in the npm bin wrapper so `ades` creates a user-local Python virtual environment, installs the matching `ades` Python package, writes a runtime marker, and then delegates all CLI arguments to the Python `ades` command.
 - Added canonical npm-bootstrap metadata on the Python side plus a local service endpoint so the npm package, public API, docs, and local service all agree on package name, version, runtime directory defaults, and bootstrap environment variables.
 - Kept the local tool Python-first by making the npm package a thin launcher around the Python runtime rather than re-implementing the pipeline in Node.
 
@@ -173,7 +173,7 @@ This file records the implementation progress of `ades` as the project moves tow
 
 ### 24. Coordinated release version synchronization and release-manifest generation
 
-- Added coordinated release version inspection so the local tool can report whether `src/ades/version.py`, `pyproject.toml`, and `npm/ades-cli/package.json` are still synchronized before a publication step.
+- Added coordinated release version inspection so the local tool can report whether `src/ades/version.py`, `pyproject.toml`, and `npm/ades/package.json` are still synchronized before a publication step.
 - Added coordinated release version synchronization so one command can update the Python runtime version file, the Python package version, and the npm wrapper version together.
 - Added persisted release-manifest generation so a local release build now writes one stable JSON artifact that captures the coordinated version state, optional sync response, and the verified wheel/sdist/npm tarball metadata.
 - Exposed the coordinated release workflow consistently through the public Python API, the CLI commands `ades release versions`, `ades release sync-version`, and `ades release manifest`, plus matching local HTTP endpoints.
@@ -520,7 +520,7 @@ This file records the implementation progress of `ades` as the project moves tow
 - `ades release validate --output-dir <dir>`
 - `ades release publish --manifest-path <path>`
 - `ades status`
-- `npm install -g ades-cli`
+- `npm install -g ades`
 - `ades tag <text>`
 - `ades tag --file <path>`
 - `ades tag-files <path...>`

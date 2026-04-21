@@ -157,8 +157,8 @@ Target release: `v0.1.0`
    - `ades status`
 
 7. Distribution
-   - `pip install ades`
-   - `npm install -g ades-cli`
+   - `pip install ades-tool`
+   - `npm install -g ades`
    - release flow for pack manifests and pack artifacts
 
 8. Integrations
