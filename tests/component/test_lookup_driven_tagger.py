@@ -549,8 +549,8 @@ def test_tagger_backfills_contextual_org_acronyms_and_skips_noise(tmp_path: Path
 
     pairs = {(entity.text, entity.label) for entity in response.entities}
 
-    assert ("CNBC", "organization") in pairs
     assert ("WWF", "organization") in pairs
+    assert ("CNBC", "organization") not in pairs
     assert ("MP", "organization") not in pairs
     assert ("TV", "organization") not in pairs
     assert ("DACA", "organization") not in pairs

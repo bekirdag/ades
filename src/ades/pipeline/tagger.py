@@ -217,7 +217,16 @@ _RUNTIME_GENERIC_SINGLE_TOKEN_ALIAS_TEXTS = {
     "taurasi",
     "unknown",
 }
-_RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS = {"ct", "not", "uk", "us"}
+_RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS = {"ct", "not", "pm", "uk", "us"}
+_RUNTIME_ATTRIBUTION_CONTEXTUAL_ORG_ACRONYM_FOLLOWING_TOKENS = {
+    "news",
+    "programme",
+    "program",
+    "radio",
+    "sport",
+    "that",
+    "tv",
+}
 _RUNTIME_GENERIC_PHRASE_ALIAS_TEXTS = {
     "central command",
     "cut off",
@@ -3894,7 +3903,32 @@ def _is_runtime_generic_single_token_alias(candidate: ExtractedCandidate) -> boo
     return any(value in blocklist for value in normalized_values)
 
 
-def _is_runtime_contextual_org_acronym_noise(candidate: ExtractedCandidate) -> bool:
+def _looks_like_reporting_attribution_contextual_org_acronym(
+    candidate: ExtractedCandidate,
+    *,
+    text: str,
+) -> bool:
+    if _single_token_occurrence_count(text, candidate.entity.text) != 1:
+        return False
+    previous_tokens = _previous_normalized_tokens(text, candidate.entity.start, limit=4)
+    if not previous_tokens:
+        return False
+    reporting_context = previous_tokens[-1] in _CONTEXTUAL_ORG_ACRONYM_REPORTING_CUES or (
+        len(previous_tokens) >= 2
+        and previous_tokens[-1] in {"a", "an", "the"}
+        and previous_tokens[-2] in _CONTEXTUAL_ORG_ACRONYM_REPORTING_CUES
+    )
+    if not reporting_context:
+        return False
+    next_token = normalize_lookup_text(_next_token(text, candidate.entity.end).rstrip(".,;:!?)]}”’\\\"'"))
+    return next_token in _RUNTIME_ATTRIBUTION_CONTEXTUAL_ORG_ACRONYM_FOLLOWING_TOKENS
+
+
+def _is_runtime_contextual_org_acronym_noise(
+    candidate: ExtractedCandidate,
+    *,
+    text: str | None = None,
+) -> bool:
     provenance = candidate.entity.provenance
     if provenance is None or provenance.source_pack != "general-en":
         return False
@@ -3904,10 +3938,12 @@ def _is_runtime_contextual_org_acronym_noise(candidate: ExtractedCandidate) -> b
         return False
     if not _is_single_token_all_caps(candidate.entity.text):
         return False
-    return any(
-        value in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS
-        for value in _runtime_normalized_alias_values(candidate)
-    )
+    normalized_values = _runtime_normalized_alias_values(candidate)
+    if any(value in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS for value in normalized_values):
+        return True
+    if text is None:
+        return False
+    return _looks_like_reporting_attribution_contextual_org_acronym(candidate, text=text)
 
 
 def _is_runtime_generic_phrase_fragment_alias(candidate: ExtractedCandidate) -> bool:
@@ -4061,7 +4097,7 @@ def _runtime_general_en_discard_reason(
 ) -> str | None:
     if _is_runtime_generic_duration_alias(candidate):
         return "runtime_generic_duration_alias"
-    if _is_runtime_contextual_org_acronym_noise(candidate):
+    if _is_runtime_contextual_org_acronym_noise(candidate, text=text):
         return "runtime_contextual_org_acronym_noise"
     if _is_runtime_possessive_alias_artifact(candidate):
         return "runtime_possessive_alias_artifact"

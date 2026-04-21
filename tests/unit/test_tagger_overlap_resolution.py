@@ -620,6 +620,71 @@ def test_runtime_contextual_org_acronym_noise_is_dropped() -> None:
     assert _is_runtime_contextual_org_acronym_noise(candidate) is True
 
 
+def test_runtime_contextual_org_title_acronym_noise_is_dropped() -> None:
+    candidate = _candidate(
+        text="PM",
+        label="organization",
+        start=4,
+        end=6,
+        relevance=0.61,
+        lane="contextual_org_acronym_backfill",
+        canonical_text="PM",
+        entity_id=None,
+        match_path="heuristic.contextual_acronym",
+        source_pack="general-en",
+    )
+
+    assert _is_runtime_contextual_org_acronym_noise(candidate) is True
+
+
+def test_runtime_reporting_attribution_contextual_org_acronym_noise_is_dropped() -> None:
+    text = "She told BBC Radio 4 that the programme was unfair."
+    candidate = _candidate(
+        text="BBC",
+        label="organization",
+        start=text.index("BBC"),
+        end=text.index("BBC") + len("BBC"),
+        relevance=0.61,
+        lane="contextual_org_acronym_backfill",
+        canonical_text="BBC",
+        entity_id=None,
+        match_path="heuristic.contextual_acronym",
+        source_pack="general-en",
+    )
+
+    assert (
+        _is_runtime_contextual_org_acronym_noise(
+            candidate,
+            text=text,
+        )
+        is True
+    )
+
+
+def test_runtime_reporting_attribution_contextual_org_acronym_noise_is_dropped_for_that_clause() -> None:
+    text = "He told CNBC that the market reaction was immediate."
+    candidate = _candidate(
+        text="CNBC",
+        label="organization",
+        start=text.index("CNBC"),
+        end=text.index("CNBC") + len("CNBC"),
+        relevance=0.61,
+        lane="contextual_org_acronym_backfill",
+        canonical_text="CNBC",
+        entity_id=None,
+        match_path="heuristic.contextual_acronym",
+        source_pack="general-en",
+    )
+
+    assert (
+        _is_runtime_contextual_org_acronym_noise(
+            candidate,
+            text=text,
+        )
+        is True
+    )
+
+
 def test_runtime_generic_phrase_fragment_alias_is_dropped() -> None:
     candidate = _candidate(
         text="More than",
