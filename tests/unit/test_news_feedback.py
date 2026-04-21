@@ -16,10 +16,10 @@ from ades.news_feedback import (
     LiveNewsEntity,
     LiveNewsFeedItem,
     LiveNewsFeedSpec,
-    LiveNewsFeedbackReport,
     LiveNewsFixSuggestion,
     LiveNewsIssue,
     _detect_news_feedback_issues,
+    _extract_article_text,
     _download_historical_huggingface_rows_snapshot,
     _filter_historical_records_for_pack,
     _filter_recent_feed_items,
@@ -46,6 +46,53 @@ from ades.news_feedback import (
 )
 from ades.service.models import EntityMatch, TagResponse
 from ades.storage.backend import MetadataBackend, RuntimeTarget
+
+
+def test_extract_article_text_prefers_clean_paragraphs_over_noisy_json_ld() -> None:
+    clean_paragraph = (
+        "Ministers said the policy change would affect manufacturers, exporters, and trade groups "
+        "across Europe while investors watched currency markets, commodity prices, and bond yields "
+        "for signs that the reaction would broaden into a wider economic dispute."
+    )
+    second_paragraph = (
+        "Officials in Brussels, Berlin, and Paris said exporters were already rewriting contracts, "
+        "rescheduling shipments, and warning customers that tariff uncertainty could hit factory "
+        "orders, consumer prices, and quarterly earnings over the coming months."
+    )
+    third_paragraph = (
+        "Analysts added that energy traders, shipping companies, and commercial banks were also "
+        "tracking the dispute because swings in oil, freight, and credit costs could spill into "
+        "broader inflation forecasts and central-bank expectations."
+    )
+    html = f"""
+    <html>
+      <head>
+        <script type="application/ld+json">
+          {{
+            "articleBody": "{clean_paragraph} {clean_paragraph} I would like to be emailed about offers, events and updates. Read more: unrelated teaser headline."
+          }}
+        </script>
+      </head>
+      <body>
+        <article>
+          <p>{clean_paragraph}</p>
+          <p>{second_paragraph}</p>
+          <p>{third_paragraph}</p>
+          <p>I would like to be emailed about offers, events and updates.</p>
+          <p>Read more: unrelated teaser headline.</p>
+        </article>
+      </body>
+    </html>
+    """
+
+    text_source, article_text = _extract_article_text(html)
+
+    assert text_source == "paragraphs"
+    assert "emailed about offers" not in article_text.casefold()
+    assert "unrelated teaser headline" not in article_text.casefold()
+    assert "Ministers said the policy change" in article_text
+    assert "Officials in Brussels" in article_text
+    assert "Analysts added that energy traders" in article_text
 
 
 def test_detect_live_news_feedback_issues_flags_generic_missing_and_partial_spans() -> None:
@@ -1874,7 +1921,6 @@ def test_run_historical_news_digestion_clusters_consumes_disk_records_and_writes
 
     def fake_tag_article_text(text, *, pack_id, storage_root, registry):
         del pack_id, storage_root, registry
-        candidate = "US" if "United States" in text else "EU"
         return TagResponse(
             version="0.1.0",
             pack="general-en",

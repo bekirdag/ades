@@ -38,6 +38,7 @@ class VectorGoldenCase:
     expected_related_entity_ids: tuple[str, ...] = ()
     expected_boosted_entity_ids: tuple[str, ...] = ()
     expected_downgraded_entity_ids: tuple[str, ...] = ()
+    expected_suppressed_entity_ids: tuple[str, ...] = ()
     expected_refinement_applied: bool = False
 
 
@@ -68,6 +69,8 @@ class VectorCaseResult:
     actual_boosted_entity_ids: list[str] = field(default_factory=list)
     expected_downgraded_entity_ids: list[str] = field(default_factory=list)
     actual_downgraded_entity_ids: list[str] = field(default_factory=list)
+    expected_suppressed_entity_ids: list[str] = field(default_factory=list)
+    actual_suppressed_entity_ids: list[str] = field(default_factory=list)
     expected_refinement_applied: bool = False
     actual_refinement_applied: bool = False
     graph_support_applied: bool = False
@@ -95,6 +98,7 @@ class VectorQualityReport:
     related_precision_at_k: float = 1.0
     related_recall_at_k: float = 1.0
     related_mrr: float = 0.0
+    suppression_alignment_rate: float = 1.0
     refinement_alignment_rate: float = 1.0
     easy_case_pass_rate: float = 1.0
     graph_support_rate: float = 0.0
@@ -113,6 +117,7 @@ class VectorReleaseThresholds:
     min_related_precision_at_k: float = 0.75
     min_related_recall_at_k: float = 0.60
     min_related_mrr: float = 0.70
+    min_suppression_alignment_rate: float = 0.75
     min_refinement_alignment_rate: float = 0.75
     min_easy_case_pass_rate: float = 1.0
     max_fallback_rate: float = 0.10
@@ -179,6 +184,7 @@ def write_vector_golden_set(path: str | Path, golden_set: VectorGoldenSet) -> Pa
                 "expected_related_entity_ids": list(case.expected_related_entity_ids),
                 "expected_boosted_entity_ids": list(case.expected_boosted_entity_ids),
                 "expected_downgraded_entity_ids": list(case.expected_downgraded_entity_ids),
+                "expected_suppressed_entity_ids": list(case.expected_suppressed_entity_ids),
                 "expected_refinement_applied": case.expected_refinement_applied,
             }
             for case in golden_set.cases
@@ -222,6 +228,10 @@ def load_vector_golden_set(path: str | Path) -> VectorGoldenSet:
                     str(entity_id)
                     for entity_id in item.get("expected_downgraded_entity_ids", [])
                 ),
+                expected_suppressed_entity_ids=tuple(
+                    str(entity_id)
+                    for entity_id in item.get("expected_suppressed_entity_ids", [])
+                ),
                 expected_refinement_applied=bool(item.get("expected_refinement_applied", False)),
             )
             for item in payload.get("cases", [])
@@ -256,6 +266,7 @@ def load_vector_quality_report(path: str | Path) -> VectorQualityReport:
         related_precision_at_k=float(payload.get("related_precision_at_k", 1.0)),
         related_recall_at_k=float(payload.get("related_recall_at_k", 1.0)),
         related_mrr=float(payload.get("related_mrr", 0.0)),
+        suppression_alignment_rate=float(payload.get("suppression_alignment_rate", 1.0)),
         refinement_alignment_rate=float(payload.get("refinement_alignment_rate", 1.0)),
         easy_case_pass_rate=float(payload.get("easy_case_pass_rate", 1.0)),
         graph_support_rate=float(payload.get("graph_support_rate", 0.0)),
@@ -295,6 +306,12 @@ def load_vector_quality_report(path: str | Path) -> VectorQualityReport:
                 ],
                 actual_downgraded_entity_ids=[
                     str(value) for value in item.get("actual_downgraded_entity_ids", [])
+                ],
+                expected_suppressed_entity_ids=[
+                    str(value) for value in item.get("expected_suppressed_entity_ids", [])
+                ],
+                actual_suppressed_entity_ids=[
+                    str(value) for value in item.get("actual_suppressed_entity_ids", [])
                 ],
                 expected_refinement_applied=bool(item.get("expected_refinement_applied", False)),
                 actual_refinement_applied=bool(item.get("actual_refinement_applied", False)),
@@ -345,6 +362,12 @@ def evaluate_vector_release_thresholds(
         reasons.append(
             f"related_mrr_below_threshold:{report.related_mrr:.4f}<{thresholds.min_related_mrr:.4f}"
         )
+    if report.suppression_alignment_rate < thresholds.min_suppression_alignment_rate:
+        reasons.append(
+            "suppression_alignment_rate_below_threshold:"
+            f"{report.suppression_alignment_rate:.4f}"
+            f"<{thresholds.min_suppression_alignment_rate:.4f}"
+        )
     if report.refinement_alignment_rate < thresholds.min_refinement_alignment_rate:
         reasons.append(
             "refinement_alignment_rate_below_threshold:"
@@ -393,6 +416,7 @@ def evaluate_vector_golden_set(
     total_related_returned = 0
     total_related_matched = 0
     total_expected_related = 0
+    total_suppression_alignment_passes = 0
     total_alignment_passes = 0
     total_graph_support = 0
     total_refinement_triggers = 0
@@ -454,15 +478,20 @@ def evaluate_vector_golden_set(
         actual_downgraded_entity_ids = (
             list(graph_support.downgraded_entity_ids) if graph_support is not None else []
         )
+        actual_suppressed_entity_ids = (
+            list(graph_support.suppressed_entity_ids) if graph_support is not None else []
+        )
         expected_boosted_entity_ids = sorted(set(case.expected_boosted_entity_ids))
         expected_downgraded_entity_ids = sorted(set(case.expected_downgraded_entity_ids))
+        expected_suppressed_entity_ids = sorted(set(case.expected_suppressed_entity_ids))
         actual_refinement_applied = bool(enriched.refinement_applied)
 
         related_ok = expected_related_set.issubset(actual_related_set)
         boosted_ok = sorted(actual_boosted_entity_ids) == expected_boosted_entity_ids
         downgraded_ok = sorted(actual_downgraded_entity_ids) == expected_downgraded_entity_ids
+        suppressed_ok = sorted(actual_suppressed_entity_ids) == expected_suppressed_entity_ids
         refinement_ok = actual_refinement_applied == case.expected_refinement_applied
-        passed = related_ok and boosted_ok and downgraded_ok and refinement_ok
+        passed = related_ok and boosted_ok and downgraded_ok and suppressed_ok and refinement_ok
 
         cases.append(
             VectorCaseResult(
@@ -478,6 +507,8 @@ def evaluate_vector_golden_set(
                 actual_boosted_entity_ids=sorted(actual_boosted_entity_ids),
                 expected_downgraded_entity_ids=expected_downgraded_entity_ids,
                 actual_downgraded_entity_ids=sorted(actual_downgraded_entity_ids),
+                expected_suppressed_entity_ids=expected_suppressed_entity_ids,
+                actual_suppressed_entity_ids=sorted(actual_suppressed_entity_ids),
                 expected_refinement_applied=case.expected_refinement_applied,
                 actual_refinement_applied=actual_refinement_applied,
                 graph_support_applied=graph_support_applied,
@@ -496,6 +527,7 @@ def evaluate_vector_golden_set(
         total_related_returned += len(actual_related_entity_ids)
         total_related_matched += len(matched_related_entity_ids)
         total_expected_related += len(expected_related_entity_ids)
+        total_suppression_alignment_passes += int(suppressed_ok)
         total_alignment_passes += int(boosted_ok and downgraded_ok and refinement_ok)
         total_graph_support += int(graph_support_applied)
         total_refinement_triggers += int(actual_refinement_applied)
@@ -525,6 +557,10 @@ def evaluate_vector_golden_set(
         ),
         related_mrr=round(
             _safe_ratio(sum(reciprocal_ranks), len(reciprocal_ranks), when_zero=0.0),
+            6,
+        ),
+        suppression_alignment_rate=round(
+            _safe_ratio(total_suppression_alignment_passes, case_count, when_zero=1.0),
             6,
         ),
         refinement_alignment_rate=round(
@@ -643,6 +679,7 @@ def _vector_quality_report_to_dict(report: VectorQualityReport) -> dict[str, obj
         "related_precision_at_k": report.related_precision_at_k,
         "related_recall_at_k": report.related_recall_at_k,
         "related_mrr": report.related_mrr,
+        "suppression_alignment_rate": report.suppression_alignment_rate,
         "refinement_alignment_rate": report.refinement_alignment_rate,
         "easy_case_pass_rate": report.easy_case_pass_rate,
         "graph_support_rate": report.graph_support_rate,
@@ -665,6 +702,8 @@ def _vector_quality_report_to_dict(report: VectorQualityReport) -> dict[str, obj
                 "actual_boosted_entity_ids": list(case.actual_boosted_entity_ids),
                 "expected_downgraded_entity_ids": list(case.expected_downgraded_entity_ids),
                 "actual_downgraded_entity_ids": list(case.actual_downgraded_entity_ids),
+                "expected_suppressed_entity_ids": list(case.expected_suppressed_entity_ids),
+                "actual_suppressed_entity_ids": list(case.actual_suppressed_entity_ids),
                 "expected_refinement_applied": case.expected_refinement_applied,
                 "actual_refinement_applied": case.actual_refinement_applied,
                 "graph_support_applied": case.graph_support_applied,

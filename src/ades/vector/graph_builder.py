@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import math
 from pathlib import Path
 import sqlite3
 from typing import Iterable
@@ -16,7 +17,7 @@ from .builder import (
     _load_targets,
 )
 
-_GRAPH_STORE_BUILDER_VERSION = "qid-graph-store-v1"
+_GRAPH_STORE_BUILDER_VERSION = "qid-graph-store-v3"
 _NODE_BATCH_SIZE = 4096
 _EDGE_BATCH_SIZE = 4096
 
@@ -36,6 +37,7 @@ def _prepare_graph_store(path: Path) -> sqlite3.Connection:
             canonical_text TEXT NOT NULL,
             entity_type TEXT,
             source_name TEXT,
+            popularity REAL,
             is_target INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE node_packs (
@@ -49,6 +51,12 @@ def _prepare_graph_store(path: Path) -> sqlite3.Connection:
             dst_qid TEXT NOT NULL,
             PRIMARY KEY (src_qid, predicate, dst_qid)
         ) WITHOUT ROWID;
+        CREATE TABLE node_stats (
+            qid TEXT PRIMARY KEY,
+            out_degree INTEGER NOT NULL DEFAULT 0,
+            in_degree INTEGER NOT NULL DEFAULT 0,
+            degree_total INTEGER NOT NULL DEFAULT 0
+        );
         CREATE INDEX idx_edges_src_predicate ON edges (src_qid, predicate, dst_qid);
         CREATE INDEX idx_edges_dst_predicate ON edges (dst_qid, predicate, src_qid);
         """
@@ -68,6 +76,7 @@ def _insert_target_nodes(connection: sqlite3.Connection, targets: dict[str, obje
                 getattr(entry, "canonical_text"),
                 getattr(entry, "entity_type"),
                 getattr(entry, "source_name"),
+                getattr(entry, "popularity"),
                 1,
             )
         )
@@ -80,8 +89,9 @@ def _insert_target_nodes(connection: sqlite3.Connection, targets: dict[str, obje
             canonical_text,
             entity_type,
             source_name,
+            popularity,
             is_target
-        ) VALUES (?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         node_rows,
     )
@@ -112,14 +122,16 @@ def _flush_pending_rows(
                 canonical_text,
                 entity_type,
                 source_name,
+                popularity,
                 is_target
-            ) VALUES (?, ?, ?, ?, ?, 0)
+            ) VALUES (?, ?, ?, ?, ?, ?, 0)
             """,
             [
                 (
                     qid,
                     f"wikidata:{qid}",
                     qid,
+                    None,
                     None,
                     None,
                 )
@@ -191,6 +203,80 @@ def _ingest_truthy_edges(
     return processed_line_count, matched_statement_count, stored_edge_count
 
 
+def _populate_node_stats(connection: sqlite3.Connection) -> None:
+    connection.execute("DELETE FROM node_stats")
+    connection.executescript(
+        """
+        INSERT INTO node_stats (qid, out_degree, in_degree, degree_total)
+        SELECT
+            nodes.qid,
+            COALESCE(outbound.out_degree, 0),
+            COALESCE(inbound.in_degree, 0),
+            COALESCE(outbound.out_degree, 0) + COALESCE(inbound.in_degree, 0)
+        FROM nodes
+        LEFT JOIN (
+            SELECT src_qid AS qid, COUNT(*) AS out_degree
+            FROM edges
+            GROUP BY src_qid
+        ) AS outbound ON outbound.qid = nodes.qid
+        LEFT JOIN (
+            SELECT dst_qid AS qid, COUNT(*) AS in_degree
+            FROM edges
+            GROUP BY dst_qid
+        ) AS inbound ON inbound.qid = nodes.qid;
+        """
+    )
+
+
+def _graph_store_summary(connection: sqlite3.Connection) -> dict[str, object]:
+    adjacent_node_count = int(
+        connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM nodes
+            WHERE is_target = 0
+            """
+        ).fetchone()[0]
+    )
+    predicate_histogram = {
+        str(row[0]): int(row[1])
+        for row in connection.execute(
+            """
+            SELECT predicate, COUNT(*)
+            FROM edges
+            GROUP BY predicate
+            ORDER BY predicate ASC
+            """
+        ).fetchall()
+    }
+    degree_rows = [
+        int(row[0])
+        for row in connection.execute(
+            """
+            SELECT degree_total
+            FROM node_stats
+            ORDER BY degree_total ASC
+            """
+        ).fetchall()
+    ]
+    if not degree_rows:
+        return {
+            "adjacent_node_count": adjacent_node_count,
+            "predicate_histogram": predicate_histogram,
+            "max_degree_total": 0,
+            "mean_degree_total": 0.0,
+            "p95_degree_total": 0,
+        }
+    p95_index = max(0, math.ceil(len(degree_rows) * 0.95) - 1)
+    return {
+        "adjacent_node_count": adjacent_node_count,
+        "predicate_histogram": predicate_histogram,
+        "max_degree_total": degree_rows[-1],
+        "mean_degree_total": round(sum(degree_rows) / len(degree_rows), 4),
+        "p95_degree_total": degree_rows[p95_index],
+    }
+
+
 def build_qid_graph_store(
     bundle_dirs: Iterable[str | Path],
     *,
@@ -236,7 +322,9 @@ def build_qid_graph_store(
             target_qids=set(targets),
             allowed_predicates=predicate_values,
         )
+        _populate_node_stats(connection)
         stored_node_count = int(connection.execute("SELECT COUNT(*) FROM nodes").fetchone()[0])
+        summary = _graph_store_summary(connection)
         connection.commit()
     finally:
         connection.close()
@@ -255,6 +343,13 @@ def build_qid_graph_store(
         processed_line_count=processed_line_count,
         matched_statement_count=matched_statement_count,
         allowed_predicates=sorted(predicate_values),
+        adjacent_node_count=int(summary["adjacent_node_count"]),
+        predicate_histogram={
+            str(key): int(value) for key, value in dict(summary["predicate_histogram"]).items()
+        },
+        max_degree_total=int(summary["max_degree_total"]),
+        mean_degree_total=float(summary["mean_degree_total"]),
+        p95_degree_total=int(summary["p95_degree_total"]),
         warnings=warnings,
     )
     manifest_path.write_text(
@@ -262,6 +357,7 @@ def build_qid_graph_store(
             {
                 **response.model_dump(mode="json"),
                 "builder_version": _GRAPH_STORE_BUILDER_VERSION,
+                "artifact_scope_version": 3,
                 "built_at": datetime.now(timezone.utc).isoformat(),
             },
             indent=2,

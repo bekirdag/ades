@@ -74,6 +74,8 @@ def test_tag_response_preserves_related_entity_enrichment_fields() -> None:
             collection_alias="ades-qids-current",
             seed_entity_ids=["wikidata:Q123"],
             related_entity_count=1,
+            suppressed_entity_ids=["wikidata:Q789"],
+            suppressed_entity_count=1,
         ),
         topics=[],
         warnings=[],
@@ -84,3 +86,4 @@ def test_tag_response_preserves_related_entity_enrichment_fields() -> None:
     assert response.graph_support is not None
     assert response.graph_support.applied is True
     assert response.graph_support.related_entity_count == 1
+    assert response.graph_support.suppressed_entity_ids == ["wikidata:Q789"]

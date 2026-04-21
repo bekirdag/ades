@@ -170,6 +170,70 @@ _GENERIC_SINGLE_TOKEN_WORDS = {
     "university",
     "wednesday",
 }
+_ARTICLE_BOILERPLATE_HARD_STOP_SUBSTRINGS = (
+    "i would like to be emailed about offers",
+    "today's top stories curated",
+    "today’s top stories curated",
+    "login or signup to continue reading",
+    "log in or sign up to continue reading",
+    "saved articles can be found in",
+    "create a free account",
+    "already have an account",
+    "by signing up you agree",
+    "this site is protected by recaptcha",
+)
+_ARTICLE_BOILERPLATE_SKIP_SUBSTRINGS = (
+    "all rights reserved",
+    "privacy notice",
+    "privacy policy",
+    "terms of service",
+    "terms and conditions",
+    "sign up to our newsletters",
+    "sign up to our newsletter",
+    "sign up for our newsletters",
+    "sign up for our newsletter",
+    "follow us on",
+    "read more:",
+    "read more ",
+    "recommended stories",
+    "recommended reading",
+    "you may also like",
+    "for the latest",
+    "press association",
+    "pa media",
+)
+_ARTICLE_BOILERPLATE_PREFIXES = (
+    "login",
+    "log in",
+    "sign up",
+    "subscribe",
+    "read more",
+    "follow us",
+    "by ",
+    "updated ",
+    "published ",
+)
+_ARTICLE_BODY_MIN_PARAGRAPHS_BEFORE_STOP = 3
+_ARTICLE_EMAIL_PARAGRAPH_WORD_LIMIT = 28
+_TRAILING_FUNCTION_WORDS = {
+    "about",
+    "against",
+    "after",
+    "before",
+    "during",
+    "for",
+    "from",
+    "into",
+    "near",
+    "of",
+    "on",
+    "over",
+    "through",
+    "to",
+    "under",
+    "with",
+    "within",
+}
 _STRUCTURAL_ORG_SUFFIXES = {
     "agency",
     "association",
@@ -3087,13 +3151,26 @@ def _fetch_text(client: httpx.Client, url: str) -> str:
 
 
 def _extract_article_text(html_text: str) -> tuple[str, str]:
-    article_body = _extract_article_body_from_json_ld(html_text)
-    if _word_count(article_body) >= 80:
-        return ("json_ld", article_body)
+    article_body = _clean_article_text(_extract_article_body_from_json_ld(html_text))
     paragraph_text = _extract_paragraph_text(html_text)
-    if _word_count(paragraph_text) >= 80:
+    article_body_word_count = _word_count(article_body)
+    paragraph_word_count = _word_count(paragraph_text)
+    article_body_noisy = _contains_article_boilerplate(article_body)
+    paragraph_noisy = _contains_article_boilerplate(paragraph_text)
+    if article_body_word_count >= 80 and not article_body_noisy:
+        return ("json_ld", article_body)
+    if paragraph_word_count >= 80 and (
+        article_body_word_count < 80
+        or article_body_noisy
+        or paragraph_word_count >= max(80, int(article_body_word_count * 0.75))
+        or (paragraph_word_count > article_body_word_count and not paragraph_noisy)
+    ):
         return ("paragraphs", paragraph_text)
-    combined = article_body if _word_count(article_body) >= _word_count(paragraph_text) else paragraph_text
+    if article_body_word_count >= 80:
+        return ("json_ld", article_body)
+    if paragraph_word_count >= 80:
+        return ("paragraphs", paragraph_text)
+    combined = article_body if article_body_word_count >= paragraph_word_count else paragraph_text
     return ("fallback", combined)
 
 
@@ -3172,7 +3249,63 @@ def _extract_paragraph_text(html_text: str) -> str:
             continue
         seen.add(normalized)
         cleaned.append(text)
-    return "\n\n".join(cleaned)
+    return _clean_article_text("\n\n".join(cleaned))
+
+
+def _clean_article_text(text: str) -> str:
+    collapsed = text.strip()
+    if not collapsed:
+        return ""
+    blocks = [block for block in re.split(r"(?:\r?\n){2,}", collapsed) if block.strip()]
+    if not blocks:
+        return _collapse_whitespace(collapsed)
+    cleaned_blocks: list[str] = []
+    accepted_body_blocks = 0
+    for block in blocks:
+        cleaned_block = _collapse_whitespace(block)
+        if not cleaned_block:
+            continue
+        action = _article_paragraph_action(
+            cleaned_block,
+            accepted_body_blocks=accepted_body_blocks,
+        )
+        if action == "stop":
+            break
+        if action == "skip":
+            continue
+        cleaned_blocks.append(cleaned_block)
+        accepted_body_blocks += 1
+    if not cleaned_blocks:
+        return _collapse_whitespace(collapsed)
+    return "\n\n".join(cleaned_blocks)
+
+
+def _article_paragraph_action(text: str, *, accepted_body_blocks: int) -> str:
+    normalized = text.casefold().strip()
+    if not normalized:
+        return "skip"
+    if _contains_email_address(text) and _word_count(text) <= _ARTICLE_EMAIL_PARAGRAPH_WORD_LIMIT:
+        return "skip"
+    if any(marker in normalized for marker in _ARTICLE_BOILERPLATE_HARD_STOP_SUBSTRINGS):
+        if accepted_body_blocks >= _ARTICLE_BODY_MIN_PARAGRAPHS_BEFORE_STOP:
+            return "stop"
+        return "skip"
+    if any(marker in normalized for marker in _ARTICLE_BOILERPLATE_SKIP_SUBSTRINGS):
+        return "skip"
+    if any(normalized.startswith(prefix) for prefix in _ARTICLE_BOILERPLATE_PREFIXES) and _word_count(text) <= 18:
+        return "skip"
+    return "keep"
+
+
+def _contains_article_boilerplate(text: str) -> bool:
+    normalized = text.casefold()
+    if any(marker in normalized for marker in _ARTICLE_BOILERPLATE_HARD_STOP_SUBSTRINGS):
+        return True
+    return any(marker in normalized for marker in _ARTICLE_BOILERPLATE_SKIP_SUBSTRINGS)
+
+
+def _contains_email_address(text: str) -> bool:
+    return bool(re.search(r"\b\S+@\S+\b", text))
 
 
 def _html_to_text(value: str) -> str:
@@ -3212,7 +3345,6 @@ def _detect_news_feedback_issues(
         entity_text = entity.text.strip()
         if not entity_text:
             continue
-        normalized = normalize_lookup_text(entity_text)
         if _is_generic_single_token_entity(entity):
             _append_issue(
                 issues,

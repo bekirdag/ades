@@ -1050,6 +1050,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 min_related_precision_at_k=request.min_related_precision_at_k,
                 min_related_recall_at_k=request.min_related_recall_at_k,
                 min_related_mrr=request.min_related_mrr,
+                min_suppression_alignment_rate=request.min_suppression_alignment_rate,
                 min_refinement_alignment_rate=request.min_refinement_alignment_rate,
                 min_easy_case_pass_rate=request.min_easy_case_pass_rate,
                 max_fallback_rate=request.max_fallback_rate,

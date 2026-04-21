@@ -21,6 +21,10 @@ DEFAULT_PORT = 8734
 DEFAULT_PACK = "general-en"
 DEFAULT_VECTOR_COLLECTION_ALIAS = "ades-qids-current"
 DEFAULT_VECTOR_RELATED_LIMIT = 5
+DEFAULT_GRAPH_CONTEXT_RELATED_LIMIT = 5
+DEFAULT_GRAPH_CONTEXT_SEED_NEIGHBOR_LIMIT = 24
+DEFAULT_GRAPH_CONTEXT_CANDIDATE_LIMIT = 128
+DEFAULT_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS = 2
 CONFIG_FILE_ENV = "ADES_CONFIG_FILE"
 DATABASE_URL_ENV = "ADES_DATABASE_URL"
 DEFAULT_CONFIG_PATHS = (
@@ -119,6 +123,14 @@ class Settings:
     vector_search_collection_alias: str = DEFAULT_VECTOR_COLLECTION_ALIAS
     vector_search_related_limit: int = DEFAULT_VECTOR_RELATED_LIMIT
     vector_search_score_threshold: float | None = None
+    graph_context_enabled: bool = False
+    graph_context_artifact_path: Path | None = None
+    graph_context_max_depth: int = 2
+    graph_context_related_limit: int = DEFAULT_GRAPH_CONTEXT_RELATED_LIMIT
+    graph_context_seed_neighbor_limit: int = DEFAULT_GRAPH_CONTEXT_SEED_NEIGHBOR_LIMIT
+    graph_context_candidate_limit: int = DEFAULT_GRAPH_CONTEXT_CANDIDATE_LIMIT
+    graph_context_min_supporting_seeds: int = DEFAULT_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS
+    graph_context_genericity_penalty_enabled: bool = True
     config_path: Path | None = None
 
     @classmethod
@@ -211,6 +223,54 @@ class Settings:
             env_name="ADES_VECTOR_SEARCH_SCORE_THRESHOLD",
             config_name="vector_search_score_threshold",
         )
+        graph_context_enabled = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_GRAPH_CONTEXT_ENABLED",
+            config_name="graph_context_enabled",
+        )
+        graph_context_artifact_path = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_GRAPH_CONTEXT_ARTIFACT_PATH",
+            config_name="graph_context_artifact_path",
+        )
+        graph_context_max_depth = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_GRAPH_CONTEXT_MAX_DEPTH",
+            config_name="graph_context_max_depth",
+        )
+        graph_context_related_limit = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_GRAPH_CONTEXT_RELATED_LIMIT",
+            config_name="graph_context_related_limit",
+        )
+        graph_context_seed_neighbor_limit = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_GRAPH_CONTEXT_SEED_NEIGHBOR_LIMIT",
+            config_name="graph_context_seed_neighbor_limit",
+        )
+        graph_context_candidate_limit = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_GRAPH_CONTEXT_CANDIDATE_LIMIT",
+            config_name="graph_context_candidate_limit",
+        )
+        graph_context_min_supporting_seeds = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS",
+            config_name="graph_context_min_supporting_seeds",
+        )
+        graph_context_genericity_penalty_enabled = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_GRAPH_CONTEXT_GENERICITY_PENALTY_ENABLED",
+            config_name="graph_context_genericity_penalty_enabled",
+        )
 
         raw_port = port if port is not None else DEFAULT_PORT
         resolved_port = _coerce_int(raw_port, name="ades port")
@@ -239,6 +299,80 @@ class Settings:
             if vector_search_score_threshold is not None
             else None
         )
+        resolved_graph_context_enabled = (
+            _coerce_bool(graph_context_enabled, name="ades graph context enabled")
+            if graph_context_enabled is not None
+            else False
+        )
+        resolved_graph_context_max_depth = (
+            _coerce_int(graph_context_max_depth, name="ades graph context max depth")
+            if graph_context_max_depth is not None
+            else 2
+        )
+        resolved_graph_context_related_limit = (
+            _coerce_int(
+                graph_context_related_limit,
+                name="ades graph context related limit",
+            )
+            if graph_context_related_limit is not None
+            else DEFAULT_GRAPH_CONTEXT_RELATED_LIMIT
+        )
+        resolved_graph_context_seed_neighbor_limit = (
+            _coerce_int(
+                graph_context_seed_neighbor_limit,
+                name="ades graph context seed neighbor limit",
+            )
+            if graph_context_seed_neighbor_limit is not None
+            else DEFAULT_GRAPH_CONTEXT_SEED_NEIGHBOR_LIMIT
+        )
+        resolved_graph_context_candidate_limit = (
+            _coerce_int(
+                graph_context_candidate_limit,
+                name="ades graph context candidate limit",
+            )
+            if graph_context_candidate_limit is not None
+            else DEFAULT_GRAPH_CONTEXT_CANDIDATE_LIMIT
+        )
+        resolved_graph_context_min_supporting_seeds = (
+            _coerce_int(
+                graph_context_min_supporting_seeds,
+                name="ades graph context min supporting seeds",
+            )
+            if graph_context_min_supporting_seeds is not None
+            else DEFAULT_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS
+        )
+        resolved_graph_context_genericity_penalty_enabled = (
+            _coerce_bool(
+                graph_context_genericity_penalty_enabled,
+                name="ades graph context genericity penalty enabled",
+            )
+            if graph_context_genericity_penalty_enabled is not None
+            else True
+        )
+        if resolved_graph_context_max_depth < 1:
+            raise InvalidConfigurationError(
+                f"Invalid ades graph context max depth: {resolved_graph_context_max_depth!r}"
+            )
+        if resolved_graph_context_related_limit <= 0:
+            raise InvalidConfigurationError(
+                "Invalid ades graph context related limit: "
+                f"{resolved_graph_context_related_limit!r}"
+            )
+        if resolved_graph_context_seed_neighbor_limit <= 0:
+            raise InvalidConfigurationError(
+                "Invalid ades graph context seed neighbor limit: "
+                f"{resolved_graph_context_seed_neighbor_limit!r}"
+            )
+        if resolved_graph_context_candidate_limit <= 0:
+            raise InvalidConfigurationError(
+                "Invalid ades graph context candidate limit: "
+                f"{resolved_graph_context_candidate_limit!r}"
+            )
+        if resolved_graph_context_min_supporting_seeds <= 0:
+            raise InvalidConfigurationError(
+                "Invalid ades graph context min supporting seeds: "
+                f"{resolved_graph_context_min_supporting_seeds!r}"
+            )
 
         return cls(
             host=str(host or DEFAULT_HOST),
@@ -261,6 +395,20 @@ class Settings:
             ),
             vector_search_related_limit=resolved_vector_related_limit,
             vector_search_score_threshold=resolved_vector_score_threshold,
+            graph_context_enabled=resolved_graph_context_enabled,
+            graph_context_artifact_path=(
+                Path(str(graph_context_artifact_path)).expanduser()
+                if graph_context_artifact_path
+                else None
+            ),
+            graph_context_max_depth=resolved_graph_context_max_depth,
+            graph_context_related_limit=resolved_graph_context_related_limit,
+            graph_context_seed_neighbor_limit=resolved_graph_context_seed_neighbor_limit,
+            graph_context_candidate_limit=resolved_graph_context_candidate_limit,
+            graph_context_min_supporting_seeds=resolved_graph_context_min_supporting_seeds,
+            graph_context_genericity_penalty_enabled=(
+                resolved_graph_context_genericity_penalty_enabled
+            ),
             config_path=config_path,
         )
 

@@ -78,6 +78,7 @@ def test_cli_can_evaluate_vector_quality_and_release_thresholds(
         min_related_precision_at_k: float | None = None,
         min_related_recall_at_k: float | None = None,
         min_related_mrr: float | None = None,
+        min_suppression_alignment_rate: float | None = None,
         min_refinement_alignment_rate: float | None = None,
         min_easy_case_pass_rate: float | None = None,
         max_fallback_rate: float | None = None,
@@ -89,6 +90,7 @@ def test_cli_can_evaluate_vector_quality_and_release_thresholds(
                 "min_related_precision_at_k": min_related_precision_at_k or 0.75,
                 "min_related_recall_at_k": min_related_recall_at_k or 0.6,
                 "min_related_mrr": min_related_mrr or 0.7,
+                "min_suppression_alignment_rate": min_suppression_alignment_rate or 0.75,
                 "min_refinement_alignment_rate": min_refinement_alignment_rate or 0.75,
                 "min_easy_case_pass_rate": min_easy_case_pass_rate or 1.0,
                 "max_fallback_rate": max_fallback_rate or 0.1,
@@ -142,6 +144,8 @@ def test_cli_can_evaluate_vector_quality_and_release_thresholds(
             "evaluate-vector-release-thresholds",
             "--report-path",
             str(report_path),
+            "--min-suppression-alignment-rate",
+            "0.9",
         ],
     )
 
@@ -149,3 +153,4 @@ def test_cli_can_evaluate_vector_quality_and_release_thresholds(
     threshold_payload = json.loads(thresholds.stdout)
     assert threshold_payload["passed"] is True
     assert threshold_payload["thresholds"]["min_related_precision_at_k"] == 0.75
+    assert threshold_payload["thresholds"]["min_suppression_alignment_rate"] == 0.9

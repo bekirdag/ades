@@ -1009,6 +1009,8 @@ class VectorCaseResultResponse(BaseModel):
     actual_boosted_entity_ids: list[str] = Field(default_factory=list)
     expected_downgraded_entity_ids: list[str] = Field(default_factory=list)
     actual_downgraded_entity_ids: list[str] = Field(default_factory=list)
+    expected_suppressed_entity_ids: list[str] = Field(default_factory=list)
+    actual_suppressed_entity_ids: list[str] = Field(default_factory=list)
     expected_refinement_applied: bool = False
     actual_refinement_applied: bool = False
     graph_support_applied: bool = False
@@ -1035,6 +1037,7 @@ class VectorQualityReportResponse(BaseModel):
     related_precision_at_k: float
     related_recall_at_k: float
     related_mrr: float
+    suppression_alignment_rate: float
     refinement_alignment_rate: float
     easy_case_pass_rate: float
     graph_support_rate: float
@@ -1070,6 +1073,7 @@ class RegistryVectorReleaseThresholdsResponse(BaseModel):
     min_related_precision_at_k: float
     min_related_recall_at_k: float
     min_related_mrr: float
+    min_suppression_alignment_rate: float
     min_refinement_alignment_rate: float
     min_easy_case_pass_rate: float
     max_fallback_rate: float
@@ -1083,6 +1087,7 @@ class RegistryEvaluateVectorReleaseThresholdsRequest(BaseModel):
     min_related_precision_at_k: float | None = Field(None, ge=0.0, le=1.0)
     min_related_recall_at_k: float | None = Field(None, ge=0.0, le=1.0)
     min_related_mrr: float | None = Field(None, ge=0.0, le=1.0)
+    min_suppression_alignment_rate: float | None = Field(None, ge=0.0, le=1.0)
     min_refinement_alignment_rate: float | None = Field(None, ge=0.0, le=1.0)
     min_easy_case_pass_rate: float | None = Field(None, ge=0.0, le=1.0)
     max_fallback_rate: float | None = Field(None, ge=0.0, le=1.0)
@@ -1603,6 +1608,8 @@ class GraphSupport(BaseModel):
     refined_entity_count: int = 0
     boosted_entity_ids: list[str] = Field(default_factory=list)
     downgraded_entity_ids: list[str] = Field(default_factory=list)
+    suppressed_entity_ids: list[str] = Field(default_factory=list)
+    suppressed_entity_count: int = 0
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -2131,4 +2138,9 @@ class QidGraphStoreBuildResponse(BaseModel):
     processed_line_count: int
     matched_statement_count: int
     allowed_predicates: list[str] = Field(default_factory=list)
+    adjacent_node_count: int = 0
+    predicate_histogram: dict[str, int] = Field(default_factory=dict)
+    max_degree_total: int = 0
+    mean_degree_total: float = 0.0
+    p95_degree_total: int = 0
     warnings: list[str] = Field(default_factory=list)

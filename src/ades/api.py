@@ -240,6 +240,14 @@ def _resolve_settings(
         vector_search_collection_alias=base.vector_search_collection_alias,
         vector_search_related_limit=base.vector_search_related_limit,
         vector_search_score_threshold=base.vector_search_score_threshold,
+        graph_context_enabled=base.graph_context_enabled,
+        graph_context_artifact_path=base.graph_context_artifact_path,
+        graph_context_max_depth=base.graph_context_max_depth,
+        graph_context_related_limit=base.graph_context_related_limit,
+        graph_context_seed_neighbor_limit=base.graph_context_seed_neighbor_limit,
+        graph_context_candidate_limit=base.graph_context_candidate_limit,
+        graph_context_min_supporting_seeds=base.graph_context_min_supporting_seeds,
+        graph_context_genericity_penalty_enabled=base.graph_context_genericity_penalty_enabled,
         config_path=base.config_path,
     )
 
@@ -1609,6 +1617,12 @@ def _vector_case_response(case: object) -> VectorCaseResultResponse:
         actual_downgraded_entity_ids=[
             str(item) for item in getattr(case, "actual_downgraded_entity_ids")
         ],
+        expected_suppressed_entity_ids=[
+            str(item) for item in getattr(case, "expected_suppressed_entity_ids")
+        ],
+        actual_suppressed_entity_ids=[
+            str(item) for item in getattr(case, "actual_suppressed_entity_ids")
+        ],
         expected_refinement_applied=bool(getattr(case, "expected_refinement_applied")),
         actual_refinement_applied=bool(getattr(case, "actual_refinement_applied")),
         graph_support_applied=bool(getattr(case, "graph_support_applied")),
@@ -1652,6 +1666,7 @@ def _vector_quality_report_response(
         related_precision_at_k=float(getattr(report, "related_precision_at_k")),
         related_recall_at_k=float(getattr(report, "related_recall_at_k")),
         related_mrr=float(getattr(report, "related_mrr")),
+        suppression_alignment_rate=float(getattr(report, "suppression_alignment_rate")),
         refinement_alignment_rate=float(getattr(report, "refinement_alignment_rate")),
         easy_case_pass_rate=float(getattr(report, "easy_case_pass_rate")),
         graph_support_rate=float(getattr(report, "graph_support_rate")),
@@ -2301,6 +2316,7 @@ def evaluate_vector_release_thresholds_from_report(
     min_related_precision_at_k: float | None = None,
     min_related_recall_at_k: float | None = None,
     min_related_mrr: float | None = None,
+    min_suppression_alignment_rate: float | None = None,
     min_refinement_alignment_rate: float | None = None,
     min_easy_case_pass_rate: float | None = None,
     max_fallback_rate: float | None = None,
@@ -2326,6 +2342,11 @@ def evaluate_vector_release_thresholds_from_report(
             defaults.min_related_mrr
             if min_related_mrr is None
             else min_related_mrr
+        ),
+        min_suppression_alignment_rate=(
+            defaults.min_suppression_alignment_rate
+            if min_suppression_alignment_rate is None
+            else min_suppression_alignment_rate
         ),
         min_refinement_alignment_rate=(
             defaults.min_refinement_alignment_rate
@@ -2358,6 +2379,7 @@ def evaluate_vector_release_thresholds_from_report(
             min_related_precision_at_k=thresholds.min_related_precision_at_k,
             min_related_recall_at_k=thresholds.min_related_recall_at_k,
             min_related_mrr=thresholds.min_related_mrr,
+            min_suppression_alignment_rate=thresholds.min_suppression_alignment_rate,
             min_refinement_alignment_rate=thresholds.min_refinement_alignment_rate,
             min_easy_case_pass_rate=thresholds.min_easy_case_pass_rate,
             max_fallback_rate=thresholds.max_fallback_rate,

@@ -1932,6 +1932,13 @@ def registry_evaluate_vector_release_thresholds(
         max=1.0,
         help="Minimum acceptable related-entity MRR.",
     ),
+    min_suppression_alignment_rate: float | None = typer.Option(
+        None,
+        "--min-suppression-alignment-rate",
+        min=0.0,
+        max=1.0,
+        help="Minimum acceptable suppression-alignment rate.",
+    ),
     min_refinement_alignment_rate: float | None = typer.Option(
         None,
         "--min-refinement-alignment-rate",
@@ -1968,6 +1975,7 @@ def registry_evaluate_vector_release_thresholds(
             min_related_precision_at_k=min_related_precision_at_k,
             min_related_recall_at_k=min_related_recall_at_k,
             min_related_mrr=min_related_mrr,
+            min_suppression_alignment_rate=min_suppression_alignment_rate,
             min_refinement_alignment_rate=min_refinement_alignment_rate,
             min_easy_case_pass_rate=min_easy_case_pass_rate,
             max_fallback_rate=max_fallback_rate,

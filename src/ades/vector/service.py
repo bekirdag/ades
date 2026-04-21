@@ -8,6 +8,7 @@ from statistics import mean
 from ..config import Settings
 from ..service.models import GraphSupport, RelatedEntityMatch, TagResponse
 from ..storage import RuntimeTarget
+from .context_engine import apply_graph_context
 from .qdrant import QdrantNearestPoint, QdrantVectorSearchClient, QdrantVectorSearchError
 
 _PROVIDER_NAME = "qdrant.qid_graph"
@@ -286,7 +287,7 @@ def _aggregate_related_entities(
     ]
 
 
-def enrich_tag_response_with_related_entities(
+def _enrich_tag_response_with_vector_search(
     response: TagResponse,
     *,
     settings: Settings,
@@ -295,7 +296,7 @@ def enrich_tag_response_with_related_entities(
     refine_links: bool = False,
     refinement_depth: str = "light",
 ) -> TagResponse:
-    """Optionally enrich one tag response with related QIDs and graph refinement."""
+    """Optionally enrich one tag response with related QIDs and vector refinement."""
 
     if not include_related_entities and not include_graph_support and not refine_links:
         return response
@@ -391,5 +392,80 @@ def enrich_tag_response_with_related_entities(
             "refinement_score": refinement_score,
             "refinement_debug": refinement_debug,
             "graph_support": graph_support,
+        }
+    )
+
+
+def enrich_tag_response_with_related_entities(
+    response: TagResponse,
+    *,
+    settings: Settings,
+    include_related_entities: bool = False,
+    include_graph_support: bool = False,
+    refine_links: bool = False,
+    refinement_depth: str = "light",
+) -> TagResponse:
+    """Optionally enrich one tag response with related QIDs and graph refinement."""
+
+    if not include_related_entities and not include_graph_support and not refine_links:
+        return response
+
+    working_response = response
+    graph_context_response: TagResponse | None = None
+    if settings.graph_context_enabled and (
+        include_related_entities or include_graph_support or refine_links
+    ):
+        graph_context_response = apply_graph_context(
+            response,
+            settings=settings,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
+        )
+        working_response = graph_context_response
+
+    if graph_context_response is not None and graph_context_response.graph_support is not None:
+        if graph_context_response.graph_support.applied:
+            return graph_context_response
+
+    if not include_related_entities:
+        if graph_context_response is not None:
+            return graph_context_response
+        return _enrich_tag_response_with_vector_search(
+            working_response,
+            settings=settings,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
+        )
+
+    vector_response = _enrich_tag_response_with_vector_search(
+        working_response,
+        settings=settings,
+        include_related_entities=True,
+        include_graph_support=graph_context_response is None and include_graph_support,
+        refine_links=graph_context_response is None and refine_links,
+        refinement_depth=refinement_depth,
+    )
+    if graph_context_response is None:
+        return vector_response
+
+    merged_graph_support = (
+        graph_context_response.graph_support.model_copy(deep=True)
+        if graph_context_response.graph_support is not None
+        else None
+    )
+    if merged_graph_support is not None:
+        merged_graph_support.related_entity_count = len(vector_response.related_entities)
+    return vector_response.model_copy(
+        update={
+            "entities": graph_context_response.entities,
+            "refinement_applied": graph_context_response.refinement_applied,
+            "refinement_strategy": graph_context_response.refinement_strategy,
+            "refinement_score": graph_context_response.refinement_score,
+            "refinement_debug": graph_context_response.refinement_debug,
+            "graph_support": merged_graph_support,
         }
     )

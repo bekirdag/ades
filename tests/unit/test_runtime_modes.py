@@ -16,6 +16,10 @@ def test_settings_from_env_resolve_local_runtime_defaults(monkeypatch) -> None:
     monkeypatch.setenv("ADES_VECTOR_SEARCH_ENABLED", "true")
     monkeypatch.setenv("ADES_VECTOR_SEARCH_URL", "http://qdrant.local:6333")
     monkeypatch.setenv("ADES_VECTOR_SEARCH_RELATED_LIMIT", "8")
+    monkeypatch.setenv("ADES_GRAPH_CONTEXT_ENABLED", "true")
+    monkeypatch.setenv("ADES_GRAPH_CONTEXT_ARTIFACT_PATH", "/tmp/qid-graph-store.sqlite")
+    monkeypatch.setenv("ADES_GRAPH_CONTEXT_RELATED_LIMIT", "6")
+    monkeypatch.setenv("ADES_GRAPH_CONTEXT_SEED_NEIGHBOR_LIMIT", "12")
 
     settings = Settings.from_env()
 
@@ -25,6 +29,10 @@ def test_settings_from_env_resolve_local_runtime_defaults(monkeypatch) -> None:
     assert settings.vector_search_enabled is True
     assert settings.vector_search_url == "http://qdrant.local:6333"
     assert settings.vector_search_related_limit == 8
+    assert settings.graph_context_enabled is True
+    assert settings.graph_context_artifact_path == Path("/tmp/qid-graph-store.sqlite")
+    assert settings.graph_context_related_limit == 6
+    assert settings.graph_context_seed_neighbor_limit == 12
 
 
 def test_production_service_requires_explicit_runtime(monkeypatch) -> None:

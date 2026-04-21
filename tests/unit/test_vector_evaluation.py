@@ -36,9 +36,16 @@ def test_evaluate_vector_golden_set_computes_quality_metrics(monkeypatch) -> Non
                         label="organization",
                         score=0.47,
                     ),
+                    VectorGoldenSeedEntity(
+                        entity_id="wikidata:Q7",
+                        canonical_text="the Second",
+                        label="person",
+                        score=0.24,
+                    ),
                 ),
                 expected_related_entity_ids=("wikidata:Q9",),
                 expected_boosted_entity_ids=("wikidata:Q1",),
+                expected_suppressed_entity_ids=("wikidata:Q7",),
                 expected_refinement_applied=True,
             ),
             VectorGoldenCase(
@@ -75,7 +82,7 @@ def test_evaluate_vector_golden_set_computes_quality_metrics(monkeypatch) -> Non
         refinement_depth: str,
     ):
         seed_ids = [entity.link.entity_id for entity in response.entities if entity.link is not None]
-        if seed_ids == ["wikidata:Q1", "wikidata:Q2"]:
+        if seed_ids == ["wikidata:Q1", "wikidata:Q2", "wikidata:Q7"]:
             return response.model_copy(
                 update={
                     "related_entities": [
@@ -100,8 +107,10 @@ def test_evaluate_vector_golden_set_computes_quality_metrics(monkeypatch) -> Non
                         seed_entity_ids=seed_ids,
                         coherence_score=0.84,
                         related_entity_count=1,
-                        refined_entity_count=1,
+                        refined_entity_count=2,
                         boosted_entity_ids=["wikidata:Q1"],
+                        suppressed_entity_ids=["wikidata:Q7"],
+                        suppressed_entity_count=1,
                     ),
                     "refinement_applied": True,
                     "refinement_strategy": "qid_graph_coherence_v1",
@@ -145,6 +154,7 @@ def test_evaluate_vector_golden_set_computes_quality_metrics(monkeypatch) -> Non
     assert report.related_precision_at_k == 1.0
     assert report.related_recall_at_k == 1.0
     assert report.related_mrr == 1.0
+    assert report.suppression_alignment_rate == 1.0
     assert report.refinement_alignment_rate == 1.0
     assert report.easy_case_pass_rate == 1.0
     assert report.graph_support_rate == 1.0
@@ -153,6 +163,7 @@ def test_evaluate_vector_golden_set_computes_quality_metrics(monkeypatch) -> Non
     assert [case.name for case in report.cases] == ["related-support", "easy-exact"]
     assert report.cases[0].matched_related_entity_ids == ["wikidata:Q9"]
     assert report.cases[0].actual_boosted_entity_ids == ["wikidata:Q1"]
+    assert report.cases[0].actual_suppressed_entity_ids == ["wikidata:Q7"]
 
 
 def test_vector_quality_report_round_trip_and_thresholds(tmp_path: Path) -> None:
@@ -167,6 +178,7 @@ def test_vector_quality_report_round_trip_and_thresholds(tmp_path: Path) -> None
         related_precision_at_k=0.8,
         related_recall_at_k=0.75,
         related_mrr=0.82,
+        suppression_alignment_rate=0.9,
         refinement_alignment_rate=0.9,
         easy_case_pass_rate=1.0,
         graph_support_rate=1.0,
@@ -186,6 +198,7 @@ def test_vector_quality_report_round_trip_and_thresholds(tmp_path: Path) -> None
             min_related_precision_at_k=0.75,
             min_related_recall_at_k=0.7,
             min_related_mrr=0.8,
+            min_suppression_alignment_rate=0.85,
             min_refinement_alignment_rate=0.85,
             min_easy_case_pass_rate=1.0,
             max_fallback_rate=0.1,
@@ -198,6 +211,7 @@ def test_vector_quality_report_round_trip_and_thresholds(tmp_path: Path) -> None
             min_related_precision_at_k=0.9,
             min_related_recall_at_k=0.8,
             min_related_mrr=0.9,
+            min_suppression_alignment_rate=0.95,
             min_refinement_alignment_rate=0.95,
             min_easy_case_pass_rate=1.0,
             max_fallback_rate=0.01,
@@ -208,4 +222,8 @@ def test_vector_quality_report_round_trip_and_thresholds(tmp_path: Path) -> None
     assert passed.passed is True
     assert failed.passed is False
     assert any(reason.startswith("related_precision_at_k_below_threshold:") for reason in failed.reasons)
+    assert any(
+        reason.startswith("suppression_alignment_rate_below_threshold:")
+        for reason in failed.reasons
+    )
     assert any(reason.startswith("fallback_rate_above_threshold:") for reason in failed.reasons)

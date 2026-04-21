@@ -8,6 +8,8 @@ from .builder import (
 from .graph_builder import build_qid_graph_store
 from .graph_store import (
     GraphNeighbor,
+    GraphNodeMetadata,
+    GraphNodeStats,
     GraphPath,
     GraphPathStep,
     QidGraphStore,
@@ -39,6 +41,8 @@ __all__ = [
     "DEFAULT_QID_GRAPH_DIMENSIONS",
     "DEFAULT_VECTOR_QUALITY_ROOT",
     "GraphNeighbor",
+    "GraphNodeMetadata",
+    "GraphNodeStats",
     "GraphPath",
     "GraphPathStep",
     "QidGraphStore",

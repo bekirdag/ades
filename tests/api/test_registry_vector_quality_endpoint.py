@@ -30,9 +30,16 @@ def test_registry_vector_quality_and_release_threshold_endpoints(
                             label="organization",
                             score=0.45,
                         ),
+                        VectorGoldenSeedEntity(
+                            entity_id="wikidata:Q7",
+                            canonical_text="the Second",
+                            label="person",
+                            score=0.24,
+                        ),
                     ),
                     expected_related_entity_ids=("wikidata:Q9",),
-                    expected_refinement_applied=False,
+                    expected_suppressed_entity_ids=("wikidata:Q7",),
+                    expected_refinement_applied=True,
                 ),
             ),
         ),
@@ -74,8 +81,11 @@ def test_registry_vector_quality_and_release_threshold_endpoints(
                     seed_entity_ids=seed_ids,
                     coherence_score=0.88,
                     related_entity_count=1,
+                    refined_entity_count=1,
+                    suppressed_entity_ids=["wikidata:Q7"],
+                    suppressed_entity_count=1,
                 ),
-                "refinement_applied": False,
+                "refinement_applied": True,
                 "refinement_score": 0.88,
             }
         )
@@ -102,12 +112,16 @@ def test_registry_vector_quality_and_release_threshold_endpoints(
     assert payload["pack_id"] == "general-en"
     assert payload["refinement_depth"] == "deep"
     assert payload["related_precision_at_k"] == 1.0
+    assert payload["suppression_alignment_rate"] == 1.0
     assert payload["report_path"] == str(report_path.resolve())
+    assert payload["cases"][0]["expected_suppressed_entity_ids"] == ["wikidata:Q7"]
+    assert payload["cases"][0]["actual_suppressed_entity_ids"] == ["wikidata:Q7"]
 
     thresholds = client.post(
         "/v0/registry/evaluate-vector-release-thresholds",
         json={
             "report_path": str(report_path),
+            "min_suppression_alignment_rate": 1.0,
             "max_p95_latency_ms": 0,
         },
     )
@@ -115,6 +129,7 @@ def test_registry_vector_quality_and_release_threshold_endpoints(
     assert thresholds.status_code == 200
     threshold_payload = thresholds.json()
     assert threshold_payload["passed"] is False
+    assert threshold_payload["thresholds"]["min_suppression_alignment_rate"] == 1.0
     assert any(
         reason.startswith("p95_latency_above_threshold:")
         for reason in threshold_payload["reasons"]
