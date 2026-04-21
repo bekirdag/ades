@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.4...ades-tool-v0.2.5) (2026-04-21)
+
+
+### Bug Fixes
+
+* publish latest release packages ([346b42b](https://github.com/bekirdag/ades/commit/346b42b40a71d7e7a31a87d61a5aece506dcfd5b))
+
 ## [0.2.4](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.3...ades-tool-v0.2.4) (2026-04-21)
 
 
