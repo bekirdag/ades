@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.6](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.5...ades-tool-v0.2.6) (2026-04-21)
+
+
+### Bug Fixes
+
+* publish npm via oidc in unified release workflow ([e0c6419](https://github.com/bekirdag/ades/commit/e0c64197dc238f971e0afd0145f08bde606bd7bf))
+
 ## [0.2.5](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.4...ades-tool-v0.2.5) (2026-04-21)
 
 
