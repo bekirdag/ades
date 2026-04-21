@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.3...ades-tool-v0.2.4) (2026-04-21)
+
+
+### Bug Fixes
+
+* rebuild matchers from metadata store ([b247eb3](https://github.com/bekirdag/ades/commit/b247eb32518aa3d502e17eff4bf78d3f5752aaae))
+
 ## [0.2.3](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.2...ades-tool-v0.2.3) (2026-04-20)
 
 
