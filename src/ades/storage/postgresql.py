@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import re
 from threading import Lock
+from typing import Any, Iterable, Iterator
 from uuid import uuid4
 
 from ..packs.manifest import PackManifest
@@ -43,6 +44,8 @@ _POOL_TIMEOUT_SECONDS = 30.0
 _POOL_NAME = "ades-metadata-store"
 _POOL_CACHE_LOCK = Lock()
 _POOL_CACHE: dict[str, object] = {}
+_ALIAS_JSON_READ_CHUNK_SIZE = 1024 * 1024
+_ALIAS_EXECUTEMANY_BATCH_SIZE = 10_000
 _PG_TRGM_ALIAS_THRESHOLD = 0.2
 _PG_TRGM_RULE_THRESHOLD = 0.15
 _SCHEMA_LOCK_KEY = 48324001
@@ -402,7 +405,7 @@ class PostgreSQLMetadataStore:
         installed_at = manifest.installed_at or _utc_now()
         labels = self._load_labels(pack_dir)
         rules = self._load_rules(pack_dir, manifest.domain)
-        aliases = self._load_aliases(pack_dir, manifest.domain)
+        aliases = self._iter_aliases(pack_dir, manifest.domain)
 
         with self._connect() as connection:
             connection.execute(
@@ -919,29 +922,9 @@ class PostgreSQLMetadataStore:
         self,
         connection,
         pack_id: str,
-        aliases: list[dict[str, str | float | bool]],
+        aliases: Iterable[dict[str, str | float | bool]],
     ) -> None:
         connection.execute("DELETE FROM pack_aliases WHERE pack_id = %s", (pack_id,))
-        rows = [
-            (
-                pack_id,
-                alias["text"],
-                alias["label"],
-                alias["normalized_text"],
-                alias["canonical_text"],
-                alias["alias_score"],
-                bool(alias["generated"]),
-                alias["source_name"],
-                alias["entity_id"],
-                alias["source_priority"],
-                alias["popularity_weight"],
-                alias["source_domain"],
-                position,
-            )
-            for position, alias in enumerate(aliases)
-        ]
-        if not rows:
-            return
         insert_sql = """
             INSERT INTO pack_aliases (
                 pack_id,
@@ -980,10 +963,30 @@ class PostgreSQLMetadataStore:
             copy_method = getattr(cursor, "copy", None)
             if callable(copy_method):
                 with copy_method(copy_sql) as copy:
-                    for row in rows:
-                        copy.write_row(row)
+                    for position, alias in enumerate(aliases):
+                        copy.write_row(
+                            self._alias_row(
+                                pack_id,
+                                alias,
+                                position=position,
+                            )
+                        )
                 return
-            cursor.executemany(insert_sql, rows)
+            pending_rows: list[tuple[object, ...]] = []
+            for position, alias in enumerate(aliases):
+                pending_rows.append(
+                    self._alias_row(
+                        pack_id,
+                        alias,
+                        position=position,
+                    )
+                )
+                if len(pending_rows) < _ALIAS_EXECUTEMANY_BATCH_SIZE:
+                    continue
+                cursor.executemany(insert_sql, pending_rows)
+                pending_rows.clear()
+            if pending_rows:
+                cursor.executemany(insert_sql, pending_rows)
 
     def _lookup_alias_candidates(
         self,
@@ -1471,47 +1474,124 @@ class PostgreSQLMetadataStore:
 
     @staticmethod
     def _load_aliases(pack_dir: Path, domain: str) -> list[dict[str, str | float | bool]]:
+        return list(PostgreSQLMetadataStore._iter_aliases(pack_dir, domain))
+
+    @staticmethod
+    def _iter_aliases(pack_dir: Path, domain: str) -> Iterator[dict[str, str | float | bool]]:
         path = pack_dir / "aliases.json"
         if not path.exists():
-            return []
-        data = json.loads(path.read_text(encoding="utf-8"))
-        aliases = data.get("aliases", [])
-        loaded: list[dict[str, str | float | bool]] = []
-        for item in aliases:
-            if isinstance(item, str):
-                loaded.append(
-                    {
-                        "text": item,
-                        "label": "alias",
-                        "normalized_text": normalize_lookup_text(item),
-                        "canonical_text": str(item),
-                        "alias_score": 1.0,
-                        "generated": False,
-                        "source_name": "",
-                        "entity_id": "",
-                        "source_priority": 0.6,
-                        "popularity_weight": 0.5,
-                        "source_domain": domain,
-                    }
-                )
-                continue
-            loaded.append(
-                {
-                    "text": str(item["text"]),
-                    "label": str(item.get("label", "alias")),
-                    "normalized_text": str(
-                        item.get("normalized_text") or normalize_lookup_text(str(item["text"]))
-                    ),
-                    "canonical_text": str(
-                        item.get("canonical_text") or item.get("text") or ""
-                    ),
-                    "alias_score": float(item.get("score", item.get("alias_score", 1.0))),
-                    "generated": bool(item.get("generated", False)),
-                    "source_name": str(item.get("source_name", "")),
-                    "entity_id": str(item.get("entity_id", "")),
-                    "source_priority": float(item.get("source_priority", 0.6)),
-                    "popularity_weight": float(item.get("popularity_weight", 0.5)),
-                    "source_domain": domain,
-                }
-            )
-        return loaded
+            return
+        for item in PostgreSQLMetadataStore._iter_alias_payload_items(path):
+            yield PostgreSQLMetadataStore._coerce_alias_record(item, domain=domain)
+
+    @staticmethod
+    def _iter_alias_payload_items(path: Path) -> Iterator[Any]:
+        decoder = json.JSONDecoder()
+        buffer = ""
+        in_alias_array = False
+        with path.open("r", encoding="utf-8") as handle:
+            while True:
+                chunk = handle.read(_ALIAS_JSON_READ_CHUNK_SIZE)
+                if chunk:
+                    buffer += chunk
+                elif not buffer:
+                    return
+
+                if not in_alias_array:
+                    aliases_key_index = buffer.find('"aliases"')
+                    if aliases_key_index == -1:
+                        if not chunk:
+                            return
+                        continue
+                    array_start_index = buffer.find("[", aliases_key_index)
+                    if array_start_index == -1:
+                        if not chunk:
+                            return
+                        continue
+                    buffer = buffer[array_start_index + 1 :]
+                    in_alias_array = True
+
+                while True:
+                    buffer = buffer.lstrip()
+                    if not buffer:
+                        break
+                    if buffer[0] == "]":
+                        return
+                    if buffer[0] == ",":
+                        buffer = buffer[1:]
+                        continue
+                    try:
+                        item, consumed = decoder.raw_decode(buffer)
+                    except json.JSONDecodeError:
+                        break
+                    yield item
+                    buffer = buffer[consumed:]
+
+                if chunk:
+                    continue
+
+                remainder = buffer.strip()
+                if remainder in {"", "]", "]}", "}"}:
+                    return
+                raise ValueError(f"Unable to stream aliases from {path}.")
+
+    @staticmethod
+    def _coerce_alias_record(
+        item: Any,
+        *,
+        domain: str,
+    ) -> dict[str, str | float | bool]:
+        if isinstance(item, str):
+            return {
+                "text": item,
+                "label": "alias",
+                "normalized_text": normalize_lookup_text(item),
+                "canonical_text": str(item),
+                "alias_score": 1.0,
+                "generated": False,
+                "source_name": "",
+                "entity_id": "",
+                "source_priority": 0.6,
+                "popularity_weight": 0.5,
+                "source_domain": domain,
+            }
+        return {
+            "text": str(item["text"]),
+            "label": str(item.get("label", "alias")),
+            "normalized_text": str(
+                item.get("normalized_text") or normalize_lookup_text(str(item["text"]))
+            ),
+            "canonical_text": str(
+                item.get("canonical_text") or item.get("text") or ""
+            ),
+            "alias_score": float(item.get("score", item.get("alias_score", 1.0))),
+            "generated": bool(item.get("generated", False)),
+            "source_name": str(item.get("source_name", "")),
+            "entity_id": str(item.get("entity_id", "")),
+            "source_priority": float(item.get("source_priority", 0.6)),
+            "popularity_weight": float(item.get("popularity_weight", 0.5)),
+            "source_domain": domain,
+        }
+
+    @staticmethod
+    def _alias_row(
+        pack_id: str,
+        alias: dict[str, str | float | bool],
+        *,
+        position: int,
+    ) -> tuple[object, ...]:
+        return (
+            pack_id,
+            alias["text"],
+            alias["label"],
+            alias["normalized_text"],
+            alias["canonical_text"],
+            alias["alias_score"],
+            bool(alias["generated"]),
+            alias["source_name"],
+            alias["entity_id"],
+            alias["source_priority"],
+            alias["popularity_weight"],
+            alias["source_domain"],
+            position,
+        )

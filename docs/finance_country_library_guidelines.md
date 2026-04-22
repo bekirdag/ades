@@ -24,6 +24,8 @@ At minimum, a mature country pack should try to cover:
 
 The pack should not aim to become a generic people directory. The target is public finance relevance, not all employees.
 
+Research, parser work, tests, and local code changes are not enough on their own. A country-pack enhancement is only complete when it has been materialized into a real generated `finance-<country>-en` library artifact and the intended library surface has been updated to reflect that artifact.
+
 ## Scope Rules
 
 Country packs should prefer entities that are durable, public, and official.
@@ -141,6 +143,28 @@ Add structured identifiers after the core entity set exists:
 
 Identifier enrichment should not be the primary source of truth for the entity universe. It should enrich an already-derived set.
 
+## Maturity Levels
+
+Use explicit maturity labels when describing country-pack health.
+
+- `scaffold`: only static baseline entities or near-baseline coverage are present; the live country lanes are absent or not reflected in the generated library
+- `weak partial`: at least one live lane exists, but coverage is still thin, fragile, or only present in code/tests rather than in the actual generated pack
+- `credible partial`: live issuer or ticker coverage is materially useful, key enrichment lanes are tested, and the generated library artifact has been rebuilt and verified, but important coverage gaps still remain
+- `release-ready`: the primary issuer and ticker lanes plus meaningful people or institution lanes are automated, the generated library artifact is current, and the release path has been exercised against the intended registry surface
+
+Entity count alone does not define maturity. A stale target library artifact caps the effective maturity of a pack even if the local code is ahead of it.
+
+## Code Status Vs Library Status
+
+Track two distinct states:
+
+- `code status`: what the repo implementation, tests, and docs support
+- `library status`: what the generated `finance-<country>-en` artifact in the target library actually contains
+
+Do not collapse those into one status.
+
+If the code is ahead of the library artifact, report that explicitly as `code ahead of library` and do not describe the pack as healthy or complete. The effective pack health is always limited by the weaker of the two states.
+
 ## Entity Modeling Rules
 
 Country finance packs should keep the normalized entity model simple and stable.
@@ -252,9 +276,10 @@ Recommended change order for a new country pack or a major enhancement:
 4. Add people and institution enrichment on top of that set.
 5. Add identifier enrichment and alias expansion.
 6. Add focused tests for the new lane.
-7. Rebuild the bundle and generate the runtime pack.
-8. Run pack-level validation and clean-install smoke checks.
-9. Update the pack-specific upkeep documentation.
+7. Rebuild the bundle and create the actual generated `finance-<country>-en` runtime pack. Do not stop at research notes, local code changes, or bundle-only output.
+8. Rebuild the target registry or other real library surface that should carry the pack, and verify that the refreshed artifact is the one being served or staged.
+9. Run pack-level validation and clean-install smoke checks against the generated artifact, not only the source snapshot or bundle.
+10. Update the pack-specific upkeep documentation.
 
 This order reduces drift and keeps merges easier to reason about.
 
@@ -267,11 +292,15 @@ Each enhancement should validate:
 - source snapshot fetch succeeded and recorded provenance
 - bundle generation succeeded deterministically
 - runtime pack generation succeeded
+- the actual generated `finance-<country>-en` library artifact was rebuilt after the change
+- the target library artifact `build.json`, `manifest.json`, and registry metadata reflect the new pack rather than the older baseline pack
 - alias ambiguity stayed inside acceptable bounds
 - at least one test exists for the new source lane
 - end-to-end tests prove the lane affects the derived entity set
 - clean consumer install succeeds from a static registry
 - random real-world spot checks match both issuers and people where expected
+
+If the target library still contains only the old baseline entities, or otherwise does not reflect the local change, the enhancement is not validated and should be treated as incomplete.
 
 Recommended spot checks:
 
@@ -292,6 +321,21 @@ Treat a country pack as production-ready only when:
 - the source inventory is documented
 - the release path has been exercised against a real registry
 - smoke tests use the generated artifact, not just mocked tests
+- local changes are reflected in the actual generated library artifact, not only in code, tests, or docs
+
+## Completion Rule
+
+Do not mark a country-pack task done just because the research phase is complete or because local repo files changed.
+
+Completion requires all of the following:
+
+1. the research findings are encoded in fetch or derive logic, tests, and docs
+2. the actual `finance-<country>-en` library is created or rebuilt from those changes
+3. the intended local library surface reflects that rebuilt artifact
+4. if the workspace maintains a prod-library snapshot or reviewed release tree, that artifact is also refreshed before claiming the library work is complete
+5. the generated pack metadata and spot checks confirm that the live artifact reflects the new coverage
+
+If the generated library still shows the old entity counts, old source counts, or old registry timestamp, the work is not complete.
 
 If a lane is known to be fragile, note that explicitly in the pack-specific upkeep section instead of hiding it.
 
@@ -332,13 +376,16 @@ ades registry generate-pack \
   --output-dir /mnt/githubActions/ades_big_data/generated_runtime_packs
 ```
 
+Do not stop after the fetch, research, or local code-change stages. When those are done, you must create the actual generated `finance-<country>-en` pack and then rebuild or refresh the real library surface that should contain it.
+
 After pack generation:
 
 1. build or update a static registry
 2. validate the generated pack
-3. test a clean pull from the target registry
-4. run real-text smoke checks
-5. only then promote or publish
+3. confirm the target library now reflects the new artifact by checking the generated pack metadata
+4. test a clean pull from the target registry
+5. run real-text smoke checks
+6. only then promote or publish
 
 ## Checklist
 
@@ -352,7 +399,10 @@ Use this as the minimum checklist for any new country lane or enhancement.
 - alias policy reviewed
 - people and institution linkage reviewed
 - tests added
+- actual `finance-<country>-en` library artifact created after the change
 - generated artifact validated
+- target local library surface updated to carry the new artifact
+- target prod or reviewed library surface updated when that surface is part of the task
 - pack-specific upkeep documentation updated
 
 ## Quality Bar
@@ -364,6 +414,7 @@ A good country finance pack is:
 - strong on exact aliases
 - cautious about ambiguity
 - explicit about operational fragility
+- reflected in the actual generated library, not only in local source changes
 - maintained as an evolving production artifact, not a one-time scrape
 
 That is the standard for creating a new pack and for deciding whether an enhancement actually improved one.

@@ -28,11 +28,24 @@ The production host must provide all of the following:
 
 - a running local Qdrant HTTP endpoint on `127.0.0.1:6333`
 - a published collection alias named `ades-qids-current`
-- the following `ades` config values in `/etc/ades/config.toml`:
+- the following `ades` runtime settings, provided either through `/etc/ades/config.toml`
+  or the active `systemd --user` drop-ins:
   - `vector_search_enabled = true`
   - `vector_search_url = "http://127.0.0.1:6333"`
   - `vector_search_collection_alias = "ades-qids-current"`
   - optional tuning such as `vector_search_related_limit`
+
+Current live host note:
+
+- the deployed `ades.service` currently gets the vector flags from
+  `/home/deploy/.config/systemd/user/ades.service.d/vector.conf`
+  rather than from `/etc/ades/config.toml`
+- verify the active values with:
+
+```bash
+systemctl --user cat ades.service
+systemctl --user show ades.service --property=Environment --property=EnvironmentFiles
+```
 
 Recommended verification commands on the production host:
 
@@ -68,6 +81,106 @@ PY
 The `/v0/tag` HTTP surface reads vector switches from the request `options` object.
 Sending `include_related_entities` or `include_graph_support` as top-level JSON fields
 does not activate the hosted vector lane on the service endpoint.
+
+## Production Graph Context Runtime
+
+The graph-context lane is now the first hosted path for graph-backed suppression and
+metadata-backed implied-entity discovery. It is still feature-flagged and must be
+enabled explicitly in the live service environment.
+
+Required runtime values:
+
+- `graph_context_enabled = true`
+- `graph_context_artifact_path = "/home/deploy/.local/share/ades-artifacts/graph-store/current/qid_graph_store.sqlite"`
+- optional tuning:
+  - `graph_context_max_depth = 2`
+  - `graph_context_related_limit = 5`
+  - `graph_context_seed_neighbor_limit = 24`
+  - `graph_context_candidate_limit = 128`
+  - `graph_context_min_supporting_seeds = 2`
+  - `graph_context_genericity_penalty_enabled = true`
+
+Operational notes:
+
+- the current staged artifact location is `/home/deploy/.local/share/ades-artifacts/graph-store/current`
+- the runtime expects a graph store built with the richer `node_stats` table introduced by the entity-context work
+- the runtime now tolerates migrated/legacy graph artifacts whose `nodes` table is missing optional metadata columns such as `popularity`; missing fields are treated as `null` rather than crashing the request path
+- the preferred rollout path on the current host is a new `systemd --user` drop-in such as
+  `/home/deploy/.config/systemd/user/ades.service.d/graph-context.conf` with:
+
+```ini
+[Service]
+Environment=ADES_GRAPH_CONTEXT_ENABLED=true
+Environment=ADES_GRAPH_CONTEXT_ARTIFACT_PATH=/home/deploy/.local/share/ades-artifacts/graph-store/current/qid_graph_store.sqlite
+Environment=ADES_GRAPH_CONTEXT_MAX_DEPTH=2
+Environment=ADES_GRAPH_CONTEXT_RELATED_LIMIT=5
+Environment=ADES_GRAPH_CONTEXT_SEED_NEIGHBOR_LIMIT=24
+Environment=ADES_GRAPH_CONTEXT_CANDIDATE_LIMIT=128
+Environment=ADES_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS=2
+Environment=ADES_GRAPH_CONTEXT_GENERICITY_PENALTY_ENABLED=true
+```
+
+- after adding or changing the drop-in, run:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user restart ades.service
+systemctl --user show ades.service --property=Environment
+```
+
+- graph-backed implied entities are intentionally limited to metadata-backed candidates; anonymous adjacent graph hubs are not expected to surface in `related_entities`
+- `include_related_entities = true` is now enough to activate the graph-context related-entity path when the feature flag is enabled; callers do not need to force `refine_links = true`
+
+Recommended host-local verification:
+
+```bash
+python3 - <<'PY'
+import json
+import urllib.request
+
+request = urllib.request.Request(
+    "http://127.0.0.1:8734/v0/tag",
+    data=json.dumps(
+        {
+            "text": "OpenAI and Microsoft announced a joint AI initiative in Washington.",
+            "pack": "general-en",
+            "options": {
+                "include_related_entities": True,
+                "include_graph_support": True,
+            },
+        }
+    ).encode("utf-8"),
+    headers={"content-type": "application/json"},
+    method="POST",
+)
+with urllib.request.urlopen(request, timeout=60) as response:
+    payload = json.load(response)
+
+graph_support = payload.get("graph_support") or {}
+warnings = list(graph_support.get("warnings") or [])
+if not graph_support.get("applied"):
+    raise SystemExit(f"graph context did not apply: {warnings}")
+disallowed = {
+    "graph_context_disabled",
+    "graph_context_artifact_missing",
+    "no_wikidata_seed_entities",
+}
+if disallowed.intersection(warnings):
+    raise SystemExit(f"graph context smoke check failed: {warnings}")
+print(json.dumps(graph_support, indent=2, sort_keys=True))
+print(json.dumps(payload.get("related_entities"), indent=2, sort_keys=True))
+PY
+```
+
+Latest verified live smoke on `2026-04-21` using `/home/deploy/deleteme.txt`:
+
+- host-local plain `POST /v0/tag/file`: `29` entities, `0` related entities, no graph metadata, about `14.485s`
+- host-local flagged `POST /v0/tag/file`: `24` entities, `1` related entity, `graph_support.applied = true`, `suppressed_entity_count = 5`, about `13.698s`
+- public plain `POST https://api.adestool.com/v0/tag`: `29` entities, `0` related entities, no graph metadata, about `12.491s`
+- public flagged `POST https://api.adestool.com/v0/tag`: `24` entities, `1` related entity, `graph_support.applied = true`, `suppressed_entity_count = 5`, about `12.765s`
+- latest verified related entity for that sample:
+  - `Americas` -> `wikidata:Q828`
+  - supporting seeds: `wikidata:Q30`, `wikidata:Q49`
 
 ## CI/CD Model
 

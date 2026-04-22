@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from hashlib import sha256
@@ -10,7 +11,9 @@ import json
 from pathlib import Path
 import re
 import shutil
+import time
 from typing import Any
+import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 import zipfile
@@ -38,19 +41,33 @@ DEFAULT_FINANCE_PEOPLE_OPERATOR_URL = "operator://ades/finance-people-entities"
 DEFAULT_DERIVED_FINANCE_PEOPLE_OPERATOR_URL = "operator://ades/sec-proxy-people-entities"
 DEFAULT_SEC_ARCHIVES_BASE_URL = "https://www.sec.gov/Archives/edgar/data"
 DEFAULT_SOURCE_FETCH_USER_AGENT = "ades/0.1.0 (ops@adestool.com)"
+_SEC_RETRYABLE_DOWNLOAD_STATUS_CODES = {429, 503}
+_SEC_DOWNLOAD_MAX_ATTEMPTS = 5
+_SEC_DOWNLOAD_RETRY_BASE_SECONDS = 1.0
 _DEFAULT_FINANCE_PEOPLE_FORMS = ("DEF 14A", "DEFA14A")
-_DEFAULT_FINANCE_PEOPLE_FILINGS_PER_COMPANY = 1
+_DEFAULT_FINANCE_PEOPLE_FILINGS_PER_COMPANY = 2
+_SEC_PROXY_DOWNLOAD_WORKERS = 4
+_PROXY_ROLE_MAX_WORDS = 16
+_PROXY_ROLE_MAX_CHARS = 120
 _FINANCE_PERSON_TITLE_BY_CLASS: tuple[tuple[str, str], ...] = (
     ("president and chief executive officer", "executive_officer"),
     ("chief executive officer", "executive_officer"),
     ("chief financial officer", "executive_officer"),
     ("chief operating officer", "executive_officer"),
     ("chief accounting officer", "executive_officer"),
+    ("principal accounting officer", "executive_officer"),
+    ("principal executive officer", "executive_officer"),
+    ("principal financial officer", "executive_officer"),
+    ("chief technology officer", "executive_officer"),
+    ("chief people officer", "executive_officer"),
     ("chief investment officer", "investment_professional"),
     ("chief risk officer", "investment_professional"),
     ("chief compliance officer", "investment_professional"),
     ("chief legal officer", "executive_officer"),
     ("general counsel", "executive_officer"),
+    ("executive chairman", "director"),
+    ("executive chair", "director"),
+    ("independent chair", "director"),
     ("executive vice president", "executive_officer"),
     ("senior vice president", "executive_officer"),
     ("vice president", "executive_officer"),
@@ -62,6 +79,7 @@ _FINANCE_PERSON_TITLE_BY_CLASS: tuple[tuple[str, str], ...] = (
     ("chair of the board", "director"),
     ("chairman", "director"),
     ("chairwoman", "director"),
+    ("chairperson", "director"),
     ("chair", "director"),
     ("director", "director"),
     ("president", "executive_officer"),
@@ -95,26 +113,113 @@ _FINANCE_PERSON_LINE_PATTERNS = (
         re.IGNORECASE,
     ),
 )
+_FINANCE_PERSON_INLINE_LINE_PATTERN = re.compile(
+    rf"^\s*(?P<name>{_FINANCE_PERSON_NAME_PATTERN})\s*(?:,|\||-)\s*"
+    rf"(?P<title>.+?)\s*$",
+    re.IGNORECASE,
+)
+_FINANCE_PERSON_SECTION_HEADING_PATTERN = re.compile(
+    r"(?:members of the .* committee|committee members)",
+    re.IGNORECASE,
+)
 _FINANCE_PERSON_CORPORATE_TOKENS = {
+    "co",
+    "co.",
     "corp",
     "corp.",
     "corporation",
     "holdings",
     "inc",
     "inc.",
+    "llp",
     "ltd",
     "ltd.",
     "llc",
     "lp",
+    "partners",
     "plc",
 }
 _FINANCE_PERSON_STOP_TOKENS = {
+    "at",
     "and",
+    "annual",
+    "against",
+    "awards",
     "board",
+    "benefits",
+    "business",
+    "career",
+    "cash",
+    "certain",
+    "chain",
+    "check",
+    "common",
     "committee",
     "company",
+    "compensation",
+    "consequences",
+    "continued",
+    "corporate",
+    "dear",
+    "determination",
+    "equity",
+    "exhibit",
+    "fees",
+    "fellow",
+    "global",
+    "governance",
+    "goals",
+    "guidelines",
+    "hedging",
+    "highlights",
+    "income",
+    "information",
+    "internal",
+    "leadership",
     "management",
+    "meeting",
+    "no",
+    "non",
+    "objectives",
     "officer",
+    "other",
+    "overboarding",
+    "our",
+    "owners",
+    "page",
+    "parity",
+    "pay",
+    "performance",
+    "plan",
+    "plans",
+    "policy",
+    "primary",
+    "protections",
+    "proposal",
+    "proposals",
+    "proxy",
+    "psu",
+    "reference",
+    "retainers",
+    "required",
+    "reserve",
+    "relationships",
+    "relationship",
+    "responsibilities",
+    "shares",
+    "shareholder",
+    "shareholders",
+    "statement",
+    "stock",
+    "structure",
+    "summary",
+    "supply",
+    "table",
+    "tax",
+    "target",
+    "value",
+    "vote",
+    "future",
 }
 _FINANCE_PERSON_NAME_PARTICLES = {
     "al",
@@ -139,6 +244,26 @@ _FINANCE_PERSON_TITLE_WORDS = {
     for title, _role_class in _FINANCE_PERSON_TITLE_BY_CLASS
     for token in title.split()
 }
+_FINANCE_PERSON_ROLE_WORDS = {
+    token.casefold()
+    for title, _role_class in _FINANCE_PERSON_TITLE_BY_CLASS
+    for token in title.split()
+}
+_FINANCE_PERSON_ROLE_WORDS.update(
+    {
+        "&",
+        "ceo",
+        "cfo",
+        "coo",
+        "cpo",
+        "cto",
+        "evp",
+        "former",
+        "interim",
+        "svp",
+        "vp",
+    }
+)
 
 
 def _curated_finance_entity(
@@ -853,6 +978,7 @@ def _extract_sec_proxy_people_entities(
     user_agent: str,
 ) -> list[dict[str, object]]:
     entities_by_key: dict[tuple[str, str], dict[str, object]] = {}
+    filings_by_source_id: dict[str, list[dict[str, str]]] = {}
     submission_records = _read_targeted_zip_json_records(
         sec_submissions_path,
         target_source_ids=set(sec_company_profiles),
@@ -866,6 +992,7 @@ def _extract_sec_proxy_people_entities(
             "employer_name", ""
         )
         employer_ticker = employer_profile.get("employer_ticker", "")
+        proxy_filing_count = 0
         for filing in _iter_recent_sec_filings(submission):
             form = _clean_text(filing.get("form")).upper()
             if form not in _DEFAULT_FINANCE_PEOPLE_FORMS:
@@ -875,22 +1002,40 @@ def _extract_sec_proxy_people_entities(
             filing_date = _clean_text(filing.get("filingDate"))
             if not primary_document or not accession_number:
                 continue
-            filing_url = _build_sec_filing_document_url(
-                archive_base_url=archive_base_url,
-                source_id=source_id,
-                accession_number=accession_number,
-                primary_document=primary_document,
+            filings_by_source_id.setdefault(source_id, []).append(
+                {
+                    "employer_cik": source_id,
+                    "employer_name": employer_name,
+                    "employer_ticker": employer_ticker,
+                    "filing_date": filing_date,
+                    "filing_url": _build_sec_filing_document_url(
+                        archive_base_url=archive_base_url,
+                        source_id=source_id,
+                        accession_number=accession_number,
+                        primary_document=primary_document,
+                    ),
+                    "source_form": form,
+                }
             )
-            document_text = _download_text(filing_url, user_agent=user_agent)
-            extracted = _extract_people_from_sec_proxy_document(
-                text=document_text,
-                employer_cik=source_id,
-                employer_name=employer_name,
-                employer_ticker=employer_ticker,
-                filing_date=filing_date,
-                filing_url=filing_url,
-                source_form=form,
-            )
+            proxy_filing_count += 1
+            if proxy_filing_count >= _DEFAULT_FINANCE_PEOPLE_FILINGS_PER_COMPANY:
+                break
+    if not filings_by_source_id:
+        return []
+    with ThreadPoolExecutor(max_workers=_SEC_PROXY_DOWNLOAD_WORKERS) as executor:
+        futures = {
+            executor.submit(
+                _extract_sec_proxy_people_entities_for_company,
+                filings=filings,
+                user_agent=user_agent,
+            ): source_id
+            for source_id, filings in filings_by_source_id.items()
+        }
+        for future in as_completed(futures):
+            try:
+                extracted = future.result()
+            except Exception:
+                continue
             for person_record in extracted:
                 key = (
                     str(person_record.get("employer_cik", "")),
@@ -898,8 +1043,6 @@ def _extract_sec_proxy_people_entities(
                 )
                 if key not in entities_by_key:
                     entities_by_key[key] = person_record
-            if extracted:
-                break
     return sorted(
         entities_by_key.values(),
         key=lambda item: (
@@ -907,6 +1050,34 @@ def _extract_sec_proxy_people_entities(
             str(item.get("canonical_text", "")).casefold(),
         ),
     )
+
+
+def _extract_sec_proxy_people_entities_for_company(
+    *,
+    filings: list[dict[str, str]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    best_extracted: list[dict[str, object]] = []
+    for filing in filings:
+        try:
+            document_text = _download_text(
+                str(filing.get("filing_url", "")),
+                user_agent=user_agent,
+            )
+        except Exception:
+            continue
+        extracted = _extract_people_from_sec_proxy_document(
+            text=document_text,
+            employer_cik=str(filing.get("employer_cik", "")),
+            employer_name=str(filing.get("employer_name", "")),
+            employer_ticker=str(filing.get("employer_ticker", "")),
+            filing_date=str(filing.get("filing_date", "")),
+            filing_url=str(filing.get("filing_url", "")),
+            source_form=str(filing.get("source_form", "")),
+        )
+        if len(extracted) > len(best_extracted):
+            best_extracted = extracted
+    return best_extracted
 
 
 def _iter_recent_sec_filings(submission: dict[str, Any]) -> list[dict[str, str]]:
@@ -955,24 +1126,65 @@ def _build_sec_filing_document_url(
 def _download_text(source_url: str, *, user_agent: str) -> str:
     normalized_source_url = normalize_source_url(source_url)
     parsed = urlparse(normalized_source_url)
-    request: str | urllib.request.Request
-    if parsed.scheme in {"http", "https"}:
-        request = urllib.request.Request(
-            normalized_source_url,
-            headers={
-                "User-Agent": user_agent,
-                "Accept": "text/html,text/plain;q=0.9,*/*;q=0.1",
-            },
-        )
-    else:
-        request = normalized_source_url
-    with urllib.request.urlopen(request, timeout=60.0) as response:
-        payload = response.read()
-        charset = response.headers.get_content_charset() or "utf-8"
+    payload: bytes
+    charset = "utf-8"
+    for attempt in range(1, _SEC_DOWNLOAD_MAX_ATTEMPTS + 1):
+        request: str | urllib.request.Request
+        if parsed.scheme in {"http", "https"}:
+            request = urllib.request.Request(
+                normalized_source_url,
+                headers={
+                    "User-Agent": user_agent,
+                    "Accept": "text/html,text/plain;q=0.9,*/*;q=0.1",
+                },
+            )
+        else:
+            request = normalized_source_url
+        try:
+            with urllib.request.urlopen(request, timeout=60.0) as response:
+                payload = response.read()
+                charset = response.headers.get_content_charset() or "utf-8"
+            break
+        except urllib.error.HTTPError as exc:
+            if not _should_retry_sec_download(
+                source_url=normalized_source_url,
+                error=exc,
+                attempt=attempt,
+            ):
+                raise
+            time.sleep(_sec_download_retry_delay_seconds(exc, attempt=attempt))
     try:
         return payload.decode(charset, errors="replace")
     except LookupError:
         return payload.decode("utf-8", errors="replace")
+
+
+def _should_retry_sec_download(
+    *,
+    source_url: str,
+    error: urllib.error.HTTPError,
+    attempt: int,
+) -> bool:
+    hostname = (urlparse(source_url).hostname or "").casefold()
+    return (
+        hostname.endswith("sec.gov")
+        and error.code in _SEC_RETRYABLE_DOWNLOAD_STATUS_CODES
+        and attempt < _SEC_DOWNLOAD_MAX_ATTEMPTS
+    )
+
+
+def _sec_download_retry_delay_seconds(
+    error: urllib.error.HTTPError,
+    *,
+    attempt: int,
+) -> float:
+    retry_after = error.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return max(float(retry_after), _SEC_DOWNLOAD_RETRY_BASE_SECONDS)
+        except ValueError:
+            pass
+    return _SEC_DOWNLOAD_RETRY_BASE_SECONDS * (2 ** (attempt - 1))
 
 
 def _extract_people_from_sec_proxy_document(
@@ -986,53 +1198,183 @@ def _extract_people_from_sec_proxy_document(
     source_form: str,
 ) -> list[dict[str, object]]:
     entities: dict[str, dict[str, object]] = {}
-    for line in _normalize_sec_proxy_document_lines(text):
-        for pattern in _FINANCE_PERSON_LINE_PATTERNS:
-            match = pattern.fullmatch(line)
-            if match is None:
-                continue
-            raw_name = _clean_text(match.group("name"))
-            role_title = _normalize_person_role_title(match.group("title"))
-            canonical_name = _normalize_person_display_name(raw_name)
-            if not _looks_like_finance_person_name(canonical_name, raw_value=raw_name):
-                continue
-            slug = _slugify(canonical_name)
-            if not slug:
-                continue
-            entity_id = f"finance-person:{employer_cik}:{slug}"
-            record: dict[str, object] = {
-                "entity_id": entity_id,
-                "canonical_text": canonical_name,
-                "aliases": (
-                    [raw_name]
-                    if raw_name and raw_name.casefold() != canonical_name.casefold()
-                    else []
-                ),
-                "employer_name": employer_name,
-                "employer_ticker": employer_ticker,
-                "employer_cik": employer_cik,
-                "role_title": role_title,
-                "role_class": _classify_finance_person_role(role_title),
-                "source_form": source_form,
-                "source_name": "sec-proxy-people",
-                "source_id": f"{employer_cik}:{slug}:def14a",
-                "effective_date": filing_date,
-                "source_url": filing_url,
-            }
-            existing = entities.get(entity_id)
-            if existing is None:
-                entities[entity_id] = record
-                break
-            existing_aliases = [
-                _clean_text(alias)
-                for alias in existing.get("aliases", [])
-                if _clean_text(alias)
-            ]
-            if raw_name and raw_name.casefold() != canonical_name.casefold():
-                existing_aliases.append(raw_name)
-            existing["aliases"] = _dedupe_preserving_order(existing_aliases)
-            break
+    lines = _normalize_sec_proxy_document_lines(text)
+    extracted_records: list[tuple[str, str]] = [
+        *_extract_inline_sec_proxy_people_records(lines),
+        *_extract_adjacent_sec_proxy_people_records(lines),
+        *_extract_committee_member_sec_proxy_people_records(lines),
+    ]
+    for raw_name, raw_role_title in extracted_records:
+        canonical_name = _normalize_person_display_name(raw_name)
+        if not _looks_like_finance_person_name(canonical_name, raw_value=raw_name):
+            continue
+        role_title = _normalize_proxy_role_title(raw_role_title)
+        if not role_title:
+            continue
+        slug = _slugify(canonical_name)
+        if not slug:
+            continue
+        entity_id = f"finance-person:{employer_cik}:{slug}"
+        record: dict[str, object] = {
+            "entity_id": entity_id,
+            "canonical_text": canonical_name,
+            "aliases": (
+                [raw_name]
+                if raw_name and raw_name.casefold() != canonical_name.casefold()
+                else []
+            ),
+            "employer_name": employer_name,
+            "employer_ticker": employer_ticker,
+            "employer_cik": employer_cik,
+            "role_title": role_title,
+            "role_class": _classify_finance_person_role(role_title),
+            "source_form": source_form,
+            "source_name": "sec-proxy-people",
+            "source_id": f"{employer_cik}:{slug}:def14a",
+            "effective_date": filing_date,
+            "source_url": filing_url,
+        }
+        existing = entities.get(entity_id)
+        if existing is None:
+            entities[entity_id] = record
+            continue
+        existing_aliases = [
+            _clean_text(alias)
+            for alias in existing.get("aliases", [])
+            if _clean_text(alias)
+        ]
+        if raw_name and raw_name.casefold() != canonical_name.casefold():
+            existing_aliases.append(raw_name)
+        existing["aliases"] = _dedupe_preserving_order(existing_aliases)
+        existing_role_title = _clean_text(existing.get("role_title"))
+        if len(role_title) > len(existing_role_title):
+            existing["role_title"] = role_title
+            existing["role_class"] = _classify_finance_person_role(role_title)
     return list(entities.values())
+
+
+def _extract_inline_sec_proxy_people_records(
+    lines: list[str],
+) -> list[tuple[str, str]]:
+    records: list[tuple[str, str]] = []
+    for line in lines:
+        for segment in _iter_proxy_line_segments(line):
+            for pattern in _FINANCE_PERSON_LINE_PATTERNS:
+                match = pattern.fullmatch(segment)
+                if match is None:
+                    continue
+                raw_name = _clean_text(match.group("name"))
+                role_title = _normalize_proxy_role_title(match.group("title"))
+                if raw_name and role_title:
+                    records.append((raw_name, role_title))
+                break
+            else:
+                match = _FINANCE_PERSON_INLINE_LINE_PATTERN.fullmatch(segment)
+                if match is None:
+                    continue
+                raw_name = _clean_text(match.group("name"))
+                role_title = _normalize_proxy_role_title(match.group("title"))
+                if raw_name and _looks_like_proxy_role_title(role_title):
+                    records.append((raw_name, role_title))
+    return records
+
+
+def _extract_adjacent_sec_proxy_people_records(
+    lines: list[str],
+) -> list[tuple[str, str]]:
+    records: list[tuple[str, str]] = []
+    for index, line in enumerate(lines):
+        raw_name = _clean_text(line)
+        canonical_name = _normalize_person_display_name(raw_name)
+        if not _looks_like_finance_person_name(canonical_name, raw_value=raw_name):
+            continue
+        title_candidates: list[str] = []
+        for offset in range(1, 3):
+            candidate_index = index + offset
+            if candidate_index >= len(lines):
+                break
+            candidate = _normalize_proxy_role_title(lines[candidate_index])
+            if not candidate:
+                break
+            title_candidates.append(candidate)
+            joined = " ".join(title_candidates)
+            if _looks_like_proxy_role_title(joined):
+                records.append((raw_name, joined))
+                break
+    return records
+
+
+def _extract_committee_member_sec_proxy_people_records(
+    lines: list[str],
+) -> list[tuple[str, str]]:
+    records: list[tuple[str, str]] = []
+    for index, line in enumerate(lines):
+        if _FINANCE_PERSON_SECTION_HEADING_PATTERN.search(line) is None:
+            continue
+        consecutive_non_names = 0
+        saw_name = False
+        for candidate in lines[index + 1 : index + 26]:
+            normalized_candidate = _clean_text(candidate)
+            normalized_candidate = re.sub(r"\s*\([^)]*\)\s*$", "", normalized_candidate)
+            if not normalized_candidate or normalized_candidate in {"•", "*", "-"}:
+                continue
+            if _looks_like_finance_person_name(
+                _normalize_person_display_name(normalized_candidate),
+                raw_value=normalized_candidate,
+            ):
+                records.append((normalized_candidate, "Director"))
+                saw_name = True
+                consecutive_non_names = 0
+                continue
+            consecutive_non_names += 1
+            if saw_name and consecutive_non_names >= 3:
+                break
+    return records
+
+
+def _iter_proxy_line_segments(line: str) -> list[str]:
+    normalized_line = _clean_text(line)
+    if not normalized_line:
+        return []
+    segments = [normalized_line]
+    if ";" in normalized_line:
+        segments.extend(
+            _clean_text(segment)
+            for segment in normalized_line.split(";")
+            if _clean_text(segment)
+        )
+    return _dedupe_preserving_order(segments)
+
+
+def _looks_like_proxy_role_title(value: str) -> bool:
+    normalized = _normalize_proxy_role_title(value).casefold()
+    if not normalized:
+        return False
+    words = [
+        token.strip(" ,.;:()[]{}\"'").casefold()
+        for token in normalized.split()
+        if token.strip(" ,.;:()[]{}\"'")
+    ]
+    if not words:
+        return False
+    if len(normalized) > _PROXY_ROLE_MAX_CHARS or len(words) > _PROXY_ROLE_MAX_WORDS:
+        return False
+    if not any(title in normalized for title, _role_class in _FINANCE_PERSON_TITLE_BY_CLASS):
+        return False
+    allowed_word_count = sum(
+        1 for token in words if token in _FINANCE_PERSON_ROLE_WORDS
+    )
+    return allowed_word_count >= max(1, len(words) // 2)
+
+
+def _normalize_proxy_role_title(value: str) -> str:
+    normalized = _clean_text(value)
+    normalized = re.sub(r"\(\d+\)", " ", normalized)
+    normalized = re.sub(r"\[[0-9]+\]", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip(" ,;:-")
+    if not normalized:
+        return ""
+    return _normalize_person_role_title(normalized)
 
 
 def _normalize_sec_proxy_document_lines(text: str) -> list[str]:
@@ -1075,6 +1417,8 @@ def _normalize_person_display_name(value: str) -> str:
             continue
         if token.isupper():
             token = token.capitalize()
+        elif "'" in token:
+            token = "'".join(part.capitalize() for part in token.split("'"))
         elif "-" in token:
             token = "-".join(part.capitalize() for part in token.split("-"))
         else:
@@ -1086,6 +1430,17 @@ def _normalize_person_display_name(value: str) -> str:
 def _looks_like_finance_person_name(value: str, *, raw_value: str | None = None) -> bool:
     normalized = _clean_text(value)
     if not normalized:
+        return False
+    normalized = re.sub(r"\s*\(\d+\)\s*$", "", normalized)
+    normalized = re.sub(
+        r"^(?:Dr|Mr|Mrs|Ms|Messrs)\.?\s+",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if "|" in normalized:
+        return False
+    if any(character.isdigit() for character in normalized):
         return False
     tokens = [
         token.strip(" ,.;:()[]{}\"'")
@@ -1107,9 +1462,20 @@ def _looks_like_finance_person_name(value: str, *, raw_value: str | None = None)
     if lowered_tokens & _FINANCE_PERSON_TITLE_WORDS:
         return False
     if raw_value is not None:
+        cleaned_raw_value = re.sub(r"\s*\(\d+\)\s*$", "", _clean_text(raw_value))
+        cleaned_raw_value = re.sub(
+            r"^(?:Dr|Mr|Mrs|Ms|Messrs)\.?\s+",
+            "",
+            cleaned_raw_value,
+            flags=re.IGNORECASE,
+        )
+        if "|" in cleaned_raw_value:
+            return False
+        if any(character.isdigit() for character in cleaned_raw_value):
+            return False
         raw_tokens = [
             token.strip(" ,.;:()[]{}\"'")
-            for token in _clean_text(raw_value).split()
+            for token in cleaned_raw_value.split()
             if token.strip(" ,.;:()[]{}\"'")
         ]
         saw_presented_name_token = False

@@ -356,6 +356,9 @@ def _query_vector_results_by_seed(
                             except QdrantVectorSearchError as fallback_exc:
                                 warnings.append(f"vector_search_failed:{fallback_exc}")
                                 return {}, warnings
+                            warnings.append(
+                                f"vector_search_seed_graph_fallback:{seed_entity_id}"
+                            )
                             continue
                         warnings.append(f"vector_search_seed_missing:{seed_entity_id}")
                         continue
@@ -405,7 +408,6 @@ def _graph_context_strong_seed_entity_ids(response: TagResponse) -> list[str]:
         seen.add(entity_id)
         strong_seed_ids.append(entity_id)
     return strong_seed_ids
-
 
 def _graph_context_vector_query_seed_entity_ids(response: TagResponse) -> list[str]:
     entity_label_by_id = {
@@ -474,8 +476,6 @@ def _graph_context_vector_query_seed_entity_ids(response: TagResponse) -> list[s
         if len(selected) >= _HYBRID_VECTOR_QUERY_SEED_LIMIT:
             break
     return selected
-
-
 def _graph_gate_vector_related_entities(
     vector_related_entities: list[RelatedEntityMatch],
     *,
@@ -651,16 +651,17 @@ def _enrich_graph_context_response_with_vector_proposals(
     if len(strong_seed_entity_ids) < settings.graph_context_min_supporting_seeds:
         return response
     proposal_seed_entity_ids = _graph_context_vector_query_seed_entity_ids(response)
-    if len(proposal_seed_entity_ids) < settings.graph_context_min_supporting_seeds:
-        return response
+    query_seed_entity_ids = proposal_seed_entity_ids
+    if len(query_seed_entity_ids) < settings.graph_context_min_supporting_seeds:
+        query_seed_entity_ids = strong_seed_entity_ids
     query_limit = max(
-        settings.graph_context_vector_proposal_limit * 2,
-        settings.graph_context_vector_proposal_limit + 2,
+        settings.graph_context_vector_proposal_limit * 4,
+        settings.graph_context_vector_proposal_limit + 4,
     )
     results_by_seed, warnings = _query_vector_results_by_seed(
         response=response,
         settings=settings,
-        seed_entity_ids=proposal_seed_entity_ids,
+        seed_entity_ids=query_seed_entity_ids,
         query_limit=query_limit,
         allow_non_production=True,
     )

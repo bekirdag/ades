@@ -48,6 +48,7 @@ class _TargetEntity:
     canonical_text: str
     entity_type: str | None = None
     source_name: str | None = None
+    popularity: float | None = None
     packs: set[str] = field(default_factory=set)
     sparse_vector: dict[int, float] = field(default_factory=dict)
 
@@ -179,6 +180,13 @@ def _load_targets(
                     skipped_non_wikidata += 1
                     continue
                 qid = entity_id.partition(":")[2]
+                raw_popularity = payload.get("popularity")
+                popularity: float | None = None
+                if raw_popularity is not None:
+                    try:
+                        popularity = float(raw_popularity)
+                    except (TypeError, ValueError):
+                        popularity = None
                 entry = targets.get(qid)
                 if entry is None:
                     entry = _TargetEntity(
@@ -195,6 +203,7 @@ def _load_targets(
                             if payload.get("source_name") is not None
                             else None
                         ),
+                        popularity=popularity,
                     )
                     if entry.entity_type:
                         _add_feature(
@@ -211,6 +220,9 @@ def _load_targets(
                             weight=0.25,
                         )
                     targets[qid] = entry
+                elif popularity is not None:
+                    if entry.popularity is None or popularity > entry.popularity:
+                        entry.popularity = popularity
                 entry.packs.add(pack_id)
         if skipped_non_wikidata:
             warnings.append(f"skipped_non_wikidata:{pack_id}:{skipped_non_wikidata}")

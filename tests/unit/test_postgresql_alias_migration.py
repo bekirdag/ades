@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import ades.storage.postgresql as postgresql_module
 from tests.pack_registry_helpers import create_pack_source
 
 from ades.service.models import VectorIndexBuildResponse
@@ -419,3 +420,126 @@ def test_postgresql_replace_aliases_falls_back_to_executemany_without_copy() -> 
     assert len(rows) == 1
     assert rows[0][0] == "general-en"
     assert rows[0][1] == "Third Point"
+
+
+def test_postgresql_load_aliases_streams_pretty_printed_pack_fixture(
+    tmp_path: Path,
+) -> None:
+    pack_dir = create_pack_source(
+        tmp_path,
+        pack_id="general-en",
+        domain="general",
+        aliases=(
+            ("Daniel Loeb", "person"),
+            ("Third Point", "organization"),
+        ),
+    )
+
+    aliases = PostgreSQLMetadataStore._load_aliases(pack_dir, "general")
+
+    assert aliases == [
+        {
+            "text": "Daniel Loeb",
+            "label": "person",
+            "normalized_text": "daniel loeb",
+            "canonical_text": "Daniel Loeb",
+            "alias_score": 1.0,
+            "generated": False,
+            "source_name": "",
+            "entity_id": "",
+            "source_priority": 0.6,
+            "popularity_weight": 0.5,
+            "source_domain": "general",
+        },
+        {
+            "text": "Third Point",
+            "label": "organization",
+            "normalized_text": "third point",
+            "canonical_text": "Third Point",
+            "alias_score": 1.0,
+            "generated": False,
+            "source_name": "",
+            "entity_id": "",
+            "source_priority": 0.6,
+            "popularity_weight": 0.5,
+            "source_domain": "general",
+        },
+    ]
+
+
+def test_postgresql_iter_alias_payload_items_supports_line_oriented_json(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "aliases.json"
+    path.write_text(
+        "{\n"
+        '  "aliases": [\n'
+        '    {"text":"Daniel Loeb","label":"person","canonical_text":"Daniel S. Loeb"},\n'
+        '    {"text":"Third Point","label":"organization","score":0.88}\n'
+        "  ]\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    aliases = [
+        PostgreSQLMetadataStore._coerce_alias_record(item, domain="general")
+        for item in PostgreSQLMetadataStore._iter_alias_payload_items(path)
+    ]
+
+    assert aliases[0]["canonical_text"] == "Daniel S. Loeb"
+    assert aliases[0]["normalized_text"] == "daniel loeb"
+    assert aliases[1]["alias_score"] == 0.88
+    assert aliases[1]["normalized_text"] == "third point"
+
+
+def test_postgresql_replace_aliases_batches_generator_input_without_copy(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        postgresql_module,
+        "_ALIAS_EXECUTEMANY_BATCH_SIZE",
+        2,
+    )
+    connection = _AliasReplaceConnection(supports_copy=False)
+    store = object.__new__(PostgreSQLMetadataStore)
+
+    def alias_rows():
+        for index in range(5):
+            yield {
+                "text": f"Alias {index}",
+                "label": "organization",
+                "normalized_text": f"alias {index}",
+                "canonical_text": f"Alias Canonical {index}",
+                "alias_score": 0.8,
+                "generated": False,
+                "source_name": "fixture",
+                "entity_id": f"fixture:{index}",
+                "source_priority": 0.7,
+                "popularity_weight": 0.6,
+                "source_domain": "general",
+            }
+
+    PostgreSQLMetadataStore._replace_aliases(
+        store,
+        connection,
+        "general-en",
+        alias_rows(),
+    )
+
+    batch_sizes = [
+        len(rows)
+        for _statement, rows in connection.cursor_impl.executemany_calls
+    ]
+    assert batch_sizes == [2, 2, 1]
+    flattened_rows = [
+        row
+        for _statement, rows in connection.cursor_impl.executemany_calls
+        for row in rows
+    ]
+    assert [row[1] for row in flattened_rows] == [
+        "Alias 0",
+        "Alias 1",
+        "Alias 2",
+        "Alias 3",
+        "Alias 4",
+    ]

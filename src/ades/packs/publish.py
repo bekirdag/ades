@@ -49,6 +49,8 @@ DEFAULT_REGISTRY_PACKS_DIR = (
 DEFAULT_REGISTRY_PROMOTION_SPEC_PATH = (
     Path(__file__).resolve().parent.parent / "resources" / "registry" / "promoted-release.json"
 )
+MIN_DEPLOY_MATCHER_ARTIFACT_SIZE_BYTES = 1024
+MIN_DEPLOY_MATCHER_ENTRIES_SIZE_BYTES = 1024
 
 
 @dataclass(frozen=True)
@@ -251,6 +253,7 @@ def build_static_registry(
         )
         artifact_path = artifacts_output_dir / artifact_filename
         _write_pack_artifact(pack_dir, packaging_manifest, artifact_path)
+        _validate_pack_artifact_sources(artifact_path, packaging_manifest)
         artifact_sha256 = _sha256_file(artifact_path)
         published_manifest = _build_published_manifest(
             source_manifest,
@@ -542,6 +545,76 @@ def _validate_manifest_sources(pack_dir: Path, manifest: PackManifest) -> None:
             raise FileNotFoundError(
                 f"Pack matcher file listed in manifest is missing: {resolved}"
             )
+    _validate_manifest_matcher_sizes(
+        artifact_size_bytes=(pack_dir / manifest.matcher.artifact_path).stat().st_size,
+        entries_size_bytes=(pack_dir / manifest.matcher.entries_path).stat().st_size,
+        manifest=manifest,
+        source=str(pack_dir),
+    )
+
+
+def _validate_pack_artifact_sources(artifact_path: Path, manifest: PackManifest) -> None:
+    if manifest.matcher is None:
+        return
+    matcher_artifact_path = manifest.matcher.artifact_path.lstrip("./")
+    matcher_entries_path = manifest.matcher.entries_path.lstrip("./")
+    target_sizes: dict[str, int] = {}
+    with artifact_path.open("rb") as raw_handle:
+        decompressor = zstandard.ZstdDecompressor()
+        with decompressor.stream_reader(raw_handle) as decompressed_handle:
+            with tarfile.open(fileobj=decompressed_handle, mode="r|") as archive:
+                for member in archive:
+                    if not member.isfile():
+                        continue
+                    member_name = member.name.lstrip("./")
+                    if member_name == matcher_artifact_path:
+                        target_sizes[matcher_artifact_path] = member.size
+                    elif member_name == matcher_entries_path:
+                        target_sizes[matcher_entries_path] = member.size
+                    if (
+                        matcher_artifact_path in target_sizes
+                        and matcher_entries_path in target_sizes
+                    ):
+                        break
+    missing = [
+        relative_path
+        for relative_path in (matcher_artifact_path, matcher_entries_path)
+        if relative_path not in target_sizes
+    ]
+    if missing:
+        raise ValueError(
+            f"Published pack artifact is missing matcher file(s): {', '.join(sorted(missing))}"
+        )
+    _validate_manifest_matcher_sizes(
+        artifact_size_bytes=target_sizes[matcher_artifact_path],
+        entries_size_bytes=target_sizes[matcher_entries_path],
+        manifest=manifest,
+        source=str(artifact_path),
+    )
+
+
+def _validate_manifest_matcher_sizes(
+    *,
+    artifact_size_bytes: int,
+    entries_size_bytes: int,
+    manifest: PackManifest,
+    source: str,
+) -> None:
+    matcher = manifest.matcher
+    if matcher is None:
+        return
+    if manifest.pack_id != "general-en":
+        return
+    if artifact_size_bytes < MIN_DEPLOY_MATCHER_ARTIFACT_SIZE_BYTES:
+        raise ValueError(
+            "Pack matcher artifact is implausibly small for deployment: "
+            f"{manifest.pack_id}={artifact_size_bytes} from {source}"
+        )
+    if entries_size_bytes < MIN_DEPLOY_MATCHER_ENTRIES_SIZE_BYTES:
+        raise ValueError(
+            "Pack matcher entries are implausibly small for deployment: "
+            f"{manifest.pack_id}={entries_size_bytes} from {source}"
+        )
 
 
 def _write_pack_artifact(source_pack_dir: Path, manifest: PackManifest, artifact_path: Path) -> None:
@@ -811,6 +884,7 @@ def _materialize_published_registry(
                 f"Published artifact checksum mismatch for {source_manifest.pack_id}: "
                 f"expected {source_artifact.sha256}, got {artifact_sha256}"
             )
+        _validate_pack_artifact_sources(artifact_path, source_manifest)
         published_manifest = _build_published_manifest(
             source_manifest,
             artifact_relative_url=f"../../artifacts/{artifact_name}",
