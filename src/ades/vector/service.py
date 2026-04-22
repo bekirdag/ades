@@ -8,6 +8,11 @@ from statistics import mean
 from ..config import Settings
 from ..service.models import GraphSupport, RelatedEntityMatch, TagResponse
 from ..storage import RuntimeTarget
+from .builder import (
+    DEFAULT_QID_GRAPH_ALLOWED_PREDICATES,
+    DEFAULT_QID_GRAPH_DIMENSIONS,
+    build_dense_vector_from_graph_store,
+)
 from .context_engine import apply_graph_context
 from .graph_store import QidGraphStore
 from .qdrant import QdrantNearestPoint, QdrantVectorSearchClient, QdrantVectorSearchError
@@ -312,7 +317,10 @@ def _query_vector_results_by_seed(
     filter_payload = _query_filter_payload(response)
     warnings: list[str] = []
     results_by_seed: dict[str, list[QdrantNearestPoint]] = {}
+    graph_store: QidGraphStore | None = None
     try:
+        if settings.graph_context_artifact_path is not None:
+            graph_store = QidGraphStore(settings.graph_context_artifact_path)
         with QdrantVectorSearchClient(
             settings.vector_search_url,
             api_key=settings.vector_search_api_key,
@@ -327,14 +335,38 @@ def _query_vector_results_by_seed(
                     )
                 except QdrantVectorSearchError as exc:
                     if exc.status_code == 404:
-                        warnings.append(
-                            f"vector_search_seed_missing:{seed_entity_id}"
-                        )
+                        fallback_vector = None
+                        if graph_store is not None:
+                            fallback_vector = build_dense_vector_from_graph_store(
+                                graph_store,
+                                seed_entity_id.removeprefix("wikidata:"),
+                                dimensions=DEFAULT_QID_GRAPH_DIMENSIONS,
+                                allowed_predicates=DEFAULT_QID_GRAPH_ALLOWED_PREDICATES,
+                            )
+                        if fallback_vector is not None:
+                            try:
+                                results_by_seed[seed_entity_id] = client.query_similar_by_vector(
+                                    settings.vector_search_collection_alias,
+                                    vector=fallback_vector,
+                                    limit=query_limit,
+                                    filter_payload=filter_payload,
+                                )
+                            except QdrantVectorSearchError as fallback_exc:
+                                warnings.append(f"vector_search_failed:{fallback_exc}")
+                                return {}, warnings
+                            warnings.append(
+                                f"vector_search_seed_graph_fallback:{seed_entity_id}"
+                            )
+                            continue
+                        warnings.append(f"vector_search_seed_missing:{seed_entity_id}")
                         continue
                     raise
     except QdrantVectorSearchError as exc:
         warnings.append(f"vector_search_failed:{exc}")
         return {}, warnings
+    finally:
+        if graph_store is not None:
+            graph_store.close()
     if not results_by_seed:
         warnings.append("vector_search_no_available_seed_points")
     return results_by_seed, warnings

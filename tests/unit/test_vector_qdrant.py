@@ -41,6 +41,40 @@ def test_query_similar_by_id_includes_payload_filter() -> None:
     }
 
 
+def test_query_similar_by_vector_includes_payload_filter() -> None:
+    captured: dict[str, object] = {}
+    client = object.__new__(QdrantVectorSearchClient)
+
+    def _fake_request(method: str, path: str, *, json_body=None, params=None):
+        captured["method"] = method
+        captured["path"] = path
+        captured["json_body"] = json_body
+        return {"result": []}
+
+    client._request = _fake_request  # type: ignore[method-assign]
+
+    points = client.query_similar_by_vector(
+        "ades-qids-current",
+        vector=[0.1, 0.2, 0.3],
+        limit=6,
+        filter_payload={"packs": ["general-en"]},
+    )
+
+    assert points == []
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/collections/ades-qids-current/points/query"
+    assert captured["json_body"] == {
+        "query": [0.1, 0.2, 0.3],
+        "limit": 6,
+        "with_payload": True,
+        "filter": {
+            "must": [
+                {"key": "packs", "match": {"any": ["general-en"]}},
+            ]
+        },
+    }
+
+
 def test_upsert_points_normalizes_string_point_ids() -> None:
     captured: dict[str, object] = {}
     client = object.__new__(QdrantVectorSearchClient)

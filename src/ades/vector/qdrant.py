@@ -256,27 +256,8 @@ class QdrantVectorSearchClient:
         )
         self._request("POST", "/collections/aliases", json_body={"actions": actions})
 
-    def query_similar_by_id(
-        self,
-        collection_name: str,
-        *,
-        point_id: str,
-        limit: int,
-        filter_payload: dict[str, object] | None = None,
-    ) -> list[QdrantNearestPoint]:
-        request_body: dict[str, Any] = {
-            "query": _qdrant_point_id(point_id),
-            "limit": limit,
-            "with_payload": True,
-        }
-        payload_filter = _payload_filter_json(filter_payload)
-        if payload_filter is not None:
-            request_body["filter"] = payload_filter
-        payload = self._request(
-            "POST",
-            f"/collections/{collection_name}/points/query",
-            json_body=request_body,
-        )
+    @staticmethod
+    def _parse_query_points_payload(payload: dict[str, Any]) -> list[QdrantNearestPoint]:
         result = payload.get("result")
         raw_points = result.get("points") if isinstance(result, dict) else result
         if not isinstance(raw_points, list):
@@ -305,3 +286,49 @@ class QdrantVectorSearchClient:
                 )
             )
         return points
+
+    def query_similar_by_id(
+        self,
+        collection_name: str,
+        *,
+        point_id: str,
+        limit: int,
+        filter_payload: dict[str, object] | None = None,
+    ) -> list[QdrantNearestPoint]:
+        request_body: dict[str, Any] = {
+            "query": _qdrant_point_id(point_id),
+            "limit": limit,
+            "with_payload": True,
+        }
+        payload_filter = _payload_filter_json(filter_payload)
+        if payload_filter is not None:
+            request_body["filter"] = payload_filter
+        payload = self._request(
+            "POST",
+            f"/collections/{collection_name}/points/query",
+            json_body=request_body,
+        )
+        return self._parse_query_points_payload(payload)
+
+    def query_similar_by_vector(
+        self,
+        collection_name: str,
+        *,
+        vector: list[float],
+        limit: int,
+        filter_payload: dict[str, object] | None = None,
+    ) -> list[QdrantNearestPoint]:
+        request_body: dict[str, Any] = {
+            "query": vector,
+            "limit": limit,
+            "with_payload": True,
+        }
+        payload_filter = _payload_filter_json(filter_payload)
+        if payload_filter is not None:
+            request_body["filter"] = payload_filter
+        payload = self._request(
+            "POST",
+            f"/collections/{collection_name}/points/query",
+            json_body=request_body,
+        )
+        return self._parse_query_points_payload(payload)

@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 
 from ades.vector import builder as builder_module
+from ades.vector import graph_builder as graph_builder_module
+from ades.vector.graph_store import QidGraphStore
 
 
 def _bundle_dir(root: Path, *, pack_id: str = "general-en") -> Path:
@@ -200,3 +202,36 @@ def test_iter_text_lines_falls_back_to_python_gzip(tmp_path: Path, monkeypatch) 
         "hello\n",
         "world\n",
     ]
+
+
+def test_build_dense_vector_from_graph_store_reconstructs_seed_vector(tmp_path: Path) -> None:
+    bundle_dir = _bundle_dir(tmp_path)
+    truthy_path = tmp_path / "truthy.nt"
+    truthy_path.write_text(
+        "\n".join(
+            [
+                "<http://www.wikidata.org/entity/Q1> <http://www.wikidata.org/prop/direct/P31> <http://www.wikidata.org/entity/Q43229> .",
+                "<http://www.wikidata.org/entity/Q1> <http://www.wikidata.org/prop/direct/P463> <http://www.wikidata.org/entity/Q3> .",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    graph_response = graph_builder_module.build_qid_graph_store(
+        [bundle_dir],
+        truthy_path=truthy_path,
+        output_dir=tmp_path / "graph-artifact",
+        allowed_predicates=["P31", "P463"],
+    )
+
+    with QidGraphStore(graph_response.artifact_path) as store:
+        dense_vector = builder_module.build_dense_vector_from_graph_store(
+            store,
+            "Q1",
+            dimensions=16,
+            allowed_predicates=["P31", "P463"],
+        )
+
+    assert dense_vector is not None
+    assert len(dense_vector) == 16
+    assert any(value != 0.0 for value in dense_vector)

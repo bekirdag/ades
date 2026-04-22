@@ -640,6 +640,114 @@ def test_enrich_tag_response_with_related_entities_merges_graph_gated_vector_pro
     assert enriched.graph_support.related_entity_count == 2
 
 
+def test_enrich_tag_response_with_related_entities_uses_graph_vector_fallback_for_missing_seed(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    response = _response_with_three_linked_entities()
+    settings = Settings(
+        runtime_target=RuntimeTarget.PRODUCTION_SERVER,
+        metadata_backend=MetadataBackend.POSTGRESQL,
+        database_url="postgresql://local/test",
+        vector_search_enabled=True,
+        vector_search_url="http://qdrant.local:6333",
+        vector_search_related_limit=3,
+        vector_search_collection_alias="ades-qids-current",
+        graph_context_enabled=True,
+        graph_context_artifact_path=_graph_context_artifact(tmp_path),
+        graph_context_seed_neighbor_limit=24,
+        graph_context_candidate_limit=64,
+        graph_context_min_supporting_seeds=2,
+        graph_context_vector_proposals_enabled=True,
+        graph_context_vector_proposal_limit=4,
+    )
+    queried_by_id: list[str] = []
+    queried_by_vector: list[list[float]] = []
+
+    class _FakeClient:
+        def __init__(self, base_url: str, *, api_key: str | None = None) -> None:
+            assert base_url == "http://qdrant.local:6333"
+            assert api_key is None
+
+        def __enter__(self) -> "_FakeClient":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def query_similar_by_id(
+            self,
+            collection_name: str,
+            *,
+            point_id: str,
+            limit: int,
+            filter_payload=None,
+        ):
+            assert collection_name == "ades-qids-current"
+            assert filter_payload == {"packs": ["general-en"]}
+            queried_by_id.append(point_id)
+            if point_id == "wikidata:Q2":
+                raise QdrantVectorSearchError(
+                    "Qdrant request failed (404): {'error': 'Not found: No point with id missing found'}",
+                    status_code=404,
+                )
+            return [
+                vector_service.QdrantNearestPoint(point_id, 1.0, {}),
+                vector_service.QdrantNearestPoint(
+                    "wikidata:Q8",
+                    0.84,
+                    {
+                        "canonical_text": "Enterprise AI",
+                        "entity_type": "organization",
+                        "packs": ["general-en"],
+                        "source_name": "wikidata-general-entities",
+                    },
+                ),
+            ]
+
+        def query_similar_by_vector(
+            self,
+            collection_name: str,
+            *,
+            vector: list[float],
+            limit: int,
+            filter_payload=None,
+        ):
+            assert collection_name == "ades-qids-current"
+            assert filter_payload == {"packs": ["general-en"]}
+            queried_by_vector.append(vector)
+            assert any(value != 0.0 for value in vector)
+            return [
+                vector_service.QdrantNearestPoint(
+                    "wikidata:Q8",
+                    0.82,
+                    {
+                        "canonical_text": "Enterprise AI",
+                        "entity_type": "organization",
+                        "packs": ["general-en"],
+                        "source_name": "wikidata-general-entities",
+                    },
+                ),
+            ]
+
+    monkeypatch.setattr(vector_service, "QdrantVectorSearchClient", _FakeClient)
+
+    enriched = vector_service.enrich_tag_response_with_related_entities(
+        response,
+        settings=settings,
+        include_related_entities=True,
+    )
+
+    assert queried_by_id == ["wikidata:Q1", "wikidata:Q2"]
+    assert len(queried_by_vector) == 1
+    assert {item.entity_id for item in enriched.related_entities} == {
+        "wikidata:Q4",
+        "wikidata:Q8",
+    }
+    assert enriched.graph_support is not None
+    assert "vector_search_seed_graph_fallback:wikidata:Q2" in enriched.graph_support.warnings
+
+
 def test_enrich_tag_response_with_related_entities_allows_local_hybrid_vector_proposals(
     monkeypatch,
     tmp_path: Path,

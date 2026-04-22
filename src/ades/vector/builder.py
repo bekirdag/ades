@@ -273,6 +273,97 @@ def _normalized_sparse_items(
     ]
 
 
+def dense_vector_from_sparse(
+    sparse_vector: dict[int, float],
+    *,
+    dimensions: int,
+) -> list[float]:
+    """Return one dense normalized vector from the sparse feature map."""
+
+    dense_vector = [0.0] * dimensions
+    for index, value in _normalized_sparse_items(sparse_vector):
+        dense_vector[int(index)] = float(value)
+    return dense_vector
+
+
+def build_sparse_vector_from_graph_store(
+    graph_store,
+    qid: str,
+    *,
+    dimensions: int = DEFAULT_QID_GRAPH_DIMENSIONS,
+    allowed_predicates: Iterable[str] | None = None,
+) -> dict[int, float]:
+    """Reconstruct one seed sparse vector from the explicit graph-store artifact."""
+
+    normalized_qid = str(qid).strip()
+    if not normalized_qid:
+        return {}
+    predicate_values = {
+        str(predicate).strip().upper()
+        for predicate in (
+            allowed_predicates
+            if allowed_predicates is not None
+            else DEFAULT_QID_GRAPH_ALLOWED_PREDICATES
+        )
+        if str(predicate).strip()
+    }
+    sparse_vector: dict[int, float] = {}
+    metadata = graph_store.node_metadata(normalized_qid)
+    if metadata.entity_type:
+        _add_feature(
+            sparse_vector,
+            f"meta:type:{metadata.entity_type}",
+            dimensions=dimensions,
+            weight=0.5,
+        )
+    if metadata.source_name:
+        _add_feature(
+            sparse_vector,
+            f"meta:source:{metadata.source_name}",
+            dimensions=dimensions,
+            weight=0.25,
+        )
+    neighbors = graph_store.neighbors(
+        normalized_qid,
+        direction="both",
+        predicates=predicate_values if predicate_values else None,
+    )
+    for neighbor in neighbors:
+        if neighbor.direction == "out":
+            _add_feature(
+                sparse_vector,
+                f"out:{neighbor.predicate}:{neighbor.qid}",
+                dimensions=dimensions,
+            )
+        else:
+            _add_feature(
+                sparse_vector,
+                f"in:{neighbor.predicate}:{neighbor.qid}",
+                dimensions=dimensions,
+            )
+    return sparse_vector
+
+
+def build_dense_vector_from_graph_store(
+    graph_store,
+    qid: str,
+    *,
+    dimensions: int = DEFAULT_QID_GRAPH_DIMENSIONS,
+    allowed_predicates: Iterable[str] | None = None,
+) -> list[float] | None:
+    """Reconstruct one dense normalized vector from the graph-store artifact."""
+
+    sparse_vector = build_sparse_vector_from_graph_store(
+        graph_store,
+        qid,
+        dimensions=dimensions,
+        allowed_predicates=allowed_predicates,
+    )
+    if not sparse_vector:
+        return None
+    return dense_vector_from_sparse(sparse_vector, dimensions=dimensions)
+
+
 def _write_sparse_artifact(
     targets: dict[str, _TargetEntity],
     *,
