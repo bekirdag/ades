@@ -20,6 +20,8 @@ from .qdrant import QdrantNearestPoint, QdrantVectorSearchClient, QdrantVectorSe
 _PROVIDER_NAME = "qdrant.qid_graph"
 _REFINEMENT_STRATEGY = "qid_graph_coherence_v1"
 _HYBRID_VECTOR_PROPOSAL_MIN_COHERENCE = 0.12
+_HYBRID_VECTOR_QUERY_SEED_LIMIT = 4
+_GENERIC_SHARED_CONTEXT_QIDS = {"Q5"}
 _LOW_CONFIDENCE_THRESHOLD_BY_DEPTH = {
     "light": 0.65,
     "deep": 0.8,
@@ -354,9 +356,6 @@ def _query_vector_results_by_seed(
                             except QdrantVectorSearchError as fallback_exc:
                                 warnings.append(f"vector_search_failed:{fallback_exc}")
                                 return {}, warnings
-                            warnings.append(
-                                f"vector_search_seed_graph_fallback:{seed_entity_id}"
-                            )
                             continue
                         warnings.append(f"vector_search_seed_missing:{seed_entity_id}")
                         continue
@@ -406,6 +405,75 @@ def _graph_context_strong_seed_entity_ids(response: TagResponse) -> list[str]:
         seen.add(entity_id)
         strong_seed_ids.append(entity_id)
     return strong_seed_ids
+
+
+def _graph_context_vector_query_seed_entity_ids(response: TagResponse) -> list[str]:
+    entity_label_by_id = {
+        entity.link.entity_id: entity.label
+        for entity in response.entities
+        if entity.link is not None and entity.link.entity_id
+    }
+    refinement_debug = response.refinement_debug
+    if not isinstance(refinement_debug, dict):
+        return _graph_context_strong_seed_entity_ids(response)[
+            :_HYBRID_VECTOR_QUERY_SEED_LIMIT
+        ]
+
+    raw_seed_decisions = refinement_debug.get("seed_decisions")
+    if not isinstance(raw_seed_decisions, list):
+        return _graph_context_strong_seed_entity_ids(response)[
+            :_HYBRID_VECTOR_QUERY_SEED_LIMIT
+        ]
+
+    scored_non_person: list[tuple[float, str]] = []
+    scored_fallback: list[tuple[float, str]] = []
+    seen: set[str] = set()
+    for item in raw_seed_decisions:
+        if not isinstance(item, dict):
+            continue
+        entity_id = str(item.get("entity_id") or "").strip()
+        action = str(item.get("action") or "").strip()
+        if action not in {"keep", "boost"}:
+            continue
+        if not entity_id.startswith("wikidata:Q") or entity_id in seen:
+            continue
+        seen.add(entity_id)
+        shared_context = {
+            str(value).strip()
+            for value in item.get("shared_context_qids") or []
+            if str(value).strip()
+        }
+        generic_shared_context_only = (
+            bool(shared_context)
+            and shared_context.issubset(_GENERIC_SHARED_CONTEXT_QIDS)
+        )
+        quality = float(item.get("cluster_fit") or 0.0)
+        quality += float(item.get("mean_peer_support") or 0.0)
+        quality += min(int(item.get("supporting_seed_count") or 0), 4) * 0.08
+        quality -= float(item.get("genericity_penalty") or 0.0)
+        if action == "boost":
+            quality += 0.2
+        if generic_shared_context_only:
+            quality -= 0.2
+        scored_fallback.append((quality, entity_id))
+        if entity_label_by_id.get(entity_id) == "person":
+            continue
+        if quality < 0.1:
+            continue
+        scored_non_person.append((quality, entity_id))
+
+    selected: list[str] = []
+    for _, entity_id in sorted(scored_non_person, reverse=True):
+        if entity_id not in selected:
+            selected.append(entity_id)
+        if len(selected) >= _HYBRID_VECTOR_QUERY_SEED_LIMIT:
+            return selected
+    for _, entity_id in sorted(scored_fallback, reverse=True):
+        if entity_id not in selected:
+            selected.append(entity_id)
+        if len(selected) >= _HYBRID_VECTOR_QUERY_SEED_LIMIT:
+            break
+    return selected
 
 
 def _graph_gate_vector_related_entities(
@@ -582,14 +650,17 @@ def _enrich_graph_context_response_with_vector_proposals(
     strong_seed_entity_ids = _graph_context_strong_seed_entity_ids(response)
     if len(strong_seed_entity_ids) < settings.graph_context_min_supporting_seeds:
         return response
+    proposal_seed_entity_ids = _graph_context_vector_query_seed_entity_ids(response)
+    if len(proposal_seed_entity_ids) < settings.graph_context_min_supporting_seeds:
+        return response
     query_limit = max(
-        settings.graph_context_vector_proposal_limit * 4,
-        settings.graph_context_vector_proposal_limit + 4,
+        settings.graph_context_vector_proposal_limit * 2,
+        settings.graph_context_vector_proposal_limit + 2,
     )
     results_by_seed, warnings = _query_vector_results_by_seed(
         response=response,
         settings=settings,
-        seed_entity_ids=strong_seed_entity_ids,
+        seed_entity_ids=proposal_seed_entity_ids,
         query_limit=query_limit,
         allow_non_production=True,
     )

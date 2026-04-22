@@ -76,7 +76,7 @@ def _insert_target_nodes(connection: sqlite3.Connection, targets: dict[str, obje
                 getattr(entry, "canonical_text"),
                 getattr(entry, "entity_type"),
                 getattr(entry, "source_name"),
-                getattr(entry, "popularity"),
+                getattr(entry, "popularity", None),
                 1,
             )
         )

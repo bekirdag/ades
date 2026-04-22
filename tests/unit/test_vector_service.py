@@ -195,6 +195,51 @@ def _response_with_three_linked_entities() -> TagResponse:
     )
 
 
+def test_graph_context_vector_query_seed_entity_ids_prefers_non_person_seeds() -> None:
+    response = _response_with_three_linked_entities().model_copy(
+        update={
+            "refinement_debug": {
+                "seed_decisions": [
+                    {
+                        "entity_id": "wikidata:Q3",
+                        "action": "keep",
+                        "cluster_fit": 0.34,
+                        "mean_peer_support": 0.08,
+                        "supporting_seed_count": 4,
+                        "genericity_penalty": 0.0,
+                        "shared_context_qids": ["Q5"],
+                    },
+                    {
+                        "entity_id": "wikidata:Q1",
+                        "action": "keep",
+                        "cluster_fit": 0.26,
+                        "mean_peer_support": 0.05,
+                        "supporting_seed_count": 2,
+                        "genericity_penalty": 0.0,
+                        "shared_context_qids": ["Q30"],
+                    },
+                    {
+                        "entity_id": "wikidata:Q2",
+                        "action": "boost",
+                        "cluster_fit": 0.2,
+                        "mean_peer_support": 0.03,
+                        "supporting_seed_count": 1,
+                        "genericity_penalty": 0.0,
+                        "shared_context_qids": [],
+                    },
+                ]
+            }
+        }
+    )
+
+    query_seed_ids = vector_service._graph_context_vector_query_seed_entity_ids(
+        response
+    )
+
+    assert query_seed_ids[:2] == ["wikidata:Q2", "wikidata:Q1"]
+    assert query_seed_ids[-1] == "wikidata:Q3"
+
+
 def test_enrich_tag_response_with_related_entities_aggregates_shared_neighbors(monkeypatch) -> None:
     response = _response_with_linked_entities()
     settings = Settings(
@@ -745,7 +790,9 @@ def test_enrich_tag_response_with_related_entities_uses_graph_vector_fallback_fo
         "wikidata:Q8",
     }
     assert enriched.graph_support is not None
-    assert "vector_search_seed_graph_fallback:wikidata:Q2" in enriched.graph_support.warnings
+    assert "vector_search_seed_graph_fallback:wikidata:Q2" not in (
+        enriched.graph_support.warnings
+    )
 
 
 def test_enrich_tag_response_with_related_entities_allows_local_hybrid_vector_proposals(
