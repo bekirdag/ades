@@ -79,7 +79,10 @@ jobs:
             ssh
             -i ~/.ssh/id_ed25519
             -o BatchMode=yes
+            -o ConnectTimeout=15
             -o IdentitiesOnly=yes
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=4
             -o StrictHostKeyChecking=yes
             -p "$ADES_DEPLOY_PORT"
             "$ADES_DEPLOY_USER@$ADES_DEPLOY_HOST"
@@ -88,6 +91,7 @@ jobs:
             scp
             -i ~/.ssh/id_ed25519
             -o BatchMode=yes
+            -o ConnectTimeout=15
             -o IdentitiesOnly=yes
             -o StrictHostKeyChecking=yes
             -P "$ADES_DEPLOY_PORT"
@@ -123,7 +127,10 @@ jobs:
             ssh
             -i ~/.ssh/id_ed25519
             -o BatchMode=yes
+            -o ConnectTimeout=15
             -o IdentitiesOnly=yes
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=4
             -o StrictHostKeyChecking=yes
             -p "$ADES_DEPLOY_PORT"
             "$ADES_DEPLOY_USER@$ADES_DEPLOY_HOST"
@@ -135,14 +142,13 @@ jobs:
           set -euo pipefail
           release_id="$release_id"
           wheel_name="$wheel_name"
-          /mnt/ades/app/shared/.venv/bin/python -m pip install --upgrade --force-reinstall "/mnt/ades/app/releases/\$release_id/\$wheel_name" "psycopg[binary]>=3.2,<4.0"
+          /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --upgrade "/mnt/ades/app/releases/\$release_id/\$wheel_name" "psycopg[binary]>=3.2,<4.0"
           ln -sfn "/mnt/ades/repo/releases/\$release_id" /mnt/ades/repo/current
           XDG_RUNTIME_DIR=/run/user/\$(id -u) systemctl --user restart ades.service
-          sleep 2
-          curl -fsS http://127.0.0.1:8734/healthz >/dev/null
-          curl -fsS http://127.0.0.1:8734/v0/status >/dev/null
-          curl -fsS http://127.0.0.1:8734/v0/packs/available >/dev/null
-          curl -fsS http://127.0.0.1:6333/collections/ades-qids-current >/dev/null
+          timeout 90s bash -c 'until curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/healthz >/dev/null; do sleep 2; done'
+          curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/v0/status >/dev/null
+          curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/v0/packs/available >/dev/null
+          curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:6333/collections/ades-qids-current >/dev/null
           python3 - <<'PY'
           import json
           import urllib.request
@@ -190,10 +196,10 @@ jobs:
       - name: Verify public endpoints
         run: |
           set -euo pipefail
-          curl -fsS https://api.adestool.com/healthz >/dev/null
-          curl -fsS https://api.adestool.com/v0/status >/dev/null
-          curl -fsS https://api.adestool.com/v0/packs/available >/dev/null
-          curl -fsS https://adestool.com/healthz >/dev/null
-          curl -fsS https://adestool.com/v0/status >/dev/null
-          curl -fsS https://adestool.com/v0/packs/available >/dev/null
-          curl -fsS https://repo.adestool.com/index.json >/dev/null
+          curl --connect-timeout 5 --max-time 15 -fsS https://api.adestool.com/healthz >/dev/null
+          curl --connect-timeout 5 --max-time 15 -fsS https://api.adestool.com/v0/status >/dev/null
+          curl --connect-timeout 5 --max-time 15 -fsS https://api.adestool.com/v0/packs/available >/dev/null
+          curl --connect-timeout 5 --max-time 15 -fsS https://adestool.com/healthz >/dev/null
+          curl --connect-timeout 5 --max-time 15 -fsS https://adestool.com/v0/status >/dev/null
+          curl --connect-timeout 5 --max-time 15 -fsS https://adestool.com/v0/packs/available >/dev/null
+          curl --connect-timeout 5 --max-time 15 -fsS https://repo.adestool.com/index.json >/dev/null
