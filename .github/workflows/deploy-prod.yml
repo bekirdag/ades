@@ -75,11 +75,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          retry() {
+            local attempts="$1"
+            shift
+            local try=1
+            while true; do
+              if "$@"; then
+                return 0
+              fi
+              local exit_code=$?
+              if [ "$try" -ge "$attempts" ]; then
+                return "$exit_code"
+              fi
+              echo "Command failed with exit code $exit_code; retrying in 15s ($try/$attempts)..." >&2
+              try=$((try + 1))
+              sleep 15
+            done
+          }
           ssh_cmd=(
             ssh
             -i ~/.ssh/id_ed25519
             -o BatchMode=yes
-            -o ConnectTimeout=15
+            -o ConnectTimeout=30
             -o IdentitiesOnly=yes
             -o ServerAliveInterval=15
             -o ServerAliveCountMax=4
@@ -91,7 +108,7 @@ jobs:
             scp
             -i ~/.ssh/id_ed25519
             -o BatchMode=yes
-            -o ConnectTimeout=15
+            -o ConnectTimeout=30
             -o IdentitiesOnly=yes
             -o StrictHostKeyChecking=yes
             -P "$ADES_DEPLOY_PORT"
@@ -99,10 +116,13 @@ jobs:
           release_id="${{ steps.release.outputs.release_id }}"
           wheel_path="${{ steps.release.outputs.wheel_path }}"
           wheel_name="${{ steps.release.outputs.wheel_name }}"
+          upload_registry() {
+            tar -C dist/registry -cf - . | "${ssh_cmd[@]}" "tar -C /mnt/ades/repo/releases/$release_id -xf -"
+          }
 
-          "${ssh_cmd[@]}" "mkdir -p /mnt/ades/app/releases/$release_id /mnt/ades/repo/releases/$release_id"
-          "${scp_cmd[@]}" "$wheel_path" "$ADES_DEPLOY_USER@$ADES_DEPLOY_HOST:/mnt/ades/app/releases/$release_id/$wheel_name"
-          tar -C dist/registry -cf - . | "${ssh_cmd[@]}" "tar -C /mnt/ades/repo/releases/$release_id -xf -"
+          retry 5 "${ssh_cmd[@]}" "mkdir -p /mnt/ades/app/releases/$release_id /mnt/ades/repo/releases/$release_id"
+          retry 5 "${scp_cmd[@]}" "$wheel_path" "$ADES_DEPLOY_USER@$ADES_DEPLOY_HOST:/mnt/ades/app/releases/$release_id/$wheel_name"
+          retry 5 upload_registry
 
       - name: Sync registry to object storage
         if: ${{ env.ADES_PACK_OBJECT_STORAGE_BUCKET != '' && env.ADES_PACK_OBJECT_STORAGE_ENDPOINT != '' && env.ADES_PACK_OBJECT_STORAGE_ACCESS_KEY_ID != '' && env.ADES_PACK_OBJECT_STORAGE_SECRET_ACCESS_KEY != '' }}
@@ -123,11 +143,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          retry() {
+            local attempts="$1"
+            shift
+            local try=1
+            while true; do
+              if "$@"; then
+                return 0
+              fi
+              local exit_code=$?
+              if [ "$try" -ge "$attempts" ]; then
+                return "$exit_code"
+              fi
+              echo "Command failed with exit code $exit_code; retrying in 15s ($try/$attempts)..." >&2
+              try=$((try + 1))
+              sleep 15
+            done
+          }
           ssh_cmd=(
             ssh
             -i ~/.ssh/id_ed25519
             -o BatchMode=yes
-            -o ConnectTimeout=15
+            -o ConnectTimeout=30
             -o IdentitiesOnly=yes
             -o ServerAliveInterval=15
             -o ServerAliveCountMax=4
@@ -137,69 +174,72 @@ jobs:
           )
           release_id="${{ steps.release.outputs.release_id }}"
           wheel_name="${{ steps.release.outputs.wheel_name }}"
+          run_remote_install() {
+            "${ssh_cmd[@]}" "bash -s" <<EOF
+            set -euo pipefail
+            release_id="$release_id"
+            wheel_name="$wheel_name"
+            /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --upgrade "/mnt/ades/app/releases/\$release_id/\$wheel_name" "psycopg[binary]>=3.2,<4.0"
+            ln -sfn "/mnt/ades/repo/releases/\$release_id" /mnt/ades/repo/current
+            XDG_RUNTIME_DIR=/run/user/\$(id -u) systemctl --user restart ades.service
+            timeout 90s bash -c 'until curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/healthz >/dev/null; do sleep 2; done'
+            curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/v0/status >/dev/null
+            curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/v0/packs/available >/dev/null
+            curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:6333/collections/ades-qids-current >/dev/null
+            python3 - <<'PY'
+            import json
+            import urllib.request
 
-          "${ssh_cmd[@]}" "bash -s" <<EOF
-          set -euo pipefail
-          release_id="$release_id"
-          wheel_name="$wheel_name"
-          /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --upgrade "/mnt/ades/app/releases/\$release_id/\$wheel_name" "psycopg[binary]>=3.2,<4.0"
-          ln -sfn "/mnt/ades/repo/releases/\$release_id" /mnt/ades/repo/current
-          XDG_RUNTIME_DIR=/run/user/\$(id -u) systemctl --user restart ades.service
-          timeout 90s bash -c 'until curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/healthz >/dev/null; do sleep 2; done'
-          curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/v0/status >/dev/null
-          curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/v0/packs/available >/dev/null
-          curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:6333/collections/ades-qids-current >/dev/null
-          python3 - <<'PY'
-          import json
-          import urllib.request
+            request = urllib.request.Request(
+                "http://127.0.0.1:8734/v0/tag",
+                data=json.dumps(
+                    {
+                        "text": "Anthropic announced a partnership with Amazon in San Francisco.",
+                        "pack": "general-en",
+                        "options": {
+                            "include_related_entities": True,
+                            "include_graph_support": True,
+                            "refine_links": True,
+                            "refinement_depth": "deep",
+                        },
+                    }
+                ).encode("utf-8"),
+                headers={"content-type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=60) as response:
+                payload = json.load(response)
 
-          request = urllib.request.Request(
-              "http://127.0.0.1:8734/v0/tag",
-              data=json.dumps(
-                  {
-                      "text": "Anthropic announced a partnership with Amazon in San Francisco.",
-                      "pack": "general-en",
-                      "options": {
-                          "include_related_entities": True,
-                          "include_graph_support": True,
-                          "refine_links": True,
-                          "refinement_depth": "deep",
-                      },
-                  }
-              ).encode("utf-8"),
-              headers={"content-type": "application/json"},
-              method="POST",
-          )
-          with urllib.request.urlopen(request, timeout=60) as response:
-              payload = json.load(response)
-
-          graph_support = payload.get("graph_support") or {}
-          warnings = list(graph_support.get("warnings") or [])
-          if not graph_support.get("requested"):
-              raise SystemExit("vector smoke check did not request graph support")
-          disallowed = {
-              "vector_search_disabled",
-              "vector_search_url_missing",
-              "vector_search_production_only",
+            graph_support = payload.get("graph_support") or {}
+            warnings = list(graph_support.get("warnings") or [])
+            if not graph_support.get("requested"):
+                raise SystemExit("vector smoke check did not request graph support")
+            disallowed = {
+                "vector_search_disabled",
+                "vector_search_url_missing",
+                "vector_search_production_only",
+            }
+            if disallowed.intersection(warnings):
+                raise SystemExit(
+                    f"vector smoke check reported disabled production vector search: {warnings}"
+                )
+            if any(str(item).startswith("vector_search_failed:") for item in warnings):
+                raise SystemExit(
+                    f"vector smoke check reported qdrant failure: {warnings}"
+                )
+            PY
+            EOF
           }
-          if disallowed.intersection(warnings):
-              raise SystemExit(
-                  f"vector smoke check reported disabled production vector search: {warnings}"
-              )
-          if any(str(item).startswith("vector_search_failed:") for item in warnings):
-              raise SystemExit(
-                  f"vector smoke check reported qdrant failure: {warnings}"
-              )
-          PY
-          EOF
+
+          retry 5 run_remote_install
 
       - name: Verify public endpoints
         run: |
           set -euo pipefail
-          curl --connect-timeout 5 --max-time 15 -fsS https://api.adestool.com/healthz >/dev/null
-          curl --connect-timeout 5 --max-time 15 -fsS https://api.adestool.com/v0/status >/dev/null
-          curl --connect-timeout 5 --max-time 15 -fsS https://api.adestool.com/v0/packs/available >/dev/null
-          curl --connect-timeout 5 --max-time 15 -fsS https://adestool.com/healthz >/dev/null
-          curl --connect-timeout 5 --max-time 15 -fsS https://adestool.com/v0/status >/dev/null
-          curl --connect-timeout 5 --max-time 15 -fsS https://adestool.com/v0/packs/available >/dev/null
-          curl --connect-timeout 5 --max-time 15 -fsS https://repo.adestool.com/index.json >/dev/null
+          curl --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 5 --max-time 15 -fsS https://api.adestool.com/healthz >/dev/null
+          curl --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 5 --max-time 15 -fsS https://api.adestool.com/v0/status >/dev/null
+          curl --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 5 --max-time 15 -fsS https://api.adestool.com/v0/packs/available >/dev/null
+          curl --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 5 --max-time 15 -fsS https://adestool.com/healthz >/dev/null
+          curl --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 5 --max-time 15 -fsS https://adestool.com/v0/status >/dev/null
+          curl --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 5 --max-time 15 -fsS https://adestool.com/v0/packs/available >/dev/null
+          curl --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 5 --max-time 15 -fsS https://repo.adestool.com/index.json >/dev/null
