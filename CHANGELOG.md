@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/bekirdag/ades/compare/ades-tool-v0.3.0...ades-tool-v0.3.1) (2026-04-22)
+
+
+### Bug Fixes
+
+* restore deploy-safe matcher provenance and validation ([c99426d](https://github.com/bekirdag/ades/commit/c99426d768c5ab7a89ebcc2b031a4b2df027a8b1))
+
 ## [0.3.0](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.6...ades-tool-v0.3.0) (2026-04-22)
 
 
