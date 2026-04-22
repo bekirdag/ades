@@ -209,6 +209,7 @@ def build_static_registry(
     pack_dirs: list[str | Path],
     *,
     output_dir: str | Path,
+    enforce_deploy_matcher_sizes: bool = False,
 ) -> RegistryBuildResult:
     """Build a static file-based registry from local pack directories."""
 
@@ -242,7 +243,11 @@ def build_static_registry(
             raise ValueError(f"Duplicate pack id in registry build: {source_manifest.pack_id}")
         seen_pack_ids.add(source_manifest.pack_id)
 
-        _validate_manifest_sources(pack_dir, source_manifest)
+        _validate_manifest_sources(
+            pack_dir,
+            source_manifest,
+            enforce_deploy_matcher_sizes=enforce_deploy_matcher_sizes,
+        )
 
         artifact_filename = f"{source_manifest.pack_id}-{source_manifest.version}.tar.zst"
         artifact_relative_url = f"../../artifacts/{artifact_filename}"
@@ -253,7 +258,11 @@ def build_static_registry(
         )
         artifact_path = artifacts_output_dir / artifact_filename
         _write_pack_artifact(pack_dir, packaging_manifest, artifact_path)
-        _validate_pack_artifact_sources(artifact_path, packaging_manifest)
+        _validate_pack_artifact_sources(
+            artifact_path,
+            packaging_manifest,
+            enforce_deploy_matcher_sizes=enforce_deploy_matcher_sizes,
+        )
         artifact_sha256 = _sha256_file(artifact_path)
         published_manifest = _build_published_manifest(
             source_manifest,
@@ -487,7 +496,11 @@ def prepare_registry_deploy_payload(
         )
 
     selected_pack_dirs = _resolve_prepare_pack_dirs(pack_dirs)
-    build_result = build_static_registry(selected_pack_dirs, output_dir=output_dir)
+    build_result = build_static_registry(
+        selected_pack_dirs,
+        output_dir=output_dir,
+        enforce_deploy_matcher_sizes=True,
+    )
     return RegistryDeployPreparationResult(
         mode="bundled",
         output_dir=build_result.output_dir,
@@ -530,7 +543,12 @@ def _build_published_manifest(
     )
 
 
-def _validate_manifest_sources(pack_dir: Path, manifest: PackManifest) -> None:
+def _validate_manifest_sources(
+    pack_dir: Path,
+    manifest: PackManifest,
+    *,
+    enforce_deploy_matcher_sizes: bool = False,
+) -> None:
     for relative_path in [*manifest.rules, *manifest.labels, *manifest.models]:
         resolved = pack_dir / relative_path
         if not resolved.exists():
@@ -545,15 +563,21 @@ def _validate_manifest_sources(pack_dir: Path, manifest: PackManifest) -> None:
             raise FileNotFoundError(
                 f"Pack matcher file listed in manifest is missing: {resolved}"
             )
-    _validate_manifest_matcher_sizes(
-        artifact_size_bytes=(pack_dir / manifest.matcher.artifact_path).stat().st_size,
-        entries_size_bytes=(pack_dir / manifest.matcher.entries_path).stat().st_size,
-        manifest=manifest,
-        source=str(pack_dir),
-    )
+    if enforce_deploy_matcher_sizes:
+        _validate_manifest_matcher_sizes(
+            artifact_size_bytes=(pack_dir / manifest.matcher.artifact_path).stat().st_size,
+            entries_size_bytes=(pack_dir / manifest.matcher.entries_path).stat().st_size,
+            manifest=manifest,
+            source=str(pack_dir),
+        )
 
 
-def _validate_pack_artifact_sources(artifact_path: Path, manifest: PackManifest) -> None:
+def _validate_pack_artifact_sources(
+    artifact_path: Path,
+    manifest: PackManifest,
+    *,
+    enforce_deploy_matcher_sizes: bool = False,
+) -> None:
     if manifest.matcher is None:
         return
     matcher_artifact_path = manifest.matcher.artifact_path.lstrip("./")
@@ -585,12 +609,13 @@ def _validate_pack_artifact_sources(artifact_path: Path, manifest: PackManifest)
         raise ValueError(
             f"Published pack artifact is missing matcher file(s): {', '.join(sorted(missing))}"
         )
-    _validate_manifest_matcher_sizes(
-        artifact_size_bytes=target_sizes[matcher_artifact_path],
-        entries_size_bytes=target_sizes[matcher_entries_path],
-        manifest=manifest,
-        source=str(artifact_path),
-    )
+    if enforce_deploy_matcher_sizes:
+        _validate_manifest_matcher_sizes(
+            artifact_size_bytes=target_sizes[matcher_artifact_path],
+            entries_size_bytes=target_sizes[matcher_entries_path],
+            manifest=manifest,
+            source=str(artifact_path),
+        )
 
 
 def _validate_manifest_matcher_sizes(
@@ -884,7 +909,11 @@ def _materialize_published_registry(
                 f"Published artifact checksum mismatch for {source_manifest.pack_id}: "
                 f"expected {source_artifact.sha256}, got {artifact_sha256}"
             )
-        _validate_pack_artifact_sources(artifact_path, source_manifest)
+        _validate_pack_artifact_sources(
+            artifact_path,
+            source_manifest,
+            enforce_deploy_matcher_sizes=True,
+        )
         published_manifest = _build_published_manifest(
             source_manifest,
             artifact_relative_url=f"../../artifacts/{artifact_name}",
