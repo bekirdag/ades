@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.6...ades-tool-v0.3.0) (2026-04-22)
+
+
+### Features
+
+* expand finance country packs and release support ([028a739](https://github.com/bekirdag/ades/commit/028a739489f684deb68caaf5a0ff9fb427ba4af7))
+
+
+### Bug Fixes
+
+* fall back to graph-derived hybrid seed vectors ([6c45fc4](https://github.com/bekirdag/ades/commit/6c45fc4abe039d2943eea4dde34fee6efdbb66b7))
+* restore graph-context vector refinement ([07c1f19](https://github.com/bekirdag/ades/commit/07c1f199ee41ec2a7f1a16091ba726c621881c34))
+* suppress low-value contextual org acronyms ([85940a5](https://github.com/bekirdag/ades/commit/85940a52e93c34f107371d856fa86faefd048127))
+* wire hybrid vector proposals on release line ([f244ada](https://github.com/bekirdag/ades/commit/f244adaa8bfca69fb51efa1394a4b85e5281a03d))
+
 ## [0.2.6](https://github.com/bekirdag/ades/compare/ades-tool-v0.2.5...ades-tool-v0.2.6) (2026-04-21)
 
 
