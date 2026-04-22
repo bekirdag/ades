@@ -64,6 +64,8 @@ def test_tag_via_local_service_serializes_vector_options(monkeypatch, tmp_path: 
         include_graph_support=True,
         refine_links=True,
         refinement_depth="deep",
+        domain_hint="finance",
+        retrieval_profile="finance",
     )
 
     assert response.pack == "general-en"
@@ -73,6 +75,10 @@ def test_tag_via_local_service_serializes_vector_options(monkeypatch, tmp_path: 
     assert options["include_graph_support"] is True
     assert options["refine_links"] is True
     assert options["refinement_depth"] == "deep"
+    assert options["domain_hint"] == "finance"
+    assert options["retrieval_profile"] == "finance"
+    assert captured["payload"]["domain_hint"] == "finance"  # type: ignore[index]
+    assert captured["payload"]["retrieval_profile"] == "finance"  # type: ignore[index]
 
 
 def test_tag_file_via_local_service_serializes_vector_options(monkeypatch, tmp_path: Path) -> None:
@@ -91,6 +97,7 @@ def test_tag_file_via_local_service_serializes_vector_options(monkeypatch, tmp_p
         include_related_entities=True,
         refine_links=True,
         refinement_depth="deep",
+        domain_hint="politics",
     )
 
     assert response.pack == "general-en"
@@ -98,6 +105,8 @@ def test_tag_file_via_local_service_serializes_vector_options(monkeypatch, tmp_p
     assert options["include_related_entities"] is True
     assert options["refine_links"] is True
     assert options["refinement_depth"] == "deep"
+    assert options["domain_hint"] == "politics"
+    assert captured["payload"]["domain_hint"] == "politics"  # type: ignore[index]
 
 
 def test_tag_files_via_local_service_serializes_vector_options(monkeypatch, tmp_path: Path) -> None:
@@ -117,6 +126,7 @@ def test_tag_files_via_local_service_serializes_vector_options(monkeypatch, tmp_
         include_graph_support=True,
         refine_links=True,
         refinement_depth="deep",
+        retrieval_profile="finance_politics",
     )
 
     assert response.pack == "general-en"
@@ -125,3 +135,5 @@ def test_tag_files_via_local_service_serializes_vector_options(monkeypatch, tmp_
     assert options["include_graph_support"] is True
     assert options["refine_links"] is True
     assert options["refinement_depth"] == "deep"
+    assert options["retrieval_profile"] == "finance_politics"
+    assert captured["payload"]["retrieval_profile"] == "finance_politics"  # type: ignore[index]

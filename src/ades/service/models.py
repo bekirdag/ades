@@ -1817,6 +1817,8 @@ class TagRequest(BaseModel):
     text: str
     pack: str
     content_type: str = "text/plain"
+    domain_hint: str | None = None
+    retrieval_profile: str | None = None
     output: TagOutputOptions | None = None
     options: dict[str, Any] = Field(default_factory=dict)
 
@@ -1827,6 +1829,8 @@ class FileTagRequest(BaseModel):
     path: str
     pack: str
     content_type: str | None = None
+    domain_hint: str | None = None
+    retrieval_profile: str | None = None
     output: TagOutputOptions | None = None
     options: dict[str, Any] = Field(default_factory=dict)
 
@@ -1849,6 +1853,8 @@ class BatchFileTagRequest(BaseModel):
     max_input_bytes: int | None = Field(default=None, ge=0)
     pack: str | None = None
     content_type: str | None = None
+    domain_hint: str | None = None
+    retrieval_profile: str | None = None
     output: TagOutputOptions | None = None
     options: dict[str, Any] = Field(default_factory=dict)
 
@@ -2090,6 +2096,8 @@ class VectorIndexBuildResponse(BaseModel):
     output_dir: str
     manifest_path: str
     artifact_path: str
+    build_strategy: str = "truthy_scan"
+    graph_store_path: str | None = None
     collection_name: str | None = None
     alias_name: str | None = None
     qdrant_url: str | None = None
@@ -2100,9 +2108,9 @@ class VectorIndexBuildResponse(BaseModel):
     bundle_count: int
     bundle_dirs: list[str] = Field(default_factory=list)
     pack_ids: list[str] = Field(default_factory=list)
-    truthy_path: str
-    processed_line_count: int
-    matched_statement_count: int
+    truthy_path: str | None = None
+    processed_line_count: int = 0
+    matched_statement_count: int = 0
     allowed_predicates: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 

@@ -88,7 +88,13 @@ def _score_candidate(aggregate: _CandidateAggregate) -> float:
     return round(base_score + coherence_bonus, 6)
 
 
-def _query_filter_payload(response: TagResponse) -> dict[str, object] | None:
+def _query_filter_payload(
+    response: TagResponse,
+    *,
+    settings: Settings,
+) -> dict[str, object] | None:
+    if settings.retrieval_profile_pack_ids:
+        return {"packs": list(settings.retrieval_profile_pack_ids)}
     if not response.pack:
         return None
     return {"packs": [response.pack]}
@@ -316,7 +322,7 @@ def _query_vector_results_by_seed(
     if not settings.vector_search_url:
         return {}, ["vector_search_url_missing"]
 
-    filter_payload = _query_filter_payload(response)
+    filter_payload = _query_filter_payload(response, settings=settings)
     warnings: list[str] = []
     results_by_seed: dict[str, list[QdrantNearestPoint]] = {}
     graph_store: QidGraphStore | None = None

@@ -15,9 +15,11 @@ import subprocess
 from typing import Any, Iterable, Iterator
 
 from ..service.models import VectorIndexBuildResponse
+from .graph_store import QidGraphStore
 from .qdrant import QdrantVectorSearchClient
 
 DEFAULT_QID_GRAPH_DIMENSIONS = 384
+DEFAULT_QID_GRAPH_NEIGHBOR_LIMIT = 128
 DEFAULT_QID_GRAPH_ALLOWED_PREDICATES = (
     "P31",
     "P279",
@@ -152,6 +154,24 @@ def _load_bundle_manifest(bundle_dir: Path) -> dict[str, Any]:
     return payload
 
 
+def _payload_wikidata_entity_id(payload: dict[str, Any]) -> str | None:
+    entity_id = str(payload.get("entity_id") or "").strip()
+    if entity_id.startswith("wikidata:Q"):
+        return entity_id
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    metadata_entity_id = str(metadata.get("wikidata_entity_id") or "").strip()
+    if metadata_entity_id.startswith("wikidata:Q"):
+        return metadata_entity_id
+    metadata_qid = str(
+        metadata.get("wikidata_qid") or metadata.get("wikidata_slug") or ""
+    ).strip()
+    if metadata_qid.startswith("Q"):
+        return f"wikidata:{metadata_qid}"
+    return None
+
+
 def _load_targets(
     bundle_dirs: list[Path],
     *,
@@ -175,8 +195,8 @@ def _load_targets(
                 payload = json.loads(line)
                 if not isinstance(payload, dict):
                     continue
-                entity_id = str(payload.get("entity_id") or "").strip()
-                if not entity_id.startswith("wikidata:Q"):
+                entity_id = _payload_wikidata_entity_id(payload)
+                if not entity_id:
                     skipped_non_wikidata += 1
                     continue
                 qid = entity_id.partition(":")[2]
@@ -304,6 +324,7 @@ def build_sparse_vector_from_graph_store(
     *,
     dimensions: int = DEFAULT_QID_GRAPH_DIMENSIONS,
     allowed_predicates: Iterable[str] | None = None,
+    neighbor_limit_per_qid: int = DEFAULT_QID_GRAPH_NEIGHBOR_LIMIT,
 ) -> dict[int, float]:
     """Reconstruct one seed sparse vector from the explicit graph-store artifact."""
 
@@ -339,6 +360,7 @@ def build_sparse_vector_from_graph_store(
         normalized_qid,
         direction="both",
         predicates=predicate_values if predicate_values else None,
+        limit=neighbor_limit_per_qid,
     )
     for neighbor in neighbors:
         if neighbor.direction == "out":
@@ -362,6 +384,7 @@ def build_dense_vector_from_graph_store(
     *,
     dimensions: int = DEFAULT_QID_GRAPH_DIMENSIONS,
     allowed_predicates: Iterable[str] | None = None,
+    neighbor_limit_per_qid: int = DEFAULT_QID_GRAPH_NEIGHBOR_LIMIT,
 ) -> list[float] | None:
     """Reconstruct one dense normalized vector from the graph-store artifact."""
 
@@ -370,6 +393,7 @@ def build_dense_vector_from_graph_store(
         qid,
         dimensions=dimensions,
         allowed_predicates=allowed_predicates,
+        neighbor_limit_per_qid=neighbor_limit_per_qid,
     )
     if not sparse_vector:
         return None
@@ -436,6 +460,36 @@ def _default_collection_name(pack_ids: Iterable[str]) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     pack_suffix = "-".join(sorted(set(pack_ids))) or "qid-graph"
     return f"ades-{pack_suffix}-{stamp}"
+
+
+def _publish_artifact_to_qdrant(
+    artifact_path: Path,
+    *,
+    dimensions: int,
+    qdrant_url: str | None,
+    qdrant_api_key: str | None,
+    collection_name: str | None,
+    publish_alias: str | None,
+    pack_ids: Iterable[str],
+) -> tuple[str | None, bool]:
+    if not qdrant_url:
+        return collection_name, False
+    resolved_collection_name = collection_name or _default_collection_name(pack_ids)
+    with QdrantVectorSearchClient(qdrant_url, api_key=qdrant_api_key) as client:
+        client.ensure_collection(
+            resolved_collection_name,
+            dimensions=dimensions,
+        )
+        client.upsert_points(
+            resolved_collection_name,
+            _iter_dense_points_from_artifact(
+                artifact_path,
+                dimensions=dimensions,
+            ),
+        )
+        if publish_alias:
+            client.set_alias(publish_alias, resolved_collection_name)
+    return resolved_collection_name, True
 
 
 def build_qid_graph_index(
@@ -511,22 +565,137 @@ def build_qid_graph_index(
         warnings=warnings,
     )
 
-    if qdrant_url:
-        resolved_collection_name = collection_name or _default_collection_name(pack_ids)
-        with QdrantVectorSearchClient(qdrant_url, api_key=qdrant_api_key) as client:
-            client.ensure_collection(
-                resolved_collection_name,
+    resolved_collection_name, published = _publish_artifact_to_qdrant(
+        artifact_path,
+        dimensions=dimensions,
+        qdrant_url=qdrant_url,
+        qdrant_api_key=qdrant_api_key,
+        collection_name=collection_name,
+        publish_alias=publish_alias,
+        pack_ids=pack_ids,
+    )
+    if published:
+        response = response.model_copy(
+            update={
+                "collection_name": resolved_collection_name,
+                "alias_name": publish_alias,
+                "qdrant_url": qdrant_url,
+                "published": published,
+            }
+        )
+
+    manifest_path.write_text(
+        json.dumps(
+            {
+                **response.model_dump(mode="json"),
+                "builder_version": _BUILDER_VERSION,
+                "built_at": datetime.now(timezone.utc).isoformat(),
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return response
+
+
+def build_qid_graph_index_from_store(
+    bundle_dirs: Iterable[str | Path],
+    *,
+    graph_store_path: str | Path,
+    output_dir: str | Path,
+    dimensions: int = DEFAULT_QID_GRAPH_DIMENSIONS,
+    allowed_predicates: Iterable[str] | None = None,
+    neighbor_limit_per_qid: int = DEFAULT_QID_GRAPH_NEIGHBOR_LIMIT,
+    qdrant_url: str | None = None,
+    qdrant_api_key: str | None = None,
+    collection_name: str | None = None,
+    publish_alias: str | None = None,
+) -> VectorIndexBuildResponse:
+    """Build one hosted QID graph artifact from an existing explicit graph store."""
+
+    resolved_bundle_dirs = [Path(path).expanduser().resolve() for path in bundle_dirs]
+    if not resolved_bundle_dirs:
+        raise ValueError("At least one bundle directory is required.")
+    if dimensions <= 0:
+        raise ValueError("dimensions must be positive.")
+    if neighbor_limit_per_qid <= 0:
+        raise ValueError("neighbor_limit_per_qid must be positive.")
+    resolved_graph_store_path = Path(graph_store_path).expanduser().resolve()
+    if not resolved_graph_store_path.exists():
+        raise FileNotFoundError(f"QID graph store not found: {resolved_graph_store_path}")
+    resolved_output_dir = Path(output_dir).expanduser().resolve()
+    resolved_output_dir.mkdir(parents=True, exist_ok=True)
+    predicate_values = {
+        str(predicate).strip().upper()
+        for predicate in (
+            allowed_predicates
+            if allowed_predicates is not None
+            else DEFAULT_QID_GRAPH_ALLOWED_PREDICATES
+        )
+        if str(predicate).strip()
+    }
+    if not predicate_values:
+        raise ValueError("At least one allowed predicate is required.")
+
+    targets, pack_ids, warnings = _load_targets(
+        resolved_bundle_dirs,
+        dimensions=dimensions,
+    )
+    if not targets:
+        raise ValueError("No Wikidata-backed QIDs were found in the provided bundles.")
+
+    populated_target_count = 0
+    with QidGraphStore(resolved_graph_store_path) as graph_store:
+        for qid, entry in targets.items():
+            entry.sparse_vector = build_sparse_vector_from_graph_store(
+                graph_store,
+                qid,
                 dimensions=dimensions,
+                allowed_predicates=predicate_values,
+                neighbor_limit_per_qid=neighbor_limit_per_qid,
             )
-            client.upsert_points(
-                resolved_collection_name,
-                _iter_dense_points_from_artifact(
-                    artifact_path,
-                    dimensions=dimensions,
-                ),
-            )
-            if publish_alias:
-                client.set_alias(publish_alias, resolved_collection_name)
+            if entry.sparse_vector:
+                populated_target_count += 1
+            else:
+                warnings.append(f"graph_store_missing_vector:{qid}")
+
+    artifact_path = resolved_output_dir / "qid_graph_points.jsonl.gz"
+    point_count = _write_sparse_artifact(targets, artifact_path=artifact_path)
+    manifest_path = resolved_output_dir / "qid_graph_index_manifest.json"
+    response = VectorIndexBuildResponse(
+        output_dir=str(resolved_output_dir),
+        manifest_path=str(manifest_path),
+        artifact_path=str(artifact_path),
+        build_strategy="graph_store",
+        graph_store_path=str(resolved_graph_store_path),
+        collection_name=None,
+        alias_name=None,
+        qdrant_url=None,
+        published=False,
+        dimensions=dimensions,
+        point_count=point_count,
+        target_entity_count=len(targets),
+        bundle_count=len(resolved_bundle_dirs),
+        bundle_dirs=[str(path) for path in resolved_bundle_dirs],
+        pack_ids=pack_ids,
+        truthy_path=None,
+        processed_line_count=len(targets),
+        matched_statement_count=populated_target_count,
+        allowed_predicates=sorted(predicate_values),
+        warnings=warnings,
+    )
+
+    resolved_collection_name, published = _publish_artifact_to_qdrant(
+        artifact_path,
+        dimensions=dimensions,
+        qdrant_url=qdrant_url,
+        qdrant_api_key=qdrant_api_key,
+        collection_name=collection_name,
+        publish_alias=publish_alias,
+        pack_ids=pack_ids,
+    )
+    if published:
         response = response.model_copy(
             update={
                 "collection_name": resolved_collection_name,

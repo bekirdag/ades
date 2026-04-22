@@ -54,6 +54,52 @@ def _bundle_dir(root: Path, *, pack_id: str = "general-en") -> Path:
     return bundle_dir
 
 
+def _metadata_backed_bundle_dir(root: Path, *, pack_id: str = "finance-us-en") -> Path:
+    bundle_dir = root / pack_id
+    normalized_dir = bundle_dir / "normalized"
+    normalized_dir.mkdir(parents=True)
+    (bundle_dir / "bundle.json").write_text(
+        json.dumps(
+            {
+                "pack_id": pack_id,
+                "entities_path": "normalized/entities.jsonl",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (normalized_dir / "entities.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "entity_id": "finance-us:sec",
+                        "canonical_text": "Securities and Exchange Commission",
+                        "entity_type": "organization",
+                        "source_name": "finance-country-us",
+                        "metadata": {
+                            "wikidata_entity_id": "wikidata:Q953944",
+                            "wikidata_qid": "Q953944",
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "entity_id": "finance-us:nasdaq",
+                        "canonical_text": "Nasdaq Stock Market",
+                        "entity_type": "exchange",
+                        "metadata": {
+                            "wikidata_qid": "Q82059",
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return bundle_dir
+
+
 def test_build_qid_graph_index_writes_sparse_artifact(tmp_path: Path) -> None:
     bundle_dir = _bundle_dir(tmp_path)
     truthy_path = tmp_path / "truthy.nt"
@@ -235,3 +281,86 @@ def test_build_dense_vector_from_graph_store_reconstructs_seed_vector(tmp_path: 
     assert dense_vector is not None
     assert len(dense_vector) == 16
     assert any(value != 0.0 for value in dense_vector)
+
+
+def test_build_qid_graph_index_from_store_writes_sparse_artifact(tmp_path: Path) -> None:
+    bundle_dir = _bundle_dir(tmp_path, pack_id="finance-en")
+    truthy_path = tmp_path / "truthy.nt"
+    truthy_path.write_text(
+        "\n".join(
+            [
+                "<http://www.wikidata.org/entity/Q1> <http://www.wikidata.org/prop/direct/P31> <http://www.wikidata.org/entity/Q43229> .",
+                "<http://www.wikidata.org/entity/Q1> <http://www.wikidata.org/prop/direct/P463> <http://www.wikidata.org/entity/Q3> .",
+                "<http://www.wikidata.org/entity/Q2> <http://www.wikidata.org/prop/direct/P31> <http://www.wikidata.org/entity/Q43229> .",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    graph_response = graph_builder_module.build_qid_graph_store(
+        [bundle_dir],
+        truthy_path=truthy_path,
+        output_dir=tmp_path / "graph-artifact",
+        allowed_predicates=["P31", "P463"],
+    )
+
+    response = builder_module.build_qid_graph_index_from_store(
+        [bundle_dir],
+        graph_store_path=graph_response.artifact_path,
+        output_dir=tmp_path / "artifact",
+        dimensions=16,
+        allowed_predicates=["P31", "P463"],
+    )
+
+    assert response.build_strategy == "graph_store"
+    assert response.graph_store_path == graph_response.artifact_path
+    assert response.point_count == 2
+    assert response.truthy_path is None
+    assert response.matched_statement_count == 2
+    assert Path(response.artifact_path).exists()
+
+    with gzip.open(response.artifact_path, "rt", encoding="utf-8") as handle:
+        records = [json.loads(line) for line in handle]
+
+    assert [record["id"] for record in records] == ["wikidata:Q1", "wikidata:Q2"]
+    assert records[0]["payload"]["packs"] == ["finance-en"]
+    assert records[0]["vector"]
+
+
+def test_build_qid_graph_index_from_store_supports_metadata_backed_wikidata_ids(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = _metadata_backed_bundle_dir(tmp_path)
+    truthy_path = tmp_path / "truthy.nt"
+    truthy_path.write_text(
+        "\n".join(
+            [
+                "<http://www.wikidata.org/entity/Q953944> <http://www.wikidata.org/prop/direct/P31> <http://www.wikidata.org/entity/Q43229> .",
+                "<http://www.wikidata.org/entity/Q82059> <http://www.wikidata.org/prop/direct/P31> <http://www.wikidata.org/entity/Q43229> .",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    graph_response = graph_builder_module.build_qid_graph_store(
+        [bundle_dir],
+        truthy_path=truthy_path,
+        output_dir=tmp_path / "graph-artifact",
+        allowed_predicates=["P31"],
+    )
+
+    response = builder_module.build_qid_graph_index_from_store(
+        [bundle_dir],
+        graph_store_path=graph_response.artifact_path,
+        output_dir=tmp_path / "artifact",
+        dimensions=16,
+        allowed_predicates=["P31"],
+    )
+
+    with gzip.open(response.artifact_path, "rt", encoding="utf-8") as handle:
+        records = [json.loads(line) for line in handle]
+
+    assert [record["id"] for record in records] == [
+        "wikidata:Q82059",
+        "wikidata:Q953944",
+    ]

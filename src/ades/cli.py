@@ -24,6 +24,7 @@ from .api import build_finance_country_source_bundles as api_build_finance_count
 from .api import build_general_source_bundle as api_build_general_source_bundle
 from .api import build_medical_source_bundle as api_build_medical_source_bundle
 from .api import build_qid_graph_index as api_build_qid_graph_index
+from .api import build_qid_graph_index_from_store as api_build_qid_graph_index_from_store
 from .api import build_qid_graph_store as api_build_qid_graph_store
 from .api import build_registry as api_build_registry
 from .api import compare_extraction_quality_reports as api_compare_extraction_quality_reports
@@ -2316,6 +2317,81 @@ def registry_build_qid_graph_index(
             output_dir=output_dir,
             dimensions=dimensions,
             allowed_predicates=predicate or None,
+            qdrant_url=qdrant_url,
+            qdrant_api_key=qdrant_api_key,
+            collection_name=collection_name,
+            publish_alias=publish_alias,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("build-qid-graph-index-from-store")
+def registry_build_qid_graph_index_from_store(
+    bundle_dirs: list[Path] = typer.Option(
+        ...,
+        "--bundle-dir",
+        help="Normalized bundle directory with bundle.json. Repeat for multiple packs.",
+    ),
+    graph_store_path: Path = typer.Option(
+        ...,
+        "--graph-store-path",
+        help="Existing explicit QID graph SQLite artifact.",
+    ),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the QID graph artifact and manifest should be written.",
+    ),
+    dimensions: int = typer.Option(
+        384,
+        "--dimensions",
+        min=1,
+        help="Deterministic graph-vector dimensionality.",
+    ),
+    neighbor_limit_per_qid: int = typer.Option(
+        128,
+        "--neighbor-limit",
+        min=1,
+        help="Maximum number of graph neighbors to fold into each reconstructed vector.",
+    ),
+    predicate: list[str] = typer.Option(
+        None,
+        "--predicate",
+        help="Allowed Wikidata property id. Repeat to override the default predicate set.",
+    ),
+    qdrant_url: str | None = typer.Option(
+        None,
+        "--qdrant-url",
+        help="Optional Qdrant base URL. When provided, the built artifact is published.",
+    ),
+    qdrant_api_key: str | None = typer.Option(
+        None,
+        "--qdrant-api-key",
+        help="Optional Qdrant API key override.",
+    ),
+    collection_name: str | None = typer.Option(
+        None,
+        "--collection-name",
+        help="Optional explicit Qdrant collection name. Defaults to one timestamped name.",
+    ),
+    publish_alias: str | None = typer.Option(
+        None,
+        "--publish-alias",
+        help="Optional alias to atomically point at the published collection.",
+    ),
+) -> None:
+    """Build one hosted QID graph index from an existing explicit graph-store artifact."""
+
+    try:
+        response = api_build_qid_graph_index_from_store(
+            bundle_dirs,
+            graph_store_path=graph_store_path,
+            output_dir=output_dir,
+            dimensions=dimensions,
+            allowed_predicates=predicate or None,
+            neighbor_limit_per_qid=neighbor_limit_per_qid,
             qdrant_url=qdrant_url,
             qdrant_api_key=qdrant_api_key,
             collection_name=collection_name,

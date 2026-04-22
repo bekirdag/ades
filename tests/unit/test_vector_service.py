@@ -238,6 +238,20 @@ def test_graph_context_vector_query_seed_entity_ids_prefers_non_person_seeds() -
 
     assert query_seed_ids[:2] == ["wikidata:Q2", "wikidata:Q1"]
     assert query_seed_ids[-1] == "wikidata:Q3"
+ 
+ 
+def test_query_filter_payload_prefers_retrieval_profile_pack_ids() -> None:
+    response = _response_with_linked_entities()
+    settings = Settings(
+        retrieval_profile_name="finance",
+        retrieval_profile_pack_ids=("general-en", "finance-en", "finance-us-en"),
+    )
+
+    payload = vector_service._query_filter_payload(response, settings=settings)
+
+    assert payload == {"packs": ["general-en", "finance-en", "finance-us-en"]}
+
+
 def test_enrich_tag_response_with_related_entities_aggregates_shared_neighbors(monkeypatch) -> None:
     response = _response_with_linked_entities()
     settings = Settings(

@@ -61,6 +61,122 @@ def test_public_api_settings_resolution_preserves_hybrid_graph_context_flags(
     assert settings.graph_context_vector_proposal_limit == 11
 
 
+def test_settings_apply_finance_domain_profile(monkeypatch) -> None:
+    monkeypatch.setenv("ADES_STORAGE_ROOT", "/tmp/ades-unit-test")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_URL", "http://qdrant.local:6333")
+    monkeypatch.setenv("ADES_GRAPH_CONTEXT_ENABLED", "true")
+    monkeypatch.setenv(
+        "ADES_GRAPH_CONTEXT_ARTIFACT_PATH",
+        "/tmp/qid-graph-store.sqlite",
+    )
+
+    settings = _resolve_settings(
+        storage_root="/tmp/ades-unit-test",
+        domain_hint="finance",
+        pack="general-en",
+    )
+
+    assert settings.retrieval_profile_name == "finance"
+    assert settings.vector_search_collection_alias == "ades-qids-finance-current"
+    assert "finance-en" in settings.retrieval_profile_pack_ids
+    assert "general-en" in settings.retrieval_profile_pack_ids
+
+
+def test_settings_apply_explicit_retrieval_profile(monkeypatch) -> None:
+    monkeypatch.setenv("ADES_STORAGE_ROOT", "/tmp/ades-unit-test")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_URL", "http://qdrant.local:6333")
+
+    settings = _resolve_settings(
+        storage_root="/tmp/ades-unit-test",
+        retrieval_profile="politics",
+        pack="general-en",
+    )
+
+    assert settings.retrieval_profile_name == "politics"
+    assert settings.default_pack == "politics-vector-en"
+    assert settings.vector_search_collection_alias == "ades-qids-politics-current"
+    assert settings.retrieval_profile_pack_ids == ("politics-vector-en",)
+
+
+def test_settings_apply_finance_politics_retrieval_profile(monkeypatch) -> None:
+    monkeypatch.setenv("ADES_STORAGE_ROOT", "/tmp/ades-unit-test")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_URL", "http://qdrant.local:6333")
+
+    settings = _resolve_settings(
+        storage_root="/tmp/ades-unit-test",
+        retrieval_profile="finance_politics",
+        pack="general-en",
+    )
+
+    assert settings.retrieval_profile_name == "finance_politics"
+    assert settings.vector_search_collection_alias == "ades-qids-finance-politics-current"
+    assert "finance-en" in settings.retrieval_profile_pack_ids
+    assert "politics-vector-en" in settings.retrieval_profile_pack_ids
+
+
+def test_settings_apply_business_domain_profile(monkeypatch) -> None:
+    monkeypatch.setenv("ADES_STORAGE_ROOT", "/tmp/ades-unit-test")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_URL", "http://qdrant.local:6333")
+
+    settings = _resolve_settings(
+        storage_root="/tmp/ades-unit-test",
+        domain_hint="business",
+        pack="general-en",
+    )
+
+    assert settings.retrieval_profile_name == "business"
+    assert settings.default_pack == "general-en"
+    assert settings.vector_search_collection_alias == "ades-qids-business-current"
+    assert settings.retrieval_profile_pack_ids == ("business-vector-en",)
+
+
+def test_settings_apply_economics_domain_profile(monkeypatch) -> None:
+    monkeypatch.setenv("ADES_STORAGE_ROOT", "/tmp/ades-unit-test")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_URL", "http://qdrant.local:6333")
+
+    settings = _resolve_settings(
+        storage_root="/tmp/ades-unit-test",
+        domain_hint="economics",
+        pack="general-en",
+    )
+
+    assert settings.retrieval_profile_name == "economics"
+    assert settings.default_pack == "general-en"
+    assert settings.vector_search_collection_alias == "ades-qids-economics-current"
+    assert settings.retrieval_profile_pack_ids == ("economics-vector-en",)
+
+
+def test_settings_infer_business_profile_from_pack(monkeypatch) -> None:
+    monkeypatch.setenv("ADES_STORAGE_ROOT", "/tmp/ades-unit-test")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_URL", "http://qdrant.local:6333")
+
+    settings = _resolve_settings(
+        storage_root="/tmp/ades-unit-test",
+        pack="business-vector-en",
+    )
+
+    assert settings.retrieval_profile_name == "business"
+    assert settings.default_pack == "general-en"
+    assert settings.vector_search_collection_alias == "ades-qids-business-current"
+
+
+def test_settings_reject_unknown_domain_hint(monkeypatch) -> None:
+    monkeypatch.setenv("ADES_STORAGE_ROOT", "/tmp/ades-unit-test")
+
+    with pytest.raises(ValueError):
+        _resolve_settings(
+            storage_root="/tmp/ades-unit-test",
+            domain_hint="sports",
+            pack="general-en",
+        )
+
+
 def test_production_service_accepts_postgresql_runtime(monkeypatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 

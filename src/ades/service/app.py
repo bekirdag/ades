@@ -167,6 +167,13 @@ def _refinement_depth_option(options: dict[str, object] | None) -> str:
     raise ValueError("Invalid refinement_depth option.")
 
 
+def _string_option(options: dict[str, object] | None, key: str) -> str | None:
+    if not options or key not in options:
+        return None
+    value = str(options[key]).strip()
+    return value or None
+
+
 def _raise_configuration_http_exception(exc: Exception) -> None:
     """Map one configuration/runtime failure onto the public HTTP contract."""
 
@@ -1219,6 +1226,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 request.text,
                 pack=resolved_pack,
                 content_type=request.content_type,
+                domain_hint=request.domain_hint
+                or _string_option(request.options, "domain_hint"),
+                retrieval_profile=request.retrieval_profile
+                or _string_option(request.options, "retrieval_profile"),
                 output_path=request.output.path if request.output else None,
                 output_dir=request.output.directory if request.output else None,
                 pretty_output=request.output.pretty if request.output else True,
@@ -1255,6 +1266,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 request.path,
                 pack=resolved_pack,
                 content_type=request.content_type,
+                domain_hint=request.domain_hint
+                or _string_option(request.options, "domain_hint"),
+                retrieval_profile=request.retrieval_profile
+                or _string_option(request.options, "retrieval_profile"),
                 output_path=request.output.path if request.output else None,
                 output_dir=request.output.directory if request.output else None,
                 pretty_output=request.output.pretty if request.output else True,
@@ -1305,6 +1320,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 request.paths,
                 pack=request.pack,
                 content_type=request.content_type,
+                domain_hint=request.domain_hint
+                or _string_option(request.options, "domain_hint"),
+                retrieval_profile=request.retrieval_profile
+                or _string_option(request.options, "retrieval_profile"),
                 output_dir=request.output.directory if request.output else None,
                 pretty_output=request.output.pretty if request.output else True,
                 storage_root=storage_root,

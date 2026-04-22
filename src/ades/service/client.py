@@ -249,6 +249,8 @@ def _options_payload(
     include_graph_support: bool = False,
     refine_links: bool = False,
     refinement_depth: str = "light",
+    domain_hint: str | None = None,
+    retrieval_profile: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     if debug:
@@ -263,6 +265,10 @@ def _options_payload(
         payload["refine_links"] = True
     if refinement_depth != "light":
         payload["refinement_depth"] = refinement_depth
+    if domain_hint:
+        payload["domain_hint"] = domain_hint
+    if retrieval_profile:
+        payload["retrieval_profile"] = retrieval_profile
     return payload
 
 
@@ -281,6 +287,8 @@ def tag_via_local_service(
     include_graph_support: bool = False,
     refine_links: bool = False,
     refinement_depth: str = "light",
+    domain_hint: str | None = None,
+    retrieval_profile: str | None = None,
 ) -> TagResponse:
     """Tag inline text through the warm local HTTP service."""
 
@@ -297,8 +305,14 @@ def tag_via_local_service(
             include_graph_support=include_graph_support,
             refine_links=refine_links,
             refinement_depth=refinement_depth,
+            domain_hint=domain_hint,
+            retrieval_profile=retrieval_profile,
         ),
     }
+    if domain_hint:
+        payload["domain_hint"] = domain_hint
+    if retrieval_profile:
+        payload["retrieval_profile"] = retrieval_profile
     output = _output_payload(path=output_path, directory=output_dir, pretty=pretty_output)
     if output is not None:
         payload["output"] = output
@@ -321,6 +335,8 @@ def tag_file_via_local_service(
     include_graph_support: bool = False,
     refine_links: bool = False,
     refinement_depth: str = "light",
+    domain_hint: str | None = None,
+    retrieval_profile: str | None = None,
 ) -> TagResponse:
     """Tag one local file through the warm local HTTP service."""
 
@@ -336,8 +352,14 @@ def tag_file_via_local_service(
             include_graph_support=include_graph_support,
             refine_links=refine_links,
             refinement_depth=refinement_depth,
+            domain_hint=domain_hint,
+            retrieval_profile=retrieval_profile,
         ),
     }
+    if domain_hint:
+        payload["domain_hint"] = domain_hint
+    if retrieval_profile:
+        payload["retrieval_profile"] = retrieval_profile
     if content_type is not None:
         payload["content_type"] = content_type
     output = _output_payload(path=output_path, directory=output_dir, pretty=pretty_output)
@@ -375,6 +397,8 @@ def tag_files_via_local_service(
     include_graph_support: bool = False,
     refine_links: bool = False,
     refinement_depth: str = "light",
+    domain_hint: str | None = None,
+    retrieval_profile: str | None = None,
 ) -> BatchTagResponse:
     """Tag multiple local files through the warm local HTTP service."""
 
@@ -398,8 +422,14 @@ def tag_files_via_local_service(
             include_graph_support=include_graph_support,
             refine_links=refine_links,
             refinement_depth=refinement_depth,
+            domain_hint=domain_hint,
+            retrieval_profile=retrieval_profile,
         ),
     }
+    if domain_hint:
+        payload["domain_hint"] = domain_hint
+    if retrieval_profile:
+        payload["retrieval_profile"] = retrieval_profile
     if pack is not None:
         payload["pack"] = pack
     if content_type is not None:

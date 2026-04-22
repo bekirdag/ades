@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from ades.service.models import GraphSupport, RelatedEntityMatch
+from ades.service.models import GraphSupport, RelatedEntityMatch, TagResponse
 from ades.packs.registry import PackRegistry
 from ades.pipeline.hybrid import ProposalSpan
 from ades.service.app import create_app
@@ -220,3 +220,56 @@ def test_tag_endpoint_rejects_invalid_refinement_depth_option(tmp_path: Path) ->
 
     assert response.status_code == 400
     assert "Invalid refinement_depth option." in response.json()["detail"]
+
+
+def test_tag_endpoint_passes_domain_routing_options(tmp_path: Path, monkeypatch) -> None:
+    pack_id = _install_endpoint_pack(tmp_path)
+    client = TestClient(create_app(storage_root=tmp_path))
+    captured: dict[str, object] = {}
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        domain_hint: str | None = None,
+        retrieval_profile: str | None = None,
+        **_: object,
+    ):
+        captured["text"] = text
+        captured["pack"] = pack
+        captured["content_type"] = content_type
+        captured["domain_hint"] = domain_hint
+        captured["retrieval_profile"] = retrieval_profile
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[],
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    response = client.post(
+        "/v0/tag",
+        json={
+            "text": "Entity Alpha Holdings moved.",
+            "pack": pack_id,
+            "content_type": "text/plain",
+            "domain_hint": "finance",
+            "retrieval_profile": "finance_politics",
+            "options": {
+                "domain_hint": "politics",
+                "retrieval_profile": "politics",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["domain_hint"] == "finance"
+    assert captured["retrieval_profile"] == "finance_politics"

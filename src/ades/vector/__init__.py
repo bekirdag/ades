@@ -4,6 +4,7 @@ from .builder import (
     DEFAULT_QID_GRAPH_ALLOWED_PREDICATES,
     DEFAULT_QID_GRAPH_DIMENSIONS,
     build_qid_graph_index,
+    build_qid_graph_index_from_store,
 )
 from .graph_builder import build_qid_graph_store
 from .graph_store import (
@@ -54,6 +55,7 @@ __all__ = [
     "VectorReleaseThresholdDecision",
     "VectorReleaseThresholds",
     "build_qid_graph_index",
+    "build_qid_graph_index_from_store",
     "build_qid_graph_store",
     "default_vector_release_thresholds",
     "enrich_tag_response_with_related_entities",
