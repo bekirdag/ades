@@ -442,6 +442,7 @@ class Settings:
         DEFAULT_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT
     )
     graph_context_genericity_penalty_enabled: bool = True
+    service_prewarm_enabled: bool = True
     retrieval_profile_name: str | None = None
     retrieval_profile_pack_ids: tuple[str, ...] = ()
     retrieval_profiles: dict[str, RetrievalProfile] = field(default_factory=dict)
@@ -695,6 +696,12 @@ class Settings:
             env_name="ADES_RETRIEVAL_PROFILE",
             config_name="retrieval_profile",
         )
+        service_prewarm_enabled = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_SERVICE_PREWARM_ENABLED",
+            config_name="service_prewarm_enabled",
+        )
         graph_context_genericity_penalty_enabled = _value_from_env_or_config(
             env_map,
             config_values,
@@ -795,6 +802,14 @@ class Settings:
             if graph_context_genericity_penalty_enabled is not None
             else True
         )
+        resolved_service_prewarm_enabled = (
+            _coerce_bool(
+                service_prewarm_enabled,
+                name="ades service prewarm enabled",
+            )
+            if service_prewarm_enabled is not None
+            else True
+        )
         if resolved_graph_context_max_depth < 1:
             raise InvalidConfigurationError(
                 f"Invalid ades graph context max depth: {resolved_graph_context_max_depth!r}"
@@ -875,6 +890,7 @@ class Settings:
             graph_context_genericity_penalty_enabled=(
                 resolved_graph_context_genericity_penalty_enabled
             ),
+            service_prewarm_enabled=resolved_service_prewarm_enabled,
             retrieval_profile_name=_coerce_optional_str(
                 retrieval_profile,
                 name="ades retrieval profile",

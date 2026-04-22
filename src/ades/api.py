@@ -256,6 +256,7 @@ def _resolve_settings(
         ),
         graph_context_vector_proposal_limit=base.graph_context_vector_proposal_limit,
         graph_context_genericity_penalty_enabled=base.graph_context_genericity_penalty_enabled,
+        service_prewarm_enabled=base.service_prewarm_enabled,
         retrieval_profile_name=base.retrieval_profile_name,
         retrieval_profile_pack_ids=base.retrieval_profile_pack_ids,
         retrieval_profiles=base.retrieval_profiles,

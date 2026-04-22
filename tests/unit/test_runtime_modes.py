@@ -23,6 +23,7 @@ def test_settings_from_env_resolve_local_runtime_defaults(monkeypatch) -> None:
     monkeypatch.setenv("ADES_GRAPH_CONTEXT_SEED_NEIGHBOR_LIMIT", "12")
     monkeypatch.setenv("ADES_GRAPH_CONTEXT_VECTOR_PROPOSALS_ENABLED", "true")
     monkeypatch.setenv("ADES_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT", "9")
+    monkeypatch.setenv("ADES_SERVICE_PREWARM_ENABLED", "false")
 
     settings = Settings.from_env()
 
@@ -38,6 +39,7 @@ def test_settings_from_env_resolve_local_runtime_defaults(monkeypatch) -> None:
     assert settings.graph_context_seed_neighbor_limit == 12
     assert settings.graph_context_vector_proposals_enabled is True
     assert settings.graph_context_vector_proposal_limit == 9
+    assert settings.service_prewarm_enabled is False
 
 
 def test_production_service_requires_explicit_runtime(monkeypatch) -> None:

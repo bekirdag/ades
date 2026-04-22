@@ -249,11 +249,13 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        try:
-            runtime_state.prewarm_active_packs()
-        except (FileNotFoundError, UnsupportedRuntimeConfigurationError, ValueError):
-            # Preserve request-time config errors on the public endpoints.
-            pass
+        settings = runtime_state.current_settings()
+        if settings.service_prewarm_enabled:
+            try:
+                runtime_state.prewarm_active_packs()
+            except (FileNotFoundError, UnsupportedRuntimeConfigurationError, ValueError):
+                # Preserve request-time config errors on the public endpoints.
+                pass
         yield
 
     app = FastAPI(title="ades", version=__version__, lifespan=lifespan)
