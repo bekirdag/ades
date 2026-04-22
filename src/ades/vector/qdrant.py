@@ -172,7 +172,12 @@ class QdrantVectorSearchClient:
         json_body: Any | None = None,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        response = self._client.request(method, path, json=json_body, params=params)
+        try:
+            response = self._client.request(method, path, json=json_body, params=params)
+        except httpx.HTTPError as exc:
+            raise QdrantVectorSearchError(
+                f"Qdrant transport request failed: {exc}"
+            ) from exc
         self._raise_for_status(response)
         payload = response.json()
         if not isinstance(payload, dict):

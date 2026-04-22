@@ -98,6 +98,14 @@ def _graph_context_bundle_dir(root: Path, *, pack_id: str = "general-en") -> Pat
                         "source_name": "wikidata-general-entities",
                     }
                 ),
+                json.dumps(
+                    {
+                        "entity_id": "wikidata:Q8",
+                        "canonical_text": "Enterprise AI",
+                        "entity_type": "organization",
+                        "source_name": "wikidata-general-entities",
+                    }
+                ),
             ]
         )
         + "\n",
@@ -115,6 +123,7 @@ def _graph_context_artifact(tmp_path: Path) -> Path:
         "<http://www.wikidata.org/entity/Q2> <http://www.wikidata.org/prop/direct/P463> <http://www.wikidata.org/entity/Q300> .",
         "<http://www.wikidata.org/entity/Q1> <http://www.wikidata.org/prop/direct/P361> <http://www.wikidata.org/entity/Q4> .",
         "<http://www.wikidata.org/entity/Q2> <http://www.wikidata.org/prop/direct/P361> <http://www.wikidata.org/entity/Q4> .",
+        "<http://www.wikidata.org/entity/Q8> <http://www.wikidata.org/prop/direct/P31> <http://www.wikidata.org/entity/Q100> .",
     ]
     truthy_lines.extend(
         f"<http://www.wikidata.org/entity/Q3> <http://www.wikidata.org/prop/direct/P17> <http://www.wikidata.org/entity/Q9{index:02d}> ."
@@ -535,3 +544,234 @@ def test_enrich_tag_response_with_related_entities_applies_graph_context_before_
     assert enriched.graph_support.provider == "sqlite.qid_graph_context"
     assert enriched.graph_support.related_entity_count == 1
     assert enriched.graph_support.suppressed_entity_ids == []
+
+
+def test_enrich_tag_response_with_related_entities_merges_graph_gated_vector_proposals(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    response = _response_with_three_linked_entities()
+    settings = Settings(
+        runtime_target=RuntimeTarget.PRODUCTION_SERVER,
+        metadata_backend=MetadataBackend.POSTGRESQL,
+        database_url="postgresql://local/test",
+        vector_search_enabled=True,
+        vector_search_url="http://qdrant.local:6333",
+        vector_search_related_limit=3,
+        vector_search_collection_alias="ades-qids-current",
+        graph_context_enabled=True,
+        graph_context_artifact_path=_graph_context_artifact(tmp_path),
+        graph_context_seed_neighbor_limit=24,
+        graph_context_candidate_limit=64,
+        graph_context_min_supporting_seeds=2,
+        graph_context_vector_proposals_enabled=True,
+        graph_context_vector_proposal_limit=4,
+    )
+    queried_point_ids: list[str] = []
+
+    class _FakeClient:
+        def __init__(self, base_url: str, *, api_key: str | None = None) -> None:
+            assert base_url == "http://qdrant.local:6333"
+            assert api_key is None
+
+        def __enter__(self) -> "_FakeClient":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def query_similar_by_id(
+            self,
+            collection_name: str,
+            *,
+            point_id: str,
+            limit: int,
+            filter_payload=None,
+        ):
+            assert collection_name == "ades-qids-current"
+            assert filter_payload == {"packs": ["general-en"]}
+            queried_point_ids.append(point_id)
+            return [
+                vector_service.QdrantNearestPoint(point_id, 1.0, {}),
+                vector_service.QdrantNearestPoint(
+                    "wikidata:Q8",
+                    0.83 if point_id == "wikidata:Q1" else 0.81,
+                    {
+                        "canonical_text": "Enterprise AI",
+                        "entity_type": "organization",
+                        "packs": ["general-en"],
+                        "source_name": "wikidata-general-entities",
+                    },
+                ),
+                vector_service.QdrantNearestPoint(
+                    "wikidata:Q99",
+                    0.9,
+                    {
+                        "canonical_text": "Noise Concept",
+                        "entity_type": "organization",
+                        "packs": ["general-en"],
+                        "source_name": "wikidata-general-entities",
+                    },
+                ),
+            ]
+
+    monkeypatch.setattr(vector_service, "QdrantVectorSearchClient", _FakeClient)
+
+    enriched = vector_service.enrich_tag_response_with_related_entities(
+        response,
+        settings=settings,
+        include_related_entities=True,
+    )
+
+    assert queried_point_ids == ["wikidata:Q1", "wikidata:Q2"]
+    assert {item.entity_id for item in enriched.related_entities} == {
+        "wikidata:Q4",
+        "wikidata:Q8",
+    }
+    hybrid_item = next(
+        item for item in enriched.related_entities if item.entity_id == "wikidata:Q8"
+    )
+    assert hybrid_item.provider == "qdrant.qid_graph"
+    assert hybrid_item.seed_entity_ids == ["wikidata:Q1", "wikidata:Q2"]
+    assert hybrid_item.shared_seed_count == 2
+    assert "wikidata:Q99" not in {item.entity_id for item in enriched.related_entities}
+    assert enriched.graph_support is not None
+    assert enriched.graph_support.provider == "sqlite.qid_graph_context"
+    assert enriched.graph_support.related_entity_count == 2
+
+
+def test_enrich_tag_response_with_related_entities_allows_local_hybrid_vector_proposals(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    response = _response_with_three_linked_entities()
+    settings = Settings(
+        runtime_target=RuntimeTarget.LOCAL,
+        metadata_backend=MetadataBackend.SQLITE,
+        vector_search_enabled=True,
+        vector_search_url="http://qdrant.local:6333",
+        vector_search_related_limit=3,
+        vector_search_collection_alias="ades-qids-current",
+        graph_context_enabled=True,
+        graph_context_artifact_path=_graph_context_artifact(tmp_path),
+        graph_context_seed_neighbor_limit=24,
+        graph_context_candidate_limit=64,
+        graph_context_min_supporting_seeds=2,
+        graph_context_vector_proposals_enabled=True,
+        graph_context_vector_proposal_limit=4,
+    )
+    queried_point_ids: list[str] = []
+
+    class _FakeClient:
+        def __init__(self, base_url: str, *, api_key: str | None = None) -> None:
+            assert base_url == "http://qdrant.local:6333"
+            assert api_key is None
+
+        def __enter__(self) -> "_FakeClient":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def query_similar_by_id(
+            self,
+            collection_name: str,
+            *,
+            point_id: str,
+            limit: int,
+            filter_payload=None,
+        ):
+            assert collection_name == "ades-qids-current"
+            assert filter_payload == {"packs": ["general-en"]}
+            queried_point_ids.append(point_id)
+            return [
+                vector_service.QdrantNearestPoint(point_id, 1.0, {}),
+                vector_service.QdrantNearestPoint(
+                    "wikidata:Q8",
+                    0.84 if point_id == "wikidata:Q1" else 0.82,
+                    {
+                        "canonical_text": "Enterprise AI",
+                        "entity_type": "organization",
+                        "packs": ["general-en"],
+                        "source_name": "wikidata-general-entities",
+                    },
+                ),
+            ]
+
+    monkeypatch.setattr(vector_service, "QdrantVectorSearchClient", _FakeClient)
+
+    enriched = vector_service.enrich_tag_response_with_related_entities(
+        response,
+        settings=settings,
+        include_related_entities=True,
+    )
+
+    assert queried_point_ids == ["wikidata:Q1", "wikidata:Q2"]
+    assert {item.entity_id for item in enriched.related_entities} == {
+        "wikidata:Q4",
+        "wikidata:Q8",
+    }
+    hybrid_item = next(
+        item for item in enriched.related_entities if item.entity_id == "wikidata:Q8"
+    )
+    assert hybrid_item.seed_entity_ids == ["wikidata:Q1", "wikidata:Q2"]
+
+
+def test_enrich_tag_response_with_related_entities_warns_when_local_hybrid_vector_transport_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    response = _response_with_three_linked_entities()
+    settings = Settings(
+        runtime_target=RuntimeTarget.LOCAL,
+        metadata_backend=MetadataBackend.SQLITE,
+        vector_search_enabled=True,
+        vector_search_url="http://127.0.0.1:6333",
+        vector_search_related_limit=3,
+        vector_search_collection_alias="ades-qids-current",
+        graph_context_enabled=True,
+        graph_context_artifact_path=_graph_context_artifact(tmp_path),
+        graph_context_seed_neighbor_limit=24,
+        graph_context_candidate_limit=64,
+        graph_context_min_supporting_seeds=2,
+        graph_context_vector_proposals_enabled=True,
+        graph_context_vector_proposal_limit=4,
+    )
+
+    class _FakeClient:
+        def __init__(self, base_url: str, *, api_key: str | None = None) -> None:
+            assert base_url == "http://127.0.0.1:6333"
+            assert api_key is None
+
+        def __enter__(self) -> "_FakeClient":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def query_similar_by_id(
+            self,
+            collection_name: str,
+            *,
+            point_id: str,
+            limit: int,
+            filter_payload=None,
+        ):
+            raise QdrantVectorSearchError(
+                "Qdrant transport request failed: [Errno 111] Connection refused"
+            )
+
+    monkeypatch.setattr(vector_service, "QdrantVectorSearchClient", _FakeClient)
+
+    enriched = vector_service.enrich_tag_response_with_related_entities(
+        response,
+        settings=settings,
+        include_related_entities=True,
+    )
+
+    assert {item.entity_id for item in enriched.related_entities} == {"wikidata:Q4"}
+    assert enriched.graph_support is not None
+    assert (
+        "vector_search_failed:Qdrant transport request failed: [Errno 111] Connection refused"
+        in enriched.graph_support.warnings
+    )

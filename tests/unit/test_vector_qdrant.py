@@ -140,3 +140,22 @@ def test_raise_for_status_preserves_http_status_code() -> None:
         assert getattr(exc, "status_code", None) == 404
     else:  # pragma: no cover - defensive check for the explicit failure path
         raise AssertionError("Expected QdrantVectorSearchError to be raised.")
+
+
+def test_request_wraps_transport_errors() -> None:
+    client = object.__new__(QdrantVectorSearchClient)
+    request = httpx.Request("POST", "http://qdrant.local/collections/test/points/query")
+
+    class _FakeClient:
+        def request(self, method: str, path: str, *, json=None, params=None):
+            raise httpx.ConnectError("[Errno 111] Connection refused", request=request)
+
+    client._client = _FakeClient()
+
+    try:
+        client._request("POST", "/collections/test/points/query", json_body={"limit": 4})
+    except Exception as exc:
+        assert str(exc) == "Qdrant transport request failed: [Errno 111] Connection refused"
+        assert getattr(exc, "status_code", None) is None
+    else:  # pragma: no cover - defensive check for the explicit failure path
+        raise AssertionError("Expected QdrantVectorSearchError to be raised.")

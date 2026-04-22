@@ -9,10 +9,12 @@ from ..config import Settings
 from ..service.models import GraphSupport, RelatedEntityMatch, TagResponse
 from ..storage import RuntimeTarget
 from .context_engine import apply_graph_context
+from .graph_store import QidGraphStore
 from .qdrant import QdrantNearestPoint, QdrantVectorSearchClient, QdrantVectorSearchError
 
 _PROVIDER_NAME = "qdrant.qid_graph"
 _REFINEMENT_STRATEGY = "qid_graph_coherence_v1"
+_HYBRID_VECTOR_PROPOSAL_MIN_COHERENCE = 0.12
 _LOW_CONFIDENCE_THRESHOLD_BY_DEPTH = {
     "light": 0.65,
     "deep": 0.8,
@@ -213,6 +215,7 @@ def _aggregate_related_entities(
     *,
     response: TagResponse,
     settings: Settings,
+    limit: int | None = None,
 ) -> list[RelatedEntityMatch]:
     seed_labels = _seed_labels(response)
     excluded_entity_ids = {
@@ -270,7 +273,8 @@ def _aggregate_related_entities(
             for item in ranked
             if _score_candidate(item) >= settings.vector_search_score_threshold
         ]
-    limited = ranked[: settings.vector_search_related_limit]
+    resolved_limit = settings.vector_search_related_limit if limit is None else limit
+    limited = ranked[:resolved_limit]
     return [
         RelatedEntityMatch(
             entity_id=item.entity_id,
@@ -285,6 +289,308 @@ def _aggregate_related_entities(
         )
         for item in limited
     ]
+
+
+def _query_vector_results_by_seed(
+    *,
+    response: TagResponse,
+    settings: Settings,
+    seed_entity_ids: list[str],
+    query_limit: int,
+    allow_non_production: bool = False,
+) -> tuple[dict[str, list[QdrantNearestPoint]], list[str]]:
+    if (
+        not allow_non_production
+        and settings.runtime_target is not RuntimeTarget.PRODUCTION_SERVER
+    ):
+        return {}, ["vector_search_production_only"]
+    if not settings.vector_search_enabled:
+        return {}, ["vector_search_disabled"]
+    if not settings.vector_search_url:
+        return {}, ["vector_search_url_missing"]
+
+    filter_payload = _query_filter_payload(response)
+    warnings: list[str] = []
+    results_by_seed: dict[str, list[QdrantNearestPoint]] = {}
+    try:
+        with QdrantVectorSearchClient(
+            settings.vector_search_url,
+            api_key=settings.vector_search_api_key,
+        ) as client:
+            for seed_entity_id in seed_entity_ids:
+                try:
+                    results_by_seed[seed_entity_id] = client.query_similar_by_id(
+                        settings.vector_search_collection_alias,
+                        point_id=seed_entity_id,
+                        limit=query_limit,
+                        filter_payload=filter_payload,
+                    )
+                except QdrantVectorSearchError as exc:
+                    if exc.status_code == 404:
+                        warnings.append(
+                            f"vector_search_seed_missing:{seed_entity_id}"
+                        )
+                        continue
+                    raise
+    except QdrantVectorSearchError as exc:
+        warnings.append(f"vector_search_failed:{exc}")
+        return {}, warnings
+    if not results_by_seed:
+        warnings.append("vector_search_no_available_seed_points")
+    return results_by_seed, warnings
+
+
+def _graph_context_strong_seed_entity_ids(response: TagResponse) -> list[str]:
+    seen: set[str] = set()
+    refinement_debug = response.refinement_debug
+    if isinstance(refinement_debug, dict):
+        raw_seed_decisions = refinement_debug.get("seed_decisions")
+        if isinstance(raw_seed_decisions, list):
+            strong_seed_ids: list[str] = []
+            for item in raw_seed_decisions:
+                if not isinstance(item, dict):
+                    continue
+                entity_id = str(item.get("entity_id") or "").strip()
+                action = str(item.get("action") or "").strip()
+                if action not in {"keep", "boost"}:
+                    continue
+                if not entity_id.startswith("wikidata:Q") or entity_id in seen:
+                    continue
+                seen.add(entity_id)
+                strong_seed_ids.append(entity_id)
+            if strong_seed_ids:
+                return strong_seed_ids
+    graph_support = response.graph_support
+    suppressed = (
+        set(graph_support.suppressed_entity_ids) if graph_support is not None else set()
+    )
+    downgraded = (
+        set(graph_support.downgraded_entity_ids) if graph_support is not None else set()
+    )
+    strong_seed_ids: list[str] = []
+    for entity_id in _linked_seed_entity_ids(response):
+        if entity_id in suppressed or entity_id in downgraded or entity_id in seen:
+            continue
+        seen.add(entity_id)
+        strong_seed_ids.append(entity_id)
+    return strong_seed_ids
+
+
+def _graph_gate_vector_related_entities(
+    vector_related_entities: list[RelatedEntityMatch],
+    *,
+    response: TagResponse,
+    strong_seed_entity_ids: list[str],
+    settings: Settings,
+) -> list[RelatedEntityMatch]:
+    graph_support = response.graph_support
+    if not vector_related_entities or settings.graph_context_artifact_path is None:
+        return []
+    if graph_support is None or graph_support.coherence_score is None:
+        return []
+    if graph_support.coherence_score < _HYBRID_VECTOR_PROPOSAL_MIN_COHERENCE:
+        return []
+    if len(strong_seed_entity_ids) < settings.graph_context_min_supporting_seeds:
+        return []
+
+    extracted_entity_ids = {
+        entity.link.entity_id
+        for entity in response.entities
+        if entity.link is not None and entity.link.entity_id
+    }
+    existing_related_ids = {item.entity_id for item in response.related_entities}
+    candidate_qids = tuple(
+        dict.fromkeys(
+            item.entity_id.removeprefix("wikidata:")
+            for item in vector_related_entities
+            if item.entity_id.startswith("wikidata:Q")
+            and item.entity_id not in extracted_entity_ids
+            and item.entity_id not in existing_related_ids
+        )
+    )
+    if not candidate_qids:
+        return []
+
+    strong_seed_qids = tuple(
+        entity_id.removeprefix("wikidata:") for entity_id in strong_seed_entity_ids
+    )
+    with QidGraphStore(settings.graph_context_artifact_path) as store:
+        metadata_by_qid = store.node_metadata_batch((*strong_seed_qids, *candidate_qids))
+        neighbors_by_qid = store.neighbors_batch(
+            (*strong_seed_qids, *candidate_qids),
+            direction="both",
+            limit_per_qid=settings.graph_context_seed_neighbor_limit,
+        )
+
+    seed_neighbor_sets = {
+        seed_qid: {neighbor.qid for neighbor in neighbors_by_qid.get(seed_qid, [])}
+        for seed_qid in strong_seed_qids
+    }
+    admitted: list[RelatedEntityMatch] = []
+    for item in vector_related_entities:
+        if not item.entity_id.startswith("wikidata:Q"):
+            continue
+        if item.entity_id in extracted_entity_ids or item.entity_id in existing_related_ids:
+            continue
+        candidate_qid = item.entity_id.removeprefix("wikidata:")
+        metadata = metadata_by_qid.get(candidate_qid)
+        if metadata is None or metadata.entity_id != item.entity_id:
+            continue
+        display_text = metadata.canonical_text.strip() or item.canonical_text.strip()
+        if not display_text or display_text == candidate_qid:
+            continue
+        candidate_neighbor_set = {
+            neighbor.qid for neighbor in neighbors_by_qid.get(candidate_qid, [])
+        }
+        supporting_seed_ids: list[str] = []
+        direct_support_count = 0
+        shared_context_qids: set[str] = set()
+        for seed_entity_id, seed_qid in zip(
+            strong_seed_entity_ids,
+            strong_seed_qids,
+            strict=True,
+        ):
+            seed_neighbor_set = seed_neighbor_sets.get(seed_qid, set())
+            direct_support = (
+                candidate_qid in seed_neighbor_set or seed_qid in candidate_neighbor_set
+            )
+            shared_neighbors = (
+                candidate_neighbor_set.intersection(seed_neighbor_set)
+                - {candidate_qid, seed_qid}
+            )
+            if not direct_support and not shared_neighbors:
+                continue
+            supporting_seed_ids.append(seed_entity_id)
+            if direct_support:
+                direct_support_count += 1
+            shared_context_qids.update(shared_neighbors)
+        if len(supporting_seed_ids) < settings.graph_context_min_supporting_seeds:
+            continue
+        graph_bonus = min(
+            0.18,
+            max(
+                0.0,
+                (len(supporting_seed_ids) - 1) * 0.05
+                + (direct_support_count * 0.03)
+                + min(len(shared_context_qids), 3) * 0.01,
+            ),
+        )
+        admitted.append(
+            RelatedEntityMatch(
+                entity_id=item.entity_id,
+                canonical_text=display_text,
+                score=round(float(item.score) + graph_bonus, 6),
+                provider=item.provider,
+                entity_type=metadata.entity_type or item.entity_type,
+                source_name=metadata.source_name or item.source_name,
+                packs=sorted(set(item.packs).union(metadata.packs)),
+                seed_entity_ids=supporting_seed_ids,
+                shared_seed_count=len(supporting_seed_ids),
+            )
+        )
+    admitted.sort(
+        key=lambda related: (
+            -related.score,
+            -related.shared_seed_count,
+            related.canonical_text.casefold(),
+            related.entity_id,
+        )
+    )
+    return admitted[: settings.graph_context_related_limit]
+
+
+def _merge_related_entities(
+    primary: list[RelatedEntityMatch],
+    secondary: list[RelatedEntityMatch],
+    *,
+    limit: int,
+) -> list[RelatedEntityMatch]:
+    merged: dict[str, RelatedEntityMatch] = {
+        item.entity_id: item.model_copy(deep=True) for item in primary
+    }
+    for item in secondary:
+        existing = merged.get(item.entity_id)
+        if existing is None:
+            merged[item.entity_id] = item.model_copy(deep=True)
+            continue
+        merged[item.entity_id] = existing.model_copy(
+            update={
+                "score": max(existing.score, item.score),
+                "entity_type": existing.entity_type or item.entity_type,
+                "source_name": existing.source_name or item.source_name,
+                "packs": sorted(set(existing.packs).union(item.packs)),
+                "seed_entity_ids": sorted(
+                    set(existing.seed_entity_ids).union(item.seed_entity_ids)
+                ),
+                "shared_seed_count": len(
+                    set(existing.seed_entity_ids).union(item.seed_entity_ids)
+                ),
+            }
+        )
+    ranked = sorted(
+        merged.values(),
+        key=lambda related: (
+            -related.score,
+            -related.shared_seed_count,
+            related.canonical_text.casefold(),
+            related.entity_id,
+        ),
+    )
+    return ranked[:limit]
+
+
+def _enrich_graph_context_response_with_vector_proposals(
+    response: TagResponse,
+    *,
+    settings: Settings,
+) -> TagResponse:
+    graph_support = response.graph_support
+    if graph_support is None or not graph_support.applied:
+        return response
+    strong_seed_entity_ids = _graph_context_strong_seed_entity_ids(response)
+    if len(strong_seed_entity_ids) < settings.graph_context_min_supporting_seeds:
+        return response
+    query_limit = max(
+        settings.graph_context_vector_proposal_limit * 4,
+        settings.graph_context_vector_proposal_limit + 4,
+    )
+    results_by_seed, warnings = _query_vector_results_by_seed(
+        response=response,
+        settings=settings,
+        seed_entity_ids=strong_seed_entity_ids,
+        query_limit=query_limit,
+        allow_non_production=True,
+    )
+    merged_graph_support = graph_support.model_copy(deep=True)
+    for warning in warnings:
+        if warning not in merged_graph_support.warnings:
+            merged_graph_support.warnings.append(warning)
+    if not results_by_seed:
+        return response.model_copy(update={"graph_support": merged_graph_support})
+    vector_candidates = _aggregate_related_entities(
+        results_by_seed,
+        response=response,
+        settings=settings,
+        limit=settings.graph_context_vector_proposal_limit,
+    )
+    vetted_candidates = _graph_gate_vector_related_entities(
+        vector_candidates,
+        response=response,
+        strong_seed_entity_ids=strong_seed_entity_ids,
+        settings=settings,
+    )
+    merged_related_entities = _merge_related_entities(
+        response.related_entities,
+        vetted_candidates,
+        limit=settings.graph_context_related_limit,
+    )
+    merged_graph_support.related_entity_count = len(merged_related_entities)
+    return response.model_copy(
+        update={
+            "related_entities": merged_related_entities,
+            "graph_support": merged_graph_support,
+        }
+    )
 
 
 def _enrich_tag_response_with_vector_search(
@@ -324,34 +630,18 @@ def _enrich_tag_response_with_vector_search(
         graph_support.warnings.append("no_wikidata_seed_entities")
         return response.model_copy(update={"graph_support": graph_support})
 
-    query_limit = max(settings.vector_search_related_limit * 4, settings.vector_search_related_limit + 4)
-    results_by_seed: dict[str, list[QdrantNearestPoint]] = {}
-    filter_payload = _query_filter_payload(response)
-    try:
-        with QdrantVectorSearchClient(
-            settings.vector_search_url,
-            api_key=settings.vector_search_api_key,
-        ) as client:
-            for seed_entity_id in seed_entity_ids:
-                try:
-                    results_by_seed[seed_entity_id] = client.query_similar_by_id(
-                        settings.vector_search_collection_alias,
-                        point_id=seed_entity_id,
-                        limit=query_limit,
-                        filter_payload=filter_payload,
-                    )
-                except QdrantVectorSearchError as exc:
-                    if exc.status_code == 404:
-                        graph_support.warnings.append(
-                            f"vector_search_seed_missing:{seed_entity_id}"
-                        )
-                        continue
-                    raise
-    except QdrantVectorSearchError as exc:
-        graph_support.warnings.append(f"vector_search_failed:{exc}")
-        return response.model_copy(update={"graph_support": graph_support})
+    query_limit = max(
+        settings.vector_search_related_limit * 4,
+        settings.vector_search_related_limit + 4,
+    )
+    results_by_seed, warnings = _query_vector_results_by_seed(
+        response=response,
+        settings=settings,
+        seed_entity_ids=seed_entity_ids,
+        query_limit=query_limit,
+    )
+    graph_support.warnings.extend(warnings)
     if not results_by_seed:
-        graph_support.warnings.append("vector_search_no_available_seed_points")
         return response.model_copy(update={"graph_support": graph_support})
 
     related_entities = (
@@ -427,6 +717,14 @@ def enrich_tag_response_with_related_entities(
 
     if graph_context_response is not None and graph_context_response.graph_support is not None:
         if graph_context_response.graph_support.applied:
+            if (
+                include_related_entities
+                and settings.graph_context_vector_proposals_enabled
+            ):
+                return _enrich_graph_context_response_with_vector_proposals(
+                    graph_context_response,
+                    settings=settings,
+                )
             return graph_context_response
 
     if not include_related_entities:

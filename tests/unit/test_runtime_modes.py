@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI
 import pytest
 
+from ades.api import _resolve_settings
 from ades.config import Settings
 from ades.service.production import create_production_app
 from ades.storage import MetadataBackend, RuntimeTarget
@@ -20,6 +21,8 @@ def test_settings_from_env_resolve_local_runtime_defaults(monkeypatch) -> None:
     monkeypatch.setenv("ADES_GRAPH_CONTEXT_ARTIFACT_PATH", "/tmp/qid-graph-store.sqlite")
     monkeypatch.setenv("ADES_GRAPH_CONTEXT_RELATED_LIMIT", "6")
     monkeypatch.setenv("ADES_GRAPH_CONTEXT_SEED_NEIGHBOR_LIMIT", "12")
+    monkeypatch.setenv("ADES_GRAPH_CONTEXT_VECTOR_PROPOSALS_ENABLED", "true")
+    monkeypatch.setenv("ADES_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT", "9")
 
     settings = Settings.from_env()
 
@@ -33,6 +36,8 @@ def test_settings_from_env_resolve_local_runtime_defaults(monkeypatch) -> None:
     assert settings.graph_context_artifact_path == Path("/tmp/qid-graph-store.sqlite")
     assert settings.graph_context_related_limit == 6
     assert settings.graph_context_seed_neighbor_limit == 12
+    assert settings.graph_context_vector_proposals_enabled is True
+    assert settings.graph_context_vector_proposal_limit == 9
 
 
 def test_production_service_requires_explicit_runtime(monkeypatch) -> None:
@@ -42,6 +47,18 @@ def test_production_service_requires_explicit_runtime(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError):
         create_production_app(storage_root=os.getcwd())
+
+
+def test_public_api_settings_resolution_preserves_hybrid_graph_context_flags(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ADES_GRAPH_CONTEXT_VECTOR_PROPOSALS_ENABLED", "true")
+    monkeypatch.setenv("ADES_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT", "11")
+
+    settings = _resolve_settings(storage_root="/tmp/ades-unit-test")
+
+    assert settings.graph_context_vector_proposals_enabled is True
+    assert settings.graph_context_vector_proposal_limit == 11
 
 
 def test_production_service_accepts_postgresql_runtime(monkeypatch, tmp_path: Path) -> None:

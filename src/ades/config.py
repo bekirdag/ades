@@ -25,6 +25,7 @@ DEFAULT_GRAPH_CONTEXT_RELATED_LIMIT = 5
 DEFAULT_GRAPH_CONTEXT_SEED_NEIGHBOR_LIMIT = 24
 DEFAULT_GRAPH_CONTEXT_CANDIDATE_LIMIT = 128
 DEFAULT_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS = 2
+DEFAULT_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT = 8
 CONFIG_FILE_ENV = "ADES_CONFIG_FILE"
 DATABASE_URL_ENV = "ADES_DATABASE_URL"
 DEFAULT_CONFIG_PATHS = (
@@ -130,6 +131,10 @@ class Settings:
     graph_context_seed_neighbor_limit: int = DEFAULT_GRAPH_CONTEXT_SEED_NEIGHBOR_LIMIT
     graph_context_candidate_limit: int = DEFAULT_GRAPH_CONTEXT_CANDIDATE_LIMIT
     graph_context_min_supporting_seeds: int = DEFAULT_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS
+    graph_context_vector_proposals_enabled: bool = False
+    graph_context_vector_proposal_limit: int = (
+        DEFAULT_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT
+    )
     graph_context_genericity_penalty_enabled: bool = True
     config_path: Path | None = None
 
@@ -265,6 +270,18 @@ class Settings:
             env_name="ADES_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS",
             config_name="graph_context_min_supporting_seeds",
         )
+        graph_context_vector_proposals_enabled = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_GRAPH_CONTEXT_VECTOR_PROPOSALS_ENABLED",
+            config_name="graph_context_vector_proposals_enabled",
+        )
+        graph_context_vector_proposal_limit = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT",
+            config_name="graph_context_vector_proposal_limit",
+        )
         graph_context_genericity_penalty_enabled = _value_from_env_or_config(
             env_map,
             config_values,
@@ -341,6 +358,22 @@ class Settings:
             if graph_context_min_supporting_seeds is not None
             else DEFAULT_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS
         )
+        resolved_graph_context_vector_proposals_enabled = (
+            _coerce_bool(
+                graph_context_vector_proposals_enabled,
+                name="ades graph context vector proposals enabled",
+            )
+            if graph_context_vector_proposals_enabled is not None
+            else False
+        )
+        resolved_graph_context_vector_proposal_limit = (
+            _coerce_int(
+                graph_context_vector_proposal_limit,
+                name="ades graph context vector proposal limit",
+            )
+            if graph_context_vector_proposal_limit is not None
+            else DEFAULT_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT
+        )
         resolved_graph_context_genericity_penalty_enabled = (
             _coerce_bool(
                 graph_context_genericity_penalty_enabled,
@@ -372,6 +405,11 @@ class Settings:
             raise InvalidConfigurationError(
                 "Invalid ades graph context min supporting seeds: "
                 f"{resolved_graph_context_min_supporting_seeds!r}"
+            )
+        if resolved_graph_context_vector_proposal_limit <= 0:
+            raise InvalidConfigurationError(
+                "Invalid ades graph context vector proposal limit: "
+                f"{resolved_graph_context_vector_proposal_limit!r}"
             )
 
         return cls(
@@ -406,6 +444,12 @@ class Settings:
             graph_context_seed_neighbor_limit=resolved_graph_context_seed_neighbor_limit,
             graph_context_candidate_limit=resolved_graph_context_candidate_limit,
             graph_context_min_supporting_seeds=resolved_graph_context_min_supporting_seeds,
+            graph_context_vector_proposals_enabled=(
+                resolved_graph_context_vector_proposals_enabled
+            ),
+            graph_context_vector_proposal_limit=(
+                resolved_graph_context_vector_proposal_limit
+            ),
             graph_context_genericity_penalty_enabled=(
                 resolved_graph_context_genericity_penalty_enabled
             ),

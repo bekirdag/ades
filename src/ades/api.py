@@ -247,6 +247,10 @@ def _resolve_settings(
         graph_context_seed_neighbor_limit=base.graph_context_seed_neighbor_limit,
         graph_context_candidate_limit=base.graph_context_candidate_limit,
         graph_context_min_supporting_seeds=base.graph_context_min_supporting_seeds,
+        graph_context_vector_proposals_enabled=(
+            base.graph_context_vector_proposals_enabled
+        ),
+        graph_context_vector_proposal_limit=base.graph_context_vector_proposal_limit,
         graph_context_genericity_penalty_enabled=base.graph_context_genericity_penalty_enabled,
         config_path=base.config_path,
     )
