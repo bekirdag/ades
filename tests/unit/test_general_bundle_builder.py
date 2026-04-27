@@ -255,6 +255,63 @@ def test_build_general_source_bundle_prunes_low_signal_geonames_locations(
     assert "Store" not in location_names
 
 
+def test_build_general_source_bundle_preserves_explicit_curated_entity_id_prefix(
+    tmp_path: Path,
+) -> None:
+    snapshots = create_general_raw_snapshots(tmp_path)
+    snapshots["curated_entities"].write_text(
+        json.dumps(
+            {
+                "entities": [
+                    {
+                        "canonical_text": "Pauline Hanson",
+                        "entity_type": "person",
+                        "entity_id": "wikidata:Q466220",
+                        "aliases": ["Pauline Lee Hanson"],
+                        "description": "Australian politician",
+                        "popularity": 17,
+                        "source_features": {
+                            "has_enwiki": True,
+                            "identifier_count": 30,
+                            "sitelink_count": 17,
+                            "statement_count": 38,
+                        },
+                    }
+                ]
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = build_general_source_bundle(
+        wikidata_entities_path=snapshots["wikidata_entities"],
+        geonames_places_path=snapshots["geonames_places"],
+        curated_entities_path=snapshots["curated_entities"],
+        output_dir=tmp_path / "bundles",
+    )
+
+    entity_records = [
+        json.loads(line)
+        for line in Path(result.entities_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    record = next(item for item in entity_records if item["canonical_text"] == "Pauline Hanson")
+
+    assert record["entity_id"] == "wikidata:Q466220"
+    assert record["source_id"] == "Q466220"
+    assert record["source_name"] == "curated-general-entities"
+    assert record["aliases"] == ["Pauline Lee Hanson"]
+    assert record["description"] == "Australian politician"
+    assert record["popularity"] == 17
+    assert record["source_features"] == {
+        "has_enwiki": True,
+        "identifier_count": 30,
+        "sitelink_count": 17,
+        "statement_count": 38,
+    }
+
+
 def test_build_general_source_bundle_accepts_official_geonames_zip(
     tmp_path: Path,
 ) -> None:

@@ -95,6 +95,120 @@ def _install_duration_alias_pack(storage_root: Path) -> str:
     return pack_dir.name
 
 
+def _install_runtime_cleanup_pack(storage_root: Path) -> str:
+    layout = ensure_storage_layout(build_storage_layout(storage_root))
+    pack_dir = create_pack_source(
+        layout.packs_dir,
+        pack_id="general-en",
+        domain="general",
+        labels=("organization",),
+    )
+    (pack_dir / "aliases.json").write_text(
+        json.dumps(
+            {
+                "aliases": [
+                    {
+                        "text": "Atlantic Ocean",
+                        "label": "organization",
+                        "canonical_text": "Atlantic Ocean",
+                        "entity_id": "wikidata:Q31956345",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "As ever",
+                        "label": "organization",
+                        "canonical_text": "As Ever",
+                        "entity_id": "wikidata:Q127104762",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "King's",
+                        "label": "organization",
+                        "canonical_text": "King's Company",
+                        "entity_id": "wikidata:Q2197437",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "Defense Minister",
+                        "label": "person",
+                        "canonical_text": "Jerry Codiñera",
+                        "entity_id": "wikidata:Q8853429",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "May. Just",
+                        "label": "person",
+                        "canonical_text": "May Evelyn Cornwell",
+                        "entity_id": "wikidata:Q75523417",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "New Town",
+                        "label": "location",
+                        "canonical_text": "New Town",
+                        "entity_id": "wikidata:Q14935638",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "The Highest Court in the Land",
+                        "label": "location",
+                        "canonical_text": "The Highest Court in the Land",
+                        "entity_id": "wikidata:Q136804782",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "Supreme Court",
+                        "label": "location",
+                        "canonical_text": "Supreme Court",
+                        "entity_id": "wikidata:Q9990001",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "Banks",
+                        "label": "person",
+                        "canonical_text": "Banks",
+                        "entity_id": "wikidata:Q9990002",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "Noise",
+                        "label": "organization",
+                        "canonical_text": "Noise",
+                        "entity_id": "wikidata:Q7047669",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "Isle",
+                        "label": "location",
+                        "canonical_text": "Isle",
+                        "entity_id": "wikidata:Q935535",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "Welsh",
+                        "label": "location",
+                        "canonical_text": "Welsh",
+                        "entity_id": "wikidata:Q2459054",
+                        "source_domain": "general",
+                    },
+                    {
+                        "text": "Santander",
+                        "label": "location",
+                        "canonical_text": "Santander",
+                        "entity_id": "wikidata:Q12233",
+                        "source_domain": "general",
+                    },
+                ]
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    PackRegistry(storage_root).sync_pack_from_disk(pack_dir.name)
+    return pack_dir.name
+
+
 def test_tagger_debug_payload_reports_discarded_overlaps(tmp_path: Path) -> None:
     pack_id = _install_overlap_pack(tmp_path)
 
@@ -171,5 +285,58 @@ def test_tagger_drops_runtime_generic_duration_aliases(tmp_path: Path) -> None:
     assert any(
         item.reason == "runtime_generic_duration_alias"
         and item.text in {"5 min", "15 Minutes"}
+        for item in response.debug.span_decisions
+    )
+
+
+def test_tagger_drops_runtime_structural_geo_titleish_and_phrase_aliases(
+    tmp_path: Path,
+) -> None:
+    pack_id = _install_runtime_cleanup_pack(tmp_path)
+
+    response = tag_text(
+        text=(
+            "The islands lie in the south-west Atlantic Ocean. "
+            "As ever, campaign rhetoric grew louder. "
+            "The King's visit was delayed. "
+            "The Defense Minister spoke later. "
+            "May. Just moved on. "
+            "A New Town plan followed. "
+            "The highest court in the land ruled yesterday. "
+            "The Supreme Court ruled in August. "
+            "Banks have also hit back at the ruling. "
+            "The association counts Santander and the financial arms of BMW and Volkswagen among its members. "
+            "Noise faded. "
+            "Welsh rhetoric sharpened. "
+            "The Isle route closed."
+        ),
+        pack=pack_id,
+        content_type="text/plain",
+        storage_root=tmp_path,
+        debug=True,
+    )
+
+    assert response.entities == []
+    assert response.metrics.entity_count == 0
+    assert response.debug is not None
+    assert any(
+        item.reason == "runtime_structural_geo_feature_label_mismatch"
+        and item.text == "Atlantic Ocean"
+        for item in response.debug.span_decisions
+    )
+    assert all(entity.text != "As ever" for entity in response.entities)
+    assert all(entity.text != "King's" for entity in response.entities)
+    assert all(entity.text != "May. Just" for entity in response.entities)
+    assert all(entity.text != "New Town" for entity in response.entities)
+    assert all(entity.text != "highest court in the land" for entity in response.entities)
+    assert all(entity.text != "Supreme Court" for entity in response.entities)
+    assert all(entity.text != "Banks" for entity in response.entities)
+    assert all(entity.text != "Santander" for entity in response.entities)
+    assert all(entity.text != "Noise" for entity in response.entities)
+    assert all(entity.text != "Welsh" for entity in response.entities)
+    assert all(entity.text != "Isle" for entity in response.entities)
+    assert any(
+        item.reason == "runtime_office_title_person_alias_artifact"
+        and item.text == "Defense Minister"
         for item in response.debug.span_decisions
     )

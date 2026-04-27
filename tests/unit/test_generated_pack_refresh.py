@@ -4,10 +4,20 @@ from pathlib import Path
 from ades.packs.finance_bundle import build_finance_source_bundle
 from ades.packs.general_bundle import build_general_source_bundle
 from ades.packs.medical_bundle import build_medical_source_bundle
-from ades.packs.refresh import refresh_generated_pack_registry
+from ades.packs.refresh import (
+    _resolve_max_dropped_alias_ratio,
+    refresh_generated_pack_registry,
+)
 from tests.finance_bundle_helpers import create_finance_raw_snapshots
 from tests.general_bundle_helpers import create_general_raw_snapshots
 from tests.medical_bundle_helpers import create_medical_raw_snapshots
+
+
+def test_resolve_max_dropped_alias_ratio_uses_pack_family_defaults() -> None:
+    assert _resolve_max_dropped_alias_ratio("general-en", max_dropped_alias_ratio=None) == 0.5
+    assert _resolve_max_dropped_alias_ratio("finance-en", max_dropped_alias_ratio=None) == 0.5
+    assert _resolve_max_dropped_alias_ratio("finance-us-en", max_dropped_alias_ratio=None) == 0.6
+    assert _resolve_max_dropped_alias_ratio("finance-us-en", max_dropped_alias_ratio=0.4) == 0.4
 
 
 def test_refresh_generated_pack_registry_builds_multi_pack_candidates_by_default(

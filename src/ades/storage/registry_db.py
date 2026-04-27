@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timezone
+from functools import lru_cache
 import json
 from pathlib import Path
 import re
@@ -27,6 +28,12 @@ ALIAS_JSON_READ_CHUNK_SIZE = 1024 * 1024
 MAX_ALIAS_SEARCH_INDEX_ROWS = 5_000_000
 SQLITE_CONNECT_TIMEOUT_SECONDS = 60.0
 SQLITE_BUSY_TIMEOUT_MS = 60_000
+
+
+@lru_cache(maxsize=1024)
+def _load_manifest_cached(manifest_path: str, mtime_ns: int) -> PackManifest:
+    del mtime_ns
+    return PackManifest.load(Path(manifest_path))
 
 
 class PackMetadataStore:
@@ -463,12 +470,17 @@ class PackMetadataStore:
         row: sqlite3.Row,
     ) -> PackManifest | None:
         manifest_path = Path(str(row["manifest_path"]))
-        if not manifest_path.exists():
+        try:
+            manifest_stat = manifest_path.stat()
+        except OSError:
             return None
         if manifest_path.parent.name.startswith("."):
             return None
 
-        source_manifest = PackManifest.load(manifest_path)
+        source_manifest = _load_manifest_cached(
+            str(manifest_path),
+            manifest_stat.st_mtime_ns,
+        )
         return PackManifest(
             schema_version=source_manifest.schema_version,
             pack_id=source_manifest.pack_id,

@@ -95,6 +95,446 @@ def test_extract_article_text_prefers_clean_paragraphs_over_noisy_json_ld() -> N
     assert "Analysts added that energy traders" in article_text
 
 
+def test_extract_article_text_stops_before_related_teaser_headlines() -> None:
+    paragraph_one = (
+        "The UK Government said ministers would keep arguing for a fairer settlement for Northern Ireland "
+        "because hospitals, schools, and local councils were all facing renewed financial pressure after "
+        "another difficult budget round in Westminster."
+    )
+    paragraph_two = (
+        "Officials said the Treasury review left Stormont under pressure to balance several major services "
+        "while also preparing for higher wage demands, infrastructure repairs, and rising social-care costs "
+        "across the region."
+    )
+    paragraph_three = (
+        "Supporters argued that long-running funding gaps were still affecting hospitals, transport links, "
+        "community programmes, and capital spending plans, leaving ministers to defend more cuts in the "
+        "months ahead."
+    )
+    html = """
+    <html>
+      <body>
+        <article>
+          <p>Get our award-winning daily news email featuring exclusive stories, opinion and expert analysis</p>
+          <p>__PARAGRAPH_ONE__</p>
+          <p>__PARAGRAPH_TWO__</p>
+          <p>__PARAGRAPH_THREE__</p>
+          <p>Art After Dark is back with an exciting calendar of cultural events</p>
+          <p>What is the Lyrid Meteor Shower - and will it be visible in London?</p>
+        </article>
+      </body>
+    </html>
+    """.replace("__PARAGRAPH_ONE__", paragraph_one).replace(
+        "__PARAGRAPH_TWO__",
+        paragraph_two,
+    ).replace(
+        "__PARAGRAPH_THREE__",
+        paragraph_three,
+    )
+
+    text_source, article_text = _extract_article_text(html)
+
+    assert text_source == "paragraphs"
+    assert "daily news email" not in article_text.casefold()
+    assert "Art After Dark" not in article_text
+    assert "Lyrid Meteor Shower" not in article_text
+    assert paragraph_one in article_text
+    assert paragraph_two in article_text
+    assert paragraph_three in article_text
+
+
+def test_extract_article_text_stops_before_newsletter_promo_and_trailing_teasers() -> None:
+    paragraph_one = (
+        "Ministers said local authorities would receive emergency support after weeks of "
+        "pressure on transport, housing, and school budgets across the region, while unions, "
+        "business groups, and council leaders warned that delays were already affecting bus "
+        "routes, classroom staffing, and social-care planning."
+    )
+    paragraph_two = (
+        "Officials warned that businesses were already delaying investment decisions while "
+        "community groups prepared for another round of spending cuts and service changes, "
+        "saying factories, charities, and health providers were all rewriting budgets to cope "
+        "with slower grants, higher borrowing costs, and worsening uncertainty."
+    )
+    paragraph_three = (
+        "Analysts said the dispute could shape tax, health, and infrastructure debates for "
+        "months because voters were already frustrated by the pace of reform, and campaigners "
+        "argued that hospitals, roads, and energy projects would remain stuck unless ministers "
+        "could explain how they planned to fund the next stage of recovery."
+    )
+    newsletter_promo = (
+        "Deep Briefing is the home on the website and app for the best analysis, with fresh "
+        "perspectives that challenge assumptions and deep reporting on the biggest issues of "
+        "the day. Editors bring their pick of the most thought-provoking deep reads and "
+        "analysis every Saturday. Sign up for the newsletter here"
+    )
+    teaser_one = (
+        "A scientist tells reporters how she escaped the shooting this week by scrambling down "
+        "steep ledges near a tourist site."
+    )
+    teaser_two = (
+        "The long-running television drama was cancelled last year as the broadcaster shifted "
+        "its focus to shorter series."
+    )
+    html = """\
+    <html>
+      <body>
+        <article>
+          <p>__PARAGRAPH_ONE__</p>
+          <p>__PARAGRAPH_TWO__</p>
+          <p>__PARAGRAPH_THREE__</p>
+          <p>__NEWSLETTER_PROMO__</p>
+          <p>__TEASER_ONE__</p>
+          <p>__TEASER_TWO__</p>
+        </article>
+      </body>
+    </html>
+    """.replace("__PARAGRAPH_ONE__", paragraph_one).replace(
+        "__PARAGRAPH_TWO__",
+        paragraph_two,
+    ).replace(
+        "__PARAGRAPH_THREE__",
+        paragraph_three,
+    ).replace(
+        "__NEWSLETTER_PROMO__",
+        newsletter_promo,
+    ).replace(
+        "__TEASER_ONE__",
+        teaser_one,
+    ).replace(
+        "__TEASER_TWO__",
+        teaser_two,
+    )
+
+    text_source, article_text = _extract_article_text(html)
+
+    assert text_source == "paragraphs"
+    assert paragraph_one in article_text
+    assert paragraph_two in article_text
+    assert paragraph_three in article_text
+    assert "sign up for the newsletter here" not in article_text.casefold()
+    assert teaser_one not in article_text
+    assert teaser_two not in article_text
+
+
+def test_extract_article_text_skips_inline_cityam_briefing_promo_and_keeps_following_body() -> None:
+    paragraph_one = (
+        "Tax rises under Labour coupled with the war in Iran have triggered the worst "
+        "start to the year for businesses on record while ministers, economists, and "
+        "industry groups warn that slower company formation could leave investment, "
+        "hiring, and borrowing plans under pressure across the country."
+    )
+    briefing_promo = (
+        "Stay ahead with our three daily briefings delivering all the key market moves, "
+        "top business and political stories, and incisive analysis straight to your inbox."
+    )
+    paragraph_two = (
+        "The figures follow findings from the International Monetary Fund which showed "
+        "that the tax burden in the UK is rising quicker than in any other major economy, "
+        "with business groups warning that capital spending, hiring plans, and confidence "
+        "could all weaken further."
+    )
+    paragraph_three = (
+        "Analysts said borrowing costs have also risen sharply since the start of the war "
+        "and markets are now anticipating the Bank of England to raise interest rates over "
+        "the course of the next year, adding another layer of uncertainty for employers."
+    )
+    html = """\
+    <html>
+      <body>
+        <article>
+          <p>__PARAGRAPH_ONE__</p>
+          <p>__BRIEFING_PROMO__</p>
+          <p>__PARAGRAPH_TWO__</p>
+          <p>__PARAGRAPH_THREE__</p>
+        </article>
+      </body>
+    </html>
+    """.replace("__PARAGRAPH_ONE__", paragraph_one).replace(
+        "__BRIEFING_PROMO__",
+        briefing_promo,
+    ).replace(
+        "__PARAGRAPH_TWO__",
+        paragraph_two,
+    ).replace(
+        "__PARAGRAPH_THREE__",
+        paragraph_three,
+    )
+
+    text_source, article_text = _extract_article_text(html)
+
+    assert text_source == "paragraphs"
+    assert paragraph_one in article_text
+    assert paragraph_two in article_text
+    assert paragraph_three in article_text
+    assert "stay ahead with our three daily briefings" not in article_text.casefold()
+
+
+def test_extract_article_text_skips_bbc_royal_watch_newsletter_tail() -> None:
+    paragraph_one = (
+        "Family, friends, and supporters gathered in Washington to mark the first "
+        "anniversary of Virginia Giuffre's death while campaigners called for more "
+        "public recognition of survivors and stronger accountability from powerful "
+        "institutions linked to Jeffrey Epstein."
+    )
+    paragraph_two = (
+        "Lawyers and campaigners said the coming state visit had renewed attention on "
+        "whether senior public figures should meet survivors privately, arguing that "
+        "symbolic recognition still mattered even when legal constraints prevented "
+        "public comment on ongoing cases."
+    )
+    paragraph_three = (
+        "Speakers told the memorial that survivors wanted institutions to show they "
+        "were listening, while supporters described the gathering as both a vigil and "
+        "a reminder that the pressure for accountability had not faded."
+    )
+    newsletter_tail = (
+        "Sign up here to get the latest royal stories and analysis every week with "
+        "our Royal Watch newsletter. Those outside the UK can sign up here."
+    )
+    html = """\
+    <html>
+      <body>
+        <article>
+          <p>__PARAGRAPH_ONE__</p>
+          <p>__PARAGRAPH_TWO__</p>
+          <p>__PARAGRAPH_THREE__</p>
+          <p>__NEWSLETTER_TAIL__</p>
+        </article>
+      </body>
+    </html>
+    """.replace("__PARAGRAPH_ONE__", paragraph_one).replace(
+        "__PARAGRAPH_TWO__",
+        paragraph_two,
+    ).replace(
+        "__PARAGRAPH_THREE__",
+        paragraph_three,
+    ).replace(
+        "__NEWSLETTER_TAIL__",
+        newsletter_tail,
+    )
+
+    text_source, article_text = _extract_article_text(html)
+
+    assert text_source == "paragraphs"
+    assert paragraph_one in article_text
+    assert paragraph_two in article_text
+    assert paragraph_three in article_text
+    assert "royal watch newsletter" not in article_text.casefold()
+    assert "latest royal stories and analysis every week" not in article_text.casefold()
+
+
+def test_extract_article_text_rejects_clear_title_body_mismatch() -> None:
+    unrelated_paragraph_one = (
+        "Stormont, through Invest NI, is funding a CIA-linked firm whose secretive "
+        "and powerful tech is being used by Donald Trump's immigration crackdown "
+        "force while politicians in Belfast argue over the consequences for Northern "
+        "Ireland, investment policy, and cross-border scrutiny as officials debate "
+        "oversight, procurement, and whether the department should keep backing the "
+        "company despite mounting criticism from civil-liberties groups."
+    )
+    unrelated_paragraph_two = (
+        "A majority of those polled in the latest survey believe Gerry Adams was a "
+        "member of the IRA, while voters remain split over Sinn Fein, Michelle "
+        "O'Neill, and whether President Trump should visit, with campaign strategists "
+        "arguing over coalition math, polling swings, and how the controversy could "
+        "shape the next round of Stormont messaging."
+    )
+    html = """
+    <html>
+      <body>
+        <article>
+          <p>__P1__</p>
+          <p>__P2__</p>
+        </article>
+      </body>
+    </html>
+    """.replace("__P1__", unrelated_paragraph_one).replace("__P2__", unrelated_paragraph_two)
+
+    text_source, article_text = _extract_article_text(
+        html,
+        title="Fearless Ulster star on why he's determined to make the most of his chance",
+    )
+
+    assert text_source == "title_mismatch"
+    assert article_text == ""
+
+
+def test_extract_article_text_stops_before_appended_unrelated_article_cluster() -> None:
+    paragraph_one = (
+        "Four-legged friends are set to roam Mount Stewart this weekend as a popular annual "
+        "event spotlighting local animal charities returns to the National Trust site for a "
+        "family day focused on welfare advice, demonstrations, and community fundraising."
+    )
+    paragraph_two = (
+        "Established in 2008, Pet Nose Day raises awareness for vital animal causes by "
+        "welcoming pet dogs to its celebrated Garden and Temple of the Winds while local "
+        "groups share advice, adoption information, and practical support for owners."
+    )
+    paragraph_three = (
+        "Visitors can browse handcrafted pet treats, artwork, and accessories while "
+        "volunteers explain how the event supports rescue charities, neighbourhood "
+        "fundraisers, and smaller animal-welfare organisations across Northern Ireland."
+    )
+    paragraph_four = (
+        "Central to the event, a Fun Dog Show gives families a light-hearted way to enter "
+        "their pets into playful categories while organisers keep the focus on community "
+        "participation, local charities, and responsible pet ownership."
+    )
+    paragraph_five = (
+        "Cats Protection Northern Ireland and other exhibitors said the weekend gathering "
+        "helps them meet supporters, answer welfare questions, and explain how rehoming, "
+        "neutering, and practical care advice improve life for animals throughout the region."
+    )
+    appended_bridge = (
+        "The Belfast comedian and writer talks about his new podcast, health struggles, "
+        "evolving on stage and why he needs to live a bit first"
+    )
+    appended_paragraph = (
+        "Stormont, through Invest NI, is funding a CIA-linked firm whose secretive and "
+        "powerful technology is being used by Donald Trump's immigration crackdown force, "
+        "with officials, ministers, and commentators arguing over procurement, oversight, "
+        "and whether Northern Ireland should keep supporting the company."
+    )
+    appended_paragraph_two = (
+        "A majority of those polled in the latest Belfast Telegraph survey believe Gerry "
+        "Adams was a member of the IRA, while party strategists debate how Sinn Fein, "
+        "Michelle O'Neill, and Donald Trump could influence the next round of Stormont "
+        "campaign messaging."
+    )
+    html = """\
+    <html>
+      <body>
+        <article>
+          <p>__P1__</p>
+          <p>__P2__</p>
+          <p>__P3__</p>
+          <p>__P4__</p>
+          <p>__P5__</p>
+          <p>__BRIDGE__</p>
+          <p>__A1__</p>
+          <p>__A2__</p>
+        </article>
+      </body>
+    </html>
+    """.replace("__P1__", paragraph_one).replace("__P2__", paragraph_two).replace(
+        "__P3__",
+        paragraph_three,
+    ).replace(
+        "__P4__",
+        paragraph_four,
+    ).replace(
+        "__P5__",
+        paragraph_five,
+    ).replace(
+        "__BRIDGE__",
+        appended_bridge,
+    ).replace(
+        "__A1__",
+        appended_paragraph,
+    ).replace(
+        "__A2__",
+        appended_paragraph_two,
+    )
+
+    text_source, article_text = _extract_article_text(
+        html,
+        title="It reminds us why we do what we do: Pet Nose Day returns for another year",
+    )
+
+    assert text_source == "paragraphs"
+    assert paragraph_one in article_text
+    assert paragraph_five in article_text
+    assert appended_bridge not in article_text
+    assert appended_paragraph not in article_text
+    assert appended_paragraph_two not in article_text
+
+
+def test_extract_article_text_stops_before_period_ended_titleish_teaser_tail() -> None:
+    paragraph_one = (
+        "Oil prices rose after a second round of peace talks between the United States "
+        "and Iran stalled again, leaving traders focused on supply risks, shipping "
+        "constraints, and the next diplomatic signals from both governments."
+    )
+    paragraph_two = (
+        "Brent crude and US-traded oil both moved higher as analysts warned that a "
+        "longer interruption around the Strait of Hormuz could push up transport, "
+        "manufacturing, and household costs across multiple regions."
+    )
+    paragraph_three = (
+        "Officials said negotiators were still discussing safe transit, regional "
+        "security, and ceasefire terms while investors watched for evidence that the "
+        "latest pause in talks would not become a broader breakdown."
+    )
+    paragraph_four = (
+        "Economists added that energy-sensitive markets in Asia were reacting less to "
+        "single headlines and more to whether shipping lanes, supply chains, and "
+        "insurance costs showed credible signs of stabilising."
+    )
+    paragraph_five = (
+        "Portfolio managers said companies were already reviewing fuel, freight, and "
+        "inventory assumptions because even a short disruption in the waterway could "
+        "feed through to prices well beyond the oil market itself."
+    )
+    teaser_sentence = (
+        "British families tell BBC Panorama how the Iran war is affecting their monthly budgets."
+    )
+    appended_paragraph_one = (
+        "The suspect's writings said he wanted to target Trump administration officials, "
+        "acting US Attorney General Todd Blanche said."
+    )
+    appended_paragraph_two = (
+        "Donald Trump and First Lady Melania Trump were rushed from a ballroom after "
+        "gunfire was heard."
+    )
+    html = """\
+    <html>
+      <body>
+        <article>
+          <p>__P1__</p>
+          <p>__P2__</p>
+          <p>__P3__</p>
+          <p>__P4__</p>
+          <p>__P5__</p>
+          <p>__TEASER__</p>
+          <p>__A1__</p>
+          <p>__A2__</p>
+        </article>
+      </body>
+    </html>
+    """.replace("__P1__", paragraph_one).replace("__P2__", paragraph_two).replace(
+        "__P3__",
+        paragraph_three,
+    ).replace(
+        "__P4__",
+        paragraph_four,
+    ).replace(
+        "__P5__",
+        paragraph_five,
+    ).replace(
+        "__TEASER__",
+        teaser_sentence,
+    ).replace(
+        "__A1__",
+        appended_paragraph_one,
+    ).replace(
+        "__A2__",
+        appended_paragraph_two,
+    )
+
+    text_source, article_text = _extract_article_text(
+        html,
+        title="Oil prices rise as US-Iran peace talks stall",
+    )
+
+    assert text_source == "paragraphs"
+    assert paragraph_one in article_text
+    assert paragraph_five in article_text
+    assert teaser_sentence not in article_text
+    assert appended_paragraph_one not in article_text
+    assert appended_paragraph_two not in article_text
+
+
 def test_detect_live_news_feedback_issues_flags_generic_missing_and_partial_spans() -> None:
     text = (
         "Four analysts in Shanghai-based Northwind Solutions said the Strait of "

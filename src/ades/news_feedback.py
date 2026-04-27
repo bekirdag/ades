@@ -180,18 +180,23 @@ _ARTICLE_BOILERPLATE_HARD_STOP_SUBSTRINGS = (
     "create a free account",
     "already have an account",
     "by signing up you agree",
+    "sign up for the newsletter",
+    "sign up to the newsletter",
     "this site is protected by recaptcha",
 )
 _ARTICLE_BOILERPLATE_SKIP_SUBSTRINGS = (
     "all rights reserved",
+    "daily news email",
     "privacy notice",
     "privacy policy",
+    "stay ahead with our three daily briefings",
     "terms of service",
     "terms and conditions",
     "sign up to our newsletters",
     "sign up to our newsletter",
     "sign up for our newsletters",
     "sign up for our newsletter",
+    "royal watch newsletter",
     "follow us on",
     "read more:",
     "read more ",
@@ -215,6 +220,38 @@ _ARTICLE_BOILERPLATE_PREFIXES = (
 )
 _ARTICLE_BODY_MIN_PARAGRAPHS_BEFORE_STOP = 3
 _ARTICLE_EMAIL_PARAGRAPH_WORD_LIMIT = 28
+_ARTICLE_CONTEXTUAL_RESET_MIN_BODY_BLOCKS = 5
+_ARTICLE_CONTEXTUAL_RESET_BRIDGE_MAX_WORDS = 26
+_ARTICLE_CONTEXTUAL_RESET_NEXT_MIN_WORDS = 24
+_ARTICLE_SENTENCE_TEASER_MAX_WORDS = 18
+_ARTICLE_SENTENCE_TEASER_MIN_TITLEISH_TOKENS = 4
+_ARTICLE_SENTENCE_TEASER_MAX_PRIOR_OVERLAP_RATIO = 0.2
+_TITLE_BODY_MISMATCH_MIN_CONTENT_TOKENS = 2
+_TITLE_BODY_MATCH_STOPWORDS = _GENERIC_SINGLE_TOKEN_WORDS | {
+    "another",
+    "behind",
+    "breaking",
+    "change",
+    "changes",
+    "final",
+    "latest",
+    "live",
+    "local",
+    "making",
+    "most",
+    "never",
+    "returns",
+    "right",
+    "still",
+    "today",
+    "watch",
+    "where",
+    "which",
+    "while",
+    "will",
+    "with",
+    "year",
+}
 _TRAILING_FUNCTION_WORDS = {
     "about",
     "against",
@@ -3061,7 +3098,7 @@ def _evaluate_live_news_item(
     registry: PackRegistry,
 ) -> LiveNewsArticleResult | None:
     html_text = _fetch_text(client, item.article_url)
-    text_source, article_text = _extract_article_text(html_text)
+    text_source, article_text = _extract_article_text(html_text, title=item.title)
     word_count = _word_count(article_text)
     if word_count < 80:
         return None
@@ -3150,26 +3187,42 @@ def _fetch_text(client: httpx.Client, url: str) -> str:
     return response.text
 
 
-def _extract_article_text(html_text: str) -> tuple[str, str]:
+def _extract_article_text(html_text: str, *, title: str | None = None) -> tuple[str, str]:
     article_body = _clean_article_text(_extract_article_body_from_json_ld(html_text))
-    paragraph_text = _extract_paragraph_text(html_text)
+    paragraph_text = _extract_paragraph_text(html_text, title=title)
     article_body_word_count = _word_count(article_body)
     paragraph_word_count = _word_count(paragraph_text)
     article_body_noisy = _contains_article_boilerplate(article_body)
     paragraph_noisy = _contains_article_boilerplate(paragraph_text)
-    if article_body_word_count >= 80 and not article_body_noisy:
+    article_body_mismatch = _looks_like_title_body_mismatch(article_body, title=title)
+    paragraph_mismatch = _looks_like_title_body_mismatch(paragraph_text, title=title)
+    if (
+        article_body_word_count >= 80
+        and not article_body_noisy
+        and not article_body_mismatch
+    ):
         return ("json_ld", article_body)
-    if paragraph_word_count >= 80 and (
-        article_body_word_count < 80
-        or article_body_noisy
-        or paragraph_word_count >= max(80, int(article_body_word_count * 0.75))
-        or (paragraph_word_count > article_body_word_count and not paragraph_noisy)
+    if (
+        paragraph_word_count >= 80
+        and not paragraph_mismatch
+        and (
+            article_body_word_count < 80
+            or article_body_noisy
+            or article_body_mismatch
+            or paragraph_word_count >= max(80, int(article_body_word_count * 0.75))
+            or (paragraph_word_count > article_body_word_count and not paragraph_noisy)
+        )
     ):
         return ("paragraphs", paragraph_text)
-    if article_body_word_count >= 80:
+    if article_body_word_count >= 80 and not article_body_mismatch:
         return ("json_ld", article_body)
-    if paragraph_word_count >= 80:
+    if paragraph_word_count >= 80 and not paragraph_mismatch:
         return ("paragraphs", paragraph_text)
+    if title and (
+        (article_body_word_count >= 80 and article_body_mismatch)
+        or (paragraph_word_count >= 80 and paragraph_mismatch)
+    ):
+        return ("title_mismatch", "")
     combined = article_body if article_body_word_count >= paragraph_word_count else paragraph_text
     return ("fallback", combined)
 
@@ -3217,7 +3270,7 @@ def _walk_json_ld(value: object) -> list[object]:
     return results
 
 
-def _extract_paragraph_text(html_text: str) -> str:
+def _extract_paragraph_text(html_text: str, *, title: str | None = None) -> str:
     stripped = re.sub(
         r"<(script|style|noscript)[^>]*>.*?</\1>",
         " ",
@@ -3249,10 +3302,10 @@ def _extract_paragraph_text(html_text: str) -> str:
             continue
         seen.add(normalized)
         cleaned.append(text)
-    return _clean_article_text("\n\n".join(cleaned))
+    return _clean_article_text("\n\n".join(cleaned), title=title)
 
 
-def _clean_article_text(text: str) -> str:
+def _clean_article_text(text: str, *, title: str | None = None) -> str:
     collapsed = text.strip()
     if not collapsed:
         return ""
@@ -3261,13 +3314,30 @@ def _clean_article_text(text: str) -> str:
         return _collapse_whitespace(collapsed)
     cleaned_blocks: list[str] = []
     accepted_body_blocks = 0
-    for block in blocks:
+    title_tokens = set(_article_title_match_tokens(title))
+    prior_body_tokens: set[str] = set()
+    for index, block in enumerate(blocks):
         cleaned_block = _collapse_whitespace(block)
         if not cleaned_block:
             continue
+        next_cleaned_block: str | None = None
+        for candidate_block in blocks[index + 1 :]:
+            candidate_text = _collapse_whitespace(candidate_block)
+            if candidate_text:
+                next_cleaned_block = candidate_text
+                break
+        if _looks_like_contextual_article_reset(
+            cleaned_block,
+            next_text=next_cleaned_block,
+            accepted_body_blocks=accepted_body_blocks,
+            title_tokens=title_tokens,
+            prior_body_tokens=prior_body_tokens,
+        ):
+            break
         action = _article_paragraph_action(
             cleaned_block,
             accepted_body_blocks=accepted_body_blocks,
+            prior_body_tokens=prior_body_tokens,
         )
         if action == "stop":
             break
@@ -3275,17 +3345,122 @@ def _clean_article_text(text: str) -> str:
             continue
         cleaned_blocks.append(cleaned_block)
         accepted_body_blocks += 1
+        prior_body_tokens.update(_article_content_tokens(cleaned_block))
     if not cleaned_blocks:
         return _collapse_whitespace(collapsed)
     return "\n\n".join(cleaned_blocks)
 
 
-def _article_paragraph_action(text: str, *, accepted_body_blocks: int) -> str:
+def _article_title_match_tokens(title: str | None) -> list[str]:
+    if not title:
+        return []
+    normalized_title = normalize_lookup_text(title)
+    if not normalized_title:
+        return []
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for raw_token in re.findall(r"\b[\w-]+\b", normalized_title):
+        token = raw_token.strip("-")
+        if (
+            len(token) < 4
+            or token.isdigit()
+            or token in _TITLE_BODY_MATCH_STOPWORDS
+            or token in seen
+        ):
+            continue
+        seen.add(token)
+        tokens.append(token)
+    return tokens
+
+
+def _looks_like_title_body_mismatch(text: str, *, title: str | None) -> bool:
+    if _word_count(text) < 80:
+        return False
+    title_tokens = _article_title_match_tokens(title)
+    if len(title_tokens) < _TITLE_BODY_MISMATCH_MIN_CONTENT_TOKENS:
+        return False
+    normalized_text = normalize_lookup_text(text)
+    return not any(
+        re.search(rf"(?<!\w){re.escape(token)}(?!\w)", normalized_text)
+        for token in title_tokens
+    )
+
+
+def _article_content_tokens(text: str) -> set[str]:
+    normalized_text = normalize_lookup_text(text)
+    if not normalized_text:
+        return set()
+    tokens: set[str] = set()
+    for raw_token in re.findall(r"\b[\w-]+\b", normalized_text):
+        token = raw_token.strip("-")
+        if (
+            len(token) < 4
+            or token.isdigit()
+            or token in _TITLE_BODY_MATCH_STOPWORDS
+        ):
+            continue
+        tokens.add(token)
+    return tokens
+
+
+def _looks_like_contextual_article_reset(
+    text: str,
+    *,
+    next_text: str | None,
+    accepted_body_blocks: int,
+    title_tokens: set[str],
+    prior_body_tokens: set[str],
+) -> bool:
+    if (
+        accepted_body_blocks < _ARTICLE_CONTEXTUAL_RESET_MIN_BODY_BLOCKS
+        or next_text is None
+    ):
+        return False
+    if _word_count(text) > _ARTICLE_CONTEXTUAL_RESET_BRIDGE_MAX_WORDS:
+        return False
+    if _word_count(next_text) < _ARTICLE_CONTEXTUAL_RESET_NEXT_MIN_WORDS:
+        return False
+    if text.casefold().strip().endswith((".", "!", "?", ":", ";")):
+        return False
+    current_tokens = _article_content_tokens(text)
+    next_tokens = _article_content_tokens(next_text)
+    if (
+        len(current_tokens) < _TITLE_BODY_MISMATCH_MIN_CONTENT_TOKENS
+        or len(next_tokens) < _TITLE_BODY_MISMATCH_MIN_CONTENT_TOKENS
+    ):
+        return False
+    current_prior_overlap = current_tokens & prior_body_tokens
+    if current_prior_overlap:
+        return False
+    next_prior_overlap = next_tokens & prior_body_tokens
+    if len(next_prior_overlap) / len(next_tokens) > 0.15:
+        return False
+    if title_tokens and (
+        current_tokens & title_tokens or next_tokens & title_tokens
+    ):
+        return False
+    return True
+
+
+def _article_paragraph_action(
+    text: str,
+    *,
+    accepted_body_blocks: int,
+    prior_body_tokens: set[str],
+) -> str:
     normalized = text.casefold().strip()
     if not normalized:
         return "skip"
     if _contains_email_address(text) and _word_count(text) <= _ARTICLE_EMAIL_PARAGRAPH_WORD_LIMIT:
         return "skip"
+    if (
+        accepted_body_blocks >= _ARTICLE_BODY_MIN_PARAGRAPHS_BEFORE_STOP
+        and _looks_like_related_teaser_headline(
+            text,
+            prior_body_tokens=prior_body_tokens,
+        )
+    ):
+        return "stop"
     if any(marker in normalized for marker in _ARTICLE_BOILERPLATE_HARD_STOP_SUBSTRINGS):
         if accepted_body_blocks >= _ARTICLE_BODY_MIN_PARAGRAPHS_BEFORE_STOP:
             return "stop"
@@ -3302,6 +3477,39 @@ def _contains_article_boilerplate(text: str) -> bool:
     if any(marker in normalized for marker in _ARTICLE_BOILERPLATE_HARD_STOP_SUBSTRINGS):
         return True
     return any(marker in normalized for marker in _ARTICLE_BOILERPLATE_SKIP_SUBSTRINGS)
+
+
+def _looks_like_related_teaser_headline(
+    text: str,
+    *,
+    prior_body_tokens: set[str] | None = None,
+) -> bool:
+    words = text.split()
+    if not 5 <= len(words) <= 20:
+        return False
+    normalized = text.casefold().strip()
+    titleish_count = sum(
+        1
+        for word in words
+        if word[:1].isupper() or word.startswith(("'", "’")) and word[1:2].isupper()
+    )
+    if normalized.endswith("?"):
+        return True
+    if normalized.endswith((".", "!", ":")):
+        if (
+            len(words) > _ARTICLE_SENTENCE_TEASER_MAX_WORDS
+            or titleish_count < _ARTICLE_SENTENCE_TEASER_MIN_TITLEISH_TOKENS
+        ):
+            return False
+        if prior_body_tokens:
+            content_tokens = _article_content_tokens(text)
+            if not content_tokens:
+                return False
+            overlap_ratio = len(content_tokens & prior_body_tokens) / len(content_tokens)
+            if overlap_ratio > _ARTICLE_SENTENCE_TEASER_MAX_PRIOR_OVERLAP_RATIO:
+                return False
+        return True
+    return titleish_count >= 3
 
 
 def _contains_email_address(text: str) -> bool:

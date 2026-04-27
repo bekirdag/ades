@@ -13,7 +13,12 @@ from ..config import Settings
 from ..service.models import EntityLink, EntityMatch, TagResponse
 from ..storage import RuntimeTarget
 from ..version import __version__
-from .service import enrich_tag_response_with_related_entities
+from .qdrant import QdrantNearestPoint, QdrantVectorSearchClient, QdrantVectorSearchError
+from .service import (
+    _collection_alias_candidates,
+    _query_filter_payload,
+    enrich_tag_response_with_related_entities,
+)
 
 DEFAULT_VECTOR_QUALITY_ROOT = Path("/mnt/githubActions/ades_big_data/vector_quality")
 
@@ -111,6 +116,75 @@ class VectorQualityReport:
 
 
 @dataclass(frozen=True)
+class VectorSeedAuditCase:
+    """One direct seed-neighbor audit case across routed collection aliases."""
+
+    name: str
+    pack_id: str = "general-en"
+    seed_entities: tuple[VectorGoldenSeedEntity, ...] = ()
+    domain_hint: str | None = None
+    country_hint: str | None = None
+    top_k: int | None = None
+
+
+@dataclass(frozen=True)
+class VectorSeedAuditNeighbor:
+    """One returned vector neighbor for one queried seed."""
+
+    entity_id: str
+    canonical_text: str | None = None
+    entity_type: str | None = None
+    source_name: str | None = None
+    score: float = 0.0
+    packs: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class VectorSeedAuditSeedResult:
+    """Neighbors returned for one queried seed under one collection alias."""
+
+    seed_entity_id: str
+    seed_canonical_text: str
+    seed_label: str
+    neighbors: list[VectorSeedAuditNeighbor] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class VectorSeedAuditAliasResult:
+    """Direct seed-neighbor audit result for one collection alias."""
+
+    collection_alias: str
+    filter_payload: dict[str, object] | None = None
+    seed_results: list[VectorSeedAuditSeedResult] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class VectorSeedAuditCaseResult:
+    """Audit result for one case across routed aliases."""
+
+    name: str
+    pack_id: str
+    domain_hint: str | None = None
+    country_hint: str | None = None
+    alias_results: list[VectorSeedAuditAliasResult] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class VectorSeedAuditReport:
+    """Aggregate direct seed-neighbor audit report."""
+
+    provider: str | None = None
+    case_count: int = 0
+    top_k: int = 0
+    collection_aliases_seen: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    cases: list[VectorSeedAuditCaseResult] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class VectorReleaseThresholds:
     """Release thresholds for the hosted vector-quality lane."""
 
@@ -133,6 +207,30 @@ class VectorReleaseThresholdDecision:
 
 
 DEFAULT_VECTOR_RELEASE_THRESHOLDS = VectorReleaseThresholds()
+
+
+@dataclass(frozen=True)
+class SavedVectorAuditReleaseThresholds:
+    """Release thresholds for saved unseen-RSS vector-audit bundles."""
+
+    min_case_count: int = 10
+    min_neighbor_seed_hit_rate: float = 0.70
+    min_related_entity_hit_rate: float = 0.10
+    min_cases_with_related_entities: int = 3
+    max_warning_case_rate: float = 0.10
+    max_p95_hinted_timing_ms: int | None = 150
+    max_location_seed_query_share: float = 0.40
+
+
+@dataclass(frozen=True)
+class SavedVectorAuditReleaseDecision:
+    """Structured decision for one saved unseen-RSS vector-audit summary."""
+
+    passed: bool
+    reasons: list[str] = field(default_factory=list)
+
+
+DEFAULT_SAVED_VECTOR_AUDIT_RELEASE_THRESHOLDS = SavedVectorAuditReleaseThresholds()
 
 
 def vector_golden_set_path(
@@ -334,10 +432,163 @@ def load_vector_quality_report(path: str | Path) -> VectorQualityReport:
     )
 
 
+def write_vector_seed_audit_report(path: str | Path, report: VectorSeedAuditReport) -> Path:
+    """Persist one direct seed-neighbor audit report as JSON."""
+
+    destination = Path(path).expanduser().resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(_vector_seed_audit_report_to_dict(report), indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return destination
+
+
 def default_vector_release_thresholds() -> VectorReleaseThresholds:
     """Return the locked default release thresholds for hosted vector quality."""
 
     return DEFAULT_VECTOR_RELEASE_THRESHOLDS
+
+
+def default_saved_vector_audit_release_thresholds() -> SavedVectorAuditReleaseThresholds:
+    """Return the locked default thresholds for saved unseen-RSS promotion gates."""
+
+    return DEFAULT_SAVED_VECTOR_AUDIT_RELEASE_THRESHOLDS
+
+
+def _load_saved_vector_seed_audit_summary(
+    summary: str | Path | dict[str, object],
+) -> dict[str, object]:
+    if isinstance(summary, dict):
+        return summary
+    return json.loads(Path(summary).expanduser().resolve().read_text(encoding="utf-8"))
+
+
+def _summary_bucket_share(rows: object, *, value: str) -> float | None:
+    if not isinstance(rows, list):
+        return None
+    total = 0
+    matched = 0
+    normalized_value = value.casefold()
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        count = item.get("count")
+        item_value = item.get("value")
+        try:
+            resolved_count = int(count)
+        except (TypeError, ValueError):
+            continue
+        if resolved_count <= 0:
+            continue
+        total += resolved_count
+        if str(item_value or "").strip().casefold() == normalized_value:
+            matched += resolved_count
+    if total <= 0:
+        return None
+    return matched / total
+
+
+def evaluate_saved_vector_seed_audit_release(
+    summary: str | Path | dict[str, object],
+    *,
+    thresholds: SavedVectorAuditReleaseThresholds,
+) -> SavedVectorAuditReleaseDecision:
+    """Evaluate one saved unseen-RSS vector-audit summary against promotion thresholds."""
+
+    payload = _load_saved_vector_seed_audit_summary(summary)
+    baseline_metrics = payload.get("baseline_metrics")
+    seed_shape_analysis = payload.get("seed_shape_analysis")
+    reasons: list[str] = []
+
+    if not isinstance(baseline_metrics, dict):
+        reasons.append("missing_baseline_metrics")
+        return SavedVectorAuditReleaseDecision(passed=False, reasons=reasons)
+    if not isinstance(seed_shape_analysis, dict):
+        reasons.append("missing_seed_shape_analysis")
+        return SavedVectorAuditReleaseDecision(passed=False, reasons=reasons)
+
+    def _summary_int(value: object, *, default: int = 0) -> int:
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return default
+
+    def _summary_float(value: object, *, default: float = 0.0) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _summary_optional_int(value: object) -> int | None:
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    case_count = _summary_int(baseline_metrics.get("case_count", 0))
+    neighbor_seed_hit_rate = _summary_float(
+        baseline_metrics.get("neighbor_seed_hit_rate", 0.0)
+    )
+    related_entity_hit_rate = _summary_float(
+        baseline_metrics.get("hinted_related_entity_hit_rate", 0.0)
+    )
+    related_case_count = _summary_int(baseline_metrics.get("hinted_related_case_count", 0))
+    warning_case_rate = _summary_float(
+        baseline_metrics.get("hinted_warning_case_rate", 0.0)
+    )
+    p95_hinted_timing_ms = _summary_optional_int(
+        baseline_metrics.get("p95_hinted_timing_ms")
+    )
+    location_seed_query_share = _summary_bucket_share(
+        seed_shape_analysis.get("seed_query_label_counts"),
+        value="location",
+    )
+
+    if case_count < thresholds.min_case_count:
+        reasons.append(
+            f"case_count_below_threshold:{case_count}<{thresholds.min_case_count}"
+        )
+    if neighbor_seed_hit_rate < thresholds.min_neighbor_seed_hit_rate:
+        reasons.append(
+            "neighbor_seed_hit_rate_below_threshold:"
+            f"{neighbor_seed_hit_rate:.4f}<{thresholds.min_neighbor_seed_hit_rate:.4f}"
+        )
+    if related_entity_hit_rate < thresholds.min_related_entity_hit_rate:
+        reasons.append(
+            "related_entity_hit_rate_below_threshold:"
+            f"{related_entity_hit_rate:.4f}<{thresholds.min_related_entity_hit_rate:.4f}"
+        )
+    if related_case_count < thresholds.min_cases_with_related_entities:
+        reasons.append(
+            "related_case_count_below_threshold:"
+            f"{related_case_count}<{thresholds.min_cases_with_related_entities}"
+        )
+    if warning_case_rate > thresholds.max_warning_case_rate:
+        reasons.append(
+            "warning_case_rate_above_threshold:"
+            f"{warning_case_rate:.4f}>{thresholds.max_warning_case_rate:.4f}"
+        )
+    if thresholds.max_p95_hinted_timing_ms is not None:
+        if p95_hinted_timing_ms is None:
+            reasons.append("p95_hinted_timing_ms_missing")
+        elif p95_hinted_timing_ms > thresholds.max_p95_hinted_timing_ms:
+            reasons.append(
+                "p95_hinted_timing_ms_above_threshold:"
+                f"{p95_hinted_timing_ms}>{thresholds.max_p95_hinted_timing_ms}"
+            )
+    if location_seed_query_share is None:
+        reasons.append("location_seed_query_share_missing")
+    elif location_seed_query_share > thresholds.max_location_seed_query_share:
+        reasons.append(
+            "location_seed_query_share_above_threshold:"
+            f"{location_seed_query_share:.4f}>{thresholds.max_location_seed_query_share:.4f}"
+        )
+
+    return SavedVectorAuditReleaseDecision(
+        passed=not reasons,
+        reasons=reasons,
+    )
 
 
 def evaluate_vector_release_thresholds(
@@ -591,6 +842,148 @@ def evaluate_vector_golden_set(
     return report
 
 
+def audit_vector_seed_neighbors(
+    cases: VectorSeedAuditCase | list[VectorSeedAuditCase] | tuple[VectorSeedAuditCase, ...],
+    *,
+    settings: Settings,
+    top_k: int | None = None,
+    collection_alias_overrides: dict[str, str] | None = None,
+) -> VectorSeedAuditReport:
+    """Query routed Qdrant aliases directly for one set of linked seed entities."""
+
+    vector_settings = replace(
+        settings,
+        runtime_target=RuntimeTarget.PRODUCTION_SERVER,
+    )
+    if not vector_settings.vector_search_enabled or not vector_settings.vector_search_url:
+        raise ValueError("Vector seed audits require an enabled vector_search_url.")
+
+    resolved_cases = (cases,) if isinstance(cases, VectorSeedAuditCase) else tuple(cases)
+    default_top_k = max(1, int(top_k or vector_settings.vector_search_related_limit))
+    alias_seen: list[str] = []
+    report_warnings: set[str] = set()
+    case_results: list[VectorSeedAuditCaseResult] = []
+
+    with QdrantVectorSearchClient(
+        vector_settings.vector_search_url,
+        api_key=vector_settings.vector_search_api_key,
+    ) as client:
+        for case in resolved_cases:
+            synthetic_response = _seed_response(
+                case.pack_id,
+                VectorGoldenCase(
+                    name=case.name,
+                    seed_entities=case.seed_entities,
+                ),
+            )
+            filter_payload = _query_filter_payload(
+                synthetic_response,
+                settings=vector_settings,
+                domain_hint=case.domain_hint,
+                country_hint=case.country_hint,
+            )
+            collection_aliases = _collection_alias_candidates(
+                synthetic_response,
+                settings=vector_settings,
+                domain_hint=case.domain_hint,
+                country_hint=case.country_hint,
+            )
+            if collection_alias_overrides:
+                remapped_aliases: list[str] = []
+                for collection_alias in collection_aliases:
+                    resolved_alias = (
+                        collection_alias_overrides.get(collection_alias, collection_alias).strip()
+                    )
+                    if resolved_alias and resolved_alias not in remapped_aliases:
+                        remapped_aliases.append(resolved_alias)
+                collection_aliases = remapped_aliases
+            alias_results: list[VectorSeedAuditAliasResult] = []
+            case_warnings: set[str] = set()
+            resolved_top_k = max(1, int(case.top_k or default_top_k))
+
+            if not case.seed_entities:
+                case_warnings.add("no_seed_entities")
+            if not collection_aliases:
+                case_warnings.add("no_collection_aliases")
+
+            for collection_alias in collection_aliases:
+                if collection_alias not in alias_seen:
+                    alias_seen.append(collection_alias)
+                alias_seed_results: list[VectorSeedAuditSeedResult] = []
+                alias_warnings: set[str] = set()
+                for seed in case.seed_entities:
+                    try:
+                        raw_neighbors = client.query_similar_by_id(
+                            collection_alias,
+                            point_id=seed.entity_id,
+                            limit=resolved_top_k + 1,
+                            filter_payload=filter_payload,
+                        )
+                    except QdrantVectorSearchError as exc:
+                        warning = (
+                            f"seed_missing:{collection_alias}:{seed.entity_id}"
+                            if exc.status_code == 404
+                            else f"query_failed:{collection_alias}:{seed.entity_id}:{str(exc).strip()}"
+                        )
+                        alias_warnings.add(warning)
+                        case_warnings.add(warning)
+                        alias_seed_results.append(
+                            VectorSeedAuditSeedResult(
+                                seed_entity_id=seed.entity_id,
+                                seed_canonical_text=seed.canonical_text,
+                                seed_label=seed.label,
+                                neighbors=[],
+                                warnings=[warning],
+                            )
+                        )
+                        continue
+
+                    neighbors = _audit_neighbors_from_points(
+                        raw_neighbors,
+                        seed_entity_id=seed.entity_id,
+                        top_k=resolved_top_k,
+                    )
+                    alias_seed_results.append(
+                        VectorSeedAuditSeedResult(
+                            seed_entity_id=seed.entity_id,
+                            seed_canonical_text=seed.canonical_text,
+                            seed_label=seed.label,
+                            neighbors=neighbors,
+                            warnings=[],
+                        )
+                    )
+
+                alias_results.append(
+                    VectorSeedAuditAliasResult(
+                        collection_alias=collection_alias,
+                        filter_payload=dict(filter_payload) if filter_payload is not None else None,
+                        seed_results=alias_seed_results,
+                        warnings=sorted(alias_warnings),
+                    )
+                )
+
+            case_results.append(
+                VectorSeedAuditCaseResult(
+                    name=case.name,
+                    pack_id=case.pack_id,
+                    domain_hint=case.domain_hint,
+                    country_hint=case.country_hint,
+                    alias_results=alias_results,
+                    warnings=sorted(case_warnings),
+                )
+            )
+            report_warnings.update(case_warnings)
+
+    return VectorSeedAuditReport(
+        provider="qdrant.qid_graph",
+        case_count=len(case_results),
+        top_k=default_top_k,
+        collection_aliases_seen=alias_seen,
+        warnings=sorted(report_warnings),
+        cases=case_results,
+    )
+
+
 def _normalize_refinement_depth(value: object) -> Literal["light", "deep"]:
     normalized = str(value or "light").strip().casefold()
     if normalized not in {"light", "deep"}:
@@ -667,6 +1060,35 @@ def _latency_percentile_ms(latencies: list[int], percentile: int) -> int:
     return int(values[rank])
 
 
+def _audit_neighbors_from_points(
+    points: list[QdrantNearestPoint],
+    *,
+    seed_entity_id: str,
+    top_k: int,
+) -> list[VectorSeedAuditNeighbor]:
+    neighbors: list[VectorSeedAuditNeighbor] = []
+    for item in points:
+        payload = item.payload if isinstance(item.payload, dict) else {}
+        payload_entity_id = _optional_string(payload.get("entity_id"))
+        entity_id = payload_entity_id or item.point_id
+        if entity_id == seed_entity_id:
+            continue
+        packs = payload.get("packs")
+        neighbors.append(
+            VectorSeedAuditNeighbor(
+                entity_id=entity_id,
+                canonical_text=_optional_string(payload.get("canonical_text")),
+                entity_type=_optional_string(payload.get("entity_type")),
+                source_name=_optional_string(payload.get("source_name")),
+                score=float(item.score),
+                packs=[str(value) for value in packs] if isinstance(packs, list) else [],
+            )
+        )
+        if len(neighbors) >= top_k:
+            break
+    return neighbors
+
+
 def _vector_quality_report_to_dict(report: VectorQualityReport) -> dict[str, object]:
     return {
         "pack_id": report.pack_id,
@@ -715,6 +1137,54 @@ def _vector_quality_report_to_dict(report: VectorQualityReport) -> dict[str, obj
                 "timing_ms": case.timing_ms,
                 "warnings": list(case.warnings),
                 "passed": case.passed,
+            }
+            for case in report.cases
+        ],
+    }
+
+
+def _vector_seed_audit_report_to_dict(report: VectorSeedAuditReport) -> dict[str, object]:
+    return {
+        "provider": report.provider,
+        "case_count": report.case_count,
+        "top_k": report.top_k,
+        "collection_aliases_seen": list(report.collection_aliases_seen),
+        "warnings": list(report.warnings),
+        "cases": [
+            {
+                "name": case.name,
+                "pack_id": case.pack_id,
+                "domain_hint": case.domain_hint,
+                "country_hint": case.country_hint,
+                "warnings": list(case.warnings),
+                "alias_results": [
+                    {
+                        "collection_alias": alias.collection_alias,
+                        "filter_payload": alias.filter_payload,
+                        "warnings": list(alias.warnings),
+                        "seed_results": [
+                            {
+                                "seed_entity_id": seed.seed_entity_id,
+                                "seed_canonical_text": seed.seed_canonical_text,
+                                "seed_label": seed.seed_label,
+                                "warnings": list(seed.warnings),
+                                "neighbors": [
+                                    {
+                                        "entity_id": neighbor.entity_id,
+                                        "canonical_text": neighbor.canonical_text,
+                                        "entity_type": neighbor.entity_type,
+                                        "source_name": neighbor.source_name,
+                                        "score": neighbor.score,
+                                        "packs": list(neighbor.packs),
+                                    }
+                                    for neighbor in seed.neighbors
+                                ],
+                            }
+                            for seed in alias.seed_results
+                        ],
+                    }
+                    for alias in case.alias_results
+                ],
             }
             for case in report.cases
         ],

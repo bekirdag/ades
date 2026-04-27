@@ -4,16 +4,21 @@ from ades.config import Settings
 from ades.service.models import GraphSupport, RelatedEntityMatch
 from ades.storage.backend import MetadataBackend, RuntimeTarget
 from ades.vector.evaluation import (
+    SavedVectorAuditReleaseThresholds,
     VectorGoldenCase,
     VectorGoldenSeedEntity,
     VectorGoldenSet,
     VectorQualityReport,
     VectorReleaseThresholds,
+    VectorSeedAuditCase,
+    audit_vector_seed_neighbors,
+    evaluate_saved_vector_seed_audit_release,
     evaluate_vector_golden_set,
     evaluate_vector_release_thresholds,
     load_vector_quality_report,
     write_vector_quality_report,
 )
+from ades.vector.qdrant import QdrantNearestPoint, QdrantVectorSearchError
 
 
 def test_evaluate_vector_golden_set_computes_quality_metrics(monkeypatch) -> None:
@@ -227,3 +232,249 @@ def test_vector_quality_report_round_trip_and_thresholds(tmp_path: Path) -> None
         for reason in failed.reasons
     )
     assert any(reason.startswith("fallback_rate_above_threshold:") for reason in failed.reasons)
+
+
+def test_audit_vector_seed_neighbors_routes_aliases_and_records_failures(
+    monkeypatch,
+) -> None:
+    settings = Settings(
+        runtime_target=RuntimeTarget.LOCAL,
+        metadata_backend=MetadataBackend.SQLITE,
+        vector_search_enabled=True,
+        vector_search_url="http://qdrant.local:6333",
+        vector_search_collection_alias="ades-qids-current",
+        vector_search_related_limit=2,
+    )
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    class _FakeClient:
+        def __init__(self, base_url: str, *, api_key=None, timeout_seconds: float = 30.0) -> None:
+            assert base_url == "http://qdrant.local:6333"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def query_similar_by_id(
+            self,
+            collection_name: str,
+            *,
+            point_id: str,
+            limit: int,
+            filter_payload=None,
+        ):
+            calls.append((collection_name, point_id, filter_payload))
+            assert limit == 3
+            if collection_name == "ades-qids-finance-current":
+                raise QdrantVectorSearchError("missing", status_code=404)
+            if collection_name == "ades-qids-business-current":
+                return [
+                    QdrantNearestPoint(
+                        point_id=point_id,
+                        score=0.99,
+                        payload={"entity_id": point_id, "canonical_text": "OpenAI"},
+                    ),
+                    QdrantNearestPoint(
+                        point_id="wikidata:Q9",
+                        score=0.91,
+                        payload={
+                            "entity_id": "wikidata:Q9",
+                            "canonical_text": "Sam Altman",
+                            "entity_type": "person",
+                            "packs": ["general-en", "business-vector-en"],
+                        },
+                    ),
+                ]
+            return [
+                QdrantNearestPoint(
+                    point_id="wikidata:Q2283",
+                    score=0.73,
+                    payload={
+                        "entity_id": "wikidata:Q2283",
+                        "canonical_text": "Microsoft",
+                        "entity_type": "organization",
+                        "packs": ["general-en"],
+                    },
+                )
+            ]
+
+    monkeypatch.setattr("ades.vector.evaluation.QdrantVectorSearchClient", _FakeClient)
+
+    report = audit_vector_seed_neighbors(
+        (
+            VectorSeedAuditCase(
+                name="uk-business-hint",
+                pack_id="general-en",
+                domain_hint="business",
+                country_hint="uk",
+                seed_entities=(
+                    VectorGoldenSeedEntity(
+                        entity_id="wikidata:Q1",
+                        canonical_text="OpenAI",
+                        label="organization",
+                    ),
+                ),
+            ),
+        ),
+        settings=settings,
+        collection_alias_overrides={"ades-qids-current": "ades-qids-shared-general-plus-domain-v1"},
+    )
+
+    assert report.provider == "qdrant.qid_graph"
+    assert report.case_count == 1
+    assert report.top_k == 2
+    assert report.collection_aliases_seen == [
+        "ades-qids-business-current",
+        "ades-qids-shared-general-plus-domain-v1",
+    ]
+    assert calls == [
+        (
+            "ades-qids-business-current",
+            "wikidata:Q1",
+            {"packs": ["general-en", "business-vector-en", "finance-uk-en"]},
+        ),
+        (
+            "ades-qids-shared-general-plus-domain-v1",
+            "wikidata:Q1",
+            {"packs": ["general-en", "business-vector-en", "finance-uk-en"]},
+        ),
+    ]
+
+    case = report.cases[0]
+    assert case.name == "uk-business-hint"
+    assert len(case.alias_results) == 2
+    assert case.warnings == []
+
+    business_alias = case.alias_results[0]
+    assert business_alias.collection_alias == "ades-qids-business-current"
+    assert business_alias.filter_payload == {
+        "packs": ["general-en", "business-vector-en", "finance-uk-en"]
+    }
+    assert business_alias.seed_results[0].neighbors == [
+        report.cases[0].alias_results[0].seed_results[0].neighbors[0].__class__(
+            entity_id="wikidata:Q9",
+            canonical_text="Sam Altman",
+            entity_type="person",
+            source_name=None,
+            score=0.91,
+            packs=["general-en", "business-vector-en"],
+        )
+    ]
+
+    general_alias = case.alias_results[1]
+    assert general_alias.collection_alias == "ades-qids-shared-general-plus-domain-v1"
+    assert general_alias.filter_payload == {
+        "packs": ["general-en", "business-vector-en", "finance-uk-en"]
+    }
+    assert general_alias.seed_results[0].neighbors == [
+        report.cases[0].alias_results[0].seed_results[0].neighbors[0].__class__(
+            entity_id="wikidata:Q2283",
+            canonical_text="Microsoft",
+            entity_type="organization",
+            source_name=None,
+            score=0.73,
+            packs=["general-en"],
+        )
+    ]
+
+
+def test_evaluate_saved_vector_seed_audit_release_passes_on_healthy_summary() -> None:
+    decision = evaluate_saved_vector_seed_audit_release(
+        {
+            "baseline_metrics": {
+                "case_count": 12,
+                "neighbor_seed_hit_rate": 0.82,
+                "hinted_related_entity_hit_rate": 0.25,
+                "hinted_related_case_count": 5,
+                "hinted_warning_case_rate": 0.0,
+                "p95_hinted_timing_ms": 96,
+            },
+            "seed_shape_analysis": {
+                "seed_query_label_counts": [
+                    {"value": "organization", "count": 30},
+                    {"value": "person", "count": 20},
+                    {"value": "location", "count": 10},
+                ]
+            },
+        },
+        thresholds=SavedVectorAuditReleaseThresholds(),
+    )
+
+    assert decision.passed is True
+    assert decision.reasons == []
+
+
+def test_evaluate_saved_vector_seed_audit_release_reports_threshold_failures() -> None:
+    decision = evaluate_saved_vector_seed_audit_release(
+        {
+            "baseline_metrics": {
+                "case_count": 5,
+                "neighbor_seed_hit_rate": 0.42,
+                "hinted_related_entity_hit_rate": 0.0,
+                "hinted_related_case_count": 0,
+                "hinted_warning_case_rate": 0.25,
+                "p95_hinted_timing_ms": 205,
+            },
+            "seed_shape_analysis": {
+                "seed_query_label_counts": [
+                    {"value": "location", "count": 12},
+                    {"value": "organization", "count": 6},
+                ]
+            },
+        },
+        thresholds=SavedVectorAuditReleaseThresholds(),
+    )
+
+    assert decision.passed is False
+    assert any(reason.startswith("case_count_below_threshold:") for reason in decision.reasons)
+    assert any(
+        reason.startswith("neighbor_seed_hit_rate_below_threshold:")
+        for reason in decision.reasons
+    )
+    assert any(
+        reason.startswith("related_entity_hit_rate_below_threshold:")
+        for reason in decision.reasons
+    )
+    assert any(
+        reason.startswith("related_case_count_below_threshold:")
+        for reason in decision.reasons
+    )
+    assert any(
+        reason.startswith("warning_case_rate_above_threshold:")
+        for reason in decision.reasons
+    )
+    assert any(
+        reason.startswith("p95_hinted_timing_ms_above_threshold:")
+        for reason in decision.reasons
+    )
+    assert any(
+        reason.startswith("location_seed_query_share_above_threshold:")
+        for reason in decision.reasons
+    )
+
+
+def test_evaluate_saved_vector_seed_audit_release_reports_missing_timing() -> None:
+    decision = evaluate_saved_vector_seed_audit_release(
+        {
+            "baseline_metrics": {
+                "case_count": 12,
+                "neighbor_seed_hit_rate": 0.82,
+                "hinted_related_entity_hit_rate": 0.25,
+                "hinted_related_case_count": 5,
+                "hinted_warning_case_rate": 0.0,
+                "p95_hinted_timing_ms": None,
+            },
+            "seed_shape_analysis": {
+                "seed_query_label_counts": [
+                    {"value": "organization", "count": 30},
+                    {"value": "location", "count": 10},
+                ]
+            },
+        },
+        thresholds=SavedVectorAuditReleaseThresholds(),
+    )
+
+    assert decision.passed is False
+    assert "p95_hinted_timing_ms_missing" in decision.reasons

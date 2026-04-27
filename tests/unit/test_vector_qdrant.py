@@ -121,6 +121,72 @@ def test_upsert_points_normalizes_string_point_ids() -> None:
     }
 
 
+def test_get_collection_info_returns_result_payload() -> None:
+    client = object.__new__(QdrantVectorSearchClient)
+
+    def _fake_request(method: str, path: str, *, json_body=None, params=None):
+        assert method == "GET"
+        assert path == "/collections/ades-qids-current"
+        return {
+            "result": {
+                "status": "green",
+                "points_count": 1855649,
+                "vectors_count": 1855649,
+            }
+        }
+
+    client._request = _fake_request  # type: ignore[method-assign]
+
+    assert client.get_collection_info("ades-qids-current") == {
+        "status": "green",
+        "points_count": 1855649,
+        "vectors_count": 1855649,
+    }
+
+
+def test_get_collection_point_count_prefers_points_count() -> None:
+    client = object.__new__(QdrantVectorSearchClient)
+
+    def _fake_request(method: str, path: str, *, json_body=None, params=None):
+        return {
+            "result": {
+                "points_count": 1855649,
+                "vectors_count": 1855648,
+            }
+        }
+
+    client._request = _fake_request  # type: ignore[method-assign]
+
+    assert client.get_collection_point_count("ades-qids-current") == 1855649
+
+
+def test_get_collection_point_count_falls_back_to_vectors_count() -> None:
+    client = object.__new__(QdrantVectorSearchClient)
+
+    def _fake_request(method: str, path: str, *, json_body=None, params=None):
+        return {
+            "result": {
+                "status": "green",
+                "vectors_count": 2048,
+            }
+        }
+
+    client._request = _fake_request  # type: ignore[method-assign]
+
+    assert client.get_collection_point_count("ades-qids-current") == 2048
+
+
+def test_get_collection_point_count_returns_none_without_counts() -> None:
+    client = object.__new__(QdrantVectorSearchClient)
+
+    def _fake_request(method: str, path: str, *, json_body=None, params=None):
+        return {"result": {"status": "green"}}
+
+    client._request = _fake_request  # type: ignore[method-assign]
+
+    assert client.get_collection_point_count("ades-qids-current") is None
+
+
 def test_query_similar_by_id_prefers_payload_entity_id() -> None:
     client = object.__new__(QdrantVectorSearchClient)
 

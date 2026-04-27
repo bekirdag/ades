@@ -209,7 +209,7 @@ def build_static_registry(
     pack_dirs: list[str | Path],
     *,
     output_dir: str | Path,
-    enforce_deploy_matcher_sizes: bool = False,
+    enforce_deploy_matcher_size_guard: bool = False,
 ) -> RegistryBuildResult:
     """Build a static file-based registry from local pack directories."""
 
@@ -246,7 +246,7 @@ def build_static_registry(
         _validate_manifest_sources(
             pack_dir,
             source_manifest,
-            enforce_deploy_matcher_sizes=enforce_deploy_matcher_sizes,
+            enforce_deploy_matcher_size_guard=enforce_deploy_matcher_size_guard,
         )
 
         artifact_filename = f"{source_manifest.pack_id}-{source_manifest.version}.tar.zst"
@@ -261,7 +261,7 @@ def build_static_registry(
         _validate_pack_artifact_sources(
             artifact_path,
             packaging_manifest,
-            enforce_deploy_matcher_sizes=enforce_deploy_matcher_sizes,
+            enforce_deploy_matcher_size_guard=enforce_deploy_matcher_size_guard,
         )
         artifact_sha256 = _sha256_file(artifact_path)
         published_manifest = _build_published_manifest(
@@ -469,6 +469,10 @@ def prepare_registry_deploy_payload(
         required=promotion_spec_path is not None,
     )
     if promotion_spec is not None:
+        build_result = _materialize_published_registry(
+            promotion_spec.registry_url,
+            output_dir=output_dir,
+        )
         consumer_smoke = smoke_test_published_registry(
             promotion_spec.registry_url,
             pack_ids=promotion_spec.smoke_pack_ids,
@@ -478,10 +482,6 @@ def prepare_registry_deploy_payload(
                 "Published registry consumer smoke failed: "
                 + "; ".join(consumer_smoke.failures)
             )
-        build_result = _materialize_published_registry(
-            promotion_spec.registry_url,
-            output_dir=output_dir,
-        )
         return RegistryDeployPreparationResult(
             mode="promoted",
             output_dir=build_result.output_dir,
@@ -499,7 +499,7 @@ def prepare_registry_deploy_payload(
     build_result = build_static_registry(
         selected_pack_dirs,
         output_dir=output_dir,
-        enforce_deploy_matcher_sizes=True,
+        enforce_deploy_matcher_size_guard=True,
     )
     return RegistryDeployPreparationResult(
         mode="bundled",
@@ -547,7 +547,7 @@ def _validate_manifest_sources(
     pack_dir: Path,
     manifest: PackManifest,
     *,
-    enforce_deploy_matcher_sizes: bool = False,
+    enforce_deploy_matcher_size_guard: bool = False,
 ) -> None:
     for relative_path in [*manifest.rules, *manifest.labels, *manifest.models]:
         resolved = pack_dir / relative_path
@@ -563,7 +563,7 @@ def _validate_manifest_sources(
             raise FileNotFoundError(
                 f"Pack matcher file listed in manifest is missing: {resolved}"
             )
-    if enforce_deploy_matcher_sizes:
+    if enforce_deploy_matcher_size_guard:
         _validate_manifest_matcher_sizes(
             artifact_size_bytes=(pack_dir / manifest.matcher.artifact_path).stat().st_size,
             entries_size_bytes=(pack_dir / manifest.matcher.entries_path).stat().st_size,
@@ -571,12 +571,11 @@ def _validate_manifest_sources(
             source=str(pack_dir),
         )
 
-
 def _validate_pack_artifact_sources(
     artifact_path: Path,
     manifest: PackManifest,
     *,
-    enforce_deploy_matcher_sizes: bool = False,
+    enforce_deploy_matcher_size_guard: bool = False,
 ) -> None:
     if manifest.matcher is None:
         return
@@ -609,7 +608,7 @@ def _validate_pack_artifact_sources(
         raise ValueError(
             f"Published pack artifact is missing matcher file(s): {', '.join(sorted(missing))}"
         )
-    if enforce_deploy_matcher_sizes:
+    if enforce_deploy_matcher_size_guard:
         _validate_manifest_matcher_sizes(
             artifact_size_bytes=target_sizes[matcher_artifact_path],
             entries_size_bytes=target_sizes[matcher_entries_path],
@@ -912,7 +911,7 @@ def _materialize_published_registry(
         _validate_pack_artifact_sources(
             artifact_path,
             source_manifest,
-            enforce_deploy_matcher_sizes=True,
+            enforce_deploy_matcher_size_guard=True,
         )
         published_manifest = _build_published_manifest(
             source_manifest,

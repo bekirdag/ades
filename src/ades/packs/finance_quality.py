@@ -15,6 +15,8 @@ from .quality_common import (
 
 
 DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES = 5000
+DEFAULT_FINANCE_MAX_DROPPED_ALIAS_RATIO = 0.5
+DEFAULT_FINANCE_REGIONAL_MAX_DROPPED_ALIAS_RATIO = 0.6
 _FINANCE_HIGH_RISK_QUALITY_TICKERS = {
     "a",
     "aa",
@@ -78,7 +80,7 @@ def validate_finance_pack_quality(
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
     max_ambiguous_aliases: int = DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES,
-    max_dropped_alias_ratio: float = 0.5,
+    max_dropped_alias_ratio: float = DEFAULT_FINANCE_MAX_DROPPED_ALIAS_RATIO,
 ) -> PackQualityResult:
     """Build, install, and evaluate one generated finance-domain pack bundle."""
 

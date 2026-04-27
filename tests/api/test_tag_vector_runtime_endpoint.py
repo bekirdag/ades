@@ -37,11 +37,15 @@ def test_tag_endpoint_can_request_related_entity_enrichment(
         include_graph_support: bool = False,
         refine_links: bool = False,
         refinement_depth: str = "light",
+        domain_hint: str | None = None,
+        country_hint: str | None = None,
     ):
         assert include_related_entities is True
         assert include_graph_support is True
         assert refine_links is True
         assert refinement_depth == "deep"
+        assert domain_hint == "business"
+        assert country_hint == "uk"
         return response.model_copy(
             update={
                 "related_entities": [
@@ -88,6 +92,8 @@ def test_tag_endpoint_can_request_related_entity_enrichment(
                 "include_graph_support": True,
                 "refine_links": True,
                 "refinement_depth": "deep",
+                "domain_hint": "business",
+                "country_hint": "uk",
             },
         },
     )
@@ -134,3 +140,21 @@ def test_tag_endpoint_rejects_invalid_refinement_depth_option(tmp_path: Path) ->
 
     assert response.status_code == 400
     assert "Invalid refinement_depth option." in response.json()["detail"]
+
+
+def test_tag_endpoint_rejects_invalid_domain_hint_option(tmp_path: Path) -> None:
+    pack_id = _install_endpoint_pack(tmp_path)
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    response = client.post(
+        "/v0/tag",
+        json={
+            "text": "Entity Alpha Holdings moved.",
+            "pack": pack_id,
+            "content_type": "text/plain",
+            "options": {"domain_hint": ["business"]},
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Invalid string option for domain_hint." in response.json()["detail"]

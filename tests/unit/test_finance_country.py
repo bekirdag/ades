@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from urllib.parse import urlparse
 
+import pytest
+
 import ades.packs.finance_country as finance_country_module
 from ades.packs.finance_bundle import build_finance_source_bundle
 from ades.packs.finance_country import (
@@ -1055,6 +1057,7 @@ def test_finance_country_refresh_passes_regional_quality(
     )
     assert all(item.pack_id != "general-en" for item in refresh_result.packs)
     assert regional_result.quality.fixture_profile == "regional"
+    assert regional_result.quality.dropped_alias_ratio > 0.5
     index_payload = json.loads(
         Path(refresh_result.registry.index_path).read_text(encoding="utf-8")
     )
@@ -1181,6 +1184,23 @@ def test_finance_country_people_source_plan_covers_g20_and_marks_turkiye_impleme
         source["source_url"] == "https://www.kap.org.tr/en/bist-sirketler"
         for source in turkiye_plan["sources"]
     )
+
+
+def test_finance_country_profile_includes_turkiye_wikidata_baseline_entities() -> None:
+    turkiye_profile = finance_country_module.FINANCE_COUNTRY_PROFILES["tr"]
+
+    entity_ids_with_wikidata = {
+        entity["entity_id"]
+        for entity in turkiye_profile["entities"]
+        if entity.get("metadata", {}).get("wikidata_slug")
+    }
+
+    assert entity_ids_with_wikidata == {
+        "finance-tr:spk",
+        "finance-tr:kap",
+        "finance-tr:bist",
+        "finance-tr:bist-100",
+    }
 
 
 def test_finance_country_profile_includes_all_authorized_argentina_markets() -> None:
@@ -2165,6 +2185,181 @@ def test_extract_kap_people_entities_parses_board_and_management_sections() -> N
     assert "Zahide Kocyigit" in zahide["aliases"]
 
 
+def test_extract_kap_market_records_falls_back_to_operating_markets() -> None:
+    detail_html = r"""
+    [\"$\",\"$L3e\",null,{\"title\":\"Markets Where The Investment Firm Operate\",\"itemObject\":{\"no\":23,\"itemName\":\"Faaliyet Gösterilen Pazarlar veya Piyasalar\",\"itemKey\":\"kpy41_acc2_pazar_piyasa\",\"value\":\"Debt Securities Market Outright Purchases and Sales Market, Debt Securities Market Repo- Reverse Repo Market\",\"disclosureIndex\":0,\"creationDate\":null}}]
+    """
+
+    records = finance_country_module._extract_kap_market_records(detail_html)
+
+    assert records == [
+        {
+            "instrument_type": "",
+            "initial_date_of_listing_or_trading": "",
+            "country_of_market_or_stock_exchange": "Türkiye",
+            "market_or_stock_exchange": "Borsa İstanbul",
+            "relevant_sub_market_or_exchange": (
+                "Debt Securities Market Outright Purchases and Sales Market"
+            ),
+        },
+        {
+            "instrument_type": "",
+            "initial_date_of_listing_or_trading": "",
+            "country_of_market_or_stock_exchange": "Türkiye",
+            "market_or_stock_exchange": "Borsa İstanbul",
+            "relevant_sub_market_or_exchange": (
+                "Debt Securities Market Repo- Reverse Repo Market"
+            ),
+        },
+    ]
+
+
+def test_extract_kap_shareholder_entities_separates_people_and_organizations() -> None:
+    detail_html = r"""
+    [\"$\",\"$L3e\",null,{\"title\":\"Shareholding Structure\",\"itemObject\":{\"no\":26,\"itemName\":\"Ortaklık Yapısı\",\"itemKey\":\"kpy41_acc5_ortaklik_yapisi\",\"value\":[{\"shareholder\":\"Türkiye Varlık Fonu\",\"shareInCapital\":\"60\",\"monetaryUnit\":{\"key\":\"TRY\",\"text\":\"TRY\"},\"ratioInCapital\":\"60\"},{\"shareholder\":\"Ahmet Yılmaz\",\"shareInCapital\":\"40\",\"monetaryUnit\":{\"key\":\"TRY\",\"text\":\"TRY\"},\"ratioInCapital\":\"40\"},{\"shareholder\":\"TOPLAM\",\"shareInCapital\":\"100\",\"monetaryUnit\":{\"key\":\"TRY\",\"text\":\"TRY\"},\"ratioInCapital\":\"100\"}],\"disclosureIndex\":630730,\"creationDate\":\"22/09/2017 19:38:26\"}}]
+    """
+
+    people_entities, organization_entities = (
+        finance_country_module._extract_kap_shareholder_entities(
+            detail_html=detail_html,
+            company_title="T.C. Ziraat Bankası A.Ş.",
+            stock_code="TCZ",
+        )
+    )
+
+    assert [entity["canonical_text"] for entity in people_entities] == ["Ahmet Yılmaz"]
+    assert [entity["canonical_text"] for entity in organization_entities] == [
+        "Türkiye Varlık Fonu"
+    ]
+    assert people_entities[0]["metadata"]["category"] == "beneficial_owner"
+    assert organization_entities[0]["metadata"]["category"] == "major_shareholder"
+
+
+def test_extract_kap_stock_codes_splits_multiple_codes() -> None:
+    assert finance_country_module._extract_kap_stock_codes(
+        r"{\"stockCode\":\"TCZ, TCZB\"}"
+    ) == ["TCZ", "TCZB"]
+    assert finance_country_module._extract_kap_stock_code(
+        r"{\"stockCode\":\"TCZ, TCZB\"}"
+    ) == "TCZ"
+
+
+def test_enrich_turkiye_entities_with_wikidata_merges_issuer_ticker_and_person(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    country_dir = tmp_path / "tr"
+    country_dir.mkdir()
+
+    def _fake_build_snapshot(
+        *,
+        issuer_entities,
+        people_entities,
+        country_dir,
+        user_agent,
+    ):
+        assert user_agent == "ades-test/0.1.0"
+        assert len(issuer_entities) == 1
+        assert len(people_entities) == 1
+        resolution_path = country_dir / "wikidata-turkiye-entity-resolution.json"
+        resolution_path.write_text('{"schema_version":1}\n', encoding="utf-8")
+        return (
+            {
+                "issuers": {
+                    "company-code:6000": {
+                        "qid": "Q230200001",
+                        "slug": "Q230200001",
+                        "entity_id": "wikidata:Q230200001",
+                        "url": "https://www.wikidata.org/wiki/Q230200001",
+                        "label": "Akbank T.A.S.",
+                        "aliases": ["Akbank"],
+                    }
+                },
+                "people": {
+                    "finance-tr-person:AKBNK:birol-basaran:kpy41-acc6-yonetim-kurulu-uyeleri": {
+                        "qid": "Q230200777",
+                        "slug": "Q230200777",
+                        "entity_id": "wikidata:Q230200777",
+                        "url": "https://www.wikidata.org/wiki/Q230200777",
+                        "label": "Birol Başaran",
+                        "aliases": ["Birol Basaran"],
+                    }
+                },
+            },
+            resolution_path,
+            [],
+        )
+
+    monkeypatch.setattr(
+        finance_country_module,
+        "_build_turkiye_wikidata_resolution_snapshot",
+        _fake_build_snapshot,
+    )
+
+    issuer_entities = [
+        {
+            "entity_id": "finance-tr-issuer:6000",
+            "entity_type": "organization",
+            "canonical_text": "AKBANK T.A.Ş.",
+            "aliases": ["AKBANK", "AKBNK"],
+            "metadata": {
+                "country_code": "tr",
+                "category": "issuer",
+                "company_code": "6000",
+                "ticker": "AKBNK",
+            },
+        }
+    ]
+    ticker_entities = [
+        {
+            "entity_id": "finance-tr-ticker:AKBNK",
+            "entity_type": "ticker",
+            "canonical_text": "AKBNK",
+            "aliases": ["AKBNK", "AKBANK T.A.Ş."],
+            "metadata": {
+                "country_code": "tr",
+                "category": "ticker",
+                "company_code": "6000",
+                "ticker": "AKBNK",
+                "issuer_name": "AKBANK T.A.Ş.",
+            },
+        }
+    ]
+    people_entities = [
+        {
+            "entity_id": "finance-tr-person:AKBNK:birol-basaran:kpy41-acc6-yonetim-kurulu-uyeleri",
+            "entity_type": "person",
+            "canonical_text": "Birol Başaran",
+            "aliases": ["Birol Basaran"],
+            "metadata": {
+                "country_code": "tr",
+                "category": "director",
+                "employer_ticker": "AKBNK",
+                "employer_name": "AKBANK T.A.Ş.",
+            },
+        }
+    ]
+    downloaded_sources: list[dict[str, object]] = []
+
+    warnings = finance_country_module._enrich_turkiye_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent="ades-test/0.1.0",
+    )
+
+    assert warnings == []
+    assert issuer_entities[0]["metadata"]["wikidata_slug"] == "Q230200001"
+    assert ticker_entities[0]["metadata"]["wikidata_slug"] == "Q230200001"
+    assert people_entities[0]["metadata"]["wikidata_slug"] == "Q230200777"
+    assert any(
+        source.get("name") == "wikidata-turkiye-entity-resolution"
+        for source in downloaded_sources
+    )
+
+
 def test_extract_asx_people_entities_parses_board_and_executive_cards() -> None:
     html = """
     <div class="bio__heading"><h3>Vicki Carter</h3><p>Independent, Non-Executive Director<br />BA (Social Sciences), GradDipMgmt, GAICD</p></div>
@@ -2213,6 +2408,1663 @@ def test_extract_asx_listed_company_entities_builds_issuers_and_tickers(
     asx_issuer = next(entity for entity in issuers if entity["canonical_text"] == "ASX Limited")
     assert "ASX" in asx_issuer["aliases"]
     assert asx_issuer["metadata"]["industry_group"] == "Diversified Financials"
+
+
+def test_extract_nsx_official_list_entities_builds_issuers_tickers_and_people(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "nsx-official-list.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "IssuerCode,SecurityCode,IssuerDescription,SecurityDescription,PrincipalActivities,Industry,Website,ISIN,ListedDate,Chairman,CEO,CompanySecretary,Directors,Auditor,ShareRegistry,ACN,ABN,CompanyBase",
+                "218,218,Rofina Group Limited,Rofina Group Limited - FPO,Travel Goods and Apparel,Consumer Discretionary,https://www.rofinagroup.com/,AU0000101248,\"Monday, August 31, 2020\",Boon Chin Soo,Wei Yin Soo,Nicholas Ong,\"Boon Chin Soo,Wei Yin Soo,Jacky Tran Cheung\",Moore Australia Audit,Boardroom Pty Limited,635 120 517,42 635 120 517,Australia",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    issuers, tickers, people = finance_country_module._extract_nsx_official_list_entities(
+        csv_path
+    )
+
+    assert {entity["canonical_text"] for entity in issuers} == {"Rofina Group Limited"}
+    assert {entity["canonical_text"] for entity in tickers} == {"218"}
+    assert {
+        entity["canonical_text"] for entity in people
+    } >= {"Boon Chin Soo", "Wei Yin Soo", "Nicholas Ong", "Jacky Tran Cheung"}
+    issuer = issuers[0]
+    assert issuer["metadata"]["exchange_code"] == "NSX"
+    assert issuer["metadata"]["isin"] == "AU0000101248"
+
+
+def test_extract_tmx_directory_entities_builds_canada_issuers_and_tickers(
+    tmp_path: Path,
+) -> None:
+    json_path = tmp_path / "tsx-directory-A.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "last_updated": 1776848106,
+                "length": 2,
+                "results": [
+                    {
+                        "symbol": "AW",
+                        "name": "A & W Food Services of Canada Inc.",
+                        "instruments": [
+                            {"symbol": "AW", "name": "A&W Food Serv Canada"}
+                        ],
+                    },
+                    {
+                        "symbol": "ABT",
+                        "name": "Abbott Labs CDR (CAD Hedged)",
+                        "instruments": [
+                            {"symbol": "ABT", "name": "AbbottLab CDR Hgd"}
+                        ],
+                    },
+                ],
+                "isHttpError": False,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    issuers, tickers = finance_country_module._extract_tmx_directory_entities(
+        json_path,
+        exchange_code="TSX",
+    )
+
+    assert {entity["canonical_text"] for entity in issuers} == {
+        "A & W Food Services of Canada Inc.",
+        "Abbott Labs CDR (CAD Hedged)",
+    }
+    assert {entity["canonical_text"] for entity in tickers} == {"AW", "ABT"}
+    assert all(entity["metadata"]["exchange_code"] == "TSX" for entity in issuers)
+
+
+def test_extract_cse_company_page_entities_builds_issuer_ticker_and_people() -> None:
+    html = """
+    <html><body>
+      <script id="__NEXT_DATA__" type="application/json">
+      {
+        "props": {
+          "pageProps": {
+            "title": "Clara Technologies Corp.",
+            "symbol": "CLTE",
+            "staticCompanyData": {
+              "metadata": {
+                "listing_market": "CSE",
+                "symbol": "CLTE",
+                "listing_date": "2023-12-22",
+                "security_name": "Clara Technologies Corp.",
+                "security_type": "Equity",
+                "sedar_filings": "https://webapi.thecse.com/trading/listed/sedar_filings/000055546.json",
+                "company_website_url": "https://claratech.ca/"
+              }
+            },
+            "staticCompanyInfo": {
+              "status": "Active",
+              "sector": "Technology",
+              "exchange": "CSE",
+              "symbol": "CLTE",
+              "listingDate": "2023-12-22T00:00:00.000Z",
+              "contactName": "Gerald Tritt",
+              "contactTitle": "Director",
+              "securityName": "Clara Technologies Corp.",
+              "companyOfficers": [
+                {"name": "Kirill Samokhin", "title": "Chief Financial Officer"},
+                {"name": "Jonah Hicks", "title": "Chief Executive Officer"}
+              ]
+            }
+          }
+        }
+      }
+      </script>
+    </body></html>
+    """
+
+    issuer, ticker, people = finance_country_module._extract_cse_company_page_entities(
+        html,
+        source_url="https://thecse.com/listings/clara-technologies-corp/",
+    )
+
+    assert issuer is not None
+    assert ticker is not None
+    assert issuer["canonical_text"] == "Clara Technologies Corp."
+    assert ticker["canonical_text"] == "CLTE"
+    assert {
+        entity["canonical_text"] for entity in people
+    } == {"Gerald Tritt", "Kirill Samokhin", "Jonah Hicks"}
+    assert issuer["metadata"]["exchange_code"] == "CSE"
+
+
+def test_extract_b3_listed_company_entities_builds_issuers_and_tickers() -> None:
+    issuers, tickers = finance_country_module._extract_b3_listed_company_entities(
+        {
+            "results": [
+                {
+                    "issuingCompany": "PETR4",
+                    "companyName": "Petroleo Brasileiro S.A.",
+                    "tradingName": "Petrobras",
+                    "codeCVM": "9512",
+                    "cnpj": "33.000.167/0001-01",
+                    "dateListing": "2000-01-03",
+                    "market": "Cash",
+                    "marketIndicator": "Equities",
+                    "status": "Listed",
+                    "segmentEng": "Novo Mercado",
+                },
+                {"issuingCompany": "", "companyName": "Ignore Me"},
+            ]
+        }
+    )
+
+    assert {entity["canonical_text"] for entity in issuers} == {"Petroleo Brasileiro S.A."}
+    assert {entity["canonical_text"] for entity in tickers} == {"PETR4"}
+    issuer = issuers[0]
+    assert "Petrobras" in issuer["aliases"]
+    assert issuer["metadata"]["exchange_code"] == "B3"
+    assert issuer["metadata"]["cvm_code"] == "9512"
+    assert issuer["metadata"]["cnpj"] == "33.000.167/0001-01"
+    ticker = tickers[0]
+    assert ticker["metadata"]["issuer_name"] == "Petroleo Brasileiro S.A."
+    assert ticker["metadata"]["governance_segment"] == "Novo Mercado"
+
+
+def test_extract_brazil_cvm_administrator_people_entities_builds_roles() -> None:
+    people = finance_country_module._extract_brazil_cvm_administrator_people_entities(
+        administrator_rows=[
+            {
+                "CNPJ_Companhia": "33.000.167/0001-01",
+                "Data_Referencia": "2025-12-31",
+                "Versao": "17",
+                "ID_Documento": "100",
+                "Nome": "OLD DIRECTOR",
+                "Orgao_Administracao": "Pertence apenas ao Conselho de Administração",
+                "Cargo_Eletivo_Ocupado": "16 - Presidente do C.A.",
+                "Complemento_Cargo_Eletivo_Ocupado": "",
+                "Outro_Cargo_Funcao": "",
+                "Profissao": "Administrador",
+                "Eleito_Controlador": "S",
+            },
+            {
+                "CNPJ_Companhia": "33.000.167/0001-01",
+                "Data_Referencia": "2025-12-31",
+                "Versao": "18",
+                "ID_Documento": "101",
+                "Nome": "JOSE DA SILVA",
+                "Orgao_Administracao": "Pertence apenas ao Conselho de Administração",
+                "Cargo_Eletivo_Ocupado": "16 - Presidente do C.A.",
+                "Complemento_Cargo_Eletivo_Ocupado": "",
+                "Outro_Cargo_Funcao": "",
+                "Profissao": "Administrador",
+                "Eleito_Controlador": "S",
+            },
+            {
+                "CNPJ_Companhia": "33.000.167/0001-01",
+                "Data_Referencia": "2025-12-31",
+                "Versao": "18",
+                "ID_Documento": "101",
+                "Nome": "MARIA DE SOUZA",
+                "Orgao_Administracao": "Pertence apenas à Diretoria",
+                "Cargo_Eletivo_Ocupado": "19 - Outros Diretores",
+                "Complemento_Cargo_Eletivo_Ocupado": "",
+                "Outro_Cargo_Funcao": "Diretora Financeira",
+                "Profissao": "Economista",
+                "Eleito_Controlador": "",
+            },
+        ],
+        issuer_lookup={
+            "33000167000101": {
+                "company_name": "Petroleo Brasileiro S.A.",
+                "ticker": "PETR4",
+            }
+        },
+        source_name="cvm-fre-administrators-2025",
+    )
+
+    assert {entity["canonical_text"] for entity in people} == {
+        "Jose Da Silva",
+        "Maria De Souza",
+    }
+    by_name = {entity["canonical_text"]: entity for entity in people}
+    assert by_name["Jose Da Silva"]["metadata"]["category"] == "director"
+    assert by_name["Jose Da Silva"]["metadata"]["employer_ticker"] == "PETR4"
+    assert by_name["Jose Da Silva"]["metadata"]["source_name"] == (
+        "cvm-fre-administrators-2025"
+    )
+    assert by_name["Maria De Souza"]["metadata"]["category"] == "executive_officer"
+    assert "Diretora Financeira" in by_name["Maria De Souza"]["metadata"]["role_title"]
+
+
+def test_extract_brazil_cvm_top_shareholder_entities_limits_to_top_three() -> None:
+    people, organizations = finance_country_module._extract_brazil_cvm_top_shareholder_entities(
+        shareholder_rows=[
+            {
+                "CNPJ_Companhia": "33.000.167/0001-01",
+                "Data_Referencia": "2025-12-31",
+                "Versao": "17",
+                "ID_Documento": "90",
+                "Acionista": "LEGACY HOLDER",
+                "Tipo_Pessoa_Acionista": "PJ",
+                "CPF_CNPJ_Acionista": "11.111.111/0001-11",
+                "Percentual_Total_Acoes_Circulacao": "99.000000",
+            },
+            {
+                "CNPJ_Companhia": "33.000.167/0001-01",
+                "Data_Referencia": "2025-12-31",
+                "Versao": "18",
+                "ID_Documento": "101",
+                "Acionista": "OUTROS",
+                "Tipo_Pessoa_Acionista": "PJ",
+                "CPF_CNPJ_Acionista": "",
+                "Percentual_Total_Acoes_Circulacao": "99.000000",
+            },
+            {
+                "CNPJ_Companhia": "33.000.167/0001-01",
+                "Data_Referencia": "2025-12-31",
+                "Versao": "18",
+                "ID_Documento": "101",
+                "Acionista": "PETROBRAS PARTICIPACOES S.A.",
+                "Tipo_Pessoa_Acionista": "PJ",
+                "CPF_CNPJ_Acionista": "00.000.001/0001-91",
+                "Percentual_Total_Acoes_Circulacao": "40.000000",
+            },
+            {
+                "CNPJ_Companhia": "33.000.167/0001-01",
+                "Data_Referencia": "2025-12-31",
+                "Versao": "18",
+                "ID_Documento": "101",
+                "Acionista": "JOAO PEREIRA",
+                "Tipo_Pessoa_Acionista": "PF",
+                "CPF_CNPJ_Acionista": "123.456.789-00",
+                "Percentual_Total_Acoes_Circulacao": "30.000000",
+            },
+            {
+                "CNPJ_Companhia": "33.000.167/0001-01",
+                "Data_Referencia": "2025-12-31",
+                "Versao": "18",
+                "ID_Documento": "101",
+                "Acionista": "FUNDACAO BRASIL",
+                "Tipo_Pessoa_Acionista": "PJ",
+                "CPF_CNPJ_Acionista": "22.222.222/0001-22",
+                "Percentual_Total_Acoes_Circulacao": "20.000000",
+            },
+            {
+                "CNPJ_Companhia": "33.000.167/0001-01",
+                "Data_Referencia": "2025-12-31",
+                "Versao": "18",
+                "ID_Documento": "101",
+                "Acionista": "MARIA COSTA",
+                "Tipo_Pessoa_Acionista": "PF",
+                "CPF_CNPJ_Acionista": "987.654.321-00",
+                "Percentual_Total_Acoes_Circulacao": "10.000000",
+            },
+        ],
+        issuer_lookup={
+            "33000167000101": {
+                "company_name": "Petroleo Brasileiro S.A.",
+                "ticker": "PETR4",
+            }
+        },
+        source_name="cvm-fre-shareholders-2025",
+    )
+
+    assert {entity["canonical_text"] for entity in people} == {"Joao Pereira"}
+    assert {entity["canonical_text"] for entity in organizations} == {
+        "Petrobras Participacoes S.A.",
+        "Fundacao Brasil",
+    }
+    assert all(
+        entity["metadata"]["source_name"] == "cvm-fre-shareholders-2025"
+        for entity in [*people, *organizations]
+    )
+    assert all(
+        entity["metadata"]["employer_ticker"] == "PETR4"
+        for entity in [*people, *organizations]
+    )
+
+
+def test_extract_brazil_fca_shareholder_department_people_entities_builds_contacts() -> None:
+    issuer_entity = {
+        "entity_type": "organization",
+        "canonical_text": "Petroleo Brasileiro S.A.",
+        "entity_id": "finance-br-issuer:9512",
+        "aliases": ["Petrobras"],
+        "metadata": {"ticker": "PETR4", "cnpj": "33.000.167/0001-01"},
+    }
+    people = (
+        finance_country_module._extract_brazil_fca_shareholder_department_people_entities(
+            department_rows=[
+                {
+                    "CNPJ_Companhia": "33.000.167/0001-01",
+                    "Data_Referencia": "2022-12-31",
+                    "Versao": "1",
+                    "ID_Documento": "1",
+                    "Contato": "OLD CONTACT",
+                    "Cidade": "Rio de Janeiro",
+                },
+                {
+                    "CNPJ_Companhia": "33.000.167/0001-01",
+                    "Data_Referencia": "2023-12-31",
+                    "Versao": "2",
+                    "ID_Documento": "2",
+                    "Contato": "JOANA MARQUES",
+                    "Cidade": "Rio de Janeiro",
+                    "Sigla_UF": "RJ",
+                    "Email": "ri@example.com",
+                    "DDI_Telefone": "55",
+                    "DDD_Telefone": "21",
+                    "Telefone": "12345678",
+                },
+            ],
+            issuer_lookup={
+                "33000167000101": {
+                    "company_name": "Petroleo Brasileiro S.A.",
+                    "ticker": "PETR4",
+                    "entity": issuer_entity,
+                }
+            },
+            source_name="cvm-fca-shareholder-department-2023",
+        )
+    )
+
+    assert {entity["canonical_text"] for entity in people} == {"Joana Marques"}
+    contact = people[0]
+    assert contact["metadata"]["category"] == "investor_relations"
+    assert contact["metadata"]["email"] == "ri@example.com"
+    assert contact["metadata"]["phone"] == "55 21 12345678"
+    assert issuer_entity["metadata"]["shareholder_department_email"] == "ri@example.com"
+    assert issuer_entity["metadata"]["shareholder_department_phone"] == "55 21 12345678"
+
+
+def test_extract_idx_company_profile_entities_builds_issuers_and_tickers() -> None:
+    html = """
+    <script>
+    window.__NUXT__={tableData:{data:[
+      {KodeEmiten:"BBCA",NamaEmiten:"Bank Central Asia Tbk.",TanggalPencatatan:"2000-05-31",Email:"corpsec@bca.co.id",Telepon:"+62-21-23588000",Fax:"+62-21-23588300",Website:"www.bca.co.id",Alamat:"Menara BCA, Jakarta",PapanPencatatan:"Utama",Sektor:"Financials",SubSektor:"Banks",Industri:"Banking",SubIndustri:"Commercial Banks",JenisEmiten:"Equity",NPWP:"01.234.567.8-901.000",NPKP:"NPKP-001",KegiatanUsahaUtama:"Banking",Logo:"/media/logo.png"}
+    ]}};
+    </script>
+    """
+
+    issuers, tickers = finance_country_module._extract_idx_company_profile_entities(html)
+
+    assert {entity["canonical_text"] for entity in issuers} == {"Bank Central Asia Tbk."}
+    assert {entity["canonical_text"] for entity in tickers} == {"BBCA"}
+    issuer = issuers[0]
+    assert issuer["metadata"]["exchange_code"] == "IDX"
+    assert issuer["metadata"]["website"] == "https://www.bca.co.id"
+    assert issuer["metadata"]["listing_board"] == "Utama"
+    assert issuer["metadata"]["sector"] == "Financials"
+    assert issuer["metadata"]["npwp"] == "01.234.567.8-901.000"
+    assert issuer["metadata"]["primary_business"] == "Banking"
+    ticker = tickers[0]
+    assert ticker["metadata"]["issuer_name"] == "Bank Central Asia Tbk."
+    assert ticker["metadata"]["listing_date"] == "2000-05-31"
+
+
+def test_extract_borsa_italiana_directory_records_reads_pages_and_links() -> None:
+    html = """
+    <a href="/borsa/azioni/scheda/IT0001233417-MTAA.html?lang=en">Issuer A</a>
+    <a href="/borsa/azioni/euronext-growth-milan/scheda/IT0006543210-EXM.html?lang=en">Issuer B</a>
+    <a href="/borsa/azioni/scheda/IT0001233417-MTAA.html?lang=en">Issuer A Duplicate</a>
+    <a href="/borsa/azioni/listino-a-z.html?initial=A&lang=en&page=4">4</a>
+    """
+
+    assert finance_country_module._extract_borsa_italiana_page_count(html) == 4
+    assert finance_country_module._extract_borsa_italiana_directory_records(html) == [
+        {
+            "detail_path": "/borsa/azioni/scheda/IT0001233417-MTAA.html?lang=en",
+            "isin": "IT0001233417",
+            "mic": "MTAA",
+        },
+        {
+            "detail_path": (
+                "/borsa/azioni/euronext-growth-milan/scheda/IT0006543210-EXM.html?lang=en"
+            ),
+            "isin": "IT0006543210",
+            "mic": "EXM",
+        },
+    ]
+
+
+def test_extract_borsa_italiana_company_profile_entities_builds_people() -> None:
+    html = """
+    <html>
+      <head>
+        <title>Example Societa S.P.A. Stocks Quotes: Company Profile - Borsa Italiana</title>
+      </head>
+      <body>
+        <div><h3>Address</h3></div>
+        <div>Via Roma 1<br/>20100 Milano<br/><a href="https://example.it">example.it</a></div></div>
+        <div><h3>Contact</h3></div>
+        <div>Maria Rossi<br/><a href="mailto:ir@example.it">ir@example.it</a><br/><a href="tel:+3902123456">+3902123456</a></div></div>
+        Key Executives
+        <table>
+          <tbody>
+            <tr><td><span>Chief Executive Officer</span></td><td><span>Luca Bianchi</span></td></tr>
+            <tr><td><span>Chairperson</span></td><td><span>Giulia Verdi</span></td></tr>
+          </tbody>
+        </table>
+      </body>
+    </html>
+    """
+
+    issuer, people = finance_country_module._extract_borsa_italiana_company_profile_entities(
+        html,
+        isin="IT0001233417",
+        mic="MTAA",
+    )
+
+    assert issuer is not None
+    assert issuer["canonical_text"] == "Example Societa S.P.A."
+    assert issuer["metadata"]["exchange_code"] == "BIT"
+    assert issuer["metadata"]["website"] == "https://example.it"
+    assert issuer["metadata"]["contact_email"] == "ir@example.it"
+    assert {
+        entity["canonical_text"] for entity in people
+    } == {"Luca Bianchi", "Giulia Verdi", "Maria Rossi"}
+    assert any(entity["metadata"]["role_class"] == "executive_officer" for entity in people)
+    assert any(entity["metadata"]["role_class"] == "investor_relations" for entity in people)
+
+
+def test_extract_moex_security_entities_builds_issuers_and_tickers() -> None:
+    issuers, tickers = finance_country_module._extract_moex_security_entities(
+        {
+            "securities": {
+                "columns": [
+                    "secid",
+                    "emitent_title",
+                    "emitent_id",
+                    "emitent_inn",
+                    "emitent_okpo",
+                    "name",
+                    "shortname",
+                    "isin",
+                    "regnumber",
+                    "type",
+                    "group",
+                    "primary_boardid",
+                ],
+                "data": [
+                    [
+                        "GAZP",
+                        "Gazprom PJSC",
+                        "1001",
+                        "7736050003",
+                        "00040778",
+                        "Gazprom",
+                        "GAZPROM",
+                        "RU0007661625",
+                        "1-02-00028-A",
+                        "common_share",
+                        "stock_shares",
+                        "TQBR",
+                    ],
+                    [
+                        "GAZPP",
+                        "Gazprom PJSC",
+                        "1001",
+                        "7736050003",
+                        "00040778",
+                        "Gazprom preferred",
+                        "GAZP PREF",
+                        "RU0007661626",
+                        "2-02-00028-A",
+                        "preferred_share",
+                        "stock_shares",
+                        "TQBR",
+                    ],
+                ],
+            }
+        }
+    )
+
+    assert {entity["canonical_text"] for entity in issuers} == {"Gazprom PJSC"}
+    assert {entity["canonical_text"] for entity in tickers} == {"GAZP", "GAZPP"}
+    issuer = issuers[0]
+    assert issuer["metadata"]["exchange_code"] == "MOEX"
+    assert issuer["metadata"]["issuer_inn"] == "7736050003"
+    assert tickers[0]["metadata"]["primary_board_id"] == "TQBR"
+
+
+def test_fetch_moex_securities_payload_paginates(monkeypatch: pytest.MonkeyPatch) -> None:
+    payloads = {
+        finance_country_module._MOEX_SECURITIES_URL: {
+            "securities": {
+                "columns": ["secid", "emitent_title"],
+                "data": [["AAA", "Issuer A"]] * 100,
+            }
+        },
+        f"{finance_country_module._MOEX_SECURITIES_URL}&start=100": {
+            "securities": {
+                "columns": ["secid", "emitent_title"],
+                "data": [["BBB", "Issuer B"]],
+            }
+        },
+    }
+
+    class _Response:
+        def __init__(self, payload: dict[str, object]) -> None:
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return self._payload
+
+    def fake_get(
+        url: str,
+        *,
+        headers: dict[str, str],
+        follow_redirects: bool,
+        timeout: float,
+        verify: bool,
+    ) -> _Response:
+        assert headers["Accept"] == "application/json,text/plain;q=0.9,*/*;q=0.1"
+        assert follow_redirects is True
+        assert timeout == finance_country_module.DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS
+        assert isinstance(verify, bool)
+        return _Response(payloads[url])
+
+    monkeypatch.setattr(finance_country_module.httpx, "get", fake_get)
+
+    payload = finance_country_module._fetch_moex_securities_payload(
+        user_agent="ades-test/0.1.0"
+    )
+
+    assert payload == {
+        "securities": {
+            "columns": ["secid", "emitent_title"],
+            "data": [["AAA", "Issuer A"]] * 100 + [["BBB", "Issuer B"]],
+        }
+    }
+
+
+def test_extract_jse_directory_entities_builds_issuers_tickers_and_people() -> None:
+    issuers, tickers, people = finance_country_module._extract_jse_directory_entities(
+        [
+            {
+                "AlphaCode": "NPN",
+                "LongName": "Naspers Limited",
+                "Status": "Current",
+                "ExchangeCode": "JSE",
+                "ExchangeName": "JSE Limited",
+                "RegistrationNumber": "1925/001431/06",
+                "Website": "https://www.naspers.com",
+                "EmailAddress": "investorrelations@naspers.com",
+                "TelephoneNumber": "+27-21-406-9111",
+                "PhysicalAddress": "40 Heerengracht, Cape Town",
+                "PostalAddress": "PO Box 2271, Cape Town",
+                "RoleDescription": "Equity Issuer",
+                "Contacts": [
+                    {
+                        "Title": "",
+                        "FirstName": "Thandeka",
+                        "LastName": "Mbeki",
+                        "ContactType": "Investor Relations",
+                        "EmailAddress": "thandeka@example.com",
+                        "Telephone": "+27-21-000-0000",
+                        "Mobile": "+27-82-000-0000",
+                    }
+                ],
+            },
+            {
+                "AlphaCode": "OLD",
+                "LongName": "Old Listing",
+                "Status": "Delisted",
+            },
+        ]
+    )
+
+    assert {entity["canonical_text"] for entity in issuers} == {"Naspers Limited"}
+    assert {entity["canonical_text"] for entity in tickers} == {"NPN"}
+    assert {entity["canonical_text"] for entity in people} == {"Thandeka Mbeki"}
+    issuer = issuers[0]
+    assert issuer["metadata"]["exchange_code"] == "JSE"
+    assert issuer["metadata"]["registration_number"] == "1925/001431/06"
+    person = people[0]
+    assert person["metadata"]["role_class"] == "investor_relations"
+    assert person["metadata"]["source_name"] == "jse-client-portal-directory"
+
+
+def test_extract_jse_associated_role_entities_builds_orgs_and_people() -> None:
+    organizations, people = finance_country_module._extract_jse_associated_role_entities(
+        {
+            "GetIssuerAssociatedRolesResult": [
+                {
+                    "AlphaCode": "AFRSP",
+                    "LongName": "African Bank Ltd (Business and Commercial Banking Division)",
+                    "MasterID": 2632,
+                    "RoleDescription": "Sponsor",
+                    "EmailAddress": "info@africanbank.co.za",
+                    "TelephoneNumber": "+27-11-459-1000",
+                    "Contacts": [
+                        {
+                            "Title": "Ms.",
+                            "FirstName": "Annerie",
+                            "LastName": "Britz",
+                            "ContactType": "Approved Executive",
+                            "EmailAddress": "abritz1@africanbank.co.za",
+                            "Telephone": "+27-11-459-1890",
+                            "Mobile": "+27-83-776-3667",
+                            "PersonID": "128588",
+                        }
+                    ],
+                }
+            ]
+        },
+        issuer_name="10X Fund Managers (RF) Proprietary Limited",
+        issuer_ticker="CORATF",
+    )
+
+    assert {entity["canonical_text"] for entity in organizations} == {
+        "African Bank Ltd (Business and Commercial Banking Division)"
+    }
+    assert {entity["canonical_text"] for entity in people} == {"Annerie Britz"}
+    assert organizations[0]["metadata"]["associated_role_description"] == "Sponsor"
+    assert people[0]["metadata"]["role_class"] == "executive_officer"
+    assert people[0]["metadata"]["issuer_ticker"] == "CORATF"
+
+
+def test_extract_cninfo_index_data_entities_builds_people_and_metadata() -> None:
+    issuer, ticker, people = finance_country_module._extract_cninfo_index_data_entities(
+        {
+            "codeInfo": {
+                "SECCODE": "300014",
+                "SECNAME": "EVE",
+                "ORGNAME": "EVE Energy Co., Ltd.",
+                "F003N": "1",
+            },
+            "snapshot5015Data": [
+                {
+                    "ORGNAME": "EVE Energy Co., Ltd.",
+                    "SECCODE": "300014",
+                    "F002V": "2001-12-24",
+                    "F003V": "2009-10-30",
+                    "F004V": "www.evebattery.com",
+                    "F005V": "No.38 Hui Feng 7th Road, Huizhou",
+                    "F006V": "No.38 Hui Feng 7th Road, Huizhou",
+                    "F007V": "ir@evebattery.com",
+                    "F008V": "(+86)752-2630809",
+                    "F009V": "(+86)752-2606256",
+                    "F010V": "Manufacturing",
+                    "F011V": "Electrical Machinery and Equipment Manufacturing",
+                    "F012V": "CNE100000GS4",
+                }
+            ],
+            "cninfo5025Data": [
+                {
+                    "F001V": "Liu Jincheng",
+                    "F002V": "Liu Jianhua",
+                    "F003V": "Jiang Min",
+                    "F004V": "Jiang Min",
+                    "F005V": (
+                        "Liu Jincheng,Liu Jianhua,Jiang Min,Zhu Yuan,"
+                        "Ai Xinping,Li Chunge"
+                    ),
+                }
+            ],
+        }
+    )
+
+    assert issuer is not None
+    assert ticker is not None
+    assert issuer["canonical_text"] == "EVE Energy Co., Ltd."
+    assert issuer["metadata"]["exchange_code"] == "SZSE"
+    assert issuer["metadata"]["market_name"] == "ChiNext"
+    assert issuer["metadata"]["website"] == "https://www.evebattery.com"
+    assert ticker["canonical_text"] == "300014"
+    assert ticker["metadata"]["issuer_name"] == "EVE Energy Co., Ltd."
+    assert {
+        entity["canonical_text"] for entity in people
+    } >= {"Liu Jincheng", "Liu Jianhua", "Jiang Min"}
+    assert any(entity["metadata"]["role_title"] == "Chairman of the Board" for entity in people)
+
+
+def test_extract_cninfo_shareholder_entities_splits_people_and_orgs() -> None:
+    organizations, people = finance_country_module._extract_cninfo_shareholder_entities(
+        {
+            "shareHoldersData": [
+                {
+                    "F002V": "Xizang EVE Holding Co., Ltd.",
+                    "F003N": "610000000",
+                    "F004N": "24.37",
+                },
+                {
+                    "F002V": "Liu Jincheng",
+                    "F003N": "120000000",
+                    "F004N": "4.79",
+                },
+            ]
+        },
+        company_name="EVE Energy Co., Ltd.",
+        ticker="300014",
+    )
+
+    assert {entity["canonical_text"] for entity in organizations} == {
+        "Xizang EVE Holding Co., Ltd."
+    }
+    assert {entity["canonical_text"] for entity in people} == {"Liu Jincheng"}
+    assert organizations[0]["metadata"]["shareholding_percent"] == "24.37"
+    assert people[0]["metadata"]["role_class"] == "shareholder"
+
+
+def test_extract_nse_listing_entities_builds_issuers_and_tickers() -> None:
+    issuers, tickers = finance_country_module._extract_nse_listing_entities(
+        {
+            "data": [
+                {
+                    "symbol": "RELIANCE",
+                    "companyName": "Reliance Industries Limited",
+                    "isin": "INE002A01018",
+                    "listingDate": "1995-11-29",
+                    "industry": "Petroleum Products",
+                    "series": "EQ",
+                    "status": "Listed",
+                    "faceValue": "10",
+                    "paidUpValue": "10",
+                    "marketLot": "1",
+                }
+            ]
+        }
+    )
+
+    assert {entity["canonical_text"] for entity in issuers} == {
+        "Reliance Industries Limited"
+    }
+    assert {entity["canonical_text"] for entity in tickers} == {"RELIANCE"}
+    assert issuers[0]["metadata"]["exchange_code"] == "NSE"
+    assert issuers[0]["metadata"]["isin"] == "INE002A01018"
+    assert tickers[0]["metadata"]["industry"] == "Petroleum Products"
+
+
+def test_extract_nse_shareholding_master_entities_builds_market_universe() -> None:
+    issuers, tickers = finance_country_module._extract_nse_shareholding_master_entities(
+        [
+            {
+                "symbol": "20MICRONS",
+                "name": "20 Microns Limited",
+                "industry": "Chemicals",
+                "date": "31-MAR-2026",
+                "isin": "INE144J01027",
+                "pr_and_prgrp": "45.04",
+                "public_val": "54.96",
+                "employeeTrusts": "0",
+                "xbrl": "https://nsearchives.nseindia.com/corporate/xbrl/SHP_example.xml",
+            }
+        ]
+    )
+
+    assert {entity["canonical_text"] for entity in issuers} == {"20 Microns Limited"}
+    assert {entity["canonical_text"] for entity in tickers} == {"20MICRONS"}
+    assert issuers[0]["metadata"]["promoter_shareholding_percent"] == "45.04"
+    assert issuers[0]["metadata"]["public_shareholding_percent"] == "54.96"
+    assert tickers[0]["metadata"]["shareholding_date"] == "31-MAR-2026"
+
+
+def test_extract_nse_governance_people_entities_reads_xbrl_tags() -> None:
+    xml_text = """<?xml version="1.0" encoding="UTF-8"?>
+    <xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance"
+        xmlns:in-bse-cg="http://www.bseindia.com/xbrl/cg/2024-03-31/in-bse-cg">
+      <in-bse-cg:NameOfTheDirector>Mukesh Dhirubhai Ambani</in-bse-cg:NameOfTheDirector>
+      <in-bse-cg:NameOfTheDirector>Akash M Ambani</in-bse-cg:NameOfTheDirector>
+      <in-bse-cg:PositionOfDirectorInBoardOne>Chairman and Managing Director</in-bse-cg:PositionOfDirectorInBoardOne>
+      <in-bse-cg:PositionOfDirectorInBoardOne>Director</in-bse-cg:PositionOfDirectorInBoardOne>
+      <in-bse-cg:DirectorIdentificationNumberOfDirector>00001695</in-bse-cg:DirectorIdentificationNumberOfDirector>
+      <in-bse-cg:DirectorIdentificationNumberOfDirector>00000002</in-bse-cg:DirectorIdentificationNumberOfDirector>
+      <in-bse-cg:DateOfAppointmentOfDirector>1977-05-01</in-bse-cg:DateOfAppointmentOfDirector>
+      <in-bse-cg:DateOfAppointmentOfDirector>2020-10-21</in-bse-cg:DateOfAppointmentOfDirector>
+    </xbrli:xbrl>
+    """
+
+    people = finance_country_module._extract_nse_governance_people_entities(
+        xml_text,
+        company_name="Reliance Industries Limited",
+        ticker="RELIANCE",
+    )
+
+    assert {entity["canonical_text"] for entity in people} == {
+        "Mukesh Dhirubhai Ambani",
+        "Akash M Ambani",
+    }
+    assert any(entity["metadata"]["role_class"] == "executive_officer" for entity in people)
+    assert any(entity["metadata"]["role_class"] == "director" for entity in people)
+
+
+def test_extract_nse_shareholding_entities_reads_xbrl_tags() -> None:
+    xml_text = """<?xml version="1.0" encoding="UTF-8"?>
+    <xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance"
+        xmlns:in-bse-shp="http://www.bseindia.com/xbrl/shp/2025-10-31/in-bse-shp">
+      <in-bse-shp:NameOfTheShareholder>IONIX ADVANCED MATERIALS PRIVATE LIMITED</in-bse-shp:NameOfTheShareholder>
+      <in-bse-shp:NameOfTheShareholder>RISHABH PANT</in-bse-shp:NameOfTheShareholder>
+      <in-bse-shp:NumberOfShares>1250000</in-bse-shp:NumberOfShares>
+      <in-bse-shp:NumberOfShares>250000</in-bse-shp:NumberOfShares>
+      <in-bse-shp:ShareholdingAsAPercentageOfTotalNumberOfShares>12.50</in-bse-shp:ShareholdingAsAPercentageOfTotalNumberOfShares>
+      <in-bse-shp:ShareholdingAsAPercentageOfTotalNumberOfShares>2.50</in-bse-shp:ShareholdingAsAPercentageOfTotalNumberOfShares>
+      <in-bse-shp:PermanentAccountNumberOfShareholder>AAACI0000A</in-bse-shp:PermanentAccountNumberOfShareholder>
+      <in-bse-shp:PermanentAccountNumberOfShareholder>ABCDE1234F</in-bse-shp:PermanentAccountNumberOfShareholder>
+    </xbrli:xbrl>
+    """
+
+    organizations, people = finance_country_module._extract_nse_shareholding_entities(
+        xml_text,
+        company_name="Example Limited",
+        ticker="EXAMPLE",
+    )
+
+    assert {entity["canonical_text"] for entity in organizations} == {
+        "Ionix Advanced Materials Private Limited"
+    }
+    assert {entity["canonical_text"] for entity in people} == {"Rishabh Pant"}
+    assert organizations[0]["metadata"]["shareholding_percent"] == "12.5"
+    assert people[0]["metadata"]["role_title"] == "Substantial Shareholder"
+
+
+def test_extract_biva_issuer_records_reads_workbook(tmp_path: Path) -> None:
+    workbook_path = tmp_path / "biva-emisoras.xlsx"
+    _write_test_xlsx_workbook(
+        workbook_path,
+        sheets={
+            "Emisoras": [
+                ["Clave", "Emisora"],
+                ["AC", "ARCA CONTINENTAL, S.A.B. DE C.V."],
+                ["AMX", "AMERICA MOVIL, S.A.B. DE C.V."],
+            ]
+        },
+    )
+
+    records = finance_country_module._extract_biva_issuer_records(workbook_path)
+
+    assert records == [
+        {"ticker": "AC", "company_name": "Arca Continental, S.A.B. De C.V."},
+        {"ticker": "AMX", "company_name": "America Movil, S.A.B. De C.V."},
+    ]
+
+
+def test_extract_biva_representante_records_reads_workbook(tmp_path: Path) -> None:
+    workbook_path = tmp_path / "biva-representante.xlsx"
+    _write_test_xlsx_workbook(
+        workbook_path,
+        sheets={
+            "Representantes": [
+                [
+                    "Clave",
+                    "Serie",
+                    "Tipo de valor",
+                    "Representante común",
+                    "Emisora",
+                    "Fecha de listado",
+                    "Fecha de vencimiento",
+                ],
+                ["ACTINVR", "24", "91", "BMULTI", "ACTINVR", "19-03-2024", "16-03-2027"],
+            ]
+        },
+    )
+
+    records = finance_country_module._extract_biva_representante_records(workbook_path)
+
+    assert records == [
+        {
+            "ticker": "ACTINVR",
+            "series": "24",
+            "security_type": "91",
+            "representative_common": "BMULTI",
+            "issuer_name": "ACTINVR",
+            "listing_date": "19-03-2024",
+            "maturity_date": "16-03-2027",
+        }
+    ]
+
+
+def test_extract_bmv_mobile_quote_records_parses_prefixed_payload() -> None:
+    records = finance_country_module._extract_bmv_mobile_quote_records(
+        """
+        for(;;);({
+          "response": {
+            "clavesCotizacion": [
+              {"clave": "AMX", "serie": "L", "precio": 15.2, "porcentaje": 0.75},
+              {"clave": "AC", "serie": "N", "precio": 0, "porcentaje": 0}
+            ]
+          }
+        })
+        """
+    )
+
+    assert records == [
+        {
+            "ticker": "AMX",
+            "series": "L",
+            "price": "15.2",
+            "change_percent": "0.75",
+        },
+        {
+            "ticker": "AC",
+            "series": "N",
+            "price": "0",
+            "change_percent": "0",
+        },
+    ]
+
+
+def test_extract_bmv_profile_details_parses_metadata_people_and_series() -> None:
+    html_text = """
+    <table class="desc desc-2" role="presentation">
+      <tr><td>Ticker Symbol:</td><td><span class="key">AC</span></td></tr>
+      <tr><td>Series:</td><td id="boxLinks"><a href="#">Capital</a></td></tr>
+      <tr><td>Web Site:</td><td><a href="http://www.arcacontal.com" target="_blank">www.arcacontal.com</a></td></tr>
+    </table>
+    <table class="info" role="presentation">
+      <tr><td>Date of Incorporation:</td><td>24-Sep-1980</td></tr>
+      <tr><td>Date of Listing on the Exchange:</td><td>13-Dec-2001</td></tr>
+      <tr><td>Investor Relations:</td><td><ul><li>LIC. EMMA REBECA PINTO</li></ul></td></tr>
+      <tr><td>Telephone:</td><td>8181511400</td></tr>
+      <tr><td>E-mail:</td><td><a href="mailto:emmarebeca.pinto@arcacontal.com">emmarebeca.pinto@arcacontal.com</a></td></tr>
+      <tr><td>Corporate Offices:</td><td>Av. San Jeronimo</td></tr>
+    </table>
+    <table class="info" role="presentation">
+      <tr><td>Sector:</td><td>PRODUCTOS DE CONSUMO FRECUENTE</td></tr>
+      <tr><td>Sub Sector:</td><td>ALIMENTOS, BEBIDAS Y TABACO</td></tr>
+      <tr><td>Branch:</td><td>BEBIDAS</td></tr>
+      <tr><td>Sub Branch:</td><td>PRODUCCIÓN DE BEBIDAS NO ALCOHÓLICAS</td></tr>
+      <tr><td>Economic Activity:</td><td>Produccion y comercializacion de bebidas.</td></tr>
+    </table>
+    <section class="info-section">
+      <h2>Issuer Securities ARCA CONTINENTAL, S.A.B. DE C.V.</h2>
+      <table class="table" role="presentation">
+        <thead>
+          <tr><th class="cell-01">Series</th><th class="cell-02">Status</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>*</td><td>ACTIVA</td><td>ACCIONES</td></tr>
+          <tr><td>B</td><td>ACTIVA</td><td>ACCIONES</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <ul class="accordion-area">
+      <li class="active">
+        <h2>Main Executives</h2>
+        <div class="slide">
+          <div class="table-holder" role="presentation">
+            <table class="table table-3" role="presentation">
+              <tr><th class="cell-01">NAME</th><th>TITLE</th></tr>
+              <tr><td>LIC. ARTURO GUTIERREZ HERNANDEZ</td><td>DIRECTOR GENERAL</td></tr>
+              <tr><td>ING. EMILIO MARCOS CHARUR</td><td>DIRECTOR DE FINANZAS</td></tr>
+            </table>
+          </div>
+        </div>
+      </li>
+      <li class="active">
+        <h2>Board of Directors</h2>
+        <div class="slide">
+          <div class="table-holder">
+            <table class="table table-3" role="presentation">
+              <tr><th class="cell-01">NAME</th><th class="cell-02">TITLE</th><th>Quality of the Adviser</th></tr>
+              <tr><td>C.P. JORGE HUMBERTO SANTOS REYNA</td><td>PRESIDENTE DEL CONSEJO DE ADMINISTRACION</td><td>PATRIMONIAL</td></tr>
+              <tr><td>Sr. JUAN CARLOS CORREA BALLESTEROS</td><td>CONSEJERO PROPIETARIO</td><td>INDEPENDIENTE</td></tr>
+            </table>
+          </div>
+        </div>
+      </li>
+    </ul>
+    <a href="/en/issuers/corporativeinformation/AC-6081-CGEN_CAPIT">Corporate</a>
+    <a href="/en/issuers/financialinformation/AC-6081-CGEN_CAPIT">Financial</a>
+    """
+
+    metadata, people_entities, equity_series = finance_country_module._extract_bmv_profile_details(
+        html_text,
+        company_name="Arca Continental, S.A.B. de C.V.",
+        ticker="AC",
+        issuer_id="6081",
+        market_code="CGEN_CAPIT",
+        source_name="bmv-profile-6081",
+        profile_url="https://www.bmv.com.mx/en/issuers/profile/-6081",
+    )
+
+    assert metadata["website"] == "www.arcacontal.com"
+    assert metadata["date_of_incorporation"] == "24-Sep-1980"
+    assert metadata["listing_date"] == "13-Dec-2001"
+    assert metadata["contact_email"] == "emmarebeca.pinto@arcacontal.com"
+    assert metadata["contact_phone"] == "8181511400"
+    assert metadata["sector"] == "PRODUCTOS DE CONSUMO FRECUENTE"
+    assert metadata["bmv_corporative_information_url"].endswith(
+        "/en/issuers/corporativeinformation/AC-6081-CGEN_CAPIT"
+    )
+    assert metadata["bmv_financial_information_url"].endswith(
+        "/en/issuers/financialinformation/AC-6081-CGEN_CAPIT"
+    )
+    assert equity_series == ["*", "B"]
+    assert [entity["canonical_text"] for entity in people_entities] == [
+        "Emma Rebeca Pinto",
+        "Arturo Gutierrez Hernandez",
+        "Emilio Marcos Charur",
+        "Jorge Humberto Santos Reyna",
+        "Juan Carlos Correa Ballesteros",
+    ]
+    assert people_entities[0]["metadata"]["role_class"] == "investor_relations"
+    assert people_entities[1]["metadata"]["role_class"] == "executive_officer"
+    assert people_entities[3]["metadata"]["role_class"] == "director"
+    assert people_entities[3]["metadata"]["adviser_quality"] == "PATRIMONIAL"
+
+
+def test_classify_bmv_person_role_prefers_executive_for_director_general() -> None:
+    assert (
+        finance_country_module._classify_bmv_person_role(
+            "DIRECTOR GENERAL",
+            default_role_class="director",
+        )
+        == "executive_officer"
+    )
+    assert (
+        finance_country_module._classify_bmv_person_role(
+            "CONSEJERO PROPIETARIO",
+            default_role_class="executive_officer",
+        )
+        == "director"
+    )
+
+
+def test_enrich_basic_country_entities_with_wikidata_bounds_resolution_inputs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, list[str]] = {}
+
+    def _fake_resolution_snapshot(
+        *,
+        country_code: str,
+        description_hints: tuple[str, ...],
+        issuer_entities: list[dict[str, object]],
+        people_entities: list[dict[str, object]],
+        country_dir: Path,
+        user_agent: str,
+    ) -> tuple[dict[str, object], Path | None, list[str]]:
+        captured["issuer_ids"] = [str(entity["entity_id"]) for entity in issuer_entities]
+        captured["people_ids"] = [str(entity["entity_id"]) for entity in people_entities]
+        return (
+            {"schema_version": 1, "issuers": {}, "people": {}, "organization_people": {}},
+            None,
+            [],
+        )
+
+    monkeypatch.setattr(
+        finance_country_module,
+        "_build_basic_country_wikidata_resolution_snapshot",
+        _fake_resolution_snapshot,
+    )
+
+    issuer_entities = [
+        {
+            "entity_type": "organization",
+            "canonical_text": f"Issuer {index}",
+            "aliases": [f"Issuer {index}"],
+            "entity_id": f"finance-cn-issuer:{index}",
+            "metadata": {"country_code": "cn", "ticker": f"{index:06d}"},
+        }
+        for index in range(5)
+    ]
+    ticker_entities = [
+        {
+            "entity_type": "ticker",
+            "canonical_text": f"{index:06d}",
+            "aliases": [f"{index:06d}"],
+            "entity_id": f"finance-cn-ticker:{index}",
+            "metadata": {"country_code": "cn", "ticker": f"{index:06d}"},
+        }
+        for index in range(5)
+    ]
+    people_entities = [
+        {
+            "entity_type": "person",
+            "canonical_text": f"Person {index} Example",
+            "aliases": [f"Person {index} Example"],
+            "entity_id": f"finance-cn-person:{index}",
+            "metadata": {"country_code": "cn"},
+        }
+        for index in range(4)
+    ]
+
+    warnings = finance_country_module._enrich_basic_country_entities_with_wikidata(
+        country_code="cn",
+        resolution_name="wikidata-china-entity-resolution",
+        source_notes="test",
+        description_hints=("china",),
+        max_issuer_entities=2,
+        max_people_entities=1,
+        country_dir=tmp_path,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=[],
+        user_agent="ades-test",
+    )
+
+    assert captured["issuer_ids"] == ["finance-cn-issuer:0", "finance-cn-issuer:1"]
+    assert captured["people_ids"] == ["finance-cn-person:0"]
+    assert "bounded_wikidata_issuers:cn:2/5" in warnings
+    assert "bounded_wikidata_people:cn:1/4" in warnings
+
+
+def test_enrich_japan_entities_with_wikidata_merges_resolution_matches(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def _fake_resolution_snapshot(
+        *,
+        country_code: str,
+        description_hints: tuple[str, ...],
+        issuer_entities: list[dict[str, object]],
+        people_entities: list[dict[str, object]],
+        country_dir: Path,
+        user_agent: str,
+    ) -> tuple[dict[str, object], Path | None, list[str]]:
+        assert country_code == "jp"
+        assert description_hints == finance_country_module._JAPAN_WIKIDATA_DESCRIPTION_HINTS
+        assert user_agent == "ades-test"
+        resolution_path = country_dir / "wikidata-japan-entity-resolution.json"
+        resolution_path.write_text("{}\n", encoding="utf-8")
+        return (
+            {
+                "schema_version": 1,
+                "issuers": {
+                    "isin:JP3633400001": {
+                        "qid": "Q53268",
+                        "slug": "Q53268",
+                        "entity_id": "wikidata:Q53268",
+                        "url": "https://www.wikidata.org/wiki/Q53268",
+                        "label": "Toyota",
+                    }
+                },
+                "people": {},
+                "organization_people": {
+                    "finance-jp-issuer:7203": [
+                        {
+                            "canonical_text": "Koji Sato",
+                            "aliases": ["Koji Sato"],
+                            "qid": "Q123456",
+                            "slug": "Q123456",
+                            "entity_id": "wikidata:Q123456",
+                            "url": "https://www.wikidata.org/wiki/Q123456",
+                            "label": "Koji Sato",
+                            "organization_qid": "Q53268",
+                            "role_class": "executive_officer",
+                            "role_title": "Chief Executive Officer",
+                            "source_property_id": "P169",
+                        }
+                    ]
+                },
+            },
+            resolution_path,
+            [],
+        )
+
+    monkeypatch.setattr(
+        finance_country_module,
+        "_build_basic_country_wikidata_resolution_snapshot",
+        _fake_resolution_snapshot,
+    )
+
+    issuer_entities = [
+        {
+            "entity_type": "organization",
+            "canonical_text": "Toyota Motor Corporation",
+            "aliases": ["Toyota Motor Corporation"],
+            "entity_id": "finance-jp-issuer:7203",
+            "metadata": {"country_code": "jp", "ticker": "7203", "isin": "JP3633400001"},
+        }
+    ]
+    ticker_entities = [
+        {
+            "entity_type": "ticker",
+            "canonical_text": "7203",
+            "aliases": ["7203"],
+            "entity_id": "finance-jp-ticker:7203",
+            "metadata": {"country_code": "jp", "ticker": "7203", "isin": "JP3633400001"},
+        }
+    ]
+    people_entities: list[dict[str, object]] = []
+    downloaded_sources: list[dict[str, object]] = []
+
+    warnings = finance_country_module._enrich_japan_entities_with_wikidata(
+        country_dir=tmp_path,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent="ades-test",
+    )
+
+    assert warnings == []
+    assert issuer_entities[0]["metadata"]["wikidata_slug"] == "Q53268"
+    assert ticker_entities[0]["metadata"]["wikidata_slug"] == "Q53268"
+    assert people_entities[0]["metadata"]["wikidata_slug"] == "Q123456"
+    assert downloaded_sources[0]["name"] == "wikidata-japan-entity-resolution"
+
+
+def test_basic_country_wikidata_languages_include_local_script_overrides() -> None:
+    assert finance_country_module._basic_country_wikidata_languages("jp") == ("ja", "en")
+    assert finance_country_module._basic_country_wikidata_languages("cn") == ("zh", "en")
+    assert finance_country_module._basic_country_wikidata_languages("kr") == ("ko", "en")
+    assert finance_country_module._basic_country_wikidata_languages("sa") == ("ar", "en")
+
+
+def test_write_curated_entities_backfills_wikidata_slug_from_qid(tmp_path: Path) -> None:
+    output_path = tmp_path / "entities.json"
+
+    finance_country_module._write_curated_entities(
+        output_path,
+        entities=[
+            {
+                "entity_type": "organization",
+                "canonical_text": "Sample Issuer",
+                "aliases": ["Sample Issuer"],
+                "entity_id": "finance-sample:issuer",
+                "metadata": {"wikidata_qid": "Q999"},
+            }
+        ],
+    )
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    metadata = payload["entities"][0]["metadata"]
+    assert metadata["wikidata_qid"] == "Q999"
+    assert metadata["wikidata_slug"] == "Q999"
+    assert metadata["wikidata_entity_id"] == "wikidata:Q999"
+    assert metadata["wikidata_url"] == "https://www.wikidata.org/wiki/Q999"
+
+
+def test_load_curated_entities_backfills_wikidata_slug_from_qid(tmp_path: Path) -> None:
+    input_path = tmp_path / "entities.json"
+    input_path.write_text(
+        json.dumps(
+            {
+                "entities": [
+                    {
+                        "entity_type": "organization",
+                        "canonical_text": "Sample Issuer",
+                        "aliases": ["Sample Issuer"],
+                        "entity_id": "finance-sample:issuer",
+                        "metadata": {"wikidata_qid": "Q888"},
+                    }
+                ]
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    entities = finance_country_module._load_curated_entities(input_path)
+
+    metadata = entities[0]["metadata"]
+    assert metadata["wikidata_qid"] == "Q888"
+    assert metadata["wikidata_slug"] == "Q888"
+    assert metadata["wikidata_entity_id"] == "wikidata:Q888"
+    assert metadata["wikidata_url"] == "https://www.wikidata.org/wiki/Q888"
+
+
+def test_extract_krx_listed_company_entities_builds_issuers_and_tickers(
+    tmp_path: Path,
+) -> None:
+    json_path = tmp_path / "kospi.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "block1": [
+                    {
+                        "tot_cnt": "839",
+                        "no": "1",
+                        "isu_cd": "005930",
+                        "eng_cor_nm": "Samsung Electronics",
+                        "std_ind_cd": "264201",
+                        "ind_nm": "Manufacture of Communication Equipment",
+                        "lst_stk_vl": "5969782550",
+                        "cpt": "8975145147500",
+                        "par_pr": "100",
+                        "iso_cd": "KRW",
+                    }
+                ]
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    issuers, tickers = finance_country_module._extract_krx_listed_company_entities(
+        json_path,
+        market_code="1",
+    )
+
+    assert {entity["canonical_text"] for entity in issuers} == {"Samsung Electronics"}
+    assert {entity["canonical_text"] for entity in tickers} == {"005930"}
+    issuer = issuers[0]
+    assert issuer["metadata"]["market_name"] == "KOSPI"
+    assert issuer["metadata"]["exchange_code"] == "KRX"
+
+
+def test_score_basic_country_issuer_wikidata_candidate_prefers_ticker_backed_match() -> None:
+    entity = {
+        "entity_type": "organization",
+        "canonical_text": "Samsung Electronics",
+        "aliases": ["Samsung Electronics", "005930"],
+        "entity_id": "finance-kr-issuer:1:005930",
+        "metadata": {
+            "country_code": "kr",
+            "category": "issuer",
+            "ticker": "005930",
+        },
+    }
+    exact_name_only_payload = {
+        "labels": {"en": {"value": "Samsung Electronics"}},
+        "descriptions": {"en": {"value": "South Korean company"}},
+        "claims": {},
+    }
+    ticker_backed_payload = {
+        "labels": {"en": {"value": "Samsung Electronics"}},
+        "descriptions": {"en": {"value": "South Korean electronics company"}},
+        "claims": {
+            "P249": [
+                {
+                    "mainsnak": {
+                        "datavalue": {
+                            "value": "005930",
+                        }
+                    }
+                }
+            ]
+        },
+    }
+
+    exact_name_only_score = finance_country_module._score_basic_country_issuer_wikidata_candidate(
+        entity=entity,
+        candidate_payload=exact_name_only_payload,
+        description_hints=("south korean", "korea"),
+    )
+    ticker_backed_score = finance_country_module._score_basic_country_issuer_wikidata_candidate(
+        entity=entity,
+        candidate_payload=ticker_backed_payload,
+        description_hints=("south korean", "korea"),
+    )
+
+    assert ticker_backed_score > exact_name_only_score
+
+
+def test_build_basic_country_public_person_entity_preserves_country_context() -> None:
+    employer_entity = {
+        "entity_type": "organization",
+        "canonical_text": "Samsung Electronics",
+        "entity_id": "finance-kr-issuer:1:005930",
+        "metadata": {
+            "country_code": "kr",
+            "category": "issuer",
+            "ticker": "005930",
+        },
+    }
+    person_record = {
+        "canonical_text": "Han Jong-hee",
+        "aliases": ["Han Jong-hee"],
+        "role_class": "executive_officer",
+        "role_title": "Chief Executive Officer",
+        "source_property_id": "P169",
+        "organization_qid": "Q1234",
+        "qid": "Q5678",
+        "slug": "Q5678",
+        "entity_id": "wikidata:Q5678",
+        "url": "https://www.wikidata.org/wiki/Q5678",
+        "label": "Han Jong-hee",
+    }
+
+    entity = finance_country_module._build_basic_country_public_person_entity(
+        country_code="kr",
+        employer_entity=employer_entity,
+        person_record=person_record,
+    )
+
+    assert entity["entity_id"] == "finance-kr-person:005930:han-jong-hee:executive-officer"
+    assert entity["metadata"]["country_code"] == "kr"
+    assert entity["metadata"]["employer_ticker"] == "005930"
+    assert entity["metadata"]["source_name"] == "wikidata-kr-organization-people"
+    assert entity["metadata"]["wikidata_slug"] == "Q5678"
+
+
+def test_query_basic_country_wikidata_public_people_rows_batches_queries(
+    monkeypatch,
+) -> None:
+    calls: list[str] = []
+    returned_row = False
+
+    def _fake_fetch_wikidata_sparql_json(*, query: str, user_agent: str) -> dict[str, object]:
+        nonlocal returned_row
+        calls.append(query)
+        assert user_agent == "ades-test/0.1.0"
+        assert finance_country_module._wikidata_label_service_languages(("ru", "en")) in query
+        if not returned_row and "wdt:P169" in query:
+            returned_row = True
+            return {
+                "results": {
+                    "bindings": [
+                        {
+                            "organization": {
+                                "value": "http://www.wikidata.org/entity/Q1",
+                            },
+                            "property": {
+                                "value": "http://www.wikidata.org/prop/direct/P169",
+                            },
+                            "person": {
+                                "value": "http://www.wikidata.org/entity/Q11",
+                            },
+                            "personLabel": {"value": "Sample Executive"},
+                        }
+                    ]
+                }
+            }
+        return {"results": {"bindings": []}}
+
+    monkeypatch.setattr(
+        finance_country_module,
+        "_fetch_wikidata_sparql_json",
+        _fake_fetch_wikidata_sparql_json,
+    )
+
+    organization_qids = [
+        f"Q{index}"
+        for index in range(
+            1,
+            finance_country_module._WIKIDATA_PUBLIC_PEOPLE_ORG_BATCH_SIZE + 2,
+        )
+    ]
+
+    rows = finance_country_module._query_basic_country_wikidata_public_people_rows(
+        organization_qids=organization_qids,
+        label_languages=("ru", "en"),
+        user_agent="ades-test/0.1.0",
+        warnings=[],
+    )
+
+    expected_query_count = (
+        ((len(organization_qids) - 1) // finance_country_module._WIKIDATA_PUBLIC_PEOPLE_ORG_BATCH_SIZE)
+        + 1
+    ) * (
+        (
+            len(finance_country_module._GERMANY_WIKIDATA_PUBLIC_PEOPLE_PROPERTIES) - 1
+        )
+        // finance_country_module._WIKIDATA_PUBLIC_PEOPLE_PROPERTY_BATCH_SIZE
+        + 1
+    )
+
+    assert len(calls) == expected_query_count
+    assert rows == [
+        {
+            "organization_qid": "Q1",
+            "property_id": "P169",
+            "person_qid": "Q11",
+            "person_label": "Sample Executive",
+        }
+    ]
+
+
+def test_wikidata_exact_label_values_expand_languages() -> None:
+    values = finance_country_module._wikidata_exact_label_values(
+        ["Газпром"],
+        languages=finance_country_module._WIKIDATA_MATCH_PREFERRED_LABEL_LANGUAGES,
+    )
+
+    assert f'"Газпром"@en' in values
+    assert f'"Газпром"@ru' in values
+    assert len(values) == len(finance_country_module._WIKIDATA_MATCH_PREFERRED_LABEL_LANGUAGES)
+
+
+def test_search_wikidata_entities_uses_preferred_languages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def _fake_fetch_wikidata_api_json(*, params: dict[str, str], user_agent: str) -> dict[str, object]:
+        calls.append(params["language"])
+        assert user_agent == "ades-test/0.1.0"
+        language = params["language"]
+        if language == "en":
+            return {"search": [{"id": "Q1", "label": "Gazprom"}]}
+        if language == "ru":
+            return {"search": [{"id": "Q1", "label": "Газпром"}, {"id": "Q2", "label": "Сбербанк"}]}
+        return {"search": []}
+
+    monkeypatch.setattr(
+        finance_country_module,
+        "_fetch_wikidata_api_json",
+        _fake_fetch_wikidata_api_json,
+    )
+
+    results = finance_country_module._search_wikidata_entities(
+        "Газпром",
+        languages=finance_country_module._WIKIDATA_MATCH_PREFERRED_LABEL_LANGUAGES,
+        user_agent="ades-test/0.1.0",
+    )
+
+    assert calls == list(finance_country_module._WIKIDATA_MATCH_PREFERRED_LABEL_LANGUAGES)
+    assert [item["id"] for item in results] == ["Q1", "Q2"]
+
+
+def test_brazil_cnpj_match_values_include_digits_and_formatted() -> None:
+    values = finance_country_module._brazil_cnpj_match_values("33000167000101")
+
+    assert "33000167000101" in values
+    assert "33.000.167/0001-01" in values
+
+
+def test_extract_moex_security_entities_propagates_issuer_isin() -> None:
+    payload = {
+        "securities": {
+            "columns": [
+                "secid",
+                "shortname",
+                "regnumber",
+                "name",
+                "isin",
+                "emitent_id",
+                "emitent_title",
+                "emitent_inn",
+                "emitent_okpo",
+                "type",
+                "group",
+                "primary_boardid",
+            ],
+            "data": [
+                [
+                    "GAZP",
+                    "Газпром ао",
+                    "1-02-00028-A",
+                    'ПАО "Газпром"',
+                    "RU0007661625",
+                    1,
+                    'Публичное акционерное общество "Газпром"',
+                    "7736050003",
+                    "00040778",
+                    "common_share",
+                    "stock_shares",
+                    "TQBR",
+                ],
+                [
+                    "GAZAP",
+                    "Газпром ап",
+                    "1-03-00028-A",
+                    'ПАО "Газпром"',
+                    "RU0009098476",
+                    1,
+                    'Публичное акционерное общество "Газпром"',
+                    "7736050003",
+                    "00040778",
+                    "preferred_share",
+                    "stock_shares",
+                    "TQBR",
+                ],
+            ],
+        }
+    }
+
+    issuers, tickers = finance_country_module._extract_moex_security_entities(payload)
+
+    assert len(issuers) == 1
+    assert issuers[0]["metadata"]["isin"] == "RU0007661625"
+    assert len(tickers) == 2
+
+
+def test_extract_bmv_mobile_quote_records_ignores_trailing_html_comment() -> None:
+    records = finance_country_module._extract_bmv_mobile_quote_records(
+        """
+        for(;;);({
+          "response": {
+            "clavesCotizacion": [
+              {"clave": "WALMEX", "serie": "*", "precio": 58.4, "porcentaje": -0.5}
+            ]
+          }
+        })
+        <!--Time: 214ms - SemanticWebBuilder: http://www.movil.swb#WebPage:JSONClaveCotizacion-->
+        """
+    )
+
+    assert records == [
+        {
+            "ticker": "WALMEX",
+            "series": "*",
+            "price": "58.4",
+            "change_percent": "-0.5",
+        }
+    ]
+
+
+def test_indonesia_profile_uses_idx_listed_companies_source() -> None:
+    profile = finance_country_module.FINANCE_COUNTRY_PROFILES["id"]
+    source_names = {source["name"] for source in profile["sources"]}
+    source_urls = {source["source_url"] for source in profile["sources"]}
+
+    assert "idx-listed-companies" in source_names
+    assert "https://www.idx.co.id/en/listed-companies/company-profiles/" in source_urls
+
+
+def test_extract_idx_company_profile_entities_reads_embedded_records() -> None:
+    html_text = """
+    <script>
+      var companies = [
+        {KodeEmiten:"BBCA",NamaEmiten:"PT BANK CENTRAL ASIA TBK",Website:"www.bca.co.id",TanggalPencatatan:"2000-05-31",Email:"corpsec@bca.co.id",Telepon:"021-23588000",Fax:"021-23588300",Alamat:"Jakarta",KegiatanUsahaUtama:"Banking",Logo:"/logo/bbca.png"}
+      ];
+    </script>
+    """
+
+    issuers, tickers = finance_country_module._extract_idx_company_profile_entities(
+        html_text
+    )
+
+    assert [entity["canonical_text"] for entity in issuers] == [
+        "Pt Bank Central Asia Tbk"
+    ]
+    assert [entity["canonical_text"] for entity in tickers] == ["BBCA"]
+    assert issuers[0]["metadata"]["exchange_code"] == "IDX"
+    assert issuers[0]["metadata"]["website"] == "https://www.bca.co.id"
+    assert issuers[0]["metadata"]["listing_date"] == "2000-05-31"
+    assert tickers[0]["metadata"]["issuer_name"] == "Pt Bank Central Asia Tbk"
 
 
 def test_extract_japan_jpx_english_disclosure_records_parses_workbook(
@@ -5722,3 +7574,476 @@ def test_finance_country_build_includes_derived_entity_files(tmp_path: Path) -> 
     normalized_entities = Path(bundle.entities_path).read_text(encoding="utf-8")
     assert "Jane Doe" in normalized_entities
     assert "\"TICKA\"" in normalized_entities
+
+
+def test_stable_entity_name_fragment_falls_back_to_digest_for_arabic_name() -> None:
+    fragment = finance_country_module._stable_entity_name_fragment(
+        "شركة إتحاد الأخوة للتنميه"
+    )
+
+    assert len(fragment) == 12
+    assert all(character in "0123456789abcdef" for character in fragment)
+
+
+def test_extract_saudi_exchange_issuer_records_parses_hidden_profile_links() -> None:
+    html_text = """
+    <div class="headline">
+      <a href="/wps/portal/saudiexchange/hidden/company-profile-main/example/?companySymbol=1020#anchor" class="sname">
+        <span>Bank Aljazira</span>
+      </a>
+    </div>
+    <div class="headline">
+      <a href="/wps/portal/saudiexchange/hidden/company-profile-nomu-parallel/example/?companySymbol=4700#anchor" class="sname">
+        <span>Alkhabeer Income</span>
+      </a>
+    </div>
+    """
+
+    records = finance_country_module._extract_saudi_exchange_issuer_records(html_text)
+
+    assert records == [
+        {
+            "company_symbol": "1020",
+            "company_name": "Bank Aljazira",
+            "profile_url": (
+                "https://www.saudiexchange.sa/wps/portal/saudiexchange/hidden/"
+                "company-profile-main/example/?companySymbol=1020#anchor"
+            ),
+            "market_name": "Main Market",
+        },
+        {
+            "company_symbol": "4700",
+            "company_name": "Alkhabeer Income",
+            "profile_url": (
+                "https://www.saudiexchange.sa/wps/portal/saudiexchange/hidden/"
+                "company-profile-nomu-parallel/example/?companySymbol=4700#anchor"
+            ),
+            "market_name": "Nomu Parallel Market",
+        },
+    ]
+
+
+def test_extract_saudi_exchange_company_profile_entities_builds_issuer_ticker_and_people() -> None:
+    html_text = """
+    <html><body>
+      <script>
+        var baseComapySymbol1 ={name:"Bank Aljazira",symbol:'1020'};
+      </script>
+      <div class="force-overflow">
+        <ul>
+          <li><h4>Listing Date</h4><p>1976/10/09</p></li>
+          <li><h4>ISIN CODE</h4><p>SA0007879055</p></li>
+          <li><h4>Number of Employees</h4><p>2183</p></li>
+        </ul>
+      </div>
+      <div class="company_management_tab_dtl">
+        <div id="namePopupBox_0" class="namePopupBox">
+          <div class="namePopupBoxScroll">
+            <div class="hdng"> Engr. Abdulmajeed Ibrahim Al-Sultan</div>
+            <div class="list">
+              <ul>
+                <li>
+                  <div class="topTxt">BD Session Start</div>
+                  <div class="btmTxt">2025-01-01</div>
+                  <div class="topTxt">Designation</div>
+                  <div class="btmTxt">Chairman</div>
+                </li>
+                <li>
+                  <div class="topTxt">BD Session End</div>
+                  <div class="btmTxt">2027-12-31</div>
+                  <div class="topTxt">Classification</div>
+                  <div class="btmTxt">Non - Executive</div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div id="namePopupBox_1" class="namePopupBox">
+          <div class="namePopupBoxScroll">
+            <div class="hdng"> Mr. Hani Salah Noori</div>
+            <div class="list">
+              <ul>
+                <li>
+                  <div class="topTxt">BD Session Start</div>
+                  <div class="btmTxt">2021-09-22</div>
+                  <div class="topTxt">Designation</div>
+                  <div class="btmTxt">Senior Executives</div>
+                </li>
+                <li>
+                  <div class="topTxt">BD Session End</div>
+                  <div class="btmTxt">-</div>
+                  <div class="topTxt">Classification</div>
+                  <div class="btmTxt">CFO</div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="investor_relations">
+        <h4>Contact Name:</h4>
+        <p>ISSAM ABDULWAHAB ALJEDDAWI</p>
+        <h4>Company Address:</h4>
+        <p>Jeddah, Saudi Arabia</p>
+        <h4>Contact Details:</h4>
+        <p>
+          Telephone: 966126098394 <br>
+          Fax: 966126098881 <br>
+          Email: <a href="mailto:ialjedda@baj.com.sa">ialjedda@baj.com.sa</a>
+        </p>
+        <h4>Company Website:</h4>
+        <p><a href="http://www.baj.com.sa" target="_blank">www.baj.com.sa</a></p>
+      </div>
+    </body></html>
+    """
+    issuer_record = {
+        "company_name": "Bank Aljazira",
+        "company_symbol": "1020",
+        "market_name": "Main Market",
+        "profile_url": "https://www.saudiexchange.sa/example?companySymbol=1020",
+    }
+
+    issuer_entity, ticker_entity, people_entities = (
+        finance_country_module._extract_saudi_exchange_company_profile_entities(
+            html_text,
+            issuer_record=issuer_record,
+        )
+    )
+
+    assert issuer_entity is not None
+    assert ticker_entity is not None
+    assert issuer_entity["canonical_text"] == "Bank Aljazira"
+    assert issuer_entity["metadata"]["isin"] == "SA0007879055"
+    assert issuer_entity["metadata"]["number_of_employees"] == "2183"
+    assert issuer_entity["metadata"]["investor_relations_contact"] == "ISSAM ABDULWAHAB ALJEDDAWI"
+    assert issuer_entity["metadata"]["issuer_website"] == "http://www.baj.com.sa"
+    assert ticker_entity["canonical_text"] == "1020"
+    assert ticker_entity["metadata"]["market_segment"] == "Main Market"
+    assert any(
+        entity["metadata"]["role_title"] == "Chairman"
+        for entity in people_entities
+    )
+    assert any(
+        entity["metadata"]["category"] == "executive_officer"
+        and entity["metadata"]["role_title"] == "CFO"
+        for entity in people_entities
+    )
+    assert any(
+        entity["metadata"]["category"] == "investor_relations"
+        and entity["metadata"]["contact_email"] == "ialjedda@baj.com.sa"
+        for entity in people_entities
+    )
+
+
+def test_extract_saudi_exchange_major_shareholder_entities_splits_people_and_orgs() -> None:
+    html_text = """
+    <table><tbody>
+      <tr>
+        <td>2026-04-22 </td>
+        <td>ابراهيم عبدالرحمن محمد القنيبط</td>
+        <td class="priceUp">6.123%</td>
+        <td class="priceUp">6.123%</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>2026-04-22 </td>
+        <td>شركة إتحاد الأخوة للتنميه</td>
+        <td class="priceUp">5%</td>
+        <td class="priceUp">5%</td>
+        <td>0</td>
+      </tr>
+    </tbody></table>
+    """
+    issuer_record = {
+        "company_name": "Bank Aljazira",
+        "company_symbol": "1020",
+        "isin": "SA0007879055",
+    }
+
+    people_entities, organization_records = (
+        finance_country_module._extract_saudi_exchange_major_shareholder_entities(
+            html_text,
+            issuer_record=issuer_record,
+        )
+    )
+    organization_entities = (
+        finance_country_module._build_saudi_exchange_major_shareholder_organization_entities(
+            shareholder_records=organization_records,
+        )
+    )
+
+    assert [entity["canonical_text"] for entity in people_entities] == [
+        "ابراهيم عبدالرحمن محمد القنيبط"
+    ]
+    assert people_entities[0]["metadata"]["shareholding_percent"] == "6.123%"
+    assert organization_records == [
+        {
+            "holder_name": "شركة إتحاد الأخوة للتنميه",
+            "employer_name": "Bank Aljazira",
+            "employer_ticker": "1020",
+            "employer_isin": "SA0007879055",
+            "trading_date": "2026-04-22",
+            "shareholding_percent": "5%",
+            "previous_shareholding_percent": "5%",
+            "change_value": "0",
+            "source_name": "saudi-exchange-major-shareholders",
+        }
+    ]
+    assert organization_entities[0]["canonical_text"] == "شركة إتحاد الأخوة للتنميه"
+    assert organization_entities[0]["metadata"]["category"] == "major_shareholder_organization"
+    assert organization_entities[0]["metadata"]["major_shareholder_of_tickers"] == ["1020"]
+
+
+def test_download_country_source_uses_saudi_renderer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    expected_url = finance_country_module._SAUDI_EXCHANGE_ISSUER_DIRECTORY_URL
+    destination = tmp_path / "saudi-issuer-directory.html"
+    calls: list[tuple[str, str]] = []
+
+    def fake_render(source_url: str | Path, destination_path: Path, *, user_agent: str) -> str:
+        calls.append((str(source_url), user_agent))
+        destination_path.write_text("<html></html>\n", encoding="utf-8")
+        return str(source_url)
+
+    monkeypatch.setattr(
+        finance_country_module,
+        "_download_saudi_exchange_rendered_page",
+        fake_render,
+    )
+
+    resolved = finance_country_module._download_country_source(
+        expected_url,
+        destination,
+        user_agent="ades-test/0.1.0",
+    )
+
+    assert resolved == expected_url
+    assert destination.read_text(encoding="utf-8") == "<html></html>\n"
+    assert calls == [(expected_url, "ades-test/0.1.0")]
+
+
+def test_download_country_source_uses_idx_renderer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    expected_url = finance_country_module._IDX_LISTED_COMPANIES_URL
+    destination = tmp_path / "idx-company-profiles.html"
+    calls: list[tuple[str, str]] = []
+
+    def fake_render(source_url: str | Path, destination_path: Path, *, user_agent: str) -> str:
+        calls.append((str(source_url), user_agent))
+        destination_path.write_text("<html></html>\n", encoding="utf-8")
+        return str(source_url)
+
+    monkeypatch.setattr(
+        finance_country_module,
+        "_download_idx_directory_page",
+        fake_render,
+    )
+
+    resolved = finance_country_module._download_country_source(
+        expected_url,
+        destination,
+        user_agent="ades-test/0.1.0",
+    )
+
+    assert resolved == expected_url
+    assert destination.read_text(encoding="utf-8") == "<html></html>\n"
+    assert calls == [(expected_url, "ades-test/0.1.0")]
+
+
+def test_resolve_basic_country_issuer_wikidata_matches_uses_search_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    issuer_entities = [
+        {
+            "entity_type": "organization",
+            "canonical_text": "Petrobras",
+            "aliases": ["Petroleo Brasileiro S.A."],
+            "entity_id": "finance-br-issuer:PETR4",
+            "metadata": {
+                "country_code": "br",
+                "ticker": "PETR4",
+            },
+        }
+    ]
+
+    monkeypatch.setattr(
+        finance_country_module,
+        "_query_wikidata_entity_ids_by_string_property",
+        lambda **kwargs: {},
+    )
+    monkeypatch.setattr(
+        finance_country_module,
+        "_query_wikidata_entity_ids_by_exact_label",
+        lambda **kwargs: {},
+    )
+    monkeypatch.setattr(
+        finance_country_module,
+        "_search_wikidata_entities",
+        lambda query, *, languages, user_agent: [
+            {
+                "id": "Q103919",
+                "label": "Petrobras",
+                "aliases": ["Petroleo Brasileiro S.A."],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        finance_country_module,
+        "_fetch_wikidata_entity_payloads",
+        lambda **kwargs: {
+            "Q103919": {
+                "id": "Q103919",
+                "labels": {"en": {"value": "Petrobras"}},
+                "aliases": {
+                    "en": [
+                        {"value": "Petroleo Brasileiro S.A."},
+                    ]
+                },
+                "descriptions": {"en": {"value": "Brazilian petroleum company"}},
+                "claims": {
+                    finance_country_module._WIKIDATA_STOCK_EXCHANGE_TICKER_SYMBOL_PROPERTY_ID: [
+                        {
+                            "mainsnak": {
+                                "snaktype": "value",
+                                "datavalue": {"value": "PETR4"},
+                            }
+                        }
+                    ]
+                },
+            }
+        },
+    )
+
+    matches, warnings = finance_country_module._resolve_basic_country_issuer_wikidata_matches(
+        country_code="br",
+        issuer_entities=issuer_entities,
+        description_hints=("brazil", "brazilian"),
+        search_languages=("pt", "en", "es"),
+        user_agent="ades-test/0.1.0",
+    )
+
+    assert warnings == []
+    assert matches["ticker:PETR4"]["qid"] == "Q103919"
+    assert matches["ticker:PETR4"]["slug"] == "Q103919"
+
+
+def test_resolve_basic_country_issuer_wikidata_matches_uses_indonesia_npwp_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    issuer_entities = [
+        {
+            "entity_type": "organization",
+            "canonical_text": "Bank Central Asia Tbk.",
+            "aliases": ["BBCA", "Bank Central Asia"],
+            "entity_id": "finance-id-issuer:BBCA",
+            "metadata": {
+                "country_code": "id",
+                "ticker": "BBCA",
+                "npwp": "01.234.567.8-901.000",
+            },
+        }
+    ]
+    query_calls: list[tuple[str, tuple[str, ...]]] = []
+
+    def _fake_query_string_property(*, property_id, values, user_agent, warnings):
+        query_calls.append((property_id, tuple(values)))
+        if property_id == finance_country_module._WIKIDATA_NOMOR_POKOK_WAJIB_PAJAK_PROPERTY_ID:
+            return {
+                "01.234.567.8-901.000": ["Q806300"],
+                "012345678901000": ["Q806300"],
+            }
+        return {}
+
+    monkeypatch.setattr(
+        finance_country_module,
+        "_query_wikidata_entity_ids_by_string_property",
+        _fake_query_string_property,
+    )
+    monkeypatch.setattr(
+        finance_country_module,
+        "_query_wikidata_entity_ids_by_casefolded_string_property",
+        lambda **kwargs: {},
+    )
+    monkeypatch.setattr(
+        finance_country_module,
+        "_query_wikidata_entity_ids_by_exact_label",
+        lambda **kwargs: {},
+    )
+    monkeypatch.setattr(
+        finance_country_module,
+        "_search_wikidata_entities",
+        lambda query, *, languages, user_agent: [],
+    )
+    monkeypatch.setattr(
+        finance_country_module,
+        "_fetch_wikidata_entity_payloads",
+        lambda **kwargs: {
+            "Q806300": {
+                "id": "Q806300",
+                "labels": {"en": {"value": "Bank Central Asia"}},
+                "aliases": {
+                    "en": [
+                        {"value": "Bank Central Asia Tbk."},
+                    ]
+                },
+                "descriptions": {"en": {"value": "Indonesian bank"}},
+                "claims": {
+                    finance_country_module._WIKIDATA_NOMOR_POKOK_WAJIB_PAJAK_PROPERTY_ID: [
+                        {
+                            "mainsnak": {
+                                "snaktype": "value",
+                                "datavalue": {"value": "01.234.567.8-901.000"},
+                            }
+                        }
+                    ]
+                },
+            }
+        },
+    )
+
+    matches, warnings = finance_country_module._resolve_basic_country_issuer_wikidata_matches(
+        country_code="id",
+        issuer_entities=issuer_entities,
+        description_hints=("indonesia", "indonesian"),
+        search_languages=("id", "en"),
+        user_agent="ades-test/0.1.0",
+    )
+
+    assert warnings == []
+    assert (
+        finance_country_module._WIKIDATA_NOMOR_POKOK_WAJIB_PAJAK_PROPERTY_ID,
+        ("012345678901000", "01.234.567.8-901.000"),
+    ) in query_calls
+    assert matches["ticker:BBCA"]["qid"] == "Q806300"
+
+
+def test_normalize_company_name_for_match_strips_multitoken_suffixes() -> None:
+    assert (
+        finance_country_module._normalize_company_name_for_match(
+            "Alpek, S.A.B. de C.V.",
+            drop_suffixes=True,
+        )
+        == "alpek"
+    )
+    assert (
+        finance_country_module._normalize_company_name_for_match(
+            "Petroleo Brasileiro S.A.",
+            drop_suffixes=True,
+        )
+        == "petroleo brasileiro"
+    )
+
+
+def test_normalize_company_name_for_match_supports_unicode_cyrillic() -> None:
+    assert (
+        finance_country_module._normalize_company_name_for_match(
+            'Публичное акционерное общество "Газпром"',
+        )
+        == "публичное акционерное общество газпром"
+    )
+    assert (
+        finance_country_module._normalize_person_name_for_match("Иван Иванович")
+        == "иван иванович"
+    )

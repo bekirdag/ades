@@ -811,6 +811,8 @@ def _load_curated_finance_entities(path: Path) -> list[dict[str, Any]]:
         metadata = item.get("metadata")
         if metadata is not None and not isinstance(metadata, dict):
             raise ValueError("Curated finance entity metadata must be an object.")
+        if isinstance(metadata, dict):
+            metadata = _backfill_wikidata_metadata(metadata)
         normalized_record: dict[str, Any] = {
             "entity_id": str(
                 item.get("entity_id")
@@ -947,7 +949,7 @@ def _normalize_finance_person_metadata(item: dict[str, Any]) -> dict[str, Any]:
     if metadata is None:
         normalized: dict[str, Any] = {}
     elif isinstance(metadata, dict):
-        normalized = dict(metadata)
+        normalized = _backfill_wikidata_metadata(dict(metadata))
     else:
         raise ValueError("Finance people metadata must be an object.")
     for key in (
@@ -964,6 +966,19 @@ def _normalize_finance_person_metadata(item: dict[str, Any]) -> dict[str, Any]:
         if value and key not in normalized:
             normalized[key] = value
     return normalized
+
+
+def _backfill_wikidata_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    qid = _clean_text(metadata.get("wikidata_qid"))
+    if not qid:
+        return metadata
+    if not _clean_text(metadata.get("wikidata_slug")):
+        metadata["wikidata_slug"] = qid
+    if not _clean_text(metadata.get("wikidata_entity_id")):
+        metadata["wikidata_entity_id"] = f"wikidata:{qid}"
+    if not _clean_text(metadata.get("wikidata_url")):
+        metadata["wikidata_url"] = f"https://www.wikidata.org/wiki/{qid}"
+    return metadata
 
 
 def _is_valid_finance_person_name(value: str) -> bool:

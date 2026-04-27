@@ -102,3 +102,34 @@ def test_load_pack_runtime_repairs_missing_matcher_metadata(tmp_path: Path) -> N
     assert installed_pack is not None
     assert installed_pack.matcher is not None
     assert installed_pack.matcher.entry_count == 2
+
+
+def test_load_pack_runtime_uses_existing_matcher_files_without_strict_repair(
+    monkeypatch, tmp_path: Path
+) -> None:
+    pack_dir = create_pack_source(
+        tmp_path / "packs",
+        pack_id="general-en",
+        domain="general",
+        aliases=(("Alpha Org", "organization"), ("New York", "location")),
+    )
+    clear_pack_runtime_cache()
+    registry = PackRegistry(tmp_path)
+    assert registry.sync_pack_from_disk("general-en") is True
+
+    manifest_payload = json.loads((pack_dir / "manifest.json").read_text(encoding="utf-8"))
+    manifest_payload["matcher"]["entry_count"] = 1
+    (pack_dir / "manifest.json").write_text(
+        json.dumps(manifest_payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    def _unexpected_repair(*_args, **_kwargs):
+        raise AssertionError("runtime load should not trigger strict matcher repair")
+
+    monkeypatch.setattr("ades.packs.runtime.ensure_pack_matcher_artifacts", _unexpected_repair)
+
+    runtime = load_pack_runtime(tmp_path, "general-en", registry=registry)
+
+    assert runtime is not None
+    assert len(runtime.matchers) == 1

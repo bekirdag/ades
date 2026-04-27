@@ -595,9 +595,20 @@ def _normalize_curated_general_entity(item: dict[str, Any]) -> dict[str, Any] | 
     aliases = item.get("aliases") or []
     if not isinstance(aliases, list):
         aliases = [aliases]
-    source_id = _clean_text(item.get("entity_id") or item.get("id")) or canonical_text.casefold()
-    return {
-        "entity_id": f"curated-general:{source_id}",
+    raw_entity_id = _clean_text(item.get("entity_id"))
+    if raw_entity_id and ":" in raw_entity_id:
+        namespace, local_id = raw_entity_id.split(":", 1)
+        if namespace and local_id:
+            entity_id = raw_entity_id
+            source_id = local_id
+        else:
+            source_id = raw_entity_id or canonical_text.casefold()
+            entity_id = f"curated-general:{source_id}"
+    else:
+        source_id = raw_entity_id or _clean_text(item.get("id")) or canonical_text.casefold()
+        entity_id = f"curated-general:{source_id}"
+    record: dict[str, Any] = {
+        "entity_id": entity_id,
         "entity_type": entity_type,
         "canonical_text": canonical_text,
         "aliases": _prune_general_aliases(
@@ -608,6 +619,18 @@ def _normalize_curated_general_entity(item: dict[str, Any]) -> dict[str, Any] | 
         "source_name": "curated-general-entities",
         "source_id": source_id,
     }
+    description = _clean_text(item.get("description"))
+    if description:
+        record["description"] = description
+    popularity = _coerce_int(
+        item.get("popularity") or item.get("sitelinks") or item.get("sitelink_count")
+    )
+    if popularity is not None:
+        record["popularity"] = popularity
+    source_features = item.get("source_features")
+    if isinstance(source_features, dict):
+        record["source_features"] = source_features
+    return record
 
 
 def _build_general_rule_records() -> list[dict[str, str]]:

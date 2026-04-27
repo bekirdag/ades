@@ -9,6 +9,8 @@ import shutil
 
 from .finance_quality import (
     DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES,
+    DEFAULT_FINANCE_MAX_DROPPED_ALIAS_RATIO,
+    DEFAULT_FINANCE_REGIONAL_MAX_DROPPED_ALIAS_RATIO,
     validate_finance_pack_quality,
 )
 from .general_quality import (
@@ -63,7 +65,7 @@ def refresh_generated_pack_registry(
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
     max_ambiguous_aliases: int | None = None,
-    max_dropped_alias_ratio: float = 0.5,
+    max_dropped_alias_ratio: float | None = None,
 ) -> GeneratedPackRefreshResult:
     """Refresh one or more generated packs into candidate bundles and optional registry output."""
 
@@ -218,11 +220,15 @@ def _validate_quality_for_pack(
     min_expected_recall: float,
     max_unexpected_hits: int,
     max_ambiguous_aliases: int | None,
-    max_dropped_alias_ratio: float,
+    max_dropped_alias_ratio: float | None,
 ) -> PackQualityResult:
     resolved_max_ambiguous_aliases = _resolve_max_ambiguous_aliases(
         manifest.pack_id,
         max_ambiguous_aliases=max_ambiguous_aliases,
+    )
+    resolved_max_dropped_alias_ratio = _resolve_max_dropped_alias_ratio(
+        manifest.pack_id,
+        max_dropped_alias_ratio=max_dropped_alias_ratio,
     )
     dependency_bundle_dirs = tuple(
         bundle_dirs_by_pack_id[dependency]
@@ -242,7 +248,7 @@ def _validate_quality_for_pack(
             min_expected_recall=min_expected_recall,
             max_unexpected_hits=max_unexpected_hits,
             max_ambiguous_aliases=resolved_max_ambiguous_aliases,
-            max_dropped_alias_ratio=max_dropped_alias_ratio,
+            max_dropped_alias_ratio=resolved_max_dropped_alias_ratio,
         )
     if manifest.pack_id == "general-en":
         return validate_general_pack_quality(
@@ -251,7 +257,7 @@ def _validate_quality_for_pack(
             min_expected_recall=min_expected_recall,
             max_unexpected_hits=max_unexpected_hits,
             max_ambiguous_aliases=resolved_max_ambiguous_aliases,
-            max_dropped_alias_ratio=max_dropped_alias_ratio,
+            max_dropped_alias_ratio=resolved_max_dropped_alias_ratio,
         )
     if manifest.pack_id == "medical-en":
         if general_bundle_dir is None:
@@ -265,7 +271,7 @@ def _validate_quality_for_pack(
             min_expected_recall=min_expected_recall,
             max_unexpected_hits=max_unexpected_hits,
             max_ambiguous_aliases=resolved_max_ambiguous_aliases,
-            max_dropped_alias_ratio=max_dropped_alias_ratio,
+            max_dropped_alias_ratio=resolved_max_dropped_alias_ratio,
         )
     raise ValueError(
         f"No generated-pack quality profile is registered for pack: {manifest.pack_id}"
@@ -285,7 +291,7 @@ def _validate_thresholds(
     min_expected_recall: float,
     max_unexpected_hits: int,
     max_ambiguous_aliases: int | None,
-    max_dropped_alias_ratio: float,
+    max_dropped_alias_ratio: float | None,
 ) -> None:
     if not 0.0 <= min_expected_recall <= 1.0:
         raise ValueError("min_expected_recall must be between 0.0 and 1.0.")
@@ -293,7 +299,7 @@ def _validate_thresholds(
         raise ValueError("max_unexpected_hits must be >= 0.")
     if max_ambiguous_aliases is not None and max_ambiguous_aliases < 0:
         raise ValueError("max_ambiguous_aliases must be >= 0.")
-    if not 0.0 <= max_dropped_alias_ratio <= 1.0:
+    if max_dropped_alias_ratio is not None and not 0.0 <= max_dropped_alias_ratio <= 1.0:
         raise ValueError("max_dropped_alias_ratio must be between 0.0 and 1.0.")
 
 
@@ -311,6 +317,18 @@ def _resolve_max_ambiguous_aliases(
     if pack_id == "medical-en":
         return DEFAULT_MEDICAL_MAX_AMBIGUOUS_ALIASES
     return DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES
+
+
+def _resolve_max_dropped_alias_ratio(
+    pack_id: str,
+    *,
+    max_dropped_alias_ratio: float | None,
+) -> float:
+    if max_dropped_alias_ratio is not None:
+        return max_dropped_alias_ratio
+    if pack_id.startswith("finance-") and pack_id.endswith("-en") and pack_id != "finance-en":
+        return DEFAULT_FINANCE_REGIONAL_MAX_DROPPED_ALIAS_RATIO
+    return DEFAULT_FINANCE_MAX_DROPPED_ALIAS_RATIO
 
 
 def _utc_timestamp() -> str:

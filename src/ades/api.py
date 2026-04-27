@@ -199,7 +199,6 @@ from .vector.builder import (
     DEFAULT_QID_GRAPH_ALLOWED_PREDICATES,
     DEFAULT_QID_GRAPH_DIMENSIONS,
     build_qid_graph_index as run_build_qid_graph_index,
-    build_qid_graph_index_from_store as run_build_qid_graph_index_from_store,
 )
 from .vector.graph_builder import build_qid_graph_store as run_build_qid_graph_store
 from .vector.evaluation import (
@@ -224,12 +223,9 @@ def _resolve_settings(
     default_pack: str | None = None,
     registry_url: str | None = None,
     database_url: str | None = None,
-    domain_hint: str | None = None,
-    retrieval_profile: str | None = None,
-    pack: str | None = None,
 ) -> Settings:
     base = get_settings()
-    settings = Settings(
+    return Settings(
         host=host or base.host,
         port=port if port is not None else base.port,
         storage_root=Path(storage_root).expanduser() if storage_root is not None else base.storage_root,
@@ -244,6 +240,11 @@ def _resolve_settings(
         vector_search_collection_alias=base.vector_search_collection_alias,
         vector_search_related_limit=base.vector_search_related_limit,
         vector_search_score_threshold=base.vector_search_score_threshold,
+        vector_search_domain_pack_routes=dict(base.vector_search_domain_pack_routes),
+        vector_search_pack_collection_aliases=dict(
+            base.vector_search_pack_collection_aliases
+        ),
+        vector_search_country_aliases=dict(base.vector_search_country_aliases),
         graph_context_enabled=base.graph_context_enabled,
         graph_context_artifact_path=base.graph_context_artifact_path,
         graph_context_max_depth=base.graph_context_max_depth,
@@ -256,16 +257,10 @@ def _resolve_settings(
         ),
         graph_context_vector_proposal_limit=base.graph_context_vector_proposal_limit,
         graph_context_genericity_penalty_enabled=base.graph_context_genericity_penalty_enabled,
-        service_prewarm_enabled=base.service_prewarm_enabled,
-        retrieval_profile_name=base.retrieval_profile_name,
-        retrieval_profile_pack_ids=base.retrieval_profile_pack_ids,
-        retrieval_profiles=base.retrieval_profiles,
+        news_context_artifact_path=base.news_context_artifact_path,
+        news_context_min_supporting_seeds=base.news_context_min_supporting_seeds,
+        news_context_min_pair_count=base.news_context_min_pair_count,
         config_path=base.config_path,
-    )
-    return settings.apply_retrieval_profile(
-        retrieval_profile=retrieval_profile,
-        domain_hint=domain_hint,
-        pack=pack or default_pack or settings.default_pack,
     )
 
 
@@ -543,7 +538,7 @@ def refresh_generated_packs(
     min_expected_recall: float = 1.0,
     max_unexpected_hits: int = 0,
     max_ambiguous_aliases: int | None = None,
-    max_dropped_alias_ratio: float = 0.5,
+    max_dropped_alias_ratio: float | None = None,
 ) -> RegistryRefreshGeneratedPacksResponse:
     """Refresh one or more generated packs into a quality-gated registry release."""
 
@@ -2508,8 +2503,6 @@ def tag(
     *,
     pack: str | None = None,
     content_type: str = "text/plain",
-    domain_hint: str | None = None,
-    retrieval_profile: str | None = None,
     output_path: str | Path | None = None,
     output_dir: str | Path | None = None,
     pretty_output: bool = True,
@@ -2520,17 +2513,14 @@ def tag(
     include_graph_support: bool = False,
     refine_links: bool = False,
     refinement_depth: str = "light",
+    domain_hint: str | None = None,
+    country_hint: str | None = None,
     registry: PackRegistry | None = None,
     runtime: PackRuntime | None = None,
 ) -> TagResponse:
     """Run in-process tagging through the installed local runtime."""
 
-    settings = _resolve_settings(
-        storage_root=storage_root,
-        domain_hint=domain_hint,
-        retrieval_profile=retrieval_profile,
-        pack=pack,
-    )
+    settings = _resolve_settings(storage_root=storage_root)
     resolved_pack = pack or settings.default_pack
     registry = registry or PackRegistry(
         settings.storage_root,
@@ -2560,6 +2550,8 @@ def tag(
         include_graph_support=include_graph_support,
         refine_links=refine_links,
         refinement_depth=refinement_depth,
+        domain_hint=domain_hint,
+        country_hint=country_hint,
     )
     if output_path is not None or output_dir is not None:
         response = persist_tag_response_json(
@@ -2578,8 +2570,6 @@ def tag_file(
     *,
     pack: str | None = None,
     content_type: str | None = None,
-    domain_hint: str | None = None,
-    retrieval_profile: str | None = None,
     output_path: str | Path | None = None,
     output_dir: str | Path | None = None,
     pretty_output: bool = True,
@@ -2590,17 +2580,14 @@ def tag_file(
     include_graph_support: bool = False,
     refine_links: bool = False,
     refinement_depth: str = "light",
+    domain_hint: str | None = None,
+    country_hint: str | None = None,
     registry: PackRegistry | None = None,
     runtime: PackRuntime | None = None,
 ) -> TagResponse:
     """Run in-process tagging for a local file path."""
 
-    settings = _resolve_settings(
-        storage_root=storage_root,
-        domain_hint=domain_hint,
-        retrieval_profile=retrieval_profile,
-        pack=pack,
-    )
+    settings = _resolve_settings(storage_root=storage_root)
     resolved_pack = pack or settings.default_pack
     registry = registry or PackRegistry(
         settings.storage_root,
@@ -2642,6 +2629,8 @@ def tag_file(
         include_graph_support=include_graph_support,
         refine_links=refine_links,
         refinement_depth=refinement_depth,
+        domain_hint=domain_hint,
+        country_hint=country_hint,
     )
     if output_path is not None or output_dir is not None:
         response = persist_tag_response_json(
@@ -2660,8 +2649,6 @@ def tag_files(
     *,
     pack: str | None = None,
     content_type: str | None = None,
-    domain_hint: str | None = None,
-    retrieval_profile: str | None = None,
     output_dir: str | Path | None = None,
     pretty_output: bool = True,
     storage_root: str | Path | None = None,
@@ -2685,17 +2672,14 @@ def tag_files(
     include_graph_support: bool = False,
     refine_links: bool = False,
     refinement_depth: str = "light",
+    domain_hint: str | None = None,
+    country_hint: str | None = None,
     registry: PackRegistry | None = None,
     runtime: PackRuntime | None = None,
 ) -> BatchTagResponse:
     """Run in-process tagging for multiple local file paths."""
 
-    settings = _resolve_settings(
-        storage_root=storage_root,
-        domain_hint=domain_hint,
-        retrieval_profile=retrieval_profile,
-        pack=pack,
-    )
+    settings = _resolve_settings(storage_root=storage_root)
     registry = registry or PackRegistry(
         settings.storage_root,
         runtime_target=settings.runtime_target,
@@ -2821,6 +2805,8 @@ def tag_files(
                             include_graph_support=include_graph_support,
                             refine_links=refine_links,
                             refinement_depth=refinement_depth,
+                            domain_hint=domain_hint,
+                            country_hint=country_hint,
                         )
                         repaired_response = persist_tag_response_json(
                             repaired_response,
@@ -2866,6 +2852,8 @@ def tag_files(
             include_graph_support=include_graph_support,
             refine_links=refine_links,
             refinement_depth=refinement_depth,
+            domain_hint=domain_hint,
+            country_hint=country_hint,
         )
         record_tag_observation(settings.storage_root, response)
         items.append(response)
@@ -3160,56 +3148,6 @@ def build_qid_graph_index(
             if allowed_predicates is not None
             else list(DEFAULT_QID_GRAPH_ALLOWED_PREDICATES)
         ),
-        qdrant_url=resolved_qdrant_url,
-        qdrant_api_key=resolved_qdrant_api_key,
-        collection_name=collection_name,
-        publish_alias=resolved_publish_alias,
-    )
-    _record_vector_build_state_if_supported(settings, response)
-    return response
-
-
-def build_qid_graph_index_from_store(
-    bundle_dirs: Iterable[str | Path],
-    *,
-    graph_store_path: str | Path,
-    output_dir: str | Path,
-    storage_root: str | Path | None = None,
-    dimensions: int = DEFAULT_QID_GRAPH_DIMENSIONS,
-    allowed_predicates: Iterable[str] | None = None,
-    neighbor_limit_per_qid: int = 128,
-    qdrant_url: str | None = None,
-    qdrant_api_key: str | None = None,
-    collection_name: str | None = None,
-    publish_alias: str | None = None,
-) -> VectorIndexBuildResponse:
-    """Build one hosted QID graph artifact from an existing explicit graph store."""
-
-    settings = _resolve_settings(storage_root=storage_root)
-    resolved_qdrant_url = qdrant_url if qdrant_url is not None else settings.vector_search_url
-    resolved_qdrant_api_key = (
-        qdrant_api_key if qdrant_api_key is not None else settings.vector_search_api_key
-    )
-    resolved_publish_alias = (
-        publish_alias
-        if publish_alias is not None
-        else (
-            settings.vector_search_collection_alias
-            if resolved_qdrant_url and settings.vector_search_enabled
-            else None
-        )
-    )
-    response = run_build_qid_graph_index_from_store(
-        bundle_dirs,
-        graph_store_path=graph_store_path,
-        output_dir=output_dir,
-        dimensions=dimensions,
-        allowed_predicates=(
-            list(allowed_predicates)
-            if allowed_predicates is not None
-            else list(DEFAULT_QID_GRAPH_ALLOWED_PREDICATES)
-        ),
-        neighbor_limit_per_qid=neighbor_limit_per_qid,
         qdrant_url=resolved_qdrant_url,
         qdrant_api_key=resolved_qdrant_api_key,
         collection_name=collection_name,

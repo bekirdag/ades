@@ -1093,21 +1093,10 @@ def _resolve_candidate_store(
         _insert_retained_aliases(connection, retained_alias_rows)
         retained_alias_rows = []
 
-    for alias_key, candidate_count in connection.execute(
-        """
-        SELECT alias_key, COUNT(*)
-        FROM alias_candidates
-        GROUP BY alias_key
-        ORDER BY alias_key ASC
-        """
+    for cluster in _iter_cluster_reports(
+        connection,
+        allowed_ambiguous_aliases=allowed_ambiguous_aliases,
     ):
-        rows = _load_cluster_candidates(connection, alias_key)
-        cluster = _resolve_cluster(
-            alias_key=alias_key,
-            candidate_count=int(candidate_count),
-            candidates=rows,
-            allowed_ambiguous_aliases=allowed_ambiguous_aliases,
-        )
         if cluster.ambiguous:
             ambiguous_alias_count += 1
         if cluster.label_count > 1:
@@ -1131,7 +1120,7 @@ def _resolve_candidate_store(
                 retained_label_counts.get(representative.label, 0) + 1
             )
             runtime_tier = _resolve_runtime_tier(
-                alias_key=alias_key,
+                alias_key=cluster.alias_key,
                 candidate=representative,
             )
             if retain_aliases_in_memory:
@@ -1182,6 +1171,7 @@ def _resolve_candidate_store(
         _insert_cluster_decision(connection, cluster)
 
     flush_retained_alias_rows()
+    _finalize_resolved_analysis_store(connection)
     connection.commit()
     if retain_aliases_in_memory:
         ordered_aliases = sorted(
@@ -1304,6 +1294,22 @@ def _finalize_analysis_store(connection: sqlite3.Connection) -> None:
     )
 
 
+def _finalize_resolved_analysis_store(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_retained_aliases_sort
+            ON retained_aliases(
+                display_sort_key,
+                display_text,
+                label_sort_key,
+                label
+            );
+        CREATE INDEX IF NOT EXISTS idx_alias_cluster_decisions_alias_key
+            ON alias_cluster_decisions(alias_key);
+        """
+    )
+
+
 def _insert_candidates(
     connection: sqlite3.Connection,
     candidates: list[AliasCandidate],
@@ -1380,15 +1386,16 @@ def _load_cluster_candidates(
             entity_id
         FROM alias_candidates
         WHERE alias_key = ?
-        ORDER BY
-            label ASC,
-            score DESC,
-            preferred_name_weight DESC,
-            length(display_text) ASC,
-            display_text ASC
         """,
         (alias_key,),
     ).fetchall()
+    return _build_cluster_candidates_from_rows(alias_key, rows)
+
+
+def _build_cluster_candidates_from_rows(
+    alias_key: str,
+    rows: Iterable[tuple[Any, ...]],
+) -> list[AliasClusterCandidate]:
     label_rows: dict[str, list[tuple[Any, ...]]] = {}
     label_candidate_counts: dict[str, int] = {}
     label_non_generated_counts: dict[str, int] = {}
@@ -1430,6 +1437,62 @@ def _load_cluster_candidates(
             candidates=cluster_candidates,
         )
     return list(best_by_label.values())
+
+
+def _iter_cluster_reports(
+    connection: sqlite3.Connection,
+    *,
+    allowed_ambiguous_aliases: set[str],
+) -> Iterator[AliasClusterReport]:
+    """Stream alias clusters in key order to avoid millions of point lookups."""
+
+    cursor = connection.execute(
+        """
+        SELECT
+            alias_key,
+            label,
+            display_text,
+            canonical_text,
+            lane,
+            generated,
+            score,
+            source_priority,
+            status_weight,
+            preferred_name_weight,
+            popularity_weight,
+            identifier_specificity_weight,
+            label_specificity_weight,
+            alias_form_penalty,
+            source_name,
+            source_id,
+            entity_id
+        FROM alias_candidates
+        ORDER BY alias_key ASC
+        """
+    )
+
+    current_alias_key: str | None = None
+    current_rows: list[tuple[Any, ...]] = []
+
+    def emit_cluster(alias_key: str, rows: list[tuple[Any, ...]]) -> AliasClusterReport:
+        candidates = _build_cluster_candidates_from_rows(alias_key, rows)
+        return _resolve_cluster(
+            alias_key=alias_key,
+            candidate_count=len(rows),
+            candidates=candidates,
+            allowed_ambiguous_aliases=allowed_ambiguous_aliases,
+        )
+
+    for row in cursor:
+        alias_key = str(row[0])
+        if current_alias_key is not None and alias_key != current_alias_key:
+            yield emit_cluster(current_alias_key, current_rows)
+            current_rows = []
+        current_alias_key = alias_key
+        current_rows.append(tuple(row[1:]))
+
+    if current_alias_key is not None and current_rows:
+        yield emit_cluster(current_alias_key, current_rows)
 
 
 def _select_best_cluster_candidate(

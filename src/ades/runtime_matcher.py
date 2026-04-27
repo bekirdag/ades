@@ -371,6 +371,15 @@ def find_exact_match_candidates(
     if not text:
         return []
     view = build_lookup_text_view(text)
+    return find_exact_match_candidates_in_view(view, matcher)
+
+
+def find_exact_match_candidates_in_view(
+    view: LookupTextView,
+    matcher: RuntimeMatcher,
+) -> list[ExactMatchCandidate]:
+    """Scan a prebuilt lookup view and return exact-match candidates."""
+
     if matcher.algorithm == MATCHER_JSON_AHO_ALGORITHM:
         return _find_json_aho_match_candidates(view, matcher)
     if matcher.algorithm == MATCHER_TOKEN_TRIE_ALGORITHM:

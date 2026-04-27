@@ -7,7 +7,10 @@ from pathlib import Path
 from threading import RLock
 from typing import Pattern
 
-from .matcher_repair import ensure_pack_matcher_artifacts
+from .matcher_repair import (
+    ensure_pack_matcher_artifacts,
+    pack_manifest_has_usable_matcher,
+)
 from .registry import PackRegistry
 from .rule_validation import ReviewedRule, compile_reviewed_rule
 
@@ -121,16 +124,18 @@ def _build_pack_runtime(
         if current_manifest is None:
             return
         pack_dir = registry.layout.packs_dir / current_manifest.pack_id
-        current_manifest, matcher_repaired = ensure_pack_matcher_artifacts(
-            pack_dir,
-            current_manifest,
-            metadata_store=registry.store,
-        )
-        if matcher_repaired:
-            registry.sync_pack_from_disk(current_manifest.pack_id, active=current_manifest.active)
-            refreshed_manifest = registry.get_pack(current_pack_id, active_only=True)
-            if refreshed_manifest is not None:
-                current_manifest = refreshed_manifest
+        matcher_repaired = False
+        if not pack_manifest_has_usable_matcher(pack_dir, current_manifest):
+            current_manifest, matcher_repaired = ensure_pack_matcher_artifacts(
+                pack_dir,
+                current_manifest,
+                metadata_store=registry.store,
+            )
+            if matcher_repaired:
+                registry.sync_pack_from_disk(current_manifest.pack_id, active=current_manifest.active)
+                refreshed_manifest = registry.get_pack(current_pack_id, active_only=True)
+                if refreshed_manifest is not None:
+                    current_manifest = refreshed_manifest
 
         for dependency in current_manifest.dependencies:
             visit(dependency)

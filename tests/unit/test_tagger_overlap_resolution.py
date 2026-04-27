@@ -10,10 +10,14 @@ from ades.pipeline.tagger import (
     _is_runtime_generic_phrase_fragment_alias,
     _is_runtime_generic_single_token_alias,
     _is_runtime_leading_apostrophe_fragment_alias,
+    _is_runtime_office_title_person_alias_artifact,
     _is_runtime_partial_person_fragment_alias,
+    _is_runtime_title_led_person_alias_artifact,
+    _is_runtime_possessive_titleish_alias_artifact,
     _is_runtime_possessive_alias_artifact,
     _is_runtime_quoted_fragment_alias,
     _is_runtime_single_token_titleish_fragment_alias,
+    _is_runtime_structural_geo_feature_label_mismatch,
     _is_runtime_truncated_connector_alias_artifact,
     _merge_linked_entity_candidates,
     _person_surname_key,
@@ -283,6 +287,119 @@ def test_suppress_document_person_surname_false_positive_for_confirmed_context()
 
     assert [item.entity.text for item in kept] == ["Jerome Powell"]
     assert [item.entity.text for item in discarded] == ["Powell"]
+
+
+def test_suppress_document_person_surname_false_positive_for_led_context() -> None:
+    text = (
+        "Vice President JD Vance arrived in Rome. "
+        "Later, Vance led a first round of unsuccessful talks."
+    )
+    vance_start = text.index("Vance led")
+    vance_end = vance_start + len("Vance")
+    person = _candidate(
+        text="JD Vance",
+        label="person",
+        start=text.index("JD Vance"),
+        end=text.index("JD Vance") + len("JD Vance"),
+        relevance=0.88,
+        lane="deterministic_alias",
+        canonical_text="JD Vance",
+        entity_id="wikidata:Q6279",
+    )
+    location = _candidate(
+        text="Vance",
+        label="location",
+        start=vance_start,
+        end=vance_end,
+        relevance=0.61,
+        lane="deterministic_alias",
+        canonical_text="Vance",
+        entity_id="wikidata:Q7947746",
+    )
+
+    kept, discarded = _suppress_document_person_surname_false_positives(
+        [person, location],
+        text=text,
+        pack_id="general-en",
+    )
+
+    assert [item.entity.text for item in kept] == ["JD Vance"]
+    assert [item.entity.text for item in discarded] == ["Vance"]
+
+
+def test_suppress_document_person_surname_false_positive_for_reported_object_context() -> None:
+    text = (
+        "Morgan McSweeney spoke with Tim Barton earlier. "
+        "Advisers told Barton to just approve the plan."
+    )
+    barton_start = text.index("Barton to")
+    barton_end = barton_start + len("Barton")
+    person = _candidate(
+        text="Tim Barton",
+        label="person",
+        start=text.index("Tim Barton"),
+        end=text.index("Tim Barton") + len("Tim Barton"),
+        relevance=0.88,
+        lane="deterministic_alias",
+        canonical_text="Tim Barton",
+        entity_id="wikidata:Q999001",
+    )
+    location = _candidate(
+        text="Barton",
+        label="location",
+        start=barton_start,
+        end=barton_end,
+        relevance=0.61,
+        lane="deterministic_alias",
+        canonical_text="Barton",
+        entity_id="wikidata:Q4866431",
+    )
+
+    kept, discarded = _suppress_document_person_surname_false_positives(
+        [person, location],
+        text=text,
+        pack_id="general-en",
+    )
+
+    assert [item.entity.text for item in kept] == ["Tim Barton"]
+    assert [item.entity.text for item in discarded] == ["Barton"]
+
+
+def test_suppress_document_person_surname_false_positive_for_went_public_context() -> None:
+    text = (
+        "Premier Doug Ford criticized the proposal earlier. "
+        "Ford went public in April with his concerns."
+    )
+    person = _candidate(
+        text="Doug Ford",
+        label="person",
+        start=text.index("Doug Ford"),
+        end=text.index("Doug Ford") + len("Doug Ford"),
+        relevance=0.88,
+        lane="deterministic_alias",
+        canonical_text="Doug Ford",
+        entity_id="wikidata:Q1625904",
+    )
+    ford_start = text.index("Ford went public")
+    location = _candidate(
+        text="Ford",
+        label="location",
+        start=ford_start,
+        end=ford_start + len("Ford"),
+        relevance=0.61,
+        lane="deterministic_alias",
+        canonical_text="Ford",
+        entity_id="wikidata:Q587761",
+    )
+
+    kept, discarded = _suppress_document_person_surname_false_positives(
+        [person, location],
+        text=text,
+        pack_id="general-en",
+    )
+
+    assert [item.entity.text for item in kept] == ["Doug Ford"]
+    assert [item.entity.text for item in discarded] == ["Ford"]
 
 
 def test_suppress_document_person_surname_false_positive_for_denies_context() -> None:
@@ -699,6 +816,102 @@ def test_runtime_generic_phrase_fragment_alias_is_dropped() -> None:
     candidate.entity.provenance.source_pack = "general-en"
 
     assert _is_runtime_generic_phrase_fragment_alias(candidate) is True
+
+
+def test_runtime_as_ever_phrase_alias_is_dropped() -> None:
+    candidate = _candidate(
+        text="As ever",
+        label="organization",
+        start=0,
+        end=7,
+        relevance=0.61,
+        lane="deterministic_alias",
+        canonical_text="As Ever",
+        entity_id="wikidata:Q127104762",
+        source_pack="general-en",
+    )
+
+    assert _is_runtime_generic_phrase_fragment_alias(candidate) is True
+
+
+def test_runtime_structural_geo_feature_label_mismatch_is_dropped() -> None:
+    candidate = _candidate(
+        text="Atlantic Ocean",
+        label="organization",
+        start=0,
+        end=14,
+        relevance=0.61,
+        lane="deterministic_alias",
+        canonical_text="Atlantic Ocean",
+        entity_id="wikidata:Q31956345",
+        source_pack="general-en",
+    )
+
+    assert _is_runtime_structural_geo_feature_label_mismatch(candidate) is True
+
+
+def test_runtime_structural_geo_feature_label_mismatch_keeps_explicit_org_lead() -> None:
+    candidate = _candidate(
+        text="Org Delta",
+        label="organization",
+        start=0,
+        end=9,
+        relevance=0.61,
+        lane="deterministic_alias",
+        canonical_text="Org Delta",
+        entity_id="wikidata:Q5",
+        source_pack="general-en",
+    )
+
+    assert _is_runtime_structural_geo_feature_label_mismatch(candidate) is False
+
+
+def test_runtime_possessive_titleish_alias_artifact_is_dropped() -> None:
+    candidate = _candidate(
+        text="King's",
+        label="organization",
+        start=0,
+        end=6,
+        relevance=0.61,
+        lane="deterministic_alias",
+        canonical_text="King's Company",
+        entity_id="wikidata:Q2197437",
+        source_pack="general-en",
+    )
+
+    assert _is_runtime_possessive_titleish_alias_artifact(candidate) is True
+
+
+def test_runtime_office_title_person_alias_artifact_is_dropped() -> None:
+    candidate = _candidate(
+        text="Defense Minister",
+        label="person",
+        start=0,
+        end=16,
+        relevance=0.61,
+        lane="deterministic_alias",
+        canonical_text="Jerry Codiñera",
+        entity_id="wikidata:Q8853429",
+        source_pack="general-en",
+    )
+
+    assert _is_runtime_office_title_person_alias_artifact(candidate) is True
+
+
+def test_runtime_single_title_real_person_alias_is_kept() -> None:
+    candidate = _candidate(
+        text="President Donald Trump",
+        label="person",
+        start=0,
+        end=22,
+        relevance=0.91,
+        lane="deterministic_alias",
+        canonical_text="Donald Trump",
+        entity_id="wikidata:Q22686",
+        source_pack="general-en",
+    )
+
+    assert _is_runtime_title_led_person_alias_artifact(candidate) is False
 
 
 def test_runtime_central_command_phrase_alias_is_dropped() -> None:

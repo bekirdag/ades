@@ -2,21 +2,23 @@
 
 from __future__ import annotations
 
+import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 import codecs
 import csv
 from hashlib import sha256
 import html
 import httpx
+import io
 import json
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import time
-from typing import Any
+from typing import Any, Sequence
 import unicodedata
 import urllib.request
 from urllib.parse import quote, urlencode, urljoin, urlparse
@@ -91,12 +93,120 @@ _KAP_ROLE_CLASS_BY_ITEM_KEY = {
     "kpy41_acc1_yatirimci_iliskileri": "investor_relations",
     "kpy41_acc6_yonetim_kurulu_uyeleri": "director",
     "kpy41_acc6_yonetimde_soz_sahibi": "executive_officer",
+    "kpy41_acc6_sirketin_diger_personel": "personnel",
+    "kpy41_acc6_portfoy_yoneticileri": "investment_professional",
+    "kpy41_acc6_sermaye_piyasa_faaliyetleri": "investment_professional",
 }
+_TURKIYE_KAP_SHAREHOLDER_ITEM_KEYS = {
+    "kpy41_acc5_ortaklik_yapisi",
+    "kpy41_acc5_sermayede_dogrudan",
+    "kpy41_acc5_son_durum_sermayeye",
+}
+_TURKIYE_KAP_MARKET_ITEM_KEYS = {
+    "kpy41_acc3_son_durum_borsa_piyasalar",
+}
+_TURKIYE_KAP_MARKET_FALLBACK_ITEM_KEYS = {
+    "kpy41_acc2_pazar_piyasa",
+    "kpy41_acc3_sermaye_arac_pazar",
+}
+_TURKIYE_KAP_SHAREHOLDER_STOP_NAMES = {
+    "TOPLAM",
+    "TOTAL",
+    "DİĞER",
+    "DIGER",
+    "OTHER",
+}
+_TURKIYE_ORGANIZATION_CUE_TOKENS = frozenset(
+    {
+        "anonim",
+        "as",
+        "bank",
+        "bankasi",
+        "degerler",
+        "emeklilik",
+        "enerji",
+        "faktoring",
+        "finans",
+        "finansal",
+        "fon",
+        "fonu",
+        "gayrimenkul",
+        "grup",
+        "grubu",
+        "holding",
+        "kurumu",
+        "leasing",
+        "madencilik",
+        "menkul",
+        "portfoy",
+        "sanayi",
+        "sigorta",
+        "sirketi",
+        "ticaret",
+        "vakfi",
+        "yatirim",
+        "yonetimi",
+    }
+)
+_TURKIYE_KAP_DETAIL_DOWNLOAD_WORKERS = 8
+_TURKIYE_WIKIDATA_PUBLIC_PERSON_ROLE_CLASSES = {
+    "director",
+    "executive_officer",
+    "investor_relations",
+    "investment_professional",
+    "beneficial_owner",
+}
+_TURKIYE_WIKIDATA_MAX_ISSUERS = 75
+_TURKIYE_WIKIDATA_MAX_PUBLIC_PEOPLE = 25
+_BORSA_ISTANBUL_LISTED_COMPANIES_URL = (
+    "https://www.borsaistanbul.com/en/companies/listed-companies"
+)
 _ASX_LISTED_COMPANIES_CSV_URL = "https://www.asx.com.au/asx/research/ASXListedCompanies.csv"
+_ASX_COMPANY_DIRECTORY_EXPORT_URL = (
+    "https://asx.api.markitdigital.com/asx-research/1.0/companies/directory/file"
+)
 _ASX_BOARD_URL = "https://www.asx.com.au/about/our-board-and-management"
 _ASX_EXECUTIVE_TEAM_URL = (
     "https://www.asx.com.au/about/our-board-and-management/our-executive-team"
 )
+_NSX_DIRECTORY_URL = "https://www.nsx.com.au/marketdata/directory/"
+_NSX_OFFICIAL_LIST_CSV_URL = "https://www.nsx.com.au/ftp/rss/nsx_txt_officiallist.csv"
+_NSX_DETAIL_URL_TEMPLATE = (
+    "https://www.nsx.com.au/marketdata/company-directory/details/{issuer_code}/"
+)
+_TSX_LISTED_COMPANY_DIRECTORY_URL = (
+    "https://www.tsx.com/en/listings/listing-with-us/listed-company-directory"
+)
+_TSX_COMPANY_DIRECTORY_SEARCH_URL_TEMPLATE = (
+    "https://www.tsx.com/json/company-directory/search/{exchange}/{query}"
+)
+_TSX_DIRECTORY_QUERY_VALUES = tuple("ABCDEFGHIJKLMNOPQRSTUVWXYZ") + ("0-9",)
+_CSE_LISTED_COMPANIES_URL = "https://thecse.com/listing/listed-companies/"
+_CSE_LISTED_COMPANIES_SITEMAP_URL = "https://thecse.com/sitemaps/listed-companies.xml"
+_KRX_LISTED_COMPANIES_URL = (
+    "https://global.krx.co.kr/contents/GLB/03/0308/0308010000/GLB0308010000.jsp"
+)
+_KRX_GENERATE_OTP_URL = "https://global.krx.co.kr/contents/COM/GenerateOTP.jspx"
+_KRX_DATA_URL = "https://global.krx.co.kr/contents/GLB/99/GLB99000001.jspx"
+_KRX_LISTED_COMPANIES_BLD = "GLB/03/0308/0308010000/glb0308010000"
+_KRX_LISTED_COMPANIES_BLD_CODE = "GLB/03/0308/0308010000/glb0308010000_01"
+_KRX_MARKET_CODE_TO_NAME = {
+    "1": "KOSPI",
+    "2": "KOSDAQ",
+    "6": "KONEX",
+}
+_KRX_MARKET_CODE_TO_ENTITY_ID = {
+    "1": "finance-kr:kospi-market",
+    "2": "finance-kr:kosdaq-market",
+    "6": "finance-kr:konex-market",
+}
+_KRX_MARKET_FETCH_WORKERS = 3
+_CSE_COMPANY_PAGE_DOWNLOAD_WORKERS = 8
+_NSX_COMPANY_FIELD_ROLE_TITLES = {
+    "chairman": ("director", "Chairman"),
+    "ceo": ("executive_officer", "Chief Executive Officer"),
+    "company_secretary": ("executive_officer", "Company Secretary"),
+}
 _JPX_ENGLISH_DISCLOSURE_GATE_URL = (
     "https://www.jpx.co.jp/english/equities/listed-co/disclosure-gate/"
 )
@@ -407,6 +517,10 @@ _ASX_BIO_PATTERN = re.compile(
     r'<div class="bio__heading"><h3>(?P<name>.*?)</h3>\s*<p>(?P<title>.*?)</p>',
     re.IGNORECASE | re.DOTALL,
 )
+_CSE_NEXT_DATA_PATTERN = re.compile(
+    r'<script id="__NEXT_DATA__" type="application/json">(?P<payload>.*?)</script>',
+    re.IGNORECASE | re.DOTALL,
+)
 _DEUTSCHE_BOERSE_LISTED_COMPANIES_URL = (
     "https://www.cashmarket.deutsche-boerse.com/cash-en/Data-Tech/statistics/listed-companies"
 )
@@ -436,10 +550,15 @@ _WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 _WIKIDATA_ENTITY_URL_TEMPLATE = "https://www.wikidata.org/wiki/{qid}"
 _WIKIDATA_SEARCH_LIMIT = 5
 _WIKIDATA_GETENTITIES_BATCH_SIZE = 50
-_WIKIDATA_STRING_PROPERTY_BATCH_SIZE = 200
+_WIKIDATA_STRING_PROPERTY_BATCH_SIZE = 100
 _WIKIDATA_CIK_PROPERTY_ID = "P5531"
 _WIKIDATA_ISIN_PROPERTY_ID = "P946"
 _WIKIDATA_LEI_PROPERTY_ID = "P1278"
+_WIKIDATA_CNPJ_PROPERTY_ID = "P6204"
+_WIKIDATA_OKPO_ID_PROPERTY_ID = "P2391"
+_WIKIDATA_NOMOR_POKOK_WAJIB_PAJAK_PROPERTY_ID = "P8346"
+_WIKIDATA_OFFICIAL_WEBSITE_PROPERTY_ID = "P856"
+_WIKIDATA_STOCK_EXCHANGE_TICKER_SYMBOL_PROPERTY_ID = "P249"
 _WIKIDATA_LONDON_STOCK_EXCHANGE_COMPANY_ID_PROPERTY_ID = "P8676"
 _WIKIDATA_INSTANCE_OF_PROPERTY_ID = "P31"
 _WIKIDATA_HUMAN_QID = "Q5"
@@ -447,6 +566,8 @@ _WIKIDATA_API_MAX_ATTEMPTS = 4
 _WIKIDATA_API_RETRY_BASE_SECONDS = 1.0
 _WIKIDATA_SPARQL_MAX_ATTEMPTS = 4
 _WIKIDATA_SPARQL_RETRY_BASE_SECONDS = 2.0
+_WIKIDATA_PUBLIC_PEOPLE_ORG_BATCH_SIZE = 5
+_WIKIDATA_PUBLIC_PEOPLE_PROPERTY_BATCH_SIZE = 1
 _GERMANY_WIKIDATA_PUBLIC_PEOPLE_PROPERTIES = (
     ("P169", "executive_officer", "Chief Executive Officer"),
     ("P488", "director", "Chairperson"),
@@ -454,10 +575,283 @@ _GERMANY_WIKIDATA_PUBLIC_PEOPLE_PROPERTIES = (
     ("P127", "shareholder", "Owner"),
     ("P112", "founder", "Founder"),
 )
+_AUSTRALIA_WIKIDATA_DESCRIPTION_HINTS = (
+    "australia",
+    "australian",
+    "asx",
+)
+_CANADA_WIKIDATA_DESCRIPTION_HINTS = (
+    "canada",
+    "canadian",
+    "tsx",
+    "toronto stock exchange",
+)
+_SOUTH_KOREA_WIKIDATA_DESCRIPTION_HINTS = (
+    "south korea",
+    "south korean",
+    "korea",
+    "korean",
+    "kospi",
+    "kosdaq",
+    "krx",
+)
+_BRAZIL_WIKIDATA_DESCRIPTION_HINTS = (
+    "brazil",
+    "brazilian",
+    "b3",
+    "sao paulo",
+)
+_INDONESIA_WIKIDATA_DESCRIPTION_HINTS = (
+    "indonesia",
+    "indonesian",
+    "idx",
+    "jakarta",
+)
+_ITALY_WIKIDATA_DESCRIPTION_HINTS = (
+    "italy",
+    "italian",
+    "borsa italiana",
+    "milan",
+)
+_RUSSIA_WIKIDATA_DESCRIPTION_HINTS = (
+    "russia",
+    "russian",
+    "moex",
+    "moscow exchange",
+)
+_CHINA_WIKIDATA_DESCRIPTION_HINTS = (
+    "china",
+    "chinese",
+    "shanghai stock exchange",
+    "shenzhen stock exchange",
+    "beijing stock exchange",
+)
+_JAPAN_WIKIDATA_DESCRIPTION_HINTS = (
+    "japan",
+    "japanese",
+    "jpx",
+    "tokyo stock exchange",
+)
+_INDIA_WIKIDATA_DESCRIPTION_HINTS = (
+    "india",
+    "indian",
+    "nse",
+    "national stock exchange of india",
+    "bombay stock exchange",
+)
+_MEXICO_WIKIDATA_DESCRIPTION_HINTS = (
+    "mexico",
+    "mexican",
+    "bmv",
+    "bolsa mexicana de valores",
+    "biva",
+    "bolsa institucional de valores",
+)
+_SOUTH_AFRICA_WIKIDATA_DESCRIPTION_HINTS = (
+    "south africa",
+    "south african",
+    "jse",
+    "johannesburg stock exchange",
+)
+_SAUDI_ARABIA_WIKIDATA_DESCRIPTION_HINTS = (
+    "saudi arabia",
+    "saudi",
+    "tadawul",
+    "saudi exchange",
+)
+_BASIC_COUNTRY_WIKIDATA_MAX_ISSUERS = 500
+_BASIC_COUNTRY_WIKIDATA_MAX_PEOPLE = 250
+_NSE_API_MAX_ATTEMPTS = 2
+_NSE_API_RETRY_BASE_SECONDS = 1.0
+_B3_LISTED_COMPANIES_API_BASE_URL = (
+    "https://sistemaswebb3-listados.b3.com.br/listedCompaniesProxy/CompanyCall/"
+)
+_B3_LISTED_COMPANIES_PAGE_SIZE = 100
+_B3_LISTED_COMPANIES_MAX_PAGES = 100
+_CVM_FRE_DATA_URL_TEMPLATE = (
+    "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/FRE/DADOS/"
+    "fre_cia_aberta_{year}.zip"
+)
+_CVM_FCA_DATA_URL_TEMPLATE = (
+    "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/FCA/DADOS/"
+    "fca_cia_aberta_{year}.zip"
+)
+_BRAZIL_FCA_CONTACT_LOOKBACK_YEARS = 3
+_BRAZIL_TOP_SHAREHOLDERS_PER_ISSUER = 3
+_BRAZIL_SHAREHOLDER_STOP_NAMES = frozenset(
+    {
+        "ACOES TESOURARIA",
+        "AÇÕES TESOURARIA",
+        "OUTROS",
+    }
+)
+_IDX_LISTED_COMPANIES_URL = "https://www.idx.co.id/en/listed-companies/company-profiles/"
+_IDX_DIRECTORY_RENDER_BUDGET_MS = 60_000
+_IDX_COMPANY_RECORD_PATTERN = re.compile(
+    r"\{[^{}]*KodeEmiten:\"[^\"]+\"[^{}]*NamaEmiten:\"[^\"]+\"[^{}]*\}",
+    re.DOTALL,
+)
+_BORSA_ITALIANA_DIRECTORY_INITIALS = tuple("ABCDEFGHIJKLMNOPQRSTUVWXYZ") + ("0-9",)
+_BORSA_ITALIANA_DIRECTORY_PAGE_URL_TEMPLATE = (
+    "https://www.borsaitaliana.it/borsa/azioni/listino-a-z.html?initial={initial}&lang=en"
+)
+_BORSA_ITALIANA_COMPANY_PROFILE_URL_TEMPLATE = (
+    "https://www.borsaitaliana.it/borsa/azioni/profilo-societa-dettaglio.html"
+    "?isin={isin}&mic={mic}&lang=en"
+)
+_BORSA_ITALIANA_DETAIL_LINK_PATTERN = re.compile(
+    r'href="(?P<path>/borsa/azioni(?:/euronext-growth-milan|/global-equity-market)?'
+    r'/scheda/(?P<isin>[A-Z0-9]{12})-(?P<mic>[A-Z0-9]+)\.html\?lang=en)"',
+    re.IGNORECASE,
+)
+_BORSA_ITALIANA_PAGE_PATTERN = re.compile(r"[?&]page=(?P<page>\d+)", re.IGNORECASE)
+_BORSA_ITALIANA_PROFILE_TITLE_PATTERN = re.compile(
+    r"<title>\s*(?P<title>.*?)\s+Stocks Quotes: Company Profile - Borsa Italiana\s*</title>",
+    re.IGNORECASE | re.DOTALL,
+)
+_BORSA_ITALIANA_KEY_EXECUTIVES_BLOCK_PATTERN = re.compile(
+    r"Key Executives\s*<table[^>]*>\s*<tbody>(?P<body>.*?)</tbody>",
+    re.IGNORECASE | re.DOTALL,
+)
+_BORSA_ITALIANA_KEY_EXECUTIVE_ROW_PATTERN = re.compile(
+    r"<tr>\s*<td>\s*<span[^>]*>(?P<role>.*?)</span>\s*</td>\s*"
+    r"<td>\s*<span[^>]*>(?P<name>.*?)</span>\s*</td>\s*</tr>",
+    re.IGNORECASE | re.DOTALL,
+)
+_BORSA_ITALIANA_CONTACT_BLOCK_PATTERN = re.compile(
+    r"<h3[^>]*>\s*Contact\s*</h3>\s*</div>\s*<div[^>]*>(?P<body>.*?)</div>\s*</div>",
+    re.IGNORECASE | re.DOTALL,
+)
+_BORSA_ITALIANA_ADDRESS_BLOCK_PATTERN = re.compile(
+    r"<h3[^>]*>\s*Address\s*</h3>\s*</div>\s*<div[^>]*>(?P<body>.*?)</div>\s*</div>",
+    re.IGNORECASE | re.DOTALL,
+)
+_JSE_GET_ALL_ISSUERS_URL = (
+    "https://clientportal.jse.co.za/_vti_bin/JSE/CustomerRoleService.svc/GetAllIssuers"
+)
+_JSE_GET_ISSUER_ASSOCIATED_ROLES_URL = (
+    "https://clientportal.jse.co.za/_vti_bin/JSE/CustomerRoleService.svc/GetIssuerAssociatedRoles"
+)
+_SOUTH_AFRICA_ASSOCIATED_ROLE_FETCH_WORKERS = 8
+_MOEX_SECURITIES_PAGE_SIZE = 100
+_MOEX_SECURITIES_URL = (
+    "https://iss.moex.com/iss/securities.json?iss.meta=off&engine=stock&market=shares"
+)
+_CNINFO_COMPANY_LIST_URL_TEMPLATE = (
+    "https://www.cninfo.com.cn/data/yellowpages/getYellowpageStockList"
+    "?type=en&pagenum={page_number}&keyword=&Sortcolumn=ORGNAME&jsonpCallback=cb"
+)
+_CNINFO_COMPANY_DETAIL_URL_TEMPLATE = (
+    "https://www.cninfo.com.cn/data/yellowpages/getIndexData?scode={security_code}&type=en"
+)
+_CNINFO_SHAREHOLDERS_URL_TEMPLATE = (
+    "https://www.cninfo.com.cn/data/yellowpages/singleStockData"
+    "?scode={security_code}&sign={sign}&type=en&mergerMark=shareHoldersData"
+)
+_CNINFO_COMPANY_LIST_MAX_PAGES = 300
+_NSE_LISTING_DIRECTORY_URL = (
+    "https://www.nseindia.com/api/corporate-listing-directory?index=equity"
+)
+_NSE_LISTING_BOOTSTRAP_URL = (
+    "https://www.nseindia.com/companies-listing/corporate-filings-governance"
+)
+_NSE_GOVERNANCE_MASTER_URL_TEMPLATE = (
+    "https://www.nseindia.com/api/corporate-governance-master?index=equities&symbol={symbol}"
+)
+_NSE_GOVERNANCE_BOOTSTRAP_URL = (
+    "https://www.nseindia.com/companies-listing/corporate-filings-governance"
+)
+_NSE_SHAREHOLDINGS_MASTER_URL = (
+    "https://www.nseindia.com/api/corporate-share-holdings-master?index=equities"
+)
+_NSE_SHAREHOLDINGS_BOOTSTRAP_URL = (
+    "https://www.nseindia.com/companies-listing/corporate-filings-shareholding-pattern"
+)
+_INDIA_GOVERNANCE_FETCH_WORKERS = 8
+_INDIA_SHAREHOLDING_FETCH_WORKERS = 12
+_BIVA_EMISORAS_XLS_URL = "https://www.biva.mx/emisoras/empresas/xls"
+_BIVA_REPRESENTANTE_COMUN_XLS_URL = (
+    "https://www.biva.mx/emisoras/empresas/participantes/representante-comun/csv"
+)
+_BMV_MOVIL_CLAVES_URL = (
+    "https://www.bmv.com.mx/en/movil/JSONClaveCotizacion?idBusquedaCotizacion=2"
+)
+_BMV_ISSUERS_INFORMATION_URL = "https://www.bmv.com.mx/en/issuers/issuers-information"
+_BMV_ISSUER_SEARCH_URL = (
+    "https://www.bmv.com.mx/en/Grupo_BMV/Informacion_de_emisora/_rid/541/_mto/3/_mod/doSearch"
+)
+_BMV_PROFILE_URL_TEMPLATE = "https://www.bmv.com.mx/en/issuers/profile/-{issuer_id}"
+_BMV_CORPORATIVE_INFORMATION_URL_TEMPLATE = (
+    "https://www.bmv.com.mx/en/issuers/corporativeinformation/{ticker}-{issuer_id}-{market_code}"
+)
+_BMV_FINANCIAL_INFORMATION_URL_TEMPLATE = (
+    "https://www.bmv.com.mx/en/issuers/financialinformation/{ticker}-{issuer_id}-{market_code}"
+)
+_BMV_DOMESTIC_STOCK_MARKET_CODE = "CGEN_CAPIT"
+_BMV_DOMESTIC_STOCK_INSTRUMENT_CODE = "CGEN_ELAC"
+_BMV_PROFILE_FETCH_WORKERS = 6
+_BIVA_HEADER_ALIASES = {
+    "clave": "ticker",
+    "emisora": "company_name",
+}
+_BIVA_REPRESENTANTE_HEADER_ALIASES = {
+    "clave": "ticker",
+    "serie": "series",
+    "tipo de valor": "security_type",
+    "representante común": "representative_common",
+    "emisora": "issuer_name",
+    "fecha de listado": "listing_date",
+    "fecha de vencimiento": "maturity_date",
+}
+_BMV_CORPORATIVE_INFORMATION_LINK_PATTERN = re.compile(
+    r'(?P<url>/en/issuers/corporativeinformation/[^"\']+)',
+    re.IGNORECASE,
+)
+_BMV_FINANCIAL_INFORMATION_LINK_PATTERN = re.compile(
+    r'(?P<url>/en/issuers/financialinformation/[^"\']+)',
+    re.IGNORECASE,
+)
+_BMV_PROFILE_DESC_TABLE_PATTERN = re.compile(
+    r'<table class="desc desc-2"[^>]*>(?P<body>.*?)</table>',
+    re.IGNORECASE | re.DOTALL,
+)
+_BMV_PROFILE_INFO_TABLE_PATTERN = re.compile(
+    r'<table class="info"[^>]*>(?P<body>.*?)</table>',
+    re.IGNORECASE | re.DOTALL,
+)
+_BMV_PROFILE_VALUE_ROW_PATTERN = re.compile(
+    r"<tr[^>]*>\s*<td[^>]*>(?P<label>.*?)</td>\s*<td[^>]*>(?P<value>.*?)</td>\s*</tr>",
+    re.IGNORECASE | re.DOTALL,
+)
+_BMV_PROFILE_EQUITY_SECTION_PATTERN = re.compile(
+    r"<h2>\s*Issuer Securities\b.*?</h2>\s*(?P<body><table class=\"table\"[^>]*>.*?</table>)",
+    re.IGNORECASE | re.DOTALL,
+)
+_BMV_PROFILE_EQUITY_SERIES_ROW_PATTERN = re.compile(
+    r"<tr>\s*<td>(?P<series>.*?)</td>\s*<td>.*?</td>\s*<td>.*?</td>\s*</tr>",
+    re.IGNORECASE | re.DOTALL,
+)
+_BMV_PROFILE_SECTION_PATTERN_TEMPLATE = {
+    "Main Executives": re.compile(
+        r"<h2>\s*Main Executives\s*</h2>\s*<div class=\"slide\">(?P<body>.*?)</div>",
+        re.IGNORECASE | re.DOTALL,
+    ),
+    "Board of Directors": re.compile(
+        r"<h2>\s*Board of Directors\s*</h2>\s*<div class=\"slide\">(?P<body>.*?)</div>",
+        re.IGNORECASE | re.DOTALL,
+    ),
+}
+_BMV_PROFILE_PEOPLE_ROW_PATTERN = re.compile(
+    r"<tr>\s*<td[^>]*>(?P<name>.*?)</td>\s*<td[^>]*>(?P<role_title>.*?)</td>"
+    r"(?:\s*<td[^>]*>(?P<adviser_quality>.*?)</td>)?\s*</tr>",
+    re.IGNORECASE | re.DOTALL,
+)
 _DEUTSCHE_BOERSE_COMPANY_DETAILS_URL_TEMPLATE = (
     "https://live.deutsche-boerse.com/equity/{identifier}/company-details"
 )
 _DEUTSCHE_BOERSE_COMPANY_DETAILS_RENDER_BUDGET_MS = 20_000
+_SAUDI_EXCHANGE_RENDER_BUDGET_MS = 20_000
+_SAUDI_EXCHANGE_PROFILE_FETCH_WORKERS = 4
 _DEUTSCHE_BOERSE_HEADLESS_CHROME_CANDIDATES = (
     "google-chrome",
     "chromium",
@@ -589,6 +983,13 @@ _FCA_OFFICIAL_LIST_LIVE_URL = "https://marketsecurities.fca.org.uk/downloadOffic
 _UK_LSE_AIM_ALL_SHARE_CONSTITUENTS_URL = (
     "https://www.londonstockexchange.com/indices/ftse-aim-all-share/constituents/table"
 )
+_SAUDI_EXCHANGE_ISSUER_DIRECTORY_URL = (
+    "https://www.saudiexchange.sa/wps/portal/tadawul/markets/equities/issuers-directory"
+)
+_SAUDI_EXCHANGE_MAJOR_SHAREHOLDER_FRAGMENT_PATH = (
+    "p0/IZ7_5A602H80O0VC4060O4GML81G57="
+    "CZ6_5A602H80OGF2E0QF9BQDEG10K4=NJhistoryOfMajorShareHolder=/"
+)
 _COMPANIES_HOUSE_SEARCH_URL_TEMPLATE = (
     "https://find-and-update.company-information.service.gov.uk/search/companies?q={query}"
 )
@@ -601,9 +1002,56 @@ _COMPANIES_HOUSE_PSC_URL_TEMPLATE = (
 _UK_OFFICIAL_LIST_COMPANY_CATEGORIES = frozenset({"equity shares (commercial companies)"})
 _UK_LSE_AIM_RENDER_BUDGET_MS = 20_000
 _UK_LSE_RENDERED_DIRECTORY_URLS = frozenset({_UK_LSE_AIM_ALL_SHARE_CONSTITUENTS_URL})
+_IDX_RENDERED_DIRECTORY_URLS = frozenset({_IDX_LISTED_COMPANIES_URL})
+_SAUDI_EXCHANGE_RENDERED_DIRECTORY_URLS = frozenset({_SAUDI_EXCHANGE_ISSUER_DIRECTORY_URL})
 _HEADLESS_CHROME_BROWSER_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/135.0 Safari/537.36"
+)
+_SAUDI_EXCHANGE_PROFILE_LINK_PATTERN = re.compile(
+    r'<a[^>]+href=["\'](?P<path>/wps/portal/saudiexchange/hidden/company-profile-[^"\']*?'
+    r'\?companySymbol=(?P<symbol>[0-9]+)[^"\']*)["\'][^>]*class="sname"[^>]*>'
+    r'\s*<span>(?P<trading_symbol>.*?)</span>',
+    re.IGNORECASE | re.DOTALL,
+)
+_SAUDI_EXCHANGE_MAJOR_SHAREHOLDER_ROW_PATTERN = re.compile(
+    r"<tr>\s*"
+    r"<td>(?P<trading_date>.*?)</td>\s*"
+    r"<td>(?P<shareholder_name>.*?)</td>.*?"
+    r"<td[^>]*>(?P<trading_day_percentage>.*?)</td>.*?"
+    r"<td[^>]*>(?P<previous_day_percentage>.*?)</td>.*?"
+    r"<td[^>]*>(?P<change_value>.*?)</td>.*?"
+    r"</tr>",
+    re.IGNORECASE | re.DOTALL,
+)
+_SAUDI_EXCHANGE_COMPANY_DETAILS_ITEM_PATTERN = re.compile(
+    r"<li>\s*<h4>(?P<label>.*?)</h4>\s*<p>(?P<value>.*?)</p>\s*</li>",
+    re.IGNORECASE | re.DOTALL,
+)
+_SAUDI_EXCHANGE_INSPECTION_ITEM_PATTERN = re.compile(
+    r"<li>\s*<span[^>]*>(?P<label>.*?)</span>\s*<strong>(?P<value>.*?)</strong>\s*</li>",
+    re.IGNORECASE | re.DOTALL,
+)
+_SAUDI_EXCHANGE_MANAGEMENT_BOX_PATTERN = re.compile(
+    r'<div id="namePopupBox_(?P<box_id>[0-9]+)" class="namePopupBox">(?P<body>.*?)</div>\s*</div>',
+    re.IGNORECASE | re.DOTALL,
+)
+_SAUDI_EXCHANGE_MANAGEMENT_FIELD_PATTERN = re.compile(
+    r'<div class="topTxt">\s*(?P<label>.*?)</div>\s*'
+    r'<div class="btmTxt">\s*(?P<value>.*?)</div>',
+    re.IGNORECASE | re.DOTALL,
+)
+_SAUDI_ARABIC_ORGANIZATION_PREFIXES = (
+    "شركة",
+    "البنك",
+    "بنك",
+    "مجموعة",
+    "مؤسسة",
+    "صندوق",
+    "جمعية",
+    "هيئة",
+    "وزارة",
+    "وقف",
 )
 _UK_AIM_SECURITY_NAME_TRAILING_PATTERNS = (
     re.compile(
@@ -635,6 +1083,76 @@ _COMPANIES_HOUSE_COMPANY_SUFFIX_TOKENS = frozenset(
         "services",
     }
 )
+_GENERIC_COMPANY_SUFFIX_TOKENS = frozenset(
+    {
+        *_COMPANIES_HOUSE_COMPANY_SUFFIX_TOKENS,
+        "sa",
+        "sab",
+        "spa",
+        "tbk",
+        "pt",
+        "pao",
+        "oao",
+        "zao",
+        "ao",
+        "ooo",
+        "nv",
+        "ag",
+        "ab",
+        "asa",
+    }
+)
+_GENERIC_COMPANY_SUFFIX_END_PATTERNS = (
+    ("s", "a", "b", "de", "c", "v"),
+    ("s", "a", "de", "c", "v"),
+    ("s", "a", "b"),
+    ("s", "a"),
+    ("s", "p", "a"),
+    ("n", "v"),
+    ("a", "g"),
+    ("a", "b"),
+    ("a", "s", "a"),
+    ("l", "l", "c"),
+    ("l", "l", "p"),
+    ("p", "l", "c"),
+    ("l", "t", "d"),
+    ("i", "n", "c"),
+)
+_UNICODE_ALNUM_TOKEN_PATTERN = re.compile(r"[0-9A-Za-z]+|[^\W\d_]+", re.UNICODE)
+_UNICODE_LETTER_TOKEN_PATTERN = re.compile(r"[A-Za-z]+|[^\W\d_]+", re.UNICODE)
+_WIKIDATA_ENTITY_PAYLOAD_LANGUAGES = "en|de|es|pt|id|ru|fr|it|tr|ja|zh|ko|ar"
+_WIKIDATA_MATCH_PREFERRED_LABEL_LANGUAGES = (
+    "en",
+    "ja",
+    "zh",
+    "ko",
+    "ar",
+    "de",
+    "es",
+    "pt",
+    "id",
+    "ru",
+    "fr",
+    "it",
+    "tr",
+)
+_WIKIDATA_LABEL_SERVICE_LANGUAGES = ",".join(_WIKIDATA_MATCH_PREFERRED_LABEL_LANGUAGES)
+_BASIC_COUNTRY_WIKIDATA_LANGUAGE_OVERRIDES: dict[str, tuple[str, ...]] = {
+    "au": ("en",),
+    "br": ("pt", "en", "es"),
+    "ca": ("en", "fr"),
+    "cn": ("zh", "en"),
+    "id": ("id", "en"),
+    "in": ("en",),
+    "it": ("it", "en"),
+    "jp": ("ja", "en"),
+    "kr": ("ko", "en"),
+    "mx": ("es", "en"),
+    "ru": ("ru", "en"),
+    "sa": ("ar", "en"),
+    "tr": ("tr", "en"),
+    "za": ("en",),
+}
 _GERMANY_COMPANY_LEGAL_SUFFIX_PATTERNS = (
     re.compile(r",?\s+gmbh\s*&\s*co\.?\s*kgaa$", re.IGNORECASE),
     re.compile(r",?\s+gmbh\s*&\s*co\.?\s*kg$", re.IGNORECASE),
@@ -890,7 +1408,7 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
             _source("asx", "https://www.asx.com.au/", category="exchange"),
             _source(
                 "asx-listed-companies",
-                _ASX_LISTED_COMPANIES_CSV_URL,
+                _ASX_COMPANY_DIRECTORY_EXPORT_URL,
                 category="issuer_directory",
             ),
             _source("asx-board", _ASX_BOARD_URL, category="issuer_profile"),
@@ -898,6 +1416,12 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
                 "asx-executive-team",
                 _ASX_EXECUTIVE_TEAM_URL,
                 category="issuer_profile",
+            ),
+            _source("nsx", _NSX_DIRECTORY_URL, category="exchange"),
+            _source(
+                "nsx-official-list",
+                _NSX_OFFICIAL_LIST_CSV_URL,
+                category="issuer_directory",
             ),
         ),
         entities=(
@@ -913,6 +1437,13 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
                 "Australian Securities Exchange",
                 aliases=("ASX",),
                 entity_id="finance-au:asx",
+                metadata={"country_code": "au", "category": "exchange"},
+            ),
+            _entity(
+                "exchange",
+                "National Stock Exchange of Australia",
+                aliases=("NSX",),
+                entity_id="finance-au:nsx",
                 metadata={"country_code": "au", "category": "exchange"},
             ),
             _entity(
@@ -1011,8 +1542,18 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
             ),
             _source(
                 "tsx",
-                "https://www.tsx.com/en/",
+                _TSX_LISTED_COMPANY_DIRECTORY_URL,
                 category="exchange",
+            ),
+            _source(
+                "cse",
+                _CSE_LISTED_COMPANIES_URL,
+                category="exchange",
+            ),
+            _source(
+                "cse-listed-companies-sitemap",
+                _CSE_LISTED_COMPANIES_SITEMAP_URL,
+                category="issuer_directory",
             ),
         ),
         entities=(
@@ -1035,6 +1576,20 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
                 "Toronto Stock Exchange",
                 aliases=("TSX",),
                 entity_id="finance-ca:tsx",
+                metadata={"country_code": "ca", "category": "exchange"},
+            ),
+            _entity(
+                "exchange",
+                "TSX Venture Exchange",
+                aliases=("TSXV",),
+                entity_id="finance-ca:tsxv",
+                metadata={"country_code": "ca", "category": "exchange"},
+            ),
+            _entity(
+                "exchange",
+                "Canadian Securities Exchange",
+                aliases=("CSE",),
+                entity_id="finance-ca:cse",
                 metadata={"country_code": "ca", "category": "exchange"},
             ),
             _entity(
@@ -1095,6 +1650,13 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
                 "Shenzhen Stock Exchange",
                 aliases=("SZSE",),
                 entity_id="finance-cn:szse",
+                metadata={"country_code": "cn", "category": "exchange"},
+            ),
+            _entity(
+                "exchange",
+                "Beijing Stock Exchange",
+                aliases=("BSE",),
+                entity_id="finance-cn:bse",
                 metadata={"country_code": "cn", "category": "exchange"},
             ),
             _entity(
@@ -1466,9 +2028,9 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
                 category="securities_regulator",
             ),
             _source(
-                "idx",
-                "https://www.idx.id/en",
-                category="exchange",
+                "idx-listed-companies",
+                _IDX_LISTED_COMPANIES_URL,
+                category="issuer_directory",
             ),
         ),
         entities=(
@@ -1767,14 +2329,10 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
         description="Saudi Arabia public-market finance entities built from official regulator and exchange sources.",
         sources=(
             _source(
-                "cma",
-                "https://cma.gov.sa/en/Pages/default.aspx",
-                category="securities_regulator",
-            ),
-            _source(
-                "saudi-exchange",
-                "https://www.saudiexchange.sa/",
-                category="exchange",
+                "saudi-exchange-issuers",
+                _SAUDI_EXCHANGE_ISSUER_DIRECTORY_URL,
+                category="issuer_directory",
+                notes="Primary issuer profile and major-shareholder join source.",
             ),
         ),
         entities=(
@@ -1888,7 +2446,7 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
             ),
             _source(
                 "krx",
-                "https://global.krx.co.kr/",
+                _KRX_LISTED_COMPANIES_URL,
                 category="exchange",
             ),
             _source(
@@ -1933,6 +2491,20 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
                 entity_id="finance-kr:kospi",
                 metadata={"country_code": "kr", "category": "market_index"},
             ),
+            _entity(
+                "organization",
+                "KOSDAQ Market",
+                aliases=("KOSDAQ",),
+                entity_id="finance-kr:kosdaq-market",
+                metadata={"country_code": "kr", "category": "market_segment"},
+            ),
+            _entity(
+                "organization",
+                "KONEX Market",
+                aliases=("KONEX",),
+                entity_id="finance-kr:konex-market",
+                metadata={"country_code": "kr", "category": "market_segment"},
+            ),
         ),
     ),
     "tr": _profile(
@@ -1942,11 +2514,20 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
         description="Türkiye public-market finance entities built from official regulator and exchange sources.",
         sources=(
             _source("spk", "https://spk.gov.tr/", category="securities_regulator"),
-            _source("kap", _KAP_LISTING_PATH, category="filing_system"),
+            _source(
+                "kap-listed-companies",
+                _KAP_LISTING_PATH,
+                category="issuer_directory",
+            ),
             _source(
                 "borsa-istanbul",
-                "https://www.borsaistanbul.com/en/companies/listed-companies",
+                _BORSA_ISTANBUL_LISTED_COMPANIES_URL,
                 category="exchange",
+            ),
+            _source(
+                "mkk-e-company",
+                "https://e-sirket.mkk.com.tr/",
+                category="company_registry",
             ),
         ),
         entities=(
@@ -1955,21 +2536,33 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
                 "Capital Markets Board of Türkiye",
                 aliases=("SPK", "Capital Markets Board of Turkey"),
                 entity_id="finance-tr:spk",
-                metadata={"country_code": "tr", "category": "securities_regulator"},
+                metadata=_wikidata_metadata(
+                    "Q5035620",
+                    label="Capital Markets Board of Turkey",
+                    extra={"country_code": "tr", "category": "securities_regulator"},
+                ),
             ),
             _entity(
                 "organization",
                 "Public Disclosure Platform",
                 aliases=("KAP",),
                 entity_id="finance-tr:kap",
-                metadata={"country_code": "tr", "category": "filing_system"},
+                metadata=_wikidata_metadata(
+                    "Q97237785",
+                    label="Public Disclosure Platform",
+                    extra={"country_code": "tr", "category": "filing_system"},
+                ),
             ),
             _entity(
                 "exchange",
                 "Borsa Istanbul",
                 aliases=("BIST", "Borsa İstanbul"),
                 entity_id="finance-tr:bist",
-                metadata={"country_code": "tr", "category": "exchange"},
+                metadata=_wikidata_metadata(
+                    "Q1407995",
+                    label="Borsa Istanbul",
+                    extra={"country_code": "tr", "category": "exchange"},
+                ),
             ),
             _entity(
                 "organization",
@@ -1983,7 +2576,11 @@ FINANCE_COUNTRY_PROFILES: dict[str, dict[str, object]] = {
                 "BIST 100",
                 aliases=("BIST 100 Index",),
                 entity_id="finance-tr:bist-100",
-                metadata={"country_code": "tr", "category": "market_index"},
+                metadata=_wikidata_metadata(
+                    "Q1654598",
+                    label="BIST 100",
+                    extra={"country_code": "tr", "category": "market_index"},
+                ),
             ),
         ),
     ),
@@ -2253,15 +2850,17 @@ FINANCE_COUNTRY_PEOPLE_SOURCE_PLANS: dict[str, dict[str, object]] = {
         "automation_status": "partial",
         "scope": "listed-company directors, named key management personnel, investor-relations contacts, and licensed financial-institution principals",
         "update_strategy": [
-            "Refresh the official ASX listed-companies CSV plus ASX governance pages on each country snapshot.",
-            "Current automation derives issuer/ticker coverage from the ASX listed-companies CSV and named board/executive people from ASX's official board and executive-team pages.",
-            "Expand next to per-issuer annual reports, governance statements, and investor contacts linked from ASX issuer pages.",
+            "Refresh the official ASX listed-company directory export, the NSX official-list CSV, and current ASX governance pages on each country snapshot.",
+            "Current automation derives broad ASX issuer/ticker coverage from the ASX directory export, NSX issuer/ticker plus named public-people coverage from the NSX official list, and named ASX Limited board/executive people from ASX's official governance pages.",
+            "Refresh bounded NSX company-detail pages when the official directory exposes additional named chair, director, CEO, or company-secretary rows.",
+            "Expand next to per-issuer ASX annual reports, governance statements, and investor contacts linked from issuer pages.",
             "Augment with ASIC/APRA registers only where official access terms allow repeatable ingestion.",
         ],
         "sources": [
-            _source("asx-listed-companies", _ASX_LISTED_COMPANIES_CSV_URL, category="issuer_directory", notes="Official listed-company CSV for issuer and ticker coverage."),
+            _source("asx-listed-companies", _ASX_COMPANY_DIRECTORY_EXPORT_URL, category="issuer_directory", notes="Official ASX company-directory export with issuer, ticker, listing-date, and market-cap coverage."),
             _source("asx-board", _ASX_BOARD_URL, category="issuer_profile", notes="Official ASX governance page with named ASX Limited board members; current automated people lane uses this directly."),
             _source("asx-executive-team", _ASX_EXECUTIVE_TEAM_URL, category="issuer_profile", notes="Official ASX management page with named ASX Limited executives; current automated people lane uses this directly."),
+            _source("nsx-official-list", _NSX_OFFICIAL_LIST_CSV_URL, category="issuer_directory", notes="Official NSX listed-securities CSV with issuer roster, security codes, ISIN, and named chair/CEO/company-secretary/director fields."),
             _source("asic-company-search", "https://asic.gov.au/for-business/search-registers/", category="company_registry", notes="Use official officer/director registry data where access and rate limits permit."),
             _source("apra-regulated-entities", "https://www.apra.gov.au/registers-of-authorised-institutions", category="institution_register", notes="Use for bank and insurer principals when publication format is stable."),
         ],
@@ -2284,16 +2883,18 @@ FINANCE_COUNTRY_PEOPLE_SOURCE_PLANS: dict[str, dict[str, object]] = {
     "ca": {
         "country_code": "ca",
         "country_name": "Canada",
-        "automation_status": "planned",
+        "automation_status": "partial",
         "scope": "listed-company directors, named executive officers, investor-relations contacts, and regulated institution principals",
         "update_strategy": [
-            "Refresh SEDAR+ issuer filings and TSX issuer profiles on each country snapshot.",
-            "Extract people from management information circulars, annual information forms, and management discussion documents.",
+            "Refresh TSX and TSXV official company-directory search pages plus the CSE listed-company sitemap on each country snapshot.",
+            "Current automation derives TSX and TSXV issuer/ticker coverage from the official TMX listed-company directory endpoints and derives CSE issuer, ticker, and named officer/contact coverage from official CSE company pages.",
+            "Expand next to SEDAR+ circulars, annual information forms, and management discussion documents for broader public people coverage.",
             "Add OSFI and provincial institution registers for non-issuer financial institutions.",
         ],
         "sources": [
             _source("sedar-plus-filings", "https://www.sedarplus.ca/", category="filing_system", notes="Primary filing source for directors and officers via circulars and annual filings."),
-            _source("tsx-listed-companies", "https://www.tsx.com/en/listings/listing-with-us/listed-company-directory", category="issuer_directory", notes="Primary issuer directory and ticker join source."),
+            _source("tsx-listed-companies", _TSX_LISTED_COMPANY_DIRECTORY_URL, category="issuer_directory", notes="Primary issuer directory landing page for TSX and TSXV roster discovery."),
+            _source("cse-listed-companies", _CSE_LISTED_COMPANIES_SITEMAP_URL, category="issuer_directory", notes="Official CSE listed-company sitemap used to resolve issuer profile pages and named company officers."),
             _source("osfi-regulated-entities", "https://www.osfi-bsif.gc.ca/en/about-osfi/osfi-knowledge-centre/who-does-osfi-regulate", category="institution_register", notes="Use for banks and insurers outside listed-issuer coverage."),
         ],
     },
@@ -2428,17 +3029,18 @@ FINANCE_COUNTRY_PEOPLE_SOURCE_PLANS: dict[str, dict[str, object]] = {
     "kr": {
         "country_code": "kr",
         "country_name": "South Korea",
-        "automation_status": "planned",
+        "automation_status": "partial",
         "scope": "listed-company directors, executive officers, responsible management personnel, and regulated institution principals",
         "update_strategy": [
-            "Refresh DART filings and KIND/KRX issuer profile pages on each snapshot.",
-            "Extract people from business reports, annual reports, and corporate-governance filings.",
+            "Refresh the official KRX listed-company export for KOSPI, KOSDAQ, and KONEX on each country snapshot.",
+            "Current automation derives broad issuer and ticker coverage from the official KRX English listed-company export path across KOSPI, KOSDAQ, and KONEX.",
+            "Expand next to DART business reports, KIND issuer profiles, annual reports, and corporate-governance filings for broader named people coverage.",
             "Treat Korean-language schema changes as a high-risk lane and keep sample validation in every refresh.",
         ],
         "sources": [
             _source("dart-filings", "https://englishdart.fss.or.kr/", category="filing_system", notes="Primary official filing source for directors and officers."),
             _source("kind-company-search", "https://engkind.krx.co.kr/disclosureinfo/companyinfo.do", category="issuer_directory", notes="Use issuer profile pages and disclosure joins."),
-            _source("krx-listed-companies", "https://global.krx.co.kr/", category="exchange", notes="Use market metadata and listed-company identifiers."),
+            _source("krx-listed-companies", _KRX_LISTED_COMPANIES_URL, category="exchange", notes="Primary official issuer and ticker export lane for KOSPI, KOSDAQ, and KONEX company coverage."),
         ],
     },
     "mx": {
@@ -2490,15 +3092,18 @@ FINANCE_COUNTRY_PEOPLE_SOURCE_PLANS: dict[str, dict[str, object]] = {
         "country_code": "tr",
         "country_name": "Türkiye",
         "automation_status": "implemented",
-        "scope": "listed-company board members, investor-relations contacts, named management personnel, and disclosed executive officers from KAP company detail pages",
+        "scope": "listed-company issuers, tickers, BIST market metadata, board members, investor-relations contacts, named management personnel, and disclosed major shareholders from KAP company detail pages",
         "update_strategy": [
             "Refresh KAP listed-company directory and company detail pages on each country snapshot.",
-            "Derive issuer, ticker, board-member, investor-relations, and management-person entities from KAP detail sections.",
-            "Expand later with SPK or MKK lanes only if they add people not already disclosed in KAP.",
+            "Derive issuer, ticker, BIST market, shareholder, board-member, investor-relations, and management-person entities from KAP detail sections.",
+            "Use conservative Wikidata name-and-ticker matching for public issuers and selected public people when the match is clear.",
+            "Expand later with SPK or MKK lanes only if they add durable public people not already disclosed in KAP.",
         ],
         "sources": [
             _source("kap-listed-companies", "https://www.kap.org.tr/en/bist-sirketler", category="issuer_directory", notes="Primary automated source for listed-company people extraction."),
-            _source("kap-company-details", "https://www.kap.org.tr/en/", category="filing_system", notes="Use company detail pages and disclosure sections for board and management names."),
+            _source("kap-company-details", "https://www.kap.org.tr/en/", category="issuer_directory", notes="Use reusable company detail pages and disclosure sections for board, management, market, and shareholder data."),
+            _source("borsa-istanbul", _BORSA_ISTANBUL_LISTED_COMPANIES_URL, category="exchange", notes="Use as exchange surface and listed-company cross-check."),
+            _source("wikidata", _WIKIDATA_API_URL, category="knowledge_graph", notes="Use conservative issuer and public-person slug resolution only when the match is unambiguous."),
             _source("mkk-e-company", "https://e-sirket.mkk.com.tr/", category="company_registry", notes="Secondary official source for issuer and governance confirmation where accessible."),
         ],
     },
@@ -3116,6 +3721,18 @@ def _download_country_source(
             destination,
             user_agent=user_agent,
         )
+    if normalized_source_url in _IDX_RENDERED_DIRECTORY_URLS:
+        return _download_idx_directory_page(
+            normalized_source_url,
+            destination,
+            user_agent=user_agent,
+        )
+    if normalized_source_url in _SAUDI_EXCHANGE_RENDERED_DIRECTORY_URLS:
+        return _download_saudi_exchange_rendered_page(
+            normalized_source_url,
+            destination,
+            user_agent=user_agent,
+        )
     return _download_source(normalized_source_url, destination, user_agent=user_agent)
 
 
@@ -3175,9 +3792,29 @@ def _httpx_verify_for_source_url(source_url: str | Path) -> bool:
     return hostname.casefold() not in _RELAXED_TLS_SOURCE_HOSTS
 
 
+def _backfill_entity_wikidata_metadata(entity: dict[str, object]) -> dict[str, object]:
+    metadata = entity.get("metadata")
+    if not isinstance(metadata, dict):
+        return entity
+    qid = _normalize_whitespace(str(metadata.get("wikidata_qid", "")))
+    if not qid:
+        return entity
+    if not _normalize_whitespace(str(metadata.get("wikidata_slug", ""))):
+        metadata["wikidata_slug"] = qid
+    if not _normalize_whitespace(str(metadata.get("wikidata_entity_id", ""))):
+        metadata["wikidata_entity_id"] = f"wikidata:{qid}"
+    if not _normalize_whitespace(str(metadata.get("wikidata_url", ""))):
+        metadata["wikidata_url"] = _WIKIDATA_ENTITY_URL_TEMPLATE.format(qid=qid)
+    return entity
+
+
 def _write_curated_entities(path: Path, *, entities: list[dict[str, object]]) -> None:
+    normalized_entities = [
+        _backfill_entity_wikidata_metadata(entity)
+        for entity in entities
+    ]
     path.write_text(
-        json.dumps({"entities": entities}, indent=2) + "\n",
+        json.dumps({"entities": normalized_entities}, indent=2) + "\n",
         encoding="utf-8",
     )
 
@@ -4669,13 +5306,44 @@ def _derive_turkiye_kap_entities(
     downloaded_sources: list[dict[str, object]],
     user_agent: str,
 ) -> list[dict[str, object]]:
-    kap_source = next(
-        (source for source in downloaded_sources if str(source.get("name")) == "kap"),
-        None,
-    )
-    if kap_source is None:
+    source_info = {
+        str(source.get("name")): source for source in downloaded_sources if source.get("name")
+    }
+    source_paths = {
+        str(source.get("name")): country_dir / str(source.get("path"))
+        for source in downloaded_sources
+    }
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
+    kap_source = source_info.get("kap-listed-companies") or source_info.get("kap")
+    if not isinstance(kap_source, dict):
         return []
-    directory_path = country_dir / str(kap_source["path"])
+    directory_path = source_paths.get(str(kap_source.get("name", "")))
+    if directory_path is None:
+        directory_path = country_dir / str(kap_source.get("path", ""))
     if not directory_path.exists():
         return []
     listing_html = directory_path.read_text(encoding="utf-8", errors="ignore")
@@ -4683,33 +5351,81 @@ def _derive_turkiye_kap_entities(
     if not company_records:
         return []
 
+    detail_records: list[tuple[dict[str, str], Path, str]] = []
+    fetch_warnings: list[str] = []
+    future_to_detail: dict[Any, tuple[str, Path, str]] = {}
+    with ThreadPoolExecutor(max_workers=_TURKIYE_KAP_DETAIL_DOWNLOAD_WORKERS) as executor:
+        for company_record in company_records:
+            permalink = str(company_record["permalink"])
+            detail_path = country_dir / f"kap-company-{permalink}.html"
+            detail_url = _KAP_COMPANY_DETAIL_URL_TEMPLATE.format(permalink=permalink)
+            detail_records.append((company_record, detail_path, detail_url))
+            if detail_path.exists():
+                continue
+            future = executor.submit(
+                _download_source,
+                detail_url,
+                detail_path,
+                user_agent=user_agent,
+            )
+            future_to_detail[future] = (permalink, detail_path, detail_url)
+        for future in as_completed(future_to_detail):
+            permalink, detail_path, detail_url = future_to_detail[future]
+            try:
+                resolved_url = future.result()
+            except Exception as exc:
+                warning_text = f"kap company detail fetch failed for {detail_url}: {exc}"
+                if warning_text not in fetch_warnings and len(fetch_warnings) < 25:
+                    fetch_warnings.append(warning_text)
+                continue
+            _append_downloaded_source(
+                name=f"kap-company-{permalink}",
+                source_url=str(resolved_url),
+                path=detail_path,
+                category="issuer_directory",
+                notes=f"permalink={permalink}",
+            )
+
     issuer_entities: list[dict[str, object]] = []
     people_entities: list[dict[str, object]] = []
     ticker_entities: list[dict[str, object]] = []
-    warnings: list[str] = []
-    for company_record in company_records:
+    shareholder_organization_entities: list[dict[str, object]] = []
+    issuer_warnings = list(fetch_warnings)
+    people_warnings = list(fetch_warnings)
+    for company_record, detail_path, detail_url in detail_records:
         permalink = str(company_record["permalink"])
         company_title = str(company_record["title"])
-        detail_url = _KAP_COMPANY_DETAIL_URL_TEMPLATE.format(permalink=permalink)
-        detail_path = country_dir / f"kap-company-{permalink}.html"
-        try:
-            _download_source(detail_url, detail_path, user_agent=user_agent)
-        except Exception as exc:
-            warnings.append(f"kap company detail fetch failed for {detail_url}: {exc}")
+        if not detail_path.exists():
+            warning_text = f"kap company detail missing for {detail_url}"
+            if warning_text not in issuer_warnings and len(issuer_warnings) < 25:
+                issuer_warnings.append(warning_text)
+            if warning_text not in people_warnings and len(people_warnings) < 25:
+                people_warnings.append(warning_text)
             continue
+        _append_downloaded_source(
+            name=f"kap-company-{permalink}",
+            source_url=detail_url,
+            path=detail_path,
+            category="issuer_directory",
+            notes=f"permalink={permalink}",
+        )
         detail_html = detail_path.read_text(encoding="utf-8", errors="ignore")
-        stock_code = _extract_kap_stock_code(detail_html)
+        stock_codes = _extract_kap_stock_codes(detail_html)
+        stock_code = stock_codes[0] if stock_codes else None
         issuer_entities.append(
             _build_kap_company_entity(
                 company_title=company_title,
                 stock_code=stock_code,
+                stock_codes=stock_codes,
+                detail_html=detail_html,
             )
         )
-        if stock_code:
+        for ticker_code in stock_codes:
             ticker_entities.append(
                 _build_kap_ticker_entity(
                     company_title=company_title,
-                    stock_code=stock_code,
+                    stock_code=ticker_code,
+                    detail_html=detail_html,
                 )
             )
         people_entities.extend(
@@ -4719,42 +5435,93 @@ def _derive_turkiye_kap_entities(
                 stock_code=stock_code,
             )
         )
+        shareholder_people_entities, shareholder_org_detail_entities = (
+            _extract_kap_shareholder_entities(
+                detail_html=detail_html,
+                company_title=company_title,
+                stock_code=stock_code,
+            )
+        )
+        people_entities.extend(shareholder_people_entities)
+        shareholder_organization_entities.extend(shareholder_org_detail_entities)
+
+    issuer_entities = _dedupe_entities(issuer_entities)
+    _enrich_turkiye_ticker_entities_with_issuer_metadata(
+        ticker_entities=ticker_entities,
+        issuer_entities=issuer_entities,
+    )
+    ticker_entities = _dedupe_entities(ticker_entities)
+    _enrich_turkiye_people_with_issuer_metadata(
+        people_entities=people_entities,
+        issuer_entities=issuer_entities,
+    )
+    people_entities = _dedupe_entities(people_entities)
+    shareholder_organization_entities = _dedupe_entities(
+        shareholder_organization_entities
+    )
+    wikidata_warnings = _enrich_turkiye_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 10:
+            issuer_warnings.append(warning)
+        if warning not in people_warnings and len(people_warnings) < 10:
+            people_warnings.append(warning)
 
     derived_files: list[dict[str, object]] = []
     if issuer_entities:
         issuer_path = country_dir / "derived_issuer_entities.json"
-        _write_curated_entities(issuer_path, entities=_dedupe_entities(issuer_entities))
+        _write_curated_entities(issuer_path, entities=issuer_entities)
         derived_files.append(
             {
                 "name": "derived-finance-tr-issuers",
                 "path": issuer_path.name,
-                "record_count": len(_load_curated_entities(issuer_path)),
-                "adapter": "kap_company_directory",
-                "warnings": warnings,
+                "record_count": len(issuer_entities),
+                "adapter": "kap_company_directory_plus_detail_pages",
+                "warnings": issuer_warnings,
             }
         )
     if ticker_entities:
         ticker_path = country_dir / "derived_ticker_entities.json"
-        _write_curated_entities(ticker_path, entities=_dedupe_entities(ticker_entities))
+        _write_curated_entities(ticker_path, entities=ticker_entities)
         derived_files.append(
             {
                 "name": "derived-finance-tr-tickers",
                 "path": ticker_path.name,
-                "record_count": len(_load_curated_entities(ticker_path)),
-                "adapter": "kap_company_directory",
+                "record_count": len(ticker_entities),
+                "adapter": "kap_company_directory_plus_detail_pages",
                 "warnings": [],
             }
         )
     if people_entities:
         people_path = country_dir / "derived_people_entities.json"
-        _write_curated_entities(people_path, entities=_dedupe_entities(people_entities))
+        _write_curated_entities(people_path, entities=people_entities)
         derived_files.append(
             {
                 "name": "derived-finance-tr-people",
                 "path": people_path.name,
-                "record_count": len(_load_curated_entities(people_path)),
-                "adapter": "kap_company_detail_people",
-                "warnings": [],
+                "record_count": len(people_entities),
+                "adapter": "kap_company_detail_people_plus_shareholders",
+                "warnings": people_warnings,
+            }
+        )
+    if shareholder_organization_entities:
+        shareholder_org_path = country_dir / "derived_shareholder_organization_entities.json"
+        _write_curated_entities(
+            shareholder_org_path,
+            entities=shareholder_organization_entities,
+        )
+        derived_files.append(
+            {
+                "name": "derived-finance-tr-shareholder-organizations",
+                "path": shareholder_org_path.name,
+                "record_count": len(shareholder_organization_entities),
+                "adapter": "kap_company_detail_shareholders",
             }
         )
     return derived_files
@@ -4766,23 +5533,52 @@ def _derive_australia_asx_entities(
     downloaded_sources: list[dict[str, object]],
     user_agent: str,
 ) -> list[dict[str, object]]:
-    del user_agent
+    source_info = {
+        str(source.get("name")): source for source in downloaded_sources if source.get("name")
+    }
     source_paths = {
         str(source.get("name")): country_dir / str(source.get("path"))
         for source in downloaded_sources
     }
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
     listed_companies_path = source_paths.get("asx-listed-companies")
     board_path = source_paths.get("asx-board")
     executive_path = source_paths.get("asx-executive-team")
+    nsx_official_list_path = source_paths.get("nsx-official-list")
 
     issuer_entities: list[dict[str, object]] = []
     ticker_entities: list[dict[str, object]] = []
     people_entities: list[dict[str, object]] = []
+    issuer_warnings: list[str] = []
 
     if listed_companies_path is not None and listed_companies_path.exists():
-        issuer_entities, ticker_entities = _extract_asx_listed_company_entities(
-            listed_companies_path
-        )
+        asx_issuers, asx_tickers = _extract_asx_listed_company_entities(listed_companies_path)
+        issuer_entities.extend(asx_issuers)
+        ticker_entities.extend(asx_tickers)
     if board_path is not None and board_path.exists():
         people_entities.extend(
             _extract_asx_people_entities(
@@ -4801,41 +5597,2738 @@ def _derive_australia_asx_entities(
                 role_class="executive_officer",
             )
         )
+    if nsx_official_list_path is not None and nsx_official_list_path.exists():
+        nsx_issuers, nsx_tickers, nsx_people = _extract_nsx_official_list_entities(
+            nsx_official_list_path
+        )
+        issuer_entities.extend(nsx_issuers)
+        ticker_entities.extend(nsx_tickers)
+        people_entities.extend(nsx_people)
+        nsx_source_url = str(source_info.get("nsx-official-list", {}).get("source_url", ""))
+        if nsx_source_url.startswith(("http://", "https://", "file://")):
+            nsx_records = _load_nsx_official_list_records(nsx_official_list_path)
+            details_dir = country_dir / "nsx-company-details"
+            details_dir.mkdir(parents=True, exist_ok=True)
+            for record in nsx_records:
+                issuer_code = _normalize_whitespace(str(record.get("issuer_code", ""))).upper()
+                if not issuer_code:
+                    continue
+                detail_url = _NSX_DETAIL_URL_TEMPLATE.format(issuer_code=quote(issuer_code))
+                detail_path = details_dir / f"{issuer_code.casefold()}.html"
+                if not detail_path.exists():
+                    try:
+                        _download_source(detail_url, detail_path, user_agent=user_agent)
+                    except Exception as exc:
+                        warning_text = (
+                            f"finance-au: failed to download NSX company detail page for "
+                            f"{issuer_code}: {exc}"
+                        )
+                        if warning_text not in issuer_warnings and len(issuer_warnings) < 10:
+                            issuer_warnings.append(warning_text)
+                        continue
+                _append_downloaded_source(
+                    name=f"nsx-company-detail-{issuer_code.casefold()}",
+                    source_url=detail_url,
+                    path=detail_path,
+                    category="issuer_profile",
+                    notes=f"issuer_code={issuer_code}",
+                )
+                people_entities.extend(
+                    _extract_nsx_detail_people_entities(
+                        detail_path.read_text(encoding="utf-8", errors="ignore"),
+                        issuer_code=issuer_code,
+                        default_company_name=_normalize_whitespace(
+                            str(record.get("company_name", ""))
+                        ),
+                        default_ticker=_normalize_whitespace(str(record.get("ticker", ""))).upper(),
+                    )
+                )
+
+    issuer_entities = _dedupe_entities(issuer_entities)
+    ticker_entities = _dedupe_entities(ticker_entities)
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_australia_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 10:
+            issuer_warnings.append(warning)
 
     derived_files: list[dict[str, object]] = []
     if issuer_entities:
         issuer_path = country_dir / "derived_issuer_entities.json"
-        _write_curated_entities(issuer_path, entities=_dedupe_entities(issuer_entities))
+        _write_curated_entities(issuer_path, entities=issuer_entities)
         derived_files.append(
             {
                 "name": "derived-finance-au-issuers",
                 "path": issuer_path.name,
-                "record_count": len(_load_curated_entities(issuer_path)),
-                "adapter": "asx_listed_companies_csv",
-                "warnings": [],
+                "record_count": len(issuer_entities),
+                "adapter": "asx_nsx_listed_company_directories",
+                "warnings": issuer_warnings,
             }
         )
     if ticker_entities:
         ticker_path = country_dir / "derived_ticker_entities.json"
-        _write_curated_entities(ticker_path, entities=_dedupe_entities(ticker_entities))
+        _write_curated_entities(ticker_path, entities=ticker_entities)
         derived_files.append(
             {
                 "name": "derived-finance-au-tickers",
                 "path": ticker_path.name,
-                "record_count": len(_load_curated_entities(ticker_path)),
-                "adapter": "asx_listed_companies_csv",
+                "record_count": len(ticker_entities),
+                "adapter": "asx_nsx_listed_company_directories",
                 "warnings": [],
             }
         )
     if people_entities:
         people_path = country_dir / "derived_people_entities.json"
-        _write_curated_entities(people_path, entities=_dedupe_entities(people_entities))
+        _write_curated_entities(people_path, entities=people_entities)
         derived_files.append(
             {
                 "name": "derived-finance-au-people",
                 "path": people_path.name,
-                "record_count": len(_load_curated_entities(people_path)),
-                "adapter": "asx_official_people_pages",
+                "record_count": len(people_entities),
+                "adapter": "asx_nsx_official_people_pages",
+                "warnings": [],
+            }
+        )
+    return derived_files
+
+
+def _derive_canada_tmx_cse_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    source_info = {
+        str(source.get("name")): source for source in downloaded_sources if source.get("name")
+    }
+    source_paths = {
+        str(source.get("name")): country_dir / str(source.get("path"))
+        for source in downloaded_sources
+    }
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    issuer_warnings: list[str] = []
+
+    tmx_dir = country_dir / "tmx-company-directory-search"
+    tmx_dir.mkdir(parents=True, exist_ok=True)
+    for exchange_code, exchange_name in (("tsx", "TSX"), ("tsxv", "TSXV")):
+        for query in _TSX_DIRECTORY_QUERY_VALUES:
+            source_url = _TSX_COMPANY_DIRECTORY_SEARCH_URL_TEMPLATE.format(
+                exchange=exchange_code,
+                query=query,
+            )
+            snapshot_path = tmx_dir / f"{exchange_code}-{query.casefold()}.json"
+            if not snapshot_path.exists():
+                try:
+                    _download_source(source_url, snapshot_path, user_agent=user_agent)
+                except Exception as exc:
+                    warning_text = (
+                        f"finance-ca: failed to download TMX directory page "
+                        f"{exchange_name}:{query}: {exc}"
+                    )
+                    if warning_text not in issuer_warnings and len(issuer_warnings) < 10:
+                        issuer_warnings.append(warning_text)
+                    continue
+            _append_downloaded_source(
+                name=f"tmx-company-directory-{exchange_code}-{query.casefold()}",
+                source_url=source_url,
+                path=snapshot_path,
+                category="issuer_directory",
+                notes=f"exchange={exchange_name};query={query}",
+            )
+            exchange_issuers, exchange_tickers = _extract_tmx_directory_entities(
+                snapshot_path,
+                exchange_code=exchange_code.upper(),
+            )
+            issuer_entities.extend(exchange_issuers)
+            ticker_entities.extend(exchange_tickers)
+
+    cse_sitemap_path = source_paths.get("cse-listed-companies-sitemap")
+    cse_urls: list[str] = []
+    if cse_sitemap_path is not None and cse_sitemap_path.exists():
+        cse_urls = _extract_cse_company_urls(cse_sitemap_path.read_text(encoding="utf-8"))
+    cse_pages_dir = country_dir / "cse-company-pages"
+    cse_pages_dir.mkdir(parents=True, exist_ok=True)
+    cse_page_jobs = [
+        (index, url)
+        for index, url in enumerate(cse_urls, start=1)
+        if url.startswith(("http://", "https://"))
+    ]
+
+    def _download_cse_company_page(job: tuple[int, str]) -> tuple[int, str, Path | None, str | None]:
+        index, source_url = job
+        slug = _slug(Path(urlparse(source_url).path).name) or f"company-{index}"
+        destination = cse_pages_dir / f"{slug}.html"
+        if not destination.exists():
+            try:
+                _download_source(source_url, destination, user_agent=user_agent)
+            except Exception as exc:
+                return index, source_url, None, str(exc)
+        return index, source_url, destination, None
+
+    with ThreadPoolExecutor(max_workers=_CSE_COMPANY_PAGE_DOWNLOAD_WORKERS) as executor:
+        futures = [executor.submit(_download_cse_company_page, job) for job in cse_page_jobs]
+        for future in as_completed(futures):
+            index, source_url, snapshot_path, error_text = future.result()
+            if snapshot_path is None:
+                warning_text = f"finance-ca: failed to download CSE company page {source_url}: {error_text}"
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 10:
+                    issuer_warnings.append(warning_text)
+                continue
+            _append_downloaded_source(
+                name=f"cse-company-page-{index}",
+                source_url=source_url,
+                path=snapshot_path,
+                category="issuer_profile",
+            )
+            issuer_entity, ticker_entity, page_people_entities = _extract_cse_company_page_entities(
+                snapshot_path.read_text(encoding="utf-8", errors="ignore"),
+                source_url=source_url,
+            )
+            if issuer_entity is not None:
+                issuer_entities.append(issuer_entity)
+            if ticker_entity is not None:
+                ticker_entities.append(ticker_entity)
+            people_entities.extend(page_people_entities)
+
+    issuer_entities = _dedupe_entities(issuer_entities)
+    ticker_entities = _dedupe_entities(ticker_entities)
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_canada_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 10:
+            issuer_warnings.append(warning)
+
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-ca-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "tmx_directory_plus_cse_company_pages",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-ca-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "tmx_directory_plus_cse_company_pages",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-ca-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "cse_company_pages",
+                "warnings": [],
+            }
+        )
+    return derived_files
+
+
+def _fetch_b3_listed_companies_payload(
+    *,
+    page_number: int,
+    page_size: int,
+    user_agent: str,
+) -> dict[str, object]:
+    request_payload = {
+        "language": "en-us",
+        "pageNumber": page_number,
+        "pageSize": page_size,
+    }
+    encoded_payload = base64.b64encode(json.dumps(request_payload).encode("utf-8")).decode(
+        "ascii"
+    )
+    source_url = (
+        f"{_B3_LISTED_COMPANIES_API_BASE_URL}GetInitialCompanies/{encoded_payload}"
+    )
+    response = httpx.get(
+        source_url,
+        headers={
+            "User-Agent": user_agent,
+            "Accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
+        },
+        follow_redirects=True,
+        timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+        verify=_httpx_verify_for_source_url(source_url),
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError("Unexpected B3 listed-companies payload shape")
+    return payload
+
+
+def _derive_brazil_b3_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
+    issuer_warnings: list[str] = []
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    snapshot_path = country_dir / "b3-listed-companies-api.json"
+    if snapshot_path.exists():
+        payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    else:
+        first_page = _fetch_b3_listed_companies_payload(
+            page_number=1,
+            page_size=_B3_LISTED_COMPANIES_PAGE_SIZE,
+            user_agent=user_agent,
+        )
+        pages = first_page.get("page", {})
+        total_pages = 1
+        if isinstance(pages, dict):
+            total_pages = int(pages.get("totalPages", 1) or 1)
+        total_pages = max(1, min(total_pages, _B3_LISTED_COMPANIES_MAX_PAGES))
+        results: list[object] = list(first_page.get("results", [])) if isinstance(
+            first_page.get("results"),
+            list,
+        ) else []
+        for page_number in range(2, total_pages + 1):
+            try:
+                page_payload = _fetch_b3_listed_companies_payload(
+                    page_number=page_number,
+                    page_size=_B3_LISTED_COMPANIES_PAGE_SIZE,
+                    user_agent=user_agent,
+                )
+            except Exception as exc:
+                warning_text = (
+                    f"finance-br: failed to download B3 listed-companies page "
+                    f"{page_number}: {exc}"
+                )
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 10:
+                    issuer_warnings.append(warning_text)
+                continue
+            page_results = page_payload.get("results")
+            if isinstance(page_results, list):
+                results.extend(page_results)
+        payload = {
+            "page": {
+                "pageNumber": 1,
+                "pageSize": _B3_LISTED_COMPANIES_PAGE_SIZE,
+                "totalPages": total_pages,
+                "totalRecords": len(results),
+            },
+            "results": results,
+        }
+        _write_json_snapshot(snapshot_path, payload=payload)
+    _append_downloaded_source(
+        name="b3-listed-companies-api",
+        source_url=_B3_LISTED_COMPANIES_API_BASE_URL,
+        path=snapshot_path,
+        category="issuer_directory",
+        notes="Official B3 paginated listed-companies API snapshot.",
+    )
+    issuer_entities, ticker_entities = _extract_b3_listed_company_entities(payload)
+    issuer_lookup = _build_brazil_issuer_lookup(issuer_entities)
+    fre_year = _latest_complete_brazil_cvm_year()
+    fre_path = country_dir / f"cvm-fre-cia-aberta-{fre_year}.zip"
+    if not fre_path.exists():
+        try:
+            _download_source(
+                _CVM_FRE_DATA_URL_TEMPLATE.format(year=fre_year),
+                fre_path,
+                user_agent=user_agent,
+            )
+        except Exception as exc:
+            warning_text = (
+                f"finance-br: failed to download CVM FRE structured archive {fre_year}: "
+                f"{exc}"
+            )
+            if warning_text not in issuer_warnings and len(issuer_warnings) < 10:
+                issuer_warnings.append(warning_text)
+    if fre_path.exists():
+        _append_downloaded_source(
+            name=f"cvm-fre-administrators-{fre_year}",
+            source_url=_CVM_FRE_DATA_URL_TEMPLATE.format(year=fre_year),
+            path=fre_path,
+            category="filing_system",
+            notes=(
+                "Official CVM Formulario de Referencia structured archive used for "
+                "board, fiscal-board, and executive people."
+            ),
+        )
+        _append_downloaded_source(
+            name=f"cvm-fre-shareholders-{fre_year}",
+            source_url=_CVM_FRE_DATA_URL_TEMPLATE.format(year=fre_year),
+            path=fre_path,
+            category="shareholder_register",
+            notes=(
+                "Official CVM Formulario de Referencia structured archive used for "
+                "bounded top-shareholder entities."
+            ),
+        )
+        administrator_rows = _extract_brazil_cvm_zip_rows(
+            fre_path,
+            member_name=f"fre_cia_aberta_administrador_membro_conselho_fiscal_{fre_year}.csv",
+        )
+        shareholder_rows = _extract_brazil_cvm_zip_rows(
+            fre_path,
+            member_name=f"fre_cia_aberta_posicao_acionaria_{fre_year}.csv",
+        )
+        people_entities.extend(
+            _extract_brazil_cvm_administrator_people_entities(
+                administrator_rows=administrator_rows,
+                issuer_lookup=issuer_lookup,
+                source_name=f"cvm-fre-administrators-{fre_year}",
+            )
+        )
+        shareholder_people, shareholder_orgs = _extract_brazil_cvm_top_shareholder_entities(
+            shareholder_rows=shareholder_rows,
+            issuer_lookup=issuer_lookup,
+            source_name=f"cvm-fre-shareholders-{fre_year}",
+        )
+        people_entities.extend(shareholder_people)
+        issuer_entities.extend(shareholder_orgs)
+    latest_nonempty_fca_year: int | None = None
+    latest_nonempty_fca_path: Path | None = None
+    for year in range(
+        fre_year,
+        max(fre_year - _BRAZIL_FCA_CONTACT_LOOKBACK_YEARS, 2019) - 1,
+        -1,
+    ):
+        fca_path = country_dir / f"cvm-fca-cia-aberta-{year}.zip"
+        if not fca_path.exists():
+            try:
+                _download_source(
+                    _CVM_FCA_DATA_URL_TEMPLATE.format(year=year),
+                    fca_path,
+                    user_agent=user_agent,
+                )
+            except Exception:
+                continue
+        department_rows = _extract_brazil_cvm_zip_rows(
+            fca_path,
+            member_name=f"fca_cia_aberta_departamento_acionistas_{year}.csv",
+        )
+        if not department_rows:
+            continue
+        latest_nonempty_fca_year = year
+        latest_nonempty_fca_path = fca_path
+        people_entities.extend(
+            _extract_brazil_fca_shareholder_department_people_entities(
+                department_rows=department_rows,
+                issuer_lookup=issuer_lookup,
+                source_name=f"cvm-fca-shareholder-department-{year}",
+            )
+        )
+        break
+    if latest_nonempty_fca_year is not None and latest_nonempty_fca_path is not None:
+        _append_downloaded_source(
+            name=f"cvm-fca-shareholder-department-{latest_nonempty_fca_year}",
+            source_url=_CVM_FCA_DATA_URL_TEMPLATE.format(year=latest_nonempty_fca_year),
+            path=latest_nonempty_fca_path,
+            category="issuer_profile",
+            notes=(
+                "Official CVM Formulario Cadastral structured archive used for "
+                "shareholder-department contacts."
+            ),
+        )
+    issuer_entities = _dedupe_entities(issuer_entities)
+    ticker_entities = _dedupe_entities(ticker_entities)
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_brazil_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 10:
+            issuer_warnings.append(warning)
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-br-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "b3_listed_companies_api",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-br-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "b3_listed_companies_api",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-br-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "b3_listed_companies_plus_wikidata_public_people",
+                "warnings": [],
+            }
+        )
+    return derived_files
+
+
+def _derive_indonesia_idx_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    source_paths = {
+        str(source.get("name")): country_dir / str(source.get("path"))
+        for source in downloaded_sources
+        if source.get("name") and source.get("path")
+    }
+    issuer_warnings: list[str] = []
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    idx_path = source_paths.get("idx-listed-companies")
+    if idx_path is not None and idx_path.exists():
+        issuer_entities, ticker_entities = _extract_idx_company_profile_entities(
+            idx_path.read_text(encoding="utf-8", errors="ignore")
+        )
+    issuer_entities = _dedupe_entities(issuer_entities)
+    ticker_entities = _dedupe_entities(ticker_entities)
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_indonesia_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 10:
+            issuer_warnings.append(warning)
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-id-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "idx_company_profiles_embedded_table",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-id-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "idx_company_profiles_embedded_table",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-id-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "idx_company_profiles_plus_wikidata_public_people",
+                "warnings": [],
+            }
+        )
+    return derived_files
+
+
+def _derive_china_cninfo_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
+    issuer_warnings: list[str] = []
+    issuer_entities_by_id: dict[str, dict[str, object]] = {}
+    ticker_entities_by_id: dict[str, dict[str, object]] = {}
+    people_entities: list[dict[str, object]] = []
+
+    listing_path = country_dir / "cninfo-company-list.json"
+    if listing_path.exists():
+        listing_payload = json.loads(listing_path.read_text(encoding="utf-8"))
+    else:
+        page_records: list[dict[str, object]] = []
+        page_count = 0
+        for page_number in range(1, _CNINFO_COMPANY_LIST_MAX_PAGES + 1):
+            page_url = _CNINFO_COMPANY_LIST_URL_TEMPLATE.format(page_number=page_number)
+            response = httpx.get(
+                page_url,
+                headers={
+                    "User-Agent": user_agent,
+                    "Accept": "application/javascript,text/plain;q=0.9,*/*;q=0.1",
+                },
+                follow_redirects=True,
+                timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+                verify=_httpx_verify_for_source_url(page_url),
+            )
+            response.raise_for_status()
+            page_payload = _parse_jsonp_payload(response.text)
+            if not isinstance(page_payload, dict):
+                raise ValueError("CNINFO company-list endpoint returned a non-object payload")
+            records = page_payload.get("records")
+            if isinstance(records, list):
+                page_records.extend(
+                    [record for record in records if isinstance(record, dict)]
+                )
+            page_count = page_number
+            if not bool(page_payload.get("hasNextPage")):
+                break
+        listing_payload = {
+            "page_count": page_count,
+            "records": page_records,
+        }
+        _write_json_snapshot(listing_path, payload=listing_payload)
+    _append_downloaded_source(
+        name="cninfo-listed-companies",
+        source_url=_CNINFO_COMPANY_LIST_URL_TEMPLATE.format(page_number=1),
+        path=listing_path,
+        category="issuer_directory",
+        notes="Official CNINFO English listed-company roster snapshot.",
+    )
+    listing_records = listing_payload.get("records", [])
+    if not isinstance(listing_records, list):
+        listing_records = []
+    for row in listing_records:
+        if not isinstance(row, dict):
+            continue
+        company_name = _smart_titlecase_company_name(
+            _normalize_whitespace(str(row.get("ORGNAME", "")))
+        )
+        ticker = _normalize_whitespace(str(row.get("SECCODE", ""))).upper()
+        short_name = _normalize_whitespace(str(row.get("SECNAME", ""))).upper()
+        if not company_name or not ticker:
+            continue
+        exchange_metadata = _classify_china_exchange(ticker)
+        aliases = _build_united_states_company_aliases(company_name, short_name, ticker)
+        issuer_entities_by_id[f"finance-cn-issuer:{ticker}"] = {
+            "entity_type": "organization",
+            "canonical_text": company_name,
+            "aliases": aliases,
+            "entity_id": f"finance-cn-issuer:{ticker}",
+            "metadata": {
+                "country_code": "cn",
+                "category": "issuer",
+                "ticker": ticker,
+                "security_short_name": short_name,
+                "exchange_code": exchange_metadata["exchange_code"],
+                "exchange_name": exchange_metadata["exchange_name"],
+                "market_name": exchange_metadata["market_name"],
+                "market_entity_id": exchange_metadata["market_entity_id"],
+            },
+        }
+        ticker_entities_by_id[f"finance-cn-ticker:{ticker}"] = {
+            "entity_type": "ticker",
+            "canonical_text": ticker,
+            "aliases": _unique_aliases([ticker, company_name, short_name, *aliases]),
+            "entity_id": f"finance-cn-ticker:{ticker}",
+            "metadata": {
+                "country_code": "cn",
+                "category": "ticker",
+                "issuer_name": company_name,
+                "security_short_name": short_name,
+                "exchange_code": exchange_metadata["exchange_code"],
+                "exchange_name": exchange_metadata["exchange_name"],
+                "market_name": exchange_metadata["market_name"],
+                "market_entity_id": exchange_metadata["market_entity_id"],
+            },
+        }
+
+    details_dir = country_dir / "cninfo-company-details"
+    details_dir.mkdir(parents=True, exist_ok=True)
+
+    def _fetch_cninfo_detail(
+        record: dict[str, object],
+    ) -> tuple[str, Path | None, str | None]:
+        ticker = _normalize_whitespace(str(record.get("SECCODE", ""))).upper()
+        if not ticker:
+            return "", None, "missing security code"
+        destination = details_dir / f"{ticker.casefold()}.json"
+        if destination.exists():
+            return ticker, destination, None
+        detail_url = _CNINFO_COMPANY_DETAIL_URL_TEMPLATE.format(security_code=ticker)
+        try:
+            response = httpx.get(
+                detail_url,
+                headers={
+                    "User-Agent": user_agent,
+                    "Accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
+                },
+                follow_redirects=True,
+                timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+                verify=_httpx_verify_for_source_url(detail_url),
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise ValueError("CNINFO company-detail endpoint returned a non-object payload")
+            _write_json_snapshot(destination, payload=payload)
+            return ticker, destination, None
+        except Exception as exc:
+            return ticker, None, str(exc)
+
+    detail_paths: dict[str, Path] = {}
+    with ThreadPoolExecutor(max_workers=min(8, len(listing_records)) or 1) as executor:
+        futures = [
+            executor.submit(_fetch_cninfo_detail, record)
+            for record in listing_records
+            if isinstance(record, dict)
+        ]
+        for future in as_completed(futures):
+            ticker, detail_path, error_text = future.result()
+            if detail_path is None:
+                if ticker:
+                    warning_text = (
+                        f"finance-cn: failed to download CNINFO company detail {ticker}: "
+                        f"{error_text}"
+                    )
+                else:
+                    warning_text = f"finance-cn: failed to download CNINFO company detail: {error_text}"
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 20:
+                    issuer_warnings.append(warning_text)
+                continue
+            detail_paths[ticker] = detail_path
+            _append_downloaded_source(
+                name=f"cninfo-company-detail-{ticker.casefold()}",
+                source_url=_CNINFO_COMPANY_DETAIL_URL_TEMPLATE.format(security_code=ticker),
+                path=detail_path,
+                category="issuer_profile",
+                notes=f"security_code={ticker}",
+            )
+            detail_payload = json.loads(detail_path.read_text(encoding="utf-8"))
+            issuer_entity, ticker_entity, detail_people = _extract_cninfo_index_data_entities(
+                detail_payload
+            )
+            if issuer_entity is not None:
+                issuer_entities_by_id[str(issuer_entity["entity_id"])] = issuer_entity
+            if ticker_entity is not None:
+                ticker_entities_by_id[str(ticker_entity["entity_id"])] = ticker_entity
+            people_entities.extend(detail_people)
+
+    shareholder_jobs: list[tuple[str, str, str]] = []
+    for ticker, detail_path in detail_paths.items():
+        detail_payload = json.loads(detail_path.read_text(encoding="utf-8"))
+        code_info = detail_payload.get("codeInfo")
+        if not isinstance(code_info, dict):
+            continue
+        sign = _normalize_whitespace(str(code_info.get("F003N", "")))
+        company_name = _normalize_whitespace(str(code_info.get("ORGNAME", "")))
+        if sign and company_name:
+            shareholder_jobs.append((ticker, sign, company_name))
+    shareholders_dir = country_dir / "cninfo-shareholders"
+    shareholders_dir.mkdir(parents=True, exist_ok=True)
+
+    def _fetch_cninfo_shareholders(
+        job: tuple[str, str, str],
+    ) -> tuple[str, str, Path | None, str | None]:
+        ticker, sign, company_name = job
+        destination = shareholders_dir / f"{ticker.casefold()}.json"
+        if destination.exists():
+            return ticker, company_name, destination, None
+        shareholders_url = _CNINFO_SHAREHOLDERS_URL_TEMPLATE.format(
+            security_code=ticker,
+            sign=quote(sign),
+        )
+        try:
+            response = httpx.get(
+                shareholders_url,
+                headers={
+                    "User-Agent": user_agent,
+                    "Accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
+                },
+                follow_redirects=True,
+                timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+                verify=_httpx_verify_for_source_url(shareholders_url),
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise ValueError("CNINFO shareholder endpoint returned a non-object payload")
+            _write_json_snapshot(destination, payload=payload)
+            return ticker, company_name, destination, None
+        except Exception as exc:
+            return ticker, company_name, None, str(exc)
+
+    with ThreadPoolExecutor(max_workers=min(8, len(shareholder_jobs)) or 1) as executor:
+        futures = [
+            executor.submit(_fetch_cninfo_shareholders, job)
+            for job in shareholder_jobs
+        ]
+        for future in as_completed(futures):
+            ticker, company_name, shareholder_path, error_text = future.result()
+            if shareholder_path is None:
+                warning_text = (
+                    f"finance-cn: failed to download CNINFO shareholder data {ticker}: "
+                    f"{error_text}"
+                )
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 20:
+                    issuer_warnings.append(warning_text)
+                continue
+            _append_downloaded_source(
+                name=f"cninfo-shareholders-{ticker.casefold()}",
+                source_url=_CNINFO_SHAREHOLDERS_URL_TEMPLATE.format(
+                    security_code=ticker,
+                    sign="*",
+                ),
+                path=shareholder_path,
+                category="issuer_profile",
+                notes=f"security_code={ticker}; top shareholders snapshot",
+            )
+            shareholder_payload = json.loads(shareholder_path.read_text(encoding="utf-8"))
+            shareholder_orgs, shareholder_people = _extract_cninfo_shareholder_entities(
+                shareholder_payload,
+                company_name=company_name,
+                ticker=ticker,
+            )
+            for entity in shareholder_orgs:
+                issuer_entities_by_id[str(entity["entity_id"])] = entity
+            people_entities.extend(shareholder_people)
+
+    issuer_entities = _dedupe_entities(list(issuer_entities_by_id.values()))
+    ticker_entities = _dedupe_entities(list(ticker_entities_by_id.values()))
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_china_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 20:
+            issuer_warnings.append(warning)
+
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-cn-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "cninfo_company_list_plus_detail_shareholders",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-cn-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "cninfo_company_list_plus_detail_shareholders",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-cn-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "cninfo_company_details_plus_shareholders",
+                "warnings": [],
+            }
+        )
+    return derived_files
+
+
+def _fetch_nse_api_json(
+    *,
+    source_url: str,
+    bootstrap_url: str,
+    user_agent: str,
+) -> dict[str, object] | list[object]:
+    last_error: Exception | None = None
+    for attempt in range(1, _NSE_API_MAX_ATTEMPTS + 1):
+        try:
+            with httpx.Client(
+                headers={
+                    "User-Agent": _HEADLESS_CHROME_BROWSER_USER_AGENT,
+                    "Accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
+                    "Referer": bootstrap_url,
+                    "Origin": "https://www.nseindia.com",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate",
+                },
+                follow_redirects=True,
+                timeout=max(DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS * 2, 40.0),
+                verify=_httpx_verify_for_source_url(source_url),
+            ) as client:
+                bootstrap_response = client.get(bootstrap_url)
+                bootstrap_response.raise_for_status()
+                response = client.get(source_url)
+                response.raise_for_status()
+                return json.loads(response.text)
+        except (httpx.HTTPError, ValueError) as exc:
+            last_error = exc
+            if attempt >= _NSE_API_MAX_ATTEMPTS:
+                break
+            time.sleep(max(_NSE_API_RETRY_BASE_SECONDS * attempt, _NSE_API_RETRY_BASE_SECONDS))
+    if last_error is None:
+        raise RuntimeError(f"Failed to fetch NSE API payload: {source_url}")
+    raise last_error
+
+
+def _derive_india_nse_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
+    issuer_warnings: list[str] = []
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    shareholder_org_entities: list[dict[str, object]] = []
+
+    listing_path = country_dir / "nse-listing-directory.json"
+    if listing_path.exists():
+        listing_payload = json.loads(listing_path.read_text(encoding="utf-8"))
+    else:
+        listing_payload = _fetch_nse_api_json(
+            source_url=_NSE_LISTING_DIRECTORY_URL,
+            bootstrap_url=_NSE_LISTING_BOOTSTRAP_URL,
+            user_agent=user_agent,
+        )
+        _write_json_snapshot(listing_path, payload=listing_payload)
+    _append_downloaded_source(
+        name="nse-listing-directory",
+        source_url=_NSE_LISTING_DIRECTORY_URL,
+        path=listing_path,
+        category="issuer_directory",
+        notes="Official NSE corporate listing directory snapshot.",
+    )
+    listing_issuer_entities, listing_ticker_entities = _extract_nse_listing_entities(
+        listing_payload
+    )
+
+    shareholding_master_path = country_dir / "nse-shareholdings-master.json"
+    if shareholding_master_path.exists():
+        shareholding_master_payload = json.loads(
+            shareholding_master_path.read_text(encoding="utf-8")
+        )
+    else:
+        shareholding_master_payload = _fetch_nse_api_json(
+            source_url=_NSE_SHAREHOLDINGS_MASTER_URL,
+            bootstrap_url=_NSE_SHAREHOLDINGS_BOOTSTRAP_URL,
+            user_agent=user_agent,
+        )
+        _write_json_snapshot(shareholding_master_path, payload=shareholding_master_payload)
+    _append_downloaded_source(
+        name="nse-shareholdings-master",
+        source_url=_NSE_SHAREHOLDINGS_MASTER_URL,
+        path=shareholding_master_path,
+        category="filing_system",
+        notes="Official NSE corporate shareholding master snapshot.",
+    )
+    shareholding_rows = (
+        shareholding_master_payload
+        if isinstance(shareholding_master_payload, list)
+        else shareholding_master_payload.get("data", [])
+        if isinstance(shareholding_master_payload, dict)
+        else []
+    )
+    shareholding_issuer_entities, shareholding_ticker_entities = (
+        _extract_nse_shareholding_master_entities(shareholding_master_payload)
+    )
+    issuer_entities = _dedupe_entities([*listing_issuer_entities, *shareholding_issuer_entities])
+    ticker_entities = _dedupe_entities([*listing_ticker_entities, *shareholding_ticker_entities])
+    issuer_by_ticker = {
+        _normalize_whitespace(str(entity.get("metadata", {}).get("ticker", ""))).upper(): entity
+        for entity in issuer_entities
+        if isinstance(entity.get("metadata"), dict)
+    }
+
+    governance_master_dir = country_dir / "nse-governance-master"
+    governance_master_dir.mkdir(parents=True, exist_ok=True)
+    governance_xbrl_dir = country_dir / "nse-governance-xbrl"
+    governance_xbrl_dir.mkdir(parents=True, exist_ok=True)
+    listing_tickers = {
+        _normalize_whitespace(str(entity.get("metadata", {}).get("ticker", ""))).upper()
+        for entity in listing_issuer_entities
+        if isinstance(entity.get("metadata"), dict)
+    }
+    cached_governance_tickers = {path.stem.upper() for path in governance_master_dir.glob("*.json")}
+    if len(listing_tickers) >= 250:
+        governance_tickers = sorted(issuer_by_ticker)
+    else:
+        governance_tickers = sorted(
+            ticker
+            for ticker in {*(listing_tickers), *cached_governance_tickers}
+            if ticker in issuer_by_ticker
+        )
+        if issuer_by_ticker and len(governance_tickers) < len(issuer_by_ticker):
+            issuer_warnings.append(
+                "finance-in: governance sweep limited to listing-directory/cached symbols "
+                f"because NSE listing returned only {len(listing_tickers)} rows"
+            )
+
+    def _fetch_governance_master(
+        ticker: str,
+    ) -> tuple[str, Path | None, str | None]:
+        destination = governance_master_dir / f"{ticker.casefold()}.json"
+        if destination.exists():
+            return ticker, destination, None
+        try:
+            payload = _fetch_nse_api_json(
+                source_url=_NSE_GOVERNANCE_MASTER_URL_TEMPLATE.format(symbol=quote(ticker)),
+                bootstrap_url=_NSE_GOVERNANCE_BOOTSTRAP_URL,
+                user_agent=user_agent,
+            )
+            _write_json_snapshot(destination, payload=payload)
+            return ticker, destination, None
+        except Exception as exc:
+            return ticker, None, str(exc)
+
+    governance_xbrl_jobs: list[tuple[str, str, str]] = []
+    with ThreadPoolExecutor(max_workers=_INDIA_GOVERNANCE_FETCH_WORKERS) as executor:
+        futures = [
+            executor.submit(_fetch_governance_master, ticker)
+            for ticker in governance_tickers
+        ]
+        for future in as_completed(futures):
+            ticker, master_path, error_text = future.result()
+            if master_path is None:
+                warning_text = (
+                    f"finance-in: failed to download NSE governance master for {ticker}: "
+                    f"{error_text}"
+                )
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 20:
+                    issuer_warnings.append(warning_text)
+                continue
+            _append_downloaded_source(
+                name=f"nse-governance-master-{ticker.casefold()}",
+                source_url=_NSE_GOVERNANCE_MASTER_URL_TEMPLATE.format(symbol=ticker),
+                path=master_path,
+                category="issuer_profile",
+                notes=f"symbol={ticker}",
+            )
+            master_payload = json.loads(master_path.read_text(encoding="utf-8"))
+            rows = master_payload.get("data") if isinstance(master_payload, dict) else master_payload
+            if not isinstance(rows, list):
+                continue
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                xbrl_url = _normalize_whitespace(str(row.get("xbrl", "")))
+                company_name = _smart_titlecase_company_name(
+                    _normalize_whitespace(
+                        str(
+                            row.get("name")
+                            or issuer_by_ticker.get(ticker, {}).get("canonical_text", "")
+                        )
+                    )
+                )
+                if xbrl_url and company_name:
+                    governance_xbrl_jobs.append((ticker, company_name, xbrl_url))
+                    break
+
+    def _fetch_governance_xbrl(
+        job: tuple[str, str, str],
+    ) -> tuple[str, str, Path | None, str | None]:
+        ticker, company_name, xbrl_url = job
+        destination = governance_xbrl_dir / f"{ticker.casefold()}.xml"
+        if destination.exists():
+            return ticker, company_name, destination, None
+        try:
+            response = httpx.get(
+                xbrl_url,
+                headers={"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"},
+                follow_redirects=True,
+                timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+                verify=_httpx_verify_for_source_url(xbrl_url),
+            )
+            response.raise_for_status()
+            destination.write_text(response.text, encoding="utf-8")
+            return ticker, company_name, destination, None
+        except Exception as exc:
+            return ticker, company_name, None, str(exc)
+
+    with ThreadPoolExecutor(max_workers=_INDIA_GOVERNANCE_FETCH_WORKERS) as executor:
+        futures = [
+            executor.submit(_fetch_governance_xbrl, job)
+            for job in governance_xbrl_jobs
+        ]
+        for future in as_completed(futures):
+            ticker, company_name, xbrl_path, error_text = future.result()
+            if xbrl_path is None:
+                warning_text = (
+                    f"finance-in: failed to download NSE governance XBRL for {ticker}: "
+                    f"{error_text}"
+                )
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 20:
+                    issuer_warnings.append(warning_text)
+                continue
+            _append_downloaded_source(
+                name=f"nse-governance-xbrl-{ticker.casefold()}",
+                source_url=next(
+                    source_url for symbol, _, source_url in governance_xbrl_jobs if symbol == ticker
+                ),
+                path=xbrl_path,
+                category="filing_system",
+                notes=f"symbol={ticker}; corporate governance XBRL",
+            )
+            people_entities.extend(
+                _extract_nse_governance_people_entities(
+                    xbrl_path.read_text(encoding="utf-8", errors="ignore"),
+                    company_name=company_name,
+                    ticker=ticker,
+                )
+            )
+
+    shareholding_xbrl_jobs: list[tuple[str, str, str]] = []
+    if isinstance(shareholding_rows, list):
+        seen_tickers: set[str] = set()
+        for row in shareholding_rows:
+            if not isinstance(row, dict):
+                continue
+            ticker = _normalize_whitespace(str(row.get("symbol", ""))).upper()
+            xbrl_url = _normalize_whitespace(str(row.get("xbrl", "")))
+            if not ticker or not xbrl_url or ticker in seen_tickers:
+                continue
+            seen_tickers.add(ticker)
+            company_name = _smart_titlecase_company_name(
+                _normalize_whitespace(
+                    str(
+                        row.get("name")
+                        or issuer_by_ticker.get(ticker, {}).get("canonical_text", "")
+                    )
+                )
+            )
+            if company_name:
+                shareholding_xbrl_jobs.append((ticker, company_name, xbrl_url))
+
+    shareholding_xbrl_dir = country_dir / "nse-shareholding-xbrl"
+    shareholding_xbrl_dir.mkdir(parents=True, exist_ok=True)
+
+    def _fetch_shareholding_xbrl(
+        job: tuple[str, str, str],
+    ) -> tuple[str, str, Path | None, str | None]:
+        ticker, company_name, xbrl_url = job
+        destination = shareholding_xbrl_dir / f"{ticker.casefold()}.xml"
+        if destination.exists():
+            return ticker, company_name, destination, None
+        try:
+            response = httpx.get(
+                xbrl_url,
+                headers={"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"},
+                follow_redirects=True,
+                timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+                verify=_httpx_verify_for_source_url(xbrl_url),
+            )
+            response.raise_for_status()
+            destination.write_text(response.text, encoding="utf-8")
+            return ticker, company_name, destination, None
+        except Exception as exc:
+            return ticker, company_name, None, str(exc)
+
+    with ThreadPoolExecutor(max_workers=_INDIA_SHAREHOLDING_FETCH_WORKERS) as executor:
+        futures = [
+            executor.submit(_fetch_shareholding_xbrl, job)
+            for job in shareholding_xbrl_jobs
+        ]
+        for future in as_completed(futures):
+            ticker, company_name, xbrl_path, error_text = future.result()
+            if xbrl_path is None:
+                warning_text = (
+                    f"finance-in: failed to download NSE shareholding XBRL for {ticker}: "
+                    f"{error_text}"
+                )
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 20:
+                    issuer_warnings.append(warning_text)
+                continue
+            _append_downloaded_source(
+                name=f"nse-shareholding-xbrl-{ticker.casefold()}",
+                source_url=next(
+                    source_url
+                    for symbol, _, source_url in shareholding_xbrl_jobs
+                    if symbol == ticker
+                ),
+                path=xbrl_path,
+                category="filing_system",
+                notes=f"symbol={ticker}; shareholding pattern XBRL",
+            )
+            shareholder_orgs, shareholder_people = _extract_nse_shareholding_entities(
+                xbrl_path.read_text(encoding="utf-8", errors="ignore"),
+                company_name=company_name,
+                ticker=ticker,
+            )
+            shareholder_org_entities.extend(shareholder_orgs)
+            people_entities.extend(shareholder_people)
+
+    issuer_entities = _dedupe_entities([*issuer_entities, *shareholder_org_entities])
+    ticker_entities = _dedupe_entities(ticker_entities)
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_india_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 20:
+            issuer_warnings.append(warning)
+
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-in-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "nse_listing_governance_shareholding",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-in-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "nse_listing_governance_shareholding",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-in-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "nse_governance_and_shareholding_xbrl",
+                "warnings": [],
+            }
+        )
+    return derived_files
+
+
+def _derive_mexico_biva_bmv_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
+    issuer_warnings: list[str] = []
+    source_paths = {
+        str(source.get("name")): country_dir / str(source.get("path"))
+        for source in downloaded_sources
+        if source.get("name") and source.get("path")
+    }
+    biva_issuer_path = source_paths.get("biva-emisoras")
+    if biva_issuer_path is None or not biva_issuer_path.exists():
+        biva_issuer_path = country_dir / "biva-emisoras.xlsx"
+        response = httpx.get(
+            _BIVA_EMISORAS_XLS_URL,
+            headers={"User-Agent": user_agent},
+            follow_redirects=True,
+            timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+            verify=_httpx_verify_for_source_url(_BIVA_EMISORAS_XLS_URL),
+        )
+        response.raise_for_status()
+        biva_issuer_path.write_bytes(response.content)
+    _append_downloaded_source(
+        name="biva-emisoras",
+        source_url=_BIVA_EMISORAS_XLS_URL,
+        path=biva_issuer_path,
+        category="issuer_directory",
+        notes="Official BIVA issuer workbook snapshot.",
+    )
+    representante_path = source_paths.get("biva-representante-comun")
+    if representante_path is None or not representante_path.exists():
+        representante_path = country_dir / "biva-representante-comun.xlsx"
+        response = httpx.get(
+            _BIVA_REPRESENTANTE_COMUN_XLS_URL,
+            headers={"User-Agent": user_agent},
+            follow_redirects=True,
+            timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+            verify=_httpx_verify_for_source_url(_BIVA_REPRESENTANTE_COMUN_XLS_URL),
+        )
+        response.raise_for_status()
+        representante_path.write_bytes(response.content)
+    _append_downloaded_source(
+        name="biva-representante-comun",
+        source_url=_BIVA_REPRESENTANTE_COMUN_XLS_URL,
+        path=representante_path,
+        category="issuer_profile",
+        notes="Official BIVA representative-common workbook snapshot.",
+    )
+    bmv_quotes_path = source_paths.get("bmv-mobile-quotes")
+    if bmv_quotes_path is None or not bmv_quotes_path.exists():
+        bmv_quotes_path = country_dir / "bmv-mobile-quotes.json"
+        response = httpx.get(
+            _BMV_MOVIL_CLAVES_URL,
+            headers={
+                "User-Agent": user_agent,
+                "Accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
+            },
+            follow_redirects=True,
+            timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+            verify=_httpx_verify_for_source_url(_BMV_MOVIL_CLAVES_URL),
+        )
+        response.raise_for_status()
+        bmv_quotes_path.write_text(response.text, encoding="utf-8")
+    _append_downloaded_source(
+        name="bmv-mobile-quotes",
+        source_url=_BMV_MOVIL_CLAVES_URL,
+        path=bmv_quotes_path,
+        category="issuer_directory",
+        notes="Official BMV mobile quote ticker/series snapshot.",
+    )
+    bmv_stocks_path = source_paths.get("bmv-listed-stocks")
+    if bmv_stocks_path is None or not bmv_stocks_path.exists():
+        bmv_stocks_path = country_dir / "bmv-listed-stocks.json"
+        bmv_stock_records = _fetch_bmv_search_records(
+            market_code=_BMV_DOMESTIC_STOCK_MARKET_CODE,
+            instrument_code=_BMV_DOMESTIC_STOCK_INSTRUMENT_CODE,
+            user_agent=user_agent,
+        )
+        _write_json_snapshot(
+            bmv_stocks_path,
+            payload={
+                "market_code": _BMV_DOMESTIC_STOCK_MARKET_CODE,
+                "instrument_code": _BMV_DOMESTIC_STOCK_INSTRUMENT_CODE,
+                "records": bmv_stock_records,
+            },
+        )
+    else:
+        bmv_stocks_payload = json.loads(bmv_stocks_path.read_text(encoding="utf-8"))
+        stock_records = bmv_stocks_payload.get("records")
+        bmv_stock_records = stock_records if isinstance(stock_records, list) else []
+    _append_downloaded_source(
+        name="bmv-listed-stocks",
+        source_url=_BMV_ISSUERS_INFORMATION_URL,
+        path=bmv_stocks_path,
+        category="issuer_directory",
+        notes="Official BMV domestic stock search snapshot from the issuers-information search endpoint.",
+    )
+
+    issuer_records = _extract_biva_issuer_records(biva_issuer_path)
+    representative_records = _extract_biva_representante_records(representante_path)
+    quote_records = _extract_bmv_mobile_quote_records(
+        bmv_quotes_path.read_text(encoding="utf-8", errors="ignore")
+    )
+    representative_by_ticker: dict[str, list[dict[str, str]]] = {}
+    for record in representative_records:
+        representative_by_ticker.setdefault(record["ticker"], []).append(record)
+    quotes_by_ticker: dict[str, list[dict[str, str]]] = {}
+    for record in quote_records:
+        quotes_by_ticker.setdefault(record["ticker"], []).append(record)
+
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    for record in issuer_records:
+        ticker = record["ticker"]
+        company_name = record["company_name"]
+        aliases = _build_united_states_company_aliases(company_name, ticker)
+        quote_series = [
+            _normalize_whitespace(str(item.get("series", ""))).upper()
+            for item in quotes_by_ticker.get(ticker, [])
+            if _normalize_whitespace(str(item.get("series", "")))
+        ]
+        representative_series = [
+            _normalize_whitespace(str(item.get("series", ""))).upper()
+            for item in representative_by_ticker.get(ticker, [])
+            if _normalize_whitespace(str(item.get("series", "")))
+        ]
+        representative_codes = _unique_aliases(
+            [
+                _normalize_whitespace(str(item.get("representative_common", ""))).upper()
+                for item in representative_by_ticker.get(ticker, [])
+                if _normalize_whitespace(str(item.get("representative_common", "")))
+            ]
+        )
+        issuer_entities.append(
+            {
+                "entity_type": "organization",
+                "canonical_text": company_name,
+                "aliases": aliases,
+                "entity_id": f"finance-mx-issuer:{ticker}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "mx",
+                        "category": "issuer",
+                        "ticker": ticker,
+                        "exchange_code": "BIVA",
+                        "exchange_name": "Bolsa Institucional de Valores",
+                        "secondary_exchange_code": "BMV" if ticker in quotes_by_ticker else "",
+                        "secondary_exchange_name": (
+                            "Bolsa Mexicana de Valores" if ticker in quotes_by_ticker else ""
+                        ),
+                        "series": _unique_aliases([*quote_series, *representative_series]),
+                        "representative_common_codes": representative_codes,
+                    }.items()
+                    if value
+                },
+            }
+        )
+        distinct_series = _unique_aliases([*quote_series, *representative_series])
+        if not distinct_series:
+            distinct_series = [""]
+        for series in distinct_series:
+            canonical_ticker = ticker if not series else f"{ticker} {series}"
+            aliases_for_ticker = _unique_aliases(
+                [ticker, canonical_ticker, company_name, *aliases]
+            )
+            metadata = {
+                key: value
+                for key, value in {
+                    "country_code": "mx",
+                    "category": "ticker",
+                    "issuer_name": company_name,
+                    "ticker_root": ticker,
+                    "series": series,
+                    "exchange_code": "BMV" if series in quote_series else "BIVA",
+                    "exchange_name": (
+                        "Bolsa Mexicana de Valores"
+                        if series in quote_series
+                        else "Bolsa Institucional de Valores"
+                    ),
+                    "representative_common_codes": representative_codes,
+                }.items()
+                if value
+            }
+            ticker_entities.append(
+                {
+                    "entity_type": "ticker",
+                    "canonical_text": canonical_ticker,
+                    "aliases": aliases_for_ticker,
+                    "entity_id": (
+                        f"finance-mx-ticker:{ticker}:{series.casefold() or 'base'}"
+                    ),
+                    "metadata": metadata,
+                }
+            )
+
+    profile_results: dict[str, tuple[Path, str]] = {}
+    bmv_profile_dir = country_dir / "bmv-profiles"
+    if bmv_stock_records:
+        bmv_profile_dir.mkdir(parents=True, exist_ok=True)
+        with ThreadPoolExecutor(max_workers=_BMV_PROFILE_FETCH_WORKERS) as executor:
+            future_map = {
+                executor.submit(
+                    _download_bmv_profile_page,
+                    record=record,
+                    profile_dir=bmv_profile_dir,
+                    user_agent=user_agent,
+                ): record
+                for record in bmv_stock_records
+                if _normalize_whitespace(str(record.get("idEmisora", "")))
+                and _normalize_whitespace(str(record.get("claveEmisora", "")))
+            }
+            for future in as_completed(future_map):
+                record = future_map[future]
+                issuer_id = _normalize_whitespace(str(record.get("idEmisora", "")))
+                ticker = _normalize_whitespace(str(record.get("claveEmisora", ""))).upper()
+                if not issuer_id or not ticker:
+                    continue
+                try:
+                    profile_path, resolved_url = future.result()
+                except Exception as exc:
+                    warning_text = (
+                        f"finance-mx: failed to download BMV profile page for {ticker} "
+                        f"({issuer_id}): {exc}"
+                    )
+                    if warning_text not in issuer_warnings and len(issuer_warnings) < 20:
+                        issuer_warnings.append(warning_text)
+                    continue
+                profile_results[issuer_id] = (profile_path, resolved_url)
+                _append_downloaded_source(
+                    name=f"bmv-profile-{issuer_id}",
+                    source_url=resolved_url,
+                    path=profile_path,
+                    category="issuer_profile",
+                    notes=(
+                        f"ticker={ticker} market={_BMV_DOMESTIC_STOCK_MARKET_CODE} "
+                        f"instrument={_BMV_DOMESTIC_STOCK_INSTRUMENT_CODE}"
+                    ),
+                )
+
+    issuer_entities_by_id = {
+        str(entity.get("entity_id", "")): entity for entity in issuer_entities if entity.get("entity_id")
+    }
+    ticker_entities_by_id = {
+        str(entity.get("entity_id", "")): entity for entity in ticker_entities if entity.get("entity_id")
+    }
+    for record in bmv_stock_records:
+        ticker = _normalize_whitespace(str(record.get("claveEmisora", ""))).upper()
+        issuer_id = _normalize_whitespace(str(record.get("idEmisora", "")))
+        company_name = _smart_titlecase_company_name(
+            _normalize_whitespace(str(record.get("razonSocial", "")))
+        )
+        if not ticker or not issuer_id or not company_name:
+            continue
+        issuer_entity_id = f"finance-mx-issuer:{ticker}"
+        profile_path, resolved_profile_url = profile_results.get(
+            issuer_id,
+            (
+                bmv_profile_dir / f"{ticker.casefold()}-{issuer_id}.html",
+                _BMV_PROFILE_URL_TEMPLATE.format(issuer_id=quote(issuer_id, safe="")),
+            ),
+        )
+        source_name = f"bmv-profile-{issuer_id}"
+        profile_metadata: dict[str, object] = {}
+        profile_people_entities: list[dict[str, object]] = []
+        equity_series: list[str] = []
+        if profile_path.exists():
+            (
+                profile_metadata,
+                profile_people_entities,
+                equity_series,
+            ) = _extract_bmv_profile_details(
+                profile_path.read_text(encoding="utf-8", errors="ignore"),
+                company_name=company_name,
+                ticker=ticker,
+                issuer_id=issuer_id,
+                market_code=_BMV_DOMESTIC_STOCK_MARKET_CODE,
+                source_name=source_name,
+                profile_url=resolved_profile_url,
+            )
+            people_entities.extend(profile_people_entities)
+        issuer_metadata = {
+            "country_code": "mx",
+            "category": "issuer",
+            "ticker": ticker,
+            "exchange_code": "BMV",
+            "exchange_name": "Bolsa Mexicana de Valores",
+            "bmv_issuer_id": issuer_id,
+            "bmv_market_code": _BMV_DOMESTIC_STOCK_MARKET_CODE,
+            "bmv_instrument_code": _BMV_DOMESTIC_STOCK_INSTRUMENT_CODE,
+            "bmv_profile_url": resolved_profile_url,
+            **profile_metadata,
+        }
+        issuer_entity = issuer_entities_by_id.get(issuer_entity_id)
+        issuer_aliases = _build_united_states_company_aliases(company_name, ticker)
+        if issuer_entity is None:
+            issuer_entity = {
+                "entity_type": "organization",
+                "canonical_text": company_name,
+                "aliases": _unique_aliases(issuer_aliases),
+                "entity_id": issuer_entity_id,
+                "metadata": {
+                    key: value for key, value in issuer_metadata.items() if value not in ("", [], None, {})
+                },
+            }
+            issuer_entities.append(issuer_entity)
+            issuer_entities_by_id[issuer_entity_id] = issuer_entity
+        else:
+            issuer_entity["aliases"] = _unique_aliases(
+                [
+                    *[alias for alias in issuer_entity.get("aliases", []) if isinstance(alias, str)],
+                    *issuer_aliases,
+                ]
+            )
+            issuer_entity_metadata = issuer_entity.setdefault("metadata", {})
+            if isinstance(issuer_entity_metadata, dict):
+                existing_exchanges = issuer_entity_metadata.get("exchange_codes")
+                exchange_codes: list[str] = []
+                if isinstance(existing_exchanges, list):
+                    exchange_codes.extend(str(value) for value in existing_exchanges if value)
+                elif existing_exchanges:
+                    exchange_codes.append(str(existing_exchanges))
+                for exchange_code in (
+                    issuer_entity_metadata.get("exchange_code"),
+                    issuer_metadata.get("exchange_code"),
+                ):
+                    if exchange_code:
+                        exchange_codes.append(str(exchange_code))
+                if exchange_codes:
+                    issuer_entity_metadata["exchange_codes"] = _unique_aliases(exchange_codes)
+                for key, value in issuer_metadata.items():
+                    if value in ("", [], None, {}):
+                        continue
+                    if key == "equity_series":
+                        existing_series = issuer_entity_metadata.get("equity_series")
+                        merged_series: list[str] = []
+                        if isinstance(existing_series, list):
+                            merged_series.extend(str(item) for item in existing_series if item)
+                        elif existing_series:
+                            merged_series.append(str(existing_series))
+                        merged_series.extend(str(item) for item in value if item)
+                        issuer_entity_metadata[key] = _unique_aliases(merged_series)
+                        continue
+                    if key not in issuer_entity_metadata or not issuer_entity_metadata.get(key):
+                        issuer_entity_metadata[key] = value
+        for series in equity_series or [""]:
+            series_value = _normalize_whitespace(series).upper()
+            ticker_entity_id = f"finance-mx-ticker:{ticker}:{series_value.casefold() or 'base'}"
+            ticker_aliases = _unique_aliases(
+                [ticker, company_name, f"{ticker} {series_value}".strip()]
+            )
+            ticker_metadata = {
+                "country_code": "mx",
+                "category": "ticker",
+                "issuer_name": company_name,
+                "ticker_root": ticker,
+                "series": series_value,
+                "exchange_code": "BMV",
+                "exchange_name": "Bolsa Mexicana de Valores",
+                "bmv_issuer_id": issuer_id,
+                "bmv_market_code": _BMV_DOMESTIC_STOCK_MARKET_CODE,
+                "bmv_instrument_code": _BMV_DOMESTIC_STOCK_INSTRUMENT_CODE,
+                "bmv_profile_url": resolved_profile_url,
+                "website": str(profile_metadata.get("website", "")),
+                "sector": str(profile_metadata.get("sector", "")),
+                "sub_sector": str(profile_metadata.get("sub_sector", "")),
+            }
+            ticker_entity = ticker_entities_by_id.get(ticker_entity_id)
+            if ticker_entity is None:
+                ticker_entity = {
+                    "entity_type": "ticker",
+                    "canonical_text": ticker if not series_value else f"{ticker} {series_value}",
+                    "aliases": ticker_aliases,
+                    "entity_id": ticker_entity_id,
+                    "metadata": {
+                        key: value for key, value in ticker_metadata.items() if value not in ("", [], None, {})
+                    },
+                }
+                ticker_entities.append(ticker_entity)
+                ticker_entities_by_id[ticker_entity_id] = ticker_entity
+            else:
+                ticker_entity["aliases"] = _unique_aliases(
+                    [
+                        *[alias for alias in ticker_entity.get("aliases", []) if isinstance(alias, str)],
+                        *ticker_aliases,
+                    ]
+                )
+                ticker_entity_metadata = ticker_entity.setdefault("metadata", {})
+                if isinstance(ticker_entity_metadata, dict):
+                    for key, value in ticker_metadata.items():
+                        if value in ("", [], None, {}):
+                            continue
+                        if key not in ticker_entity_metadata or not ticker_entity_metadata.get(key):
+                            ticker_entity_metadata[key] = value
+
+    issuer_entities = _dedupe_entities(issuer_entities)
+    ticker_entities = _dedupe_entities(ticker_entities)
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_mexico_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 20:
+            issuer_warnings.append(warning)
+
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-mx-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "biva_issuers_plus_bmv_quotes",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-mx-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "biva_issuers_plus_bmv_quotes",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-mx-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "wikidata_mexico_public_people",
+                "warnings": [],
+            }
+        )
+    return derived_files
+
+
+def _derive_italy_borsa_italiana_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
+    issuer_warnings: list[str] = []
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    directory_pages_dir = country_dir / "borsa-italiana-directory-pages"
+    directory_pages_dir.mkdir(parents=True, exist_ok=True)
+    profile_pages_dir = country_dir / "borsa-italiana-company-profiles"
+    profile_pages_dir.mkdir(parents=True, exist_ok=True)
+    records: list[dict[str, str]] = []
+    for initial in _BORSA_ITALIANA_DIRECTORY_INITIALS:
+        first_page_url = _BORSA_ITALIANA_DIRECTORY_PAGE_URL_TEMPLATE.format(initial=initial)
+        first_page_path = directory_pages_dir / f"{_slug(initial or 'all')}-1.html"
+        if not first_page_path.exists():
+            try:
+                _download_source(first_page_url, first_page_path, user_agent=user_agent)
+            except Exception as exc:
+                warning_text = (
+                    f"finance-it: failed to download Borsa Italiana directory page "
+                    f"{initial}: {exc}"
+                )
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 10:
+                    issuer_warnings.append(warning_text)
+                continue
+        _append_downloaded_source(
+            name=f"borsa-italiana-directory-{_slug(initial or 'all')}-1",
+            source_url=first_page_url,
+            path=first_page_path,
+            category="issuer_directory",
+            notes=f"initial={initial};page=1",
+        )
+        first_page_html = first_page_path.read_text(encoding="utf-8", errors="ignore")
+        records.extend(_extract_borsa_italiana_directory_records(first_page_html))
+        page_count = _extract_borsa_italiana_page_count(first_page_html)
+        for page_number in range(2, page_count + 1):
+            page_url = f"{first_page_url}&page={page_number}"
+            page_path = directory_pages_dir / f"{_slug(initial or 'all')}-{page_number}.html"
+            if not page_path.exists():
+                try:
+                    _download_source(page_url, page_path, user_agent=user_agent)
+                except Exception as exc:
+                    warning_text = (
+                        f"finance-it: failed to download Borsa Italiana directory page "
+                        f"{initial}:{page_number}: {exc}"
+                    )
+                    if warning_text not in issuer_warnings and len(issuer_warnings) < 10:
+                        issuer_warnings.append(warning_text)
+                    continue
+            _append_downloaded_source(
+                name=f"borsa-italiana-directory-{_slug(initial or 'all')}-{page_number}",
+                source_url=page_url,
+                path=page_path,
+                category="issuer_directory",
+                notes=f"initial={initial};page={page_number}",
+            )
+            records.extend(
+                _extract_borsa_italiana_directory_records(
+                    page_path.read_text(encoding="utf-8", errors="ignore")
+                )
+            )
+    seen_records: set[tuple[str, str]] = set()
+    for record in records:
+        key = (record["isin"], record["mic"])
+        if key in seen_records:
+            continue
+        seen_records.add(key)
+        profile_url = _BORSA_ITALIANA_COMPANY_PROFILE_URL_TEMPLATE.format(
+            isin=record["isin"],
+            mic=record["mic"],
+        )
+        profile_path = profile_pages_dir / f"{record['isin'].casefold()}-{record['mic'].casefold()}.html"
+        if not profile_path.exists():
+            try:
+                _download_source(profile_url, profile_path, user_agent=user_agent)
+            except Exception as exc:
+                warning_text = (
+                    f"finance-it: failed to download Borsa Italiana company profile "
+                    f"{record['isin']}:{record['mic']}: {exc}"
+                )
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 10:
+                    issuer_warnings.append(warning_text)
+                continue
+        _append_downloaded_source(
+            name=(
+                f"borsa-italiana-company-profile-"
+                f"{record['isin'].casefold()}-{record['mic'].casefold()}"
+            ),
+            source_url=profile_url,
+            path=profile_path,
+            category="issuer_profile",
+            notes=f"isin={record['isin']};mic={record['mic']}",
+        )
+        issuer_entity, page_people_entities = _extract_borsa_italiana_company_profile_entities(
+            profile_path.read_text(encoding="utf-8", errors="ignore"),
+            isin=record["isin"],
+            mic=record["mic"],
+        )
+        if issuer_entity is not None:
+            issuer_entities.append(issuer_entity)
+        people_entities.extend(page_people_entities)
+    issuer_entities = _dedupe_entities(issuer_entities)
+    ticker_entities = _dedupe_entities(ticker_entities)
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_italy_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 10:
+            issuer_warnings.append(warning)
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-it-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "borsa_italiana_directory_plus_company_profiles",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-it-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "borsa_italiana_directory_plus_company_profiles",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-it-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "borsa_italiana_company_profiles",
+                "warnings": [],
+            }
+        )
+    return derived_files
+
+
+def _derive_russia_moex_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
+    issuer_warnings: list[str] = []
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    snapshot_path = country_dir / "moex-securities.json"
+    if snapshot_path.exists():
+        payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    else:
+        payload = _fetch_moex_securities_payload(user_agent=user_agent)
+        _write_json_snapshot(snapshot_path, payload=payload)
+    _append_downloaded_source(
+        name="moex-securities-api",
+        source_url=_MOEX_SECURITIES_URL,
+        path=snapshot_path,
+        category="issuer_directory",
+        notes="Official MOEX ISS securities snapshot for stock-market shares.",
+    )
+    issuer_entities, ticker_entities = _extract_moex_security_entities(payload)
+    issuer_entities = _dedupe_entities(issuer_entities)
+    ticker_entities = _dedupe_entities(ticker_entities)
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_russia_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 10:
+            issuer_warnings.append(warning)
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-ru-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "moex_iss_securities_api",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-ru-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "moex_iss_securities_api",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-ru-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "moex_iss_securities_plus_wikidata_public_people",
+                "warnings": [],
+            }
+        )
+    return derived_files
+
+
+def _fetch_moex_securities_payload(*, user_agent: str) -> dict[str, object]:
+    columns: list[object] | None = None
+    rows: list[object] = []
+    start = 0
+    while True:
+        source_url = (
+            _MOEX_SECURITIES_URL
+            if start == 0
+            else f"{_MOEX_SECURITIES_URL}&start={start}"
+        )
+        response = httpx.get(
+            source_url,
+            headers={
+                "User-Agent": user_agent,
+                "Accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
+            },
+            follow_redirects=True,
+            timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+            verify=_httpx_verify_for_source_url(_MOEX_SECURITIES_URL),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        securities = payload.get("securities")
+        if not isinstance(securities, dict):
+            break
+        page_columns = securities.get("columns")
+        page_rows = securities.get("data")
+        if columns is None and isinstance(page_columns, list):
+            columns = page_columns
+        if not isinstance(page_rows, list) or not page_rows:
+            break
+        rows.extend(page_rows)
+        if len(page_rows) < _MOEX_SECURITIES_PAGE_SIZE:
+            break
+        start += _MOEX_SECURITIES_PAGE_SIZE
+    return {
+        "securities": {
+            "columns": columns or [],
+            "data": rows,
+        }
+    }
+
+
+def _derive_saudi_exchange_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
+    issuer_warnings: list[str] = []
+    people_warnings: list[str] = []
+    directory_path = country_dir / "saudi-exchange-issuer-directory.html"
+    if not directory_path.exists():
+        _download_saudi_exchange_rendered_page(
+            _SAUDI_EXCHANGE_ISSUER_DIRECTORY_URL,
+            directory_path,
+            user_agent=user_agent,
+        )
+    _append_downloaded_source(
+        name="saudi-exchange-issuer-directory",
+        source_url=_SAUDI_EXCHANGE_ISSUER_DIRECTORY_URL,
+        path=directory_path,
+        category="issuer_directory",
+        notes="Rendered Saudi Exchange issuer directory used to discover hidden company-profile routes.",
+    )
+    issuer_records = _extract_saudi_exchange_issuer_records(
+        directory_path.read_text(encoding="utf-8", errors="ignore")
+    )
+    if not issuer_records:
+        return []
+
+    try:
+        snapshot_date = date.fromisoformat(country_dir.parent.name)
+    except ValueError:
+        snapshot_date = date.today()
+
+    profile_dir = country_dir / "saudi-exchange-company-profiles"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    future_to_profile: dict[Any, tuple[dict[str, str], Path]] = {}
+    with ThreadPoolExecutor(max_workers=_SAUDI_EXCHANGE_PROFILE_FETCH_WORKERS) as executor:
+        for issuer_record in issuer_records:
+            company_symbol = str(issuer_record["company_symbol"])
+            profile_path = profile_dir / f"{company_symbol}.html"
+            if profile_path.exists():
+                continue
+            future = executor.submit(
+                _download_saudi_exchange_rendered_page,
+                issuer_record["profile_url"],
+                profile_path,
+                user_agent=user_agent,
+            )
+            future_to_profile[future] = (issuer_record, profile_path)
+        for future in as_completed(future_to_profile):
+            issuer_record, profile_path = future_to_profile[future]
+            try:
+                future.result()
+            except Exception as exc:
+                warning_text = (
+                    "finance-sa: failed to download Saudi Exchange company profile "
+                    f"{issuer_record['company_symbol']}: {exc}"
+                )
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 25:
+                    issuer_warnings.append(warning_text)
+                if warning_text not in people_warnings and len(people_warnings) < 25:
+                    people_warnings.append(warning_text)
+                if profile_path.exists():
+                    profile_path.unlink(missing_ok=True)
+
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    shareholder_organization_records: list[dict[str, str]] = []
+    major_dir = country_dir / "saudi-exchange-major-shareholders"
+    major_dir.mkdir(parents=True, exist_ok=True)
+    for issuer_record in issuer_records:
+        company_symbol = str(issuer_record["company_symbol"])
+        profile_path = profile_dir / f"{company_symbol}.html"
+        if not profile_path.exists():
+            continue
+        _append_downloaded_source(
+            name=f"saudi-exchange-company-profile-{company_symbol}",
+            source_url=str(issuer_record["profile_url"]),
+            path=profile_path,
+            category="issuer_profile",
+            notes=f"company_symbol={company_symbol}",
+        )
+        profile_html = profile_path.read_text(encoding="utf-8", errors="ignore")
+        issuer_entity, ticker_entity, profile_people = (
+            _extract_saudi_exchange_company_profile_entities(
+                profile_html,
+                issuer_record=issuer_record,
+            )
+        )
+        if issuer_entity is None:
+            warning_text = (
+                "finance-sa: failed to parse Saudi Exchange company profile "
+                f"{company_symbol}"
+            )
+            if warning_text not in issuer_warnings and len(issuer_warnings) < 25:
+                issuer_warnings.append(warning_text)
+            continue
+        issuer_metadata = issuer_entity.get("metadata")
+        if isinstance(issuer_metadata, dict):
+            issuer_metadata["profile_url"] = str(issuer_record["profile_url"])
+            issuer_record["isin"] = _normalize_whitespace(str(issuer_metadata.get("isin", "")))
+        if ticker_entity is not None:
+            ticker_metadata = ticker_entity.get("metadata")
+            if isinstance(ticker_metadata, dict):
+                ticker_metadata["profile_url"] = str(issuer_record["profile_url"])
+        issuer_entities.append(issuer_entity)
+        if ticker_entity is not None:
+            ticker_entities.append(ticker_entity)
+        people_entities.extend(profile_people)
+
+        major_url = _build_saudi_exchange_major_shareholder_url(
+            profile_html=profile_html,
+            company_symbol=company_symbol,
+            snapshot_date=snapshot_date,
+        )
+        if major_url is None:
+            continue
+        major_path = major_dir / f"{company_symbol}.html"
+        if not major_path.exists():
+            try:
+                _download_saudi_exchange_rendered_page(
+                    major_url,
+                    major_path,
+                    user_agent=user_agent,
+                )
+            except Exception as exc:
+                warning_text = (
+                    "finance-sa: failed to download Saudi Exchange major shareholders "
+                    f"{company_symbol}: {exc}"
+                )
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 25:
+                    issuer_warnings.append(warning_text)
+                if warning_text not in people_warnings and len(people_warnings) < 25:
+                    people_warnings.append(warning_text)
+                continue
+        _append_downloaded_source(
+            name=f"saudi-exchange-major-shareholders-{company_symbol}",
+            source_url=major_url,
+            path=major_path,
+            category="shareholder_register",
+            notes=f"company_symbol={company_symbol}",
+        )
+        major_people, organization_records = _extract_saudi_exchange_major_shareholder_entities(
+            major_path.read_text(encoding="utf-8", errors="ignore"),
+            issuer_record=issuer_record,
+        )
+        people_entities.extend(major_people)
+        shareholder_organization_records.extend(organization_records)
+
+    issuer_entities.extend(
+        _build_saudi_exchange_major_shareholder_organization_entities(
+            shareholder_records=shareholder_organization_records,
+        )
+    )
+    issuer_entities = _dedupe_entities(issuer_entities)
+    ticker_entities = _dedupe_entities(ticker_entities)
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_saudi_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 10:
+            issuer_warnings.append(warning)
+        if warning not in people_warnings and len(people_warnings) < 10:
+            people_warnings.append(warning)
+
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-sa-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "saudi_exchange_hidden_company_profiles_plus_major_shareholders",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-sa-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "saudi_exchange_hidden_company_profiles",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-sa-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "saudi_exchange_hidden_company_profiles_plus_major_shareholders",
+                "warnings": people_warnings,
+            }
+        )
+    return derived_files
+
+
+def _derive_south_africa_jse_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
+    issuer_warnings: list[str] = []
+    snapshot_path = country_dir / "jse-listed-companies.json"
+    if snapshot_path.exists():
+        payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    else:
+        response = httpx.post(
+            _JSE_GET_ALL_ISSUERS_URL,
+            headers={
+                "User-Agent": user_agent,
+                "Accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
+                "Content-Type": "application/json;",
+            },
+            json={"filterLongName": "", "filterType": ""},
+            follow_redirects=True,
+            timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+            verify=_httpx_verify_for_source_url(_JSE_GET_ALL_ISSUERS_URL),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        _write_json_snapshot(snapshot_path, payload=payload)
+    _append_downloaded_source(
+        name="jse-listed-companies-api",
+        source_url=_JSE_GET_ALL_ISSUERS_URL,
+        path=snapshot_path,
+        category="issuer_directory",
+        notes="Official JSE client-portal listed-company directory snapshot.",
+    )
+    issuer_entities, ticker_entities, people_entities = _extract_jse_directory_entities(payload)
+    associated_role_dir = country_dir / "jse-associated-roles"
+    associated_role_dir.mkdir(parents=True, exist_ok=True)
+    associated_role_org_entities: list[dict[str, object]] = []
+    associated_role_jobs: list[tuple[str, str, str]] = []
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        master_id = _normalize_whitespace(str(row.get("MasterID", "")))
+        ticker = _normalize_whitespace(str(row.get("AlphaCode", ""))).upper()
+        issuer_name = _smart_titlecase_company_name(
+            _normalize_whitespace(str(row.get("LongName", "")))
+        )
+        status = _normalize_whitespace(str(row.get("Status", "")))
+        if not master_id or not ticker or not issuer_name or status.casefold() != "current":
+            continue
+        associated_role_jobs.append((master_id, ticker, issuer_name))
+
+    def _fetch_associated_roles(
+        job: tuple[str, str, str],
+    ) -> tuple[str, str, str, Path | None, str | None]:
+        master_id, ticker, issuer_name = job
+        destination = associated_role_dir / f"{master_id}.json"
+        if destination.exists():
+            return master_id, ticker, issuer_name, destination, None
+        try:
+            response = httpx.post(
+                _JSE_GET_ISSUER_ASSOCIATED_ROLES_URL,
+                headers={
+                    "User-Agent": user_agent,
+                    "Accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
+                    "Content-Type": "application/json;",
+                },
+                json={"issuerMasterId": int(master_id)},
+                follow_redirects=True,
+                timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+                verify=_httpx_verify_for_source_url(_JSE_GET_ISSUER_ASSOCIATED_ROLES_URL),
+            )
+            response.raise_for_status()
+            destination.write_text(response.text, encoding="utf-8")
+            return master_id, ticker, issuer_name, destination, None
+        except Exception as exc:
+            return master_id, ticker, issuer_name, None, str(exc)
+
+    with ThreadPoolExecutor(max_workers=_SOUTH_AFRICA_ASSOCIATED_ROLE_FETCH_WORKERS) as executor:
+        futures = [executor.submit(_fetch_associated_roles, job) for job in associated_role_jobs]
+        for future in as_completed(futures):
+            master_id, ticker, issuer_name, associated_path, error_text = future.result()
+            if associated_path is None:
+                warning_text = (
+                    "finance-za: failed to download JSE associated roles for "
+                    f"{ticker}/{master_id}: {error_text}"
+                )
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 20:
+                    issuer_warnings.append(warning_text)
+                continue
+            _append_downloaded_source(
+                name=f"jse-associated-roles-{master_id}",
+                source_url=_JSE_GET_ISSUER_ASSOCIATED_ROLES_URL,
+                path=associated_path,
+                category="issuer_profile",
+                notes=f"master_id={master_id}; ticker={ticker}",
+            )
+            associated_payload = json.loads(associated_path.read_text(encoding="utf-8"))
+            role_orgs, role_people = _extract_jse_associated_role_entities(
+                associated_payload,
+                issuer_name=issuer_name,
+                issuer_ticker=ticker,
+            )
+            associated_role_org_entities.extend(role_orgs)
+            people_entities.extend(role_people)
+    issuer_entities = _dedupe_entities([*issuer_entities, *associated_role_org_entities])
+    ticker_entities = _dedupe_entities(ticker_entities)
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_south_africa_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 10:
+            issuer_warnings.append(warning)
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-za-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "jse_client_portal_directory",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-za-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "jse_client_portal_directory",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-za-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "jse_client_portal_directory",
+                "warnings": [],
+            }
+        )
+    return derived_files
+
+
+def _derive_south_korea_krx_entities(
+    *,
+    country_dir: Path,
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    downloaded_source_names = {
+        str(source.get("name")) for source in downloaded_sources if source.get("name")
+    }
+
+    def _append_downloaded_source(
+        *,
+        name: str,
+        source_url: str,
+        path: Path,
+        category: str,
+        notes: str = "",
+    ) -> None:
+        if name in downloaded_source_names:
+            return
+        downloaded_sources.append(
+            {
+                "name": name,
+                "source_url": source_url,
+                "path": str(path.relative_to(country_dir)),
+                "category": category,
+                "notes": notes,
+            }
+        )
+        downloaded_source_names.add(name)
+
+    issuer_warnings: list[str] = []
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    market_dir = country_dir / "krx-listed-companies"
+    market_dir.mkdir(parents=True, exist_ok=True)
+
+    def _fetch_market_snapshot(market_code: str) -> tuple[str, Path | None, str | None]:
+        market_name = _KRX_MARKET_CODE_TO_NAME[market_code]
+        destination = market_dir / f"{market_name.casefold()}.json"
+        if destination.exists():
+            return market_code, destination, None
+        try:
+            payload = _fetch_krx_listed_company_payload(
+                market_code=market_code,
+                user_agent=user_agent,
+            )
+        except Exception as exc:
+            return market_code, None, str(exc)
+        _write_json_snapshot(destination, payload=payload)
+        return market_code, destination, None
+
+    with ThreadPoolExecutor(max_workers=_KRX_MARKET_FETCH_WORKERS) as executor:
+        futures = [
+            executor.submit(_fetch_market_snapshot, market_code)
+            for market_code in sorted(_KRX_MARKET_CODE_TO_NAME)
+        ]
+        for future in as_completed(futures):
+            market_code, snapshot_path, error_text = future.result()
+            market_name = _KRX_MARKET_CODE_TO_NAME[market_code]
+            if snapshot_path is None:
+                warning_text = (
+                    f"finance-kr: failed to download KRX listed-company data for "
+                    f"{market_name}: {error_text}"
+                )
+                if warning_text not in issuer_warnings and len(issuer_warnings) < 10:
+                    issuer_warnings.append(warning_text)
+                continue
+            _append_downloaded_source(
+                name=f"krx-listed-companies-{market_name.casefold()}",
+                source_url=_KRX_DATA_URL,
+                path=snapshot_path,
+                category="issuer_directory",
+                notes=f"market={market_name}",
+            )
+            market_issuers, market_tickers = _extract_krx_listed_company_entities(
+                snapshot_path,
+                market_code=market_code,
+            )
+            issuer_entities.extend(market_issuers)
+            ticker_entities.extend(market_tickers)
+
+    issuer_entities = _dedupe_entities(issuer_entities)
+    ticker_entities = _dedupe_entities(ticker_entities)
+    wikidata_warnings = _enrich_south_korea_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    people_entities = _merge_country_people_entities([], people_entities)
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 10:
+            issuer_warnings.append(warning)
+
+    derived_files: list[dict[str, object]] = []
+    if issuer_entities:
+        issuer_path = country_dir / "derived_issuer_entities.json"
+        _write_curated_entities(issuer_path, entities=issuer_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-kr-issuers",
+                "path": issuer_path.name,
+                "record_count": len(issuer_entities),
+                "adapter": "krx_listed_companies_export",
+                "warnings": issuer_warnings,
+            }
+        )
+    if ticker_entities:
+        ticker_path = country_dir / "derived_ticker_entities.json"
+        _write_curated_entities(ticker_path, entities=ticker_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-kr-tickers",
+                "path": ticker_path.name,
+                "record_count": len(ticker_entities),
+                "adapter": "krx_listed_companies_export",
+                "warnings": [],
+            }
+        )
+    if people_entities:
+        people_path = country_dir / "derived_people_entities.json"
+        _write_curated_entities(people_path, entities=people_entities)
+        derived_files.append(
+            {
+                "name": "derived-finance-kr-people",
+                "path": people_path.name,
+                "record_count": len(people_entities),
+                "adapter": "krx_listed_companies_plus_wikidata_public_people",
                 "warnings": [],
             }
         )
@@ -5010,6 +8503,18 @@ def _derive_japan_jpx_entities(
     else:
         people_entities = []
     people_entities.extend(detail_page_people_entities)
+    people_entities = _merge_country_people_entities([], people_entities)
+    wikidata_warnings = _enrich_japan_entities_with_wikidata(
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+    for warning in wikidata_warnings:
+        if warning not in issuer_warnings and len(issuer_warnings) < 20:
+            issuer_warnings.append(warning)
 
     derived_files: list[dict[str, object]] = []
     if issuer_entities:
@@ -7021,6 +10526,62 @@ def _query_wikidata_entity_ids_by_string_property(
     return matches
 
 
+def _query_wikidata_entity_ids_by_casefolded_string_property(
+    *,
+    property_id: str,
+    values: list[str],
+    user_agent: str,
+    warnings: list[str],
+) -> dict[str, list[str]]:
+    resolved_values = _unique_aliases(
+        [
+            _normalize_whitespace(value).casefold()
+            for value in values
+            if _normalize_whitespace(value)
+        ]
+    )
+    matches: dict[str, list[str]] = {}
+    for index in range(0, len(resolved_values), _WIKIDATA_STRING_PROPERTY_BATCH_SIZE):
+        batch = resolved_values[index : index + _WIKIDATA_STRING_PROPERTY_BATCH_SIZE]
+        query = (
+            "SELECT ?item ?normalized_value WHERE { "
+            f"VALUES ?normalized_value {{ {' '.join(json.dumps(value) for value in batch)} }} "
+            f"?item wdt:{property_id} ?property_value . "
+            "FILTER(LCASE(STR(?property_value)) = ?normalized_value) "
+            "}"
+        )
+        try:
+            payload = _fetch_wikidata_sparql_json(query=query, user_agent=user_agent)
+        except Exception as exc:
+            warning_text = f"Wikidata casefolded property query failed for {property_id}: {exc}"
+            if warning_text not in warnings and len(warnings) < 5:
+                warnings.append(warning_text)
+            continue
+        results = payload.get("results")
+        if not isinstance(results, dict):
+            continue
+        bindings = results.get("bindings")
+        if not isinstance(bindings, list):
+            continue
+        for binding in bindings:
+            if not isinstance(binding, dict):
+                continue
+            property_binding = binding.get("normalized_value")
+            item_binding = binding.get("item")
+            if not isinstance(property_binding, dict) or not isinstance(item_binding, dict):
+                continue
+            property_value = _normalize_whitespace(
+                str(property_binding.get("value", ""))
+            ).casefold()
+            qid = _extract_wikidata_qid_from_uri(str(item_binding.get("value", "")))
+            if not property_value or not qid:
+                continue
+            matches.setdefault(property_value, [])
+            if qid not in matches[property_value]:
+                matches[property_value].append(qid)
+    return matches
+
+
 def _fetch_wikidata_sparql_json(
     *,
     query: str,
@@ -7189,6 +10750,2244 @@ def _score_united_states_issuer_wikidata_candidate(
     return score
 
 
+def _decode_javascript_string_literal(value: str) -> str:
+    candidate = value.strip()
+    if not candidate:
+        return ""
+    try:
+        return json.loads(f'"{candidate}"')
+    except json.JSONDecodeError:
+        return _normalize_whitespace(html.unescape(candidate.replace(r"\/", "/")))
+
+
+def _extract_javascript_quoted_field(block: str, field_name: str) -> str:
+    pattern = re.compile(rf"{re.escape(field_name)}:\"(?P<value>(?:\\\\.|[^\"])*)\"")
+    match = pattern.search(block)
+    if match is None:
+        return ""
+    return _normalize_whitespace(_decode_javascript_string_literal(match.group("value")))
+
+
+def _extract_b3_listed_company_entities(
+    payload: dict[str, object],
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    results = payload.get("results")
+    if not isinstance(results, list):
+        return issuer_entities, ticker_entities
+    for row in results:
+        if not isinstance(row, dict):
+            continue
+        ticker = _normalize_whitespace(str(row.get("issuingCompany", ""))).upper()
+        company_name = _smart_titlecase_company_name(
+            _normalize_whitespace(str(row.get("companyName", "")))
+        )
+        if not ticker or not company_name:
+            continue
+        trading_name = _smart_titlecase_company_name(
+            _normalize_whitespace(str(row.get("tradingName", "")))
+        )
+        aliases = _unique_aliases(
+            _build_united_states_company_aliases(company_name, trading_name, ticker)
+        )
+        issuer_metadata = {
+            "country_code": "br",
+            "category": "issuer",
+            "ticker": ticker,
+            "exchange_code": "B3",
+            "exchange_name": "B3",
+            "cvm_code": _normalize_whitespace(str(row.get("codeCVM", ""))),
+            "cnpj": _normalize_whitespace(str(row.get("cnpj", ""))),
+            "listing_date": _normalize_whitespace(str(row.get("dateListing", ""))),
+            "market": _normalize_whitespace(str(row.get("market", ""))),
+            "market_indicator": _normalize_whitespace(str(row.get("marketIndicator", ""))),
+            "listing_status": _normalize_whitespace(str(row.get("status", ""))),
+            "governance_segment": _normalize_whitespace(
+                str(row.get("segmentEng") or row.get("segment") or "")
+            ),
+        }
+        issuer_entities.append(
+            {
+                "entity_type": "organization",
+                "canonical_text": company_name,
+                "aliases": aliases,
+                "entity_id": (
+                    f"finance-br-issuer:{_slug(issuer_metadata['cvm_code'] or ticker)}"
+                ),
+                "metadata": {key: value for key, value in issuer_metadata.items() if value},
+            }
+        )
+        ticker_entities.append(
+            {
+                "entity_type": "ticker",
+                "canonical_text": ticker,
+                "aliases": _unique_aliases([ticker, company_name, trading_name]),
+                "entity_id": f"finance-br-ticker:{ticker}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "br",
+                        "category": "ticker",
+                        "issuer_name": company_name,
+                        "exchange_code": "B3",
+                        "exchange_name": "B3",
+                        "cvm_code": issuer_metadata["cvm_code"],
+                        "cnpj": issuer_metadata["cnpj"],
+                        "listing_date": issuer_metadata["listing_date"],
+                        "governance_segment": issuer_metadata["governance_segment"],
+                        "market": issuer_metadata["market"],
+                    }.items()
+                    if value
+                },
+            }
+        )
+    return issuer_entities, ticker_entities
+
+
+def _latest_complete_brazil_cvm_year(today: date | None = None) -> int:
+    resolved_today = today or date.today()
+    return max(2010, resolved_today.year - 1)
+
+
+def _extract_brazil_cvm_zip_rows(
+    source_path: Path,
+    *,
+    member_name: str,
+) -> list[dict[str, str]]:
+    if not zipfile.is_zipfile(source_path):
+        return []
+    with zipfile.ZipFile(source_path) as archive:
+        target_name = next(
+            (
+                name
+                for name in archive.namelist()
+                if _normalize_whitespace(name).casefold()
+                == _normalize_whitespace(member_name).casefold()
+            ),
+            None,
+        )
+        if target_name is None:
+            return []
+        with archive.open(target_name) as handle:
+            reader = csv.DictReader(
+                io.TextIOWrapper(
+                    handle,
+                    encoding="latin-1",
+                    errors="ignore",
+                    newline="",
+                ),
+                delimiter=";",
+            )
+            return [
+                {
+                    str(key): _normalize_whitespace(str(value or ""))
+                    for key, value in row.items()
+                    if key
+                }
+                for row in reader
+                if isinstance(row, dict)
+            ]
+
+
+def _brazil_cvm_company_latest_row_groups(
+    rows: list[dict[str, str]],
+) -> dict[str, list[dict[str, str]]]:
+    grouped: dict[str, tuple[tuple[str, int, int], list[dict[str, str]]]] = {}
+    for row in rows:
+        cnpj_digits = re.sub(
+            r"\D+",
+            "",
+            _normalize_whitespace(str(row.get("CNPJ_Companhia", ""))),
+        )
+        if not cnpj_digits:
+            continue
+        data_reference = _normalize_whitespace(str(row.get("Data_Referencia", "")))
+        try:
+            version = int(_normalize_whitespace(str(row.get("Versao", ""))) or "0")
+        except ValueError:
+            version = 0
+        try:
+            document_id = int(
+                _normalize_whitespace(str(row.get("ID_Documento", ""))) or "0"
+            )
+        except ValueError:
+            document_id = 0
+        row_key = (data_reference, version, document_id)
+        current = grouped.get(cnpj_digits)
+        if current is None or row_key > current[0]:
+            grouped[cnpj_digits] = (row_key, [row])
+            continue
+        if row_key == current[0]:
+            current[1].append(row)
+    return {
+        cnpj_digits: selected_rows
+        for cnpj_digits, (_, selected_rows) in grouped.items()
+    }
+
+
+def _build_brazil_issuer_lookup(
+    issuer_entities: list[dict[str, object]],
+) -> dict[str, dict[str, object]]:
+    lookup: dict[str, dict[str, object]] = {}
+    for entity in issuer_entities:
+        metadata = entity.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        cnpj_digits = re.sub(
+            r"\D+",
+            "",
+            _normalize_whitespace(str(metadata.get("cnpj", ""))),
+        )
+        if not cnpj_digits:
+            continue
+        lookup[cnpj_digits] = {
+            "company_name": _normalize_whitespace(str(entity.get("canonical_text", ""))),
+            "ticker": _normalize_whitespace(str(metadata.get("ticker", ""))).upper(),
+            "entity": entity,
+        }
+    return lookup
+
+
+def _classify_brazil_cvm_person_role(row: dict[str, str]) -> str:
+    administration_body = _normalize_whitespace(str(row.get("Orgao_Administracao", "")))
+    role_text = " ".join(
+        value
+        for value in (
+            _normalize_whitespace(str(row.get("Cargo_Eletivo_Ocupado", ""))),
+            _normalize_whitespace(
+                str(row.get("Complemento_Cargo_Eletivo_Ocupado", ""))
+            ),
+            _normalize_whitespace(str(row.get("Outro_Cargo_Funcao", ""))),
+        )
+        if value
+    ).casefold()
+    administration_body_lower = administration_body.casefold()
+    if "diretoria" in administration_body_lower:
+        return "executive_officer"
+    if "diretor" in role_text or "presidente executivo" in role_text:
+        return "executive_officer"
+    if "conselho" in administration_body_lower:
+        return "director"
+    return "director"
+
+
+def _build_brazil_cvm_role_title(row: dict[str, str]) -> str:
+    return " / ".join(
+        _unique_aliases(
+            [
+                _normalize_whitespace(str(row.get("Cargo_Eletivo_Ocupado", ""))),
+                _normalize_whitespace(
+                    str(row.get("Complemento_Cargo_Eletivo_Ocupado", ""))
+                ),
+                _normalize_whitespace(str(row.get("Outro_Cargo_Funcao", ""))),
+                _normalize_whitespace(str(row.get("Orgao_Administracao", ""))),
+            ]
+        )
+    )
+
+
+def _extract_brazil_cvm_administrator_people_entities(
+    *,
+    administrator_rows: list[dict[str, str]],
+    issuer_lookup: dict[str, dict[str, object]],
+    source_name: str,
+) -> list[dict[str, object]]:
+    entities: list[dict[str, object]] = []
+    for cnpj_digits, rows in _brazil_cvm_company_latest_row_groups(administrator_rows).items():
+        issuer_metadata = issuer_lookup.get(cnpj_digits)
+        if issuer_metadata is None:
+            continue
+        company_name = str(issuer_metadata["company_name"])
+        ticker = str(issuer_metadata["ticker"])
+        employer_key = ticker or cnpj_digits
+        for row in rows:
+            canonical_name, aliases = _normalize_person_name_aliases(
+                str(row.get("Nome", ""))
+            )
+            if canonical_name is None:
+                continue
+            metadata: dict[str, object] = {
+                "country_code": "br",
+                "category": _classify_brazil_cvm_person_role(row),
+                "role_title": _build_brazil_cvm_role_title(row),
+                "employer_name": company_name,
+                "source_name": source_name,
+                "source_forms": ["FRE"],
+                "administration_body": _normalize_whitespace(
+                    str(row.get("Orgao_Administracao", ""))
+                ),
+                "profession": _normalize_whitespace(str(row.get("Profissao", ""))),
+                "elected_by_controller": _normalize_whitespace(
+                    str(row.get("Eleito_Controlador", ""))
+                ),
+                "data_reference": _normalize_whitespace(
+                    str(row.get("Data_Referencia", ""))
+                ),
+            }
+            if ticker:
+                metadata["employer_ticker"] = ticker
+            cpf = _normalize_whitespace(str(row.get("CPF", "")))
+            if cpf:
+                metadata["cpf"] = cpf
+            entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_text": canonical_name,
+                    "aliases": aliases,
+                    "entity_id": (
+                        f"finance-br-person:{employer_key}:{_slug(canonical_name)}"
+                    ),
+                    "metadata": {key: value for key, value in metadata.items() if value},
+                }
+            )
+    return entities
+
+
+def _parse_brazil_shareholder_percent(row: dict[str, str]) -> float:
+    percentages: list[float] = []
+    for key in (
+        "Percentual_Total_Acoes_Circulacao",
+        "Percentual_Acao_Ordinaria_Circulacao",
+        "Percentual_Acao_Preferencial_Circulacao",
+    ):
+        raw_value = _normalize_whitespace(str(row.get(key, ""))).replace(",", ".")
+        if not raw_value:
+            continue
+        try:
+            percentages.append(float(raw_value))
+        except ValueError:
+            continue
+    return max(percentages, default=0.0)
+
+
+def _extract_brazil_cvm_top_shareholder_entities(
+    *,
+    shareholder_rows: list[dict[str, str]],
+    issuer_lookup: dict[str, dict[str, object]],
+    source_name: str,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    people_entities: list[dict[str, object]] = []
+    organization_entities: list[dict[str, object]] = []
+    grouped_rows = _brazil_cvm_company_latest_row_groups(shareholder_rows)
+    for cnpj_digits, rows in grouped_rows.items():
+        issuer_metadata = issuer_lookup.get(cnpj_digits)
+        if issuer_metadata is None:
+            continue
+        company_name = str(issuer_metadata["company_name"])
+        ticker = str(issuer_metadata["ticker"])
+        employer_key = ticker or cnpj_digits
+        ranked_rows = sorted(
+            rows,
+            key=lambda row: (
+                -_parse_brazil_shareholder_percent(row),
+                _normalize_whitespace(str(row.get("Acionista", ""))).casefold(),
+            ),
+        )
+        promoted_count = 0
+        seen_holders: set[tuple[str, str]] = set()
+        for row in ranked_rows:
+            holder_name = _normalize_whitespace(str(row.get("Acionista", "")))
+            holder_type = _normalize_whitespace(str(row.get("Tipo_Pessoa_Acionista", "")))
+            if holder_type not in {"PF", "PJ"} or not holder_name:
+                continue
+            normalized_stop_name = _normalize_whitespace(
+                (_ascii_fold_alias(holder_name) or holder_name).upper()
+            )
+            if normalized_stop_name in _BRAZIL_SHAREHOLDER_STOP_NAMES:
+                continue
+            dedupe_key = (holder_name.casefold(), holder_type)
+            if dedupe_key in seen_holders:
+                continue
+            seen_holders.add(dedupe_key)
+            ownership_percent = _parse_brazil_shareholder_percent(row)
+            metadata: dict[str, object] = {
+                "country_code": "br",
+                "role_title": "Major Shareholder",
+                "employer_name": company_name,
+                "source_name": source_name,
+                "data_reference": _normalize_whitespace(
+                    str(row.get("Data_Referencia", ""))
+                ),
+                "ownership_percent": (
+                    f"{ownership_percent:.6f}" if ownership_percent > 0 else ""
+                ),
+                "shareholder_type": holder_type,
+            }
+            if ticker:
+                metadata["employer_ticker"] = ticker
+            shareholder_tax_id = _normalize_whitespace(
+                str(row.get("CPF_CNPJ_Acionista", ""))
+            )
+            if shareholder_tax_id:
+                metadata["shareholder_tax_id"] = shareholder_tax_id
+            if _normalize_whitespace(str(row.get("Acionista_Controlador", ""))):
+                metadata["is_controlling_shareholder"] = _normalize_whitespace(
+                    str(row.get("Acionista_Controlador", ""))
+                )
+            if _normalize_whitespace(
+                str(row.get("Participante_Acordo_Acionistas", ""))
+            ):
+                metadata["shareholders_agreement_participant"] = _normalize_whitespace(
+                    str(row.get("Participante_Acordo_Acionistas", ""))
+                )
+            if holder_type == "PF":
+                canonical_name, aliases = _normalize_person_name_aliases(holder_name)
+                if canonical_name is None:
+                    continue
+                people_entities.append(
+                    {
+                        "entity_type": "person",
+                        "canonical_text": canonical_name,
+                        "aliases": aliases,
+                        "entity_id": (
+                            f"finance-br-person:{employer_key}:{_slug(canonical_name)}:"
+                            "shareholder"
+                        ),
+                        "metadata": {
+                            key: value
+                            for key, value in {
+                                **metadata,
+                                "category": "shareholder",
+                            }.items()
+                            if value
+                        },
+                    }
+                )
+            else:
+                canonical_name = _smart_titlecase_company_name(holder_name)
+                if not canonical_name:
+                    continue
+                organization_entities.append(
+                    {
+                        "entity_type": "organization",
+                        "canonical_text": canonical_name,
+                        "aliases": _unique_aliases(
+                            [canonical_name, holder_name, shareholder_tax_id]
+                        ),
+                        "entity_id": (
+                            f"finance-br-shareholder:{employer_key}:"
+                            f"{_slug(shareholder_tax_id or canonical_name)}"
+                        ),
+                        "metadata": {
+                            key: value
+                            for key, value in {
+                                **metadata,
+                                "category": "major_shareholder",
+                            }.items()
+                            if value
+                        },
+                    }
+                )
+            promoted_count += 1
+            if promoted_count >= _BRAZIL_TOP_SHAREHOLDERS_PER_ISSUER:
+                break
+    return people_entities, organization_entities
+
+
+def _format_brazil_contact_phone(row: dict[str, str]) -> str:
+    parts = [
+        _normalize_whitespace(str(row.get("DDI_Telefone", ""))),
+        _normalize_whitespace(str(row.get("DDD_Telefone", ""))),
+        _normalize_whitespace(str(row.get("Telefone", ""))),
+    ]
+    return _normalize_whitespace(" ".join(part for part in parts if part))
+
+
+def _extract_brazil_fca_shareholder_department_people_entities(
+    *,
+    department_rows: list[dict[str, str]],
+    issuer_lookup: dict[str, dict[str, object]],
+    source_name: str,
+) -> list[dict[str, object]]:
+    entities: list[dict[str, object]] = []
+    for cnpj_digits, rows in _brazil_cvm_company_latest_row_groups(department_rows).items():
+        issuer_metadata = issuer_lookup.get(cnpj_digits)
+        if issuer_metadata is None:
+            continue
+        company_name = str(issuer_metadata["company_name"])
+        ticker = str(issuer_metadata["ticker"])
+        employer_key = ticker or cnpj_digits
+        issuer_entity = issuer_metadata.get("entity")
+        if isinstance(issuer_entity, dict):
+            issuer_entity_metadata = issuer_entity.get("metadata")
+            if isinstance(issuer_entity_metadata, dict):
+                for row in rows:
+                    email = _normalize_whitespace(str(row.get("Email", "")))
+                    phone = _format_brazil_contact_phone(row)
+                    if email and not _normalize_whitespace(
+                        str(issuer_entity_metadata.get("shareholder_department_email", ""))
+                    ):
+                        issuer_entity_metadata["shareholder_department_email"] = email
+                    if phone and not _normalize_whitespace(
+                        str(issuer_entity_metadata.get("shareholder_department_phone", ""))
+                    ):
+                        issuer_entity_metadata["shareholder_department_phone"] = phone
+        for row in rows:
+            canonical_name, aliases = _normalize_person_name_aliases(
+                str(row.get("Contato", ""))
+            )
+            if canonical_name is None:
+                continue
+            metadata: dict[str, object] = {
+                "country_code": "br",
+                "category": "investor_relations",
+                "role_title": "Shareholder Department Contact",
+                "employer_name": company_name,
+                "source_name": source_name,
+                "source_forms": ["FCA"],
+                "email": _normalize_whitespace(str(row.get("Email", ""))),
+                "phone": _format_brazil_contact_phone(row),
+                "city": _normalize_whitespace(str(row.get("Cidade", ""))),
+                "state": _normalize_whitespace(str(row.get("Sigla_UF", ""))),
+                "data_reference": _normalize_whitespace(
+                    str(row.get("Data_Referencia", ""))
+                ),
+            }
+            if ticker:
+                metadata["employer_ticker"] = ticker
+            entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_text": canonical_name,
+                    "aliases": aliases,
+                    "entity_id": (
+                        f"finance-br-person:{employer_key}:{_slug(canonical_name)}:"
+                        "shareholder-contact"
+                    ),
+                    "metadata": {key: value for key, value in metadata.items() if value},
+                }
+            )
+    return entities
+
+
+def _extract_idx_company_profile_entities(
+    html_text: str,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    for match in _IDX_COMPANY_RECORD_PATTERN.finditer(html_text):
+        block = match.group(0)
+        ticker = _extract_javascript_quoted_field(block, "KodeEmiten").upper()
+        company_name = _smart_titlecase_company_name(
+            _extract_javascript_quoted_field(block, "NamaEmiten")
+        )
+        if not ticker or not company_name:
+            continue
+        website = _extract_javascript_quoted_field(block, "Website")
+        if website and not website.startswith(("http://", "https://")):
+            website = f"https://{website.lstrip('/')}"
+        listing_date = _extract_javascript_quoted_field(block, "TanggalPencatatan")
+        issuer_entities.append(
+            {
+                "entity_type": "organization",
+                "canonical_text": company_name,
+                "aliases": _unique_aliases(
+                    _build_united_states_company_aliases(company_name, ticker)
+                ),
+                "entity_id": f"finance-id-issuer:{ticker}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "id",
+                        "category": "issuer",
+                        "ticker": ticker,
+                        "exchange_code": "IDX",
+                        "exchange_name": "Indonesia Stock Exchange",
+                        "listing_date": listing_date,
+                        "email": _extract_javascript_quoted_field(block, "Email"),
+                        "phone": _extract_javascript_quoted_field(block, "Telepon"),
+                        "fax": _extract_javascript_quoted_field(block, "Fax"),
+                        "website": website,
+                        "address": _extract_javascript_quoted_field(block, "Alamat"),
+                        "listing_board": _extract_javascript_quoted_field(
+                            block,
+                            "PapanPencatatan",
+                        ),
+                        "sector": _extract_javascript_quoted_field(block, "Sektor"),
+                        "sub_sector": _extract_javascript_quoted_field(
+                            block,
+                            "SubSektor",
+                        ),
+                        "industry": _extract_javascript_quoted_field(block, "Industri"),
+                        "sub_industry": _extract_javascript_quoted_field(
+                            block,
+                            "SubIndustri",
+                        ),
+                        "issuer_type": _extract_javascript_quoted_field(
+                            block,
+                            "JenisEmiten",
+                        ),
+                        "npwp": _extract_javascript_quoted_field(block, "NPWP"),
+                        "npkp": _extract_javascript_quoted_field(block, "NPKP"),
+                        "primary_business": _extract_javascript_quoted_field(
+                            block,
+                            "KegiatanUsahaUtama",
+                        ),
+                        "logo_path": _extract_javascript_quoted_field(block, "Logo"),
+                    }.items()
+                    if value
+                },
+            }
+        )
+        ticker_entities.append(
+            {
+                "entity_type": "ticker",
+                "canonical_text": ticker,
+                "aliases": _unique_aliases([ticker, company_name]),
+                "entity_id": f"finance-id-ticker:{ticker}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "id",
+                        "category": "ticker",
+                        "issuer_name": company_name,
+                        "exchange_code": "IDX",
+                        "exchange_name": "Indonesia Stock Exchange",
+                        "listing_date": listing_date,
+                        "website": website,
+                    }.items()
+                    if value
+                },
+            }
+        )
+    return issuer_entities, ticker_entities
+
+
+def _extract_borsa_italiana_page_count(html_text: str) -> int:
+    page_numbers = [
+        int(match.group("page"))
+        for match in _BORSA_ITALIANA_PAGE_PATTERN.finditer(html_text)
+        if match.group("page").isdigit()
+    ]
+    return max(page_numbers, default=1)
+
+
+def _extract_borsa_italiana_directory_records(html_text: str) -> list[dict[str, str]]:
+    seen: set[tuple[str, str]] = set()
+    records: list[dict[str, str]] = []
+    for match in _BORSA_ITALIANA_DETAIL_LINK_PATTERN.finditer(html_text):
+        isin = match.group("isin").upper()
+        mic = match.group("mic").upper()
+        key = (isin, mic)
+        if key in seen:
+            continue
+        seen.add(key)
+        records.append(
+            {
+                "detail_path": match.group("path"),
+                "isin": isin,
+                "mic": mic,
+            }
+        )
+    return records
+
+
+def _extract_borsa_italiana_company_profile_entities(
+    html_text: str,
+    *,
+    isin: str,
+    mic: str,
+) -> tuple[dict[str, object] | None, list[dict[str, object]]]:
+    title_match = _BORSA_ITALIANA_PROFILE_TITLE_PATTERN.search(html_text)
+    if title_match is None:
+        return None, []
+    company_name = _smart_titlecase_company_name(_strip_html(title_match.group("title")))
+    if not company_name:
+        return None, []
+    address_block_match = _BORSA_ITALIANA_ADDRESS_BLOCK_PATTERN.search(html_text)
+    address_block = address_block_match.group("body") if address_block_match is not None else ""
+    contact_block_match = _BORSA_ITALIANA_CONTACT_BLOCK_PATTERN.search(html_text)
+    contact_block = contact_block_match.group("body") if contact_block_match is not None else ""
+    website_match = re.search(
+        r'href="(?P<website>https?://[^"]+)"',
+        address_block,
+        re.IGNORECASE,
+    )
+    email_match = re.search(
+        r'href="mailto:(?P<email>[^"]+)"',
+        contact_block,
+        re.IGNORECASE,
+    )
+    phone_match = re.search(
+        r'href="tel:(?P<phone>[^"]+)"',
+        contact_block,
+        re.IGNORECASE,
+    )
+    issuer_entity = {
+        "entity_type": "organization",
+        "canonical_text": company_name,
+        "aliases": _unique_aliases(_build_united_states_company_aliases(company_name, isin)),
+        "entity_id": f"finance-it-issuer:{isin}",
+        "metadata": {
+            key: value
+            for key, value in {
+                "country_code": "it",
+                "category": "issuer",
+                "isin": isin,
+                "market_code": mic,
+                "exchange_code": "BIT",
+                "exchange_name": "Borsa Italiana",
+                "website": website_match.group("website") if website_match is not None else "",
+                "contact_email": email_match.group("email") if email_match is not None else "",
+                "contact_phone": phone_match.group("phone") if phone_match is not None else "",
+                "address": _strip_html(address_block),
+            }.items()
+            if value
+        },
+    }
+    people_entities: list[dict[str, object]] = []
+    executives_match = _BORSA_ITALIANA_KEY_EXECUTIVES_BLOCK_PATTERN.search(html_text)
+    if executives_match is not None:
+        for row_match in _BORSA_ITALIANA_KEY_EXECUTIVE_ROW_PATTERN.finditer(
+            executives_match.group("body")
+        ):
+            person_name = _smart_titlecase_person_name(_strip_html(row_match.group("name")))
+            role_title = _normalize_whitespace(_strip_html(row_match.group("role")))
+            if not person_name or not _looks_like_person_name(person_name):
+                continue
+            role_class = _classify_finance_person_role(role_title)
+            people_entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_text": person_name,
+                    "aliases": [person_name],
+                    "entity_id": (
+                        f"finance-it-person:{isin}:{_slug(person_name)}:{_slug(role_class)}"
+                    ),
+                    "metadata": {
+                        "country_code": "it",
+                        "category": "public_company_person",
+                        "employer_name": company_name,
+                        "employer_isin": isin,
+                        "exchange_code": "BIT",
+                        "role_class": role_class,
+                        "role_title": role_title,
+                        "source_name": "borsa-italiana-company-profile",
+                    },
+                }
+            )
+    if contact_block:
+        contact_name = _smart_titlecase_person_name(
+            _strip_html(re.split(r"<br\s*/?>", contact_block, maxsplit=1, flags=re.IGNORECASE)[0])
+        )
+        if contact_name and _looks_like_person_name(contact_name):
+            people_entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_text": contact_name,
+                    "aliases": [contact_name],
+                    "entity_id": f"finance-it-person:{isin}:{_slug(contact_name)}:contact",
+                    "metadata": {
+                        "country_code": "it",
+                        "category": "public_company_person",
+                        "employer_name": company_name,
+                        "employer_isin": isin,
+                        "exchange_code": "BIT",
+                        "role_class": "investor_relations",
+                        "role_title": "Investor Relations Contact",
+                        "email": email_match.group("email") if email_match is not None else "",
+                        "phone": phone_match.group("phone") if phone_match is not None else "",
+                        "source_name": "borsa-italiana-company-profile",
+                    },
+                }
+            )
+    return issuer_entity, people_entities
+
+
+def _extract_moex_security_entities(
+    payload: dict[str, object],
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    securities = payload.get("securities")
+    if not isinstance(securities, dict):
+        return issuer_entities, ticker_entities
+    columns = securities.get("columns")
+    rows = securities.get("data")
+    if not isinstance(columns, list) or not isinstance(rows, list):
+        return issuer_entities, ticker_entities
+    issuer_entities_by_key: dict[str, dict[str, object]] = {}
+    for row in rows:
+        if not isinstance(row, list):
+            continue
+        mapped = {
+            str(columns[index]): row[index]
+            for index in range(min(len(columns), len(row)))
+        }
+        ticker = _normalize_whitespace(str(mapped.get("secid", ""))).upper()
+        issuer_name = _smart_titlecase_company_name(
+            _normalize_whitespace(str(mapped.get("emitent_title", "")))
+        )
+        issuer_key = _slug(
+            _normalize_whitespace(str(mapped.get("emitent_id") or mapped.get("emitent_inn") or ""))
+            or issuer_name
+        )
+        isin = _normalize_whitespace(str(mapped.get("isin", ""))).upper()
+        if not ticker or not issuer_name:
+            continue
+        issuer_entity = issuer_entities_by_key.get(issuer_key)
+        if issuer_entity is None:
+            issuer_entity = {
+                "entity_type": "organization",
+                "canonical_text": issuer_name,
+                "aliases": _unique_aliases(
+                    _build_united_states_company_aliases(
+                        issuer_name,
+                        ticker,
+                        _normalize_whitespace(str(mapped.get("name", ""))),
+                    )
+                ),
+                "entity_id": f"finance-ru-issuer:{issuer_key}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "ru",
+                        "category": "issuer",
+                        "exchange_code": "MOEX",
+                        "exchange_name": "Moscow Exchange",
+                        "ticker": ticker,
+                        "isin": isin,
+                        "issuer_inn": _normalize_whitespace(
+                            str(mapped.get("emitent_inn", ""))
+                        ),
+                        "issuer_okpo": _normalize_whitespace(
+                            str(mapped.get("emitent_okpo", ""))
+                        ),
+                    }.items()
+                    if value
+                },
+            }
+            issuer_entities_by_key[issuer_key] = issuer_entity
+            issuer_entities.append(issuer_entity)
+        else:
+            issuer_entity["aliases"] = _unique_aliases(
+                [
+                    *[
+                        alias
+                        for alias in issuer_entity.get("aliases", [])
+                        if isinstance(alias, str)
+                    ],
+                    *_build_united_states_company_aliases(
+                        issuer_name,
+                        ticker,
+                        _normalize_whitespace(str(mapped.get("name", ""))),
+                    ),
+                ]
+            )
+            issuer_metadata = issuer_entity.get("metadata")
+            if isinstance(issuer_metadata, dict):
+                if isin and not _normalize_whitespace(str(issuer_metadata.get("isin", ""))):
+                    issuer_metadata["isin"] = isin
+        ticker_entities.append(
+            {
+                "entity_type": "ticker",
+                "canonical_text": ticker,
+                "aliases": _unique_aliases(
+                    [ticker, issuer_name, _normalize_whitespace(str(mapped.get("shortname", "")))]
+                ),
+                "entity_id": f"finance-ru-ticker:{ticker}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "ru",
+                        "category": "ticker",
+                        "issuer_name": issuer_name,
+                        "exchange_code": "MOEX",
+                        "exchange_name": "Moscow Exchange",
+                        "isin": isin,
+                        "reg_number": _normalize_whitespace(str(mapped.get("regnumber", ""))),
+                        "instrument_type": _normalize_whitespace(str(mapped.get("type", ""))),
+                        "group": _normalize_whitespace(str(mapped.get("group", ""))),
+                        "primary_board_id": _normalize_whitespace(
+                            str(mapped.get("primary_boardid", ""))
+                        ),
+                    }.items()
+                    if value
+                },
+            }
+        )
+    return issuer_entities, ticker_entities
+
+
+def _extract_jse_directory_entities(
+    payload: list[dict[str, object]],
+) -> tuple[list[dict[str, object]], list[dict[str, object]], list[dict[str, object]]]:
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    seen_issuers: set[str] = set()
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        ticker = _normalize_whitespace(str(row.get("AlphaCode", ""))).upper()
+        company_name = _smart_titlecase_company_name(
+            _normalize_whitespace(str(row.get("LongName", "")))
+        )
+        status = _normalize_whitespace(str(row.get("Status", "")))
+        if not ticker or not company_name or status.casefold() != "current":
+            continue
+        issuer_key = _slug(
+            _normalize_whitespace(str(row.get("RegistrationNumber") or row.get("MasterID") or ""))
+            or company_name
+        )
+        if issuer_key not in seen_issuers:
+            seen_issuers.add(issuer_key)
+            issuer_entities.append(
+                {
+                    "entity_type": "organization",
+                    "canonical_text": company_name,
+                    "aliases": _unique_aliases(
+                        _build_united_states_company_aliases(company_name, ticker)
+                    ),
+                    "entity_id": f"finance-za-issuer:{issuer_key}",
+                    "metadata": {
+                        key: value
+                        for key, value in {
+                            "country_code": "za",
+                            "category": "issuer",
+                            "exchange_code": _normalize_whitespace(
+                                str(row.get("ExchangeCode", ""))
+                            )
+                            or "JSE",
+                            "exchange_name": _normalize_whitespace(
+                                str(row.get("ExchangeName", ""))
+                            )
+                            or "JSE Limited",
+                            "ticker": ticker,
+                            "registration_number": _normalize_whitespace(
+                                str(row.get("RegistrationNumber", ""))
+                            ),
+                            "website": _normalize_whitespace(str(row.get("Website", ""))),
+                            "email": _normalize_whitespace(str(row.get("EmailAddress", ""))),
+                            "phone": _normalize_whitespace(str(row.get("TelephoneNumber", ""))),
+                            "fax": _normalize_whitespace(str(row.get("FaxNumber", ""))),
+                            "physical_address": _normalize_whitespace(
+                                str(row.get("PhysicalAddress", ""))
+                            ),
+                            "postal_address": _normalize_whitespace(
+                                str(row.get("PostalAddress", ""))
+                            ),
+                            "role_description": _normalize_whitespace(
+                                str(row.get("RoleDescription", ""))
+                            ),
+                        }.items()
+                        if value
+                    },
+                }
+            )
+        ticker_entities.append(
+            {
+                "entity_type": "ticker",
+                "canonical_text": ticker,
+                "aliases": _unique_aliases([ticker, company_name]),
+                "entity_id": f"finance-za-ticker:{ticker}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "za",
+                        "category": "ticker",
+                        "issuer_name": company_name,
+                        "exchange_code": _normalize_whitespace(
+                            str(row.get("ExchangeCode", ""))
+                        )
+                        or "JSE",
+                        "exchange_name": _normalize_whitespace(
+                            str(row.get("ExchangeName", ""))
+                        )
+                        or "JSE Limited",
+                        "role_description": _normalize_whitespace(
+                            str(row.get("RoleDescription", ""))
+                        ),
+                    }.items()
+                    if value
+                },
+            }
+        )
+        contacts = row.get("Contacts")
+        if isinstance(contacts, list):
+            for contact in contacts:
+                if not isinstance(contact, dict):
+                    continue
+                person_name = _smart_titlecase_person_name(
+                    _normalize_whitespace(
+                        " ".join(
+                            part
+                            for part in (
+                                str(contact.get("Title", "")),
+                                str(contact.get("FirstName", "")),
+                                str(contact.get("LastName", "")),
+                            )
+                            if _normalize_whitespace(part)
+                        )
+                    )
+                )
+                if not person_name or not _looks_like_person_name(person_name):
+                    continue
+                contact_type = _normalize_whitespace(str(contact.get("ContactType", "")))
+                normalized_contact_type = _normalize_company_name_for_match(contact_type)
+                if "investor" in normalized_contact_type:
+                    role_class = "investor_relations"
+                elif "press" in normalized_contact_type or "media" in normalized_contact_type:
+                    role_class = "press_contact"
+                else:
+                    role_class = _classify_finance_person_role(contact_type or "contact")
+                people_entities.append(
+                    {
+                        "entity_type": "person",
+                        "canonical_text": person_name,
+                        "aliases": [person_name],
+                        "entity_id": (
+                            f"finance-za-person:{ticker}:{_slug(person_name)}:{_slug(role_class)}"
+                        ),
+                        "metadata": {
+                            "country_code": "za",
+                            "category": "public_company_person",
+                            "employer_name": company_name,
+                            "employer_ticker": ticker,
+                            "exchange_code": "JSE",
+                            "role_class": role_class,
+                            "role_title": contact_type or "Contact",
+                            "email": _normalize_whitespace(
+                                str(contact.get("EmailAddress", ""))
+                            ),
+                            "phone": _normalize_whitespace(
+                                str(contact.get("Telephone", ""))
+                            ),
+                            "mobile": _normalize_whitespace(str(contact.get("Mobile", ""))),
+                            "source_name": "jse-client-portal-directory",
+                        },
+                    }
+                )
+    return issuer_entities, ticker_entities, people_entities
+
+
+def _extract_jse_associated_role_entities(
+    payload: dict[str, object] | list[object],
+    *,
+    issuer_name: str,
+    issuer_ticker: str,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    if isinstance(payload, dict):
+        rows = payload.get("GetIssuerAssociatedRolesResult")
+    else:
+        rows = payload
+    if not isinstance(rows, list):
+        return [], []
+    organization_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        associated_name = _smart_titlecase_company_name(
+            _normalize_whitespace(str(row.get("LongName", "")))
+        )
+        alpha_code = _normalize_whitespace(str(row.get("AlphaCode", ""))).upper()
+        master_id = _normalize_whitespace(str(row.get("MasterID", "")))
+        role_description = _normalize_whitespace(str(row.get("RoleDescription", "")))
+        if associated_name and associated_name.casefold() != issuer_name.casefold():
+            organization_entities.append(
+                {
+                    "entity_type": "organization",
+                    "canonical_text": associated_name,
+                    "aliases": _unique_aliases(
+                        _build_united_states_company_aliases(associated_name, alpha_code)
+                    ),
+                    "entity_id": (
+                        f"finance-za-associated-org:{master_id or _slug(alpha_code or associated_name)}"
+                    ),
+                    "metadata": {
+                        key: value
+                        for key, value in {
+                            "country_code": "za",
+                            "category": "related_finance_organization",
+                            "issuer_name": issuer_name,
+                            "issuer_ticker": issuer_ticker,
+                            "associated_role_description": role_description,
+                            "alpha_code": alpha_code,
+                            "registration_number": _normalize_whitespace(
+                                str(row.get("RegistrationNumber", ""))
+                            ),
+                            "website": _normalize_whitespace(str(row.get("Website", ""))),
+                            "email": _normalize_whitespace(str(row.get("EmailAddress", ""))),
+                            "phone": _normalize_whitespace(str(row.get("TelephoneNumber", ""))),
+                        }.items()
+                        if value
+                    },
+                }
+            )
+        contacts = row.get("Contacts")
+        if not isinstance(contacts, list):
+            continue
+        employer_name = associated_name or issuer_name
+        employer_key = master_id or _slug(alpha_code or employer_name)
+        for contact in contacts:
+            if not isinstance(contact, dict):
+                continue
+            person_name = _smart_titlecase_person_name(
+                _normalize_whitespace(
+                    " ".join(
+                        part
+                        for part in (
+                            str(contact.get("FirstName", "")),
+                            str(contact.get("LastName", "")),
+                        )
+                        if _normalize_whitespace(part)
+                    )
+                )
+            )
+            if not person_name or not _looks_like_person_name(person_name):
+                continue
+            contact_type = _normalize_whitespace(str(contact.get("ContactType", "")))
+            normalized_contact_type = _normalize_company_name_for_match(contact_type)
+            if "approved executive" in normalized_contact_type:
+                role_class = "executive_officer"
+            elif "investor" in normalized_contact_type:
+                role_class = "investor_relations"
+            else:
+                role_class = _classify_finance_person_role(contact_type or "contact")
+            people_entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_text": person_name,
+                    "aliases": [person_name],
+                    "entity_id": (
+                        f"finance-za-person:{employer_key}:{_slug(person_name)}:{_slug(role_class)}"
+                    ),
+                    "metadata": {
+                        key: value
+                        for key, value in {
+                            "country_code": "za",
+                            "category": "public_company_person",
+                            "issuer_name": issuer_name,
+                            "issuer_ticker": issuer_ticker,
+                            "employer_name": employer_name,
+                            "associated_role_description": role_description,
+                            "role_class": role_class,
+                            "role_title": contact_type or "Contact",
+                            "email": _normalize_whitespace(
+                                str(contact.get("EmailAddress", ""))
+                            ),
+                            "phone": _normalize_whitespace(str(contact.get("Telephone", ""))),
+                            "mobile": _normalize_whitespace(str(contact.get("Mobile", ""))),
+                            "person_id": _normalize_whitespace(str(contact.get("PersonID", ""))),
+                            "source_name": "jse-associated-roles",
+                        }.items()
+                        if value
+                    },
+                }
+            )
+    return organization_entities, people_entities
+
+
+def _parse_jsonp_payload(payload_text: str) -> Any:
+    stripped = payload_text.strip().lstrip("\ufeff")
+    stripped = re.sub(r"<!--.*?-->\s*$", "", stripped, flags=re.DOTALL).strip()
+    if stripped.startswith("for(;;);"):
+        stripped = stripped[len("for(;;);") :].strip()
+    if stripped.startswith("(") and stripped.endswith(")"):
+        stripped = stripped[1:-1].strip()
+    callback_match = re.match(
+        r"^[^(]+\(\s*(?P<payload>.*)\s*\)\s*;?\s*$",
+        stripped,
+        re.DOTALL,
+    )
+    if callback_match is not None:
+        stripped = callback_match.group("payload").strip()
+    return json.loads(stripped)
+
+
+def _normalize_shareholding_percentage(value: object) -> str:
+    normalized = _normalize_whitespace(str(value)).rstrip("%")
+    if not normalized:
+        return ""
+    candidate = normalized.replace(",", "")
+    try:
+        number = float(candidate)
+    except ValueError:
+        return normalized
+    formatted = f"{number:.7f}".rstrip("0").rstrip(".")
+    return formatted or "0"
+
+
+def _looks_like_organization_name(value: str) -> bool:
+    normalized = _normalize_whitespace(value)
+    if not normalized:
+        return False
+    looks_like_org = re.search(
+        r"\b(?:bank|bancorp|capital|co|company|corp|corporation|fund|financial|"
+        r"group|holding|holdings|inc|industr(?:y|ies)|institution|insurance|"
+        r"limited|ltd|llc|llp|manufacturing|partners|private|plc|sab|sa|sociedad|"
+        r"teknoloji|technology|trust|ventures?)\b",
+        normalized,
+        re.IGNORECASE,
+    )
+    if looks_like_org is not None:
+        return True
+    return not _looks_like_person_name(_smart_titlecase_person_name(normalized))
+
+
+def _classify_china_exchange(security_code: str) -> dict[str, str]:
+    ticker = _normalize_whitespace(security_code).upper()
+    if ticker.startswith("688"):
+        return {
+            "exchange_code": "SSE",
+            "exchange_name": "Shanghai Stock Exchange",
+            "market_name": "STAR Market",
+            "market_entity_id": "finance-cn:sse",
+        }
+    if ticker.startswith(("600", "601", "603", "605")):
+        return {
+            "exchange_code": "SSE",
+            "exchange_name": "Shanghai Stock Exchange",
+            "market_name": "Main Board",
+            "market_entity_id": "finance-cn:sse",
+        }
+    if ticker.startswith("300"):
+        return {
+            "exchange_code": "SZSE",
+            "exchange_name": "Shenzhen Stock Exchange",
+            "market_name": "ChiNext",
+            "market_entity_id": "finance-cn:szse",
+        }
+    if ticker.startswith(("000", "001", "002", "003")):
+        return {
+            "exchange_code": "SZSE",
+            "exchange_name": "Shenzhen Stock Exchange",
+            "market_name": "Main Board",
+            "market_entity_id": "finance-cn:szse",
+        }
+    if ticker.startswith(("4", "8")):
+        return {
+            "exchange_code": "BSE",
+            "exchange_name": "Beijing Stock Exchange",
+            "market_name": "Main Board",
+            "market_entity_id": "finance-cn:bse",
+        }
+    return {
+        "exchange_code": "CN",
+        "exchange_name": "China Public Markets",
+        "market_name": "Equities",
+        "market_entity_id": "finance-cn:csrc",
+    }
+
+
+def _split_cninfo_board_member_names(value: str) -> list[str]:
+    return _unique_aliases(
+        [
+            _normalize_whitespace(part)
+            for part in re.split(r"\s*[,;/、，]\s*", value)
+            if _normalize_whitespace(part)
+        ]
+    )
+
+
+def _extract_cninfo_index_data_entities(
+    payload: dict[str, object],
+) -> tuple[dict[str, object] | None, dict[str, object] | None, list[dict[str, object]]]:
+    code_info = payload.get("codeInfo")
+    if not isinstance(code_info, dict):
+        code_info = {}
+    snapshot_rows = payload.get("snapshot5015Data")
+    snapshot_row = (
+        snapshot_rows[0]
+        if isinstance(snapshot_rows, list) and snapshot_rows and isinstance(snapshot_rows[0], dict)
+        else {}
+    )
+    management_rows = payload.get("cninfo5025Data")
+    management_row = (
+        management_rows[0]
+        if isinstance(management_rows, list)
+        and management_rows
+        and isinstance(management_rows[0], dict)
+        else {}
+    )
+    company_name = _smart_titlecase_company_name(
+        _normalize_whitespace(
+            str(snapshot_row.get("ORGNAME") or code_info.get("ORGNAME") or "")
+        )
+    )
+    ticker = _normalize_whitespace(
+        str(snapshot_row.get("SECCODE") or code_info.get("SECCODE") or "")
+    ).upper()
+    short_name = _normalize_whitespace(str(code_info.get("SECNAME", ""))).upper()
+    if not company_name or not ticker:
+        return None, None, []
+    exchange_metadata = _classify_china_exchange(ticker)
+    issuer_aliases = _build_united_states_company_aliases(company_name, short_name, ticker)
+    website = _normalize_whitespace(str(snapshot_row.get("F004V", "")))
+    if website and not website.startswith(("http://", "https://")):
+        website = normalize_source_url(f"https://{website.lstrip('/')}")
+    issuer_metadata = {
+        key: value
+        for key, value in {
+            "country_code": "cn",
+            "category": "issuer",
+            "ticker": ticker,
+            "security_short_name": short_name,
+            "exchange_code": exchange_metadata["exchange_code"],
+            "exchange_name": exchange_metadata["exchange_name"],
+            "market_name": exchange_metadata["market_name"],
+            "market_entity_id": exchange_metadata["market_entity_id"],
+            "established_date": _normalize_whitespace(str(snapshot_row.get("F002V", ""))),
+            "listing_date": _normalize_whitespace(str(snapshot_row.get("F003V", ""))),
+            "website": website,
+            "registered_address": _normalize_whitespace(str(snapshot_row.get("F005V", ""))),
+            "office_address": _normalize_whitespace(str(snapshot_row.get("F006V", ""))),
+            "email": _normalize_whitespace(str(snapshot_row.get("F007V", ""))),
+            "phone": _normalize_whitespace(str(snapshot_row.get("F008V", ""))),
+            "fax": _normalize_whitespace(str(snapshot_row.get("F009V", ""))),
+            "industry": _normalize_whitespace(str(snapshot_row.get("F010V", ""))),
+            "subindustry": _normalize_whitespace(str(snapshot_row.get("F011V", ""))),
+            "isin": _normalize_whitespace(str(snapshot_row.get("F012V", ""))).upper(),
+            "cninfo_sign": _normalize_whitespace(str(code_info.get("F003N", ""))),
+        }.items()
+        if value
+    }
+    issuer_entity: dict[str, object] = {
+        "entity_type": "organization",
+        "canonical_text": company_name,
+        "aliases": issuer_aliases,
+        "entity_id": f"finance-cn-issuer:{ticker}",
+        "metadata": issuer_metadata,
+    }
+    ticker_entity: dict[str, object] = {
+        "entity_type": "ticker",
+        "canonical_text": ticker,
+        "aliases": _unique_aliases([ticker, company_name, short_name, *issuer_aliases]),
+        "entity_id": f"finance-cn-ticker:{ticker}",
+        "metadata": {
+            key: value
+            for key, value in {
+                "country_code": "cn",
+                "category": "ticker",
+                "issuer_name": company_name,
+                "security_short_name": short_name,
+                "exchange_code": exchange_metadata["exchange_code"],
+                "exchange_name": exchange_metadata["exchange_name"],
+                "market_name": exchange_metadata["market_name"],
+                "market_entity_id": exchange_metadata["market_entity_id"],
+                "isin": _normalize_whitespace(str(snapshot_row.get("F012V", ""))).upper(),
+                "listing_date": _normalize_whitespace(str(snapshot_row.get("F003V", ""))),
+            }.items()
+            if value
+        },
+    }
+    people_entities: list[dict[str, object]] = []
+    for field_name, role_title, role_class in (
+        ("F001V", "Chairman of the Board", "director"),
+        ("F002V", "General Manager", "executive_officer"),
+        ("F003V", "Chief Financial Officer", "executive_officer"),
+        ("F004V", "Secretary of the Board", "executive_officer"),
+    ):
+        canonical_name, aliases = _normalize_person_name_aliases(
+            _smart_titlecase_person_name(_normalize_whitespace(str(management_row.get(field_name, ""))))
+        )
+        if not canonical_name:
+            continue
+        people_entities.append(
+            {
+                "entity_type": "person",
+                "canonical_text": canonical_name,
+                "aliases": aliases,
+                "entity_id": (
+                    f"finance-cn-person:{ticker}:{_slug(canonical_name)}:{_slug(role_class)}"
+                ),
+                "metadata": {
+                    "country_code": "cn",
+                    "category": "public_company_person",
+                    "role_class": role_class,
+                    "role_title": role_title,
+                    "employer_name": company_name,
+                    "employer_ticker": ticker,
+                    "exchange_code": exchange_metadata["exchange_code"],
+                    "source_name": "cninfo-company-detail",
+                },
+            }
+        )
+    for raw_name in _split_cninfo_board_member_names(str(management_row.get("F005V", ""))):
+        canonical_name, aliases = _normalize_person_name_aliases(raw_name)
+        if not canonical_name:
+            continue
+        people_entities.append(
+            {
+                "entity_type": "person",
+                "canonical_text": canonical_name,
+                "aliases": aliases,
+                "entity_id": f"finance-cn-person:{ticker}:{_slug(canonical_name)}:director",
+                "metadata": {
+                    "country_code": "cn",
+                    "category": "public_company_person",
+                    "role_class": "director",
+                    "role_title": "Board Member / Senior Executive",
+                    "employer_name": company_name,
+                    "employer_ticker": ticker,
+                    "exchange_code": exchange_metadata["exchange_code"],
+                    "source_name": "cninfo-company-detail",
+                },
+            }
+        )
+    return issuer_entity, ticker_entity, people_entities
+
+
+def _extract_cninfo_shareholder_entities(
+    payload: dict[str, object],
+    *,
+    company_name: str,
+    ticker: str,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    records = payload.get("shareHoldersData")
+    if not isinstance(records, list):
+        return [], []
+    organization_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    for row in records:
+        if not isinstance(row, dict):
+            continue
+        shareholder_name = _normalize_whitespace(str(row.get("F002V", "")))
+        if not shareholder_name:
+            continue
+        shares_held = _normalize_whitespace(str(row.get("F003N", "")))
+        shareholding_percent = _normalize_shareholding_percentage(row.get("F004N", ""))
+        metadata = {
+            key: value
+            for key, value in {
+                "country_code": "cn",
+                "issuer_name": company_name,
+                "issuer_ticker": ticker,
+                "shares_held": shares_held,
+                "shareholding_percent": shareholding_percent,
+                "source_name": "cninfo-shareholders",
+            }.items()
+            if value
+        }
+        if _looks_like_organization_name(shareholder_name):
+            canonical_name = _smart_titlecase_company_name(shareholder_name)
+            organization_entities.append(
+                {
+                    "entity_type": "organization",
+                    "canonical_text": canonical_name,
+                    "aliases": _build_united_states_company_aliases(
+                        canonical_name,
+                        shareholder_name,
+                    ),
+                    "entity_id": f"finance-cn-shareholder-org:{_slug(canonical_name)}",
+                    "metadata": {
+                        **metadata,
+                        "category": "public_company_shareholder_organization",
+                    },
+                }
+            )
+            continue
+        canonical_name, aliases = _normalize_person_name_aliases(
+            _smart_titlecase_person_name(shareholder_name)
+        )
+        if not canonical_name:
+            continue
+        people_entities.append(
+            {
+                "entity_type": "person",
+                "canonical_text": canonical_name,
+                "aliases": aliases,
+                "entity_id": f"finance-cn-person:{ticker}:{_slug(canonical_name)}:shareholder",
+                "metadata": {
+                    **metadata,
+                    "category": "public_company_person",
+                    "role_class": "shareholder",
+                    "role_title": "Substantial Shareholder",
+                    "employer_name": company_name,
+                    "employer_ticker": ticker,
+                },
+            }
+        )
+    return organization_entities, people_entities
+
+
+def _extract_xbrl_local_name_values(xml_text: str, *local_names: str) -> dict[str, list[str]]:
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return {local_name: [] for local_name in local_names}
+    targets = set(local_names)
+    values = {local_name: [] for local_name in local_names}
+    for element in root.iter():
+        local_name = str(element.tag).split("}", 1)[-1].split(":", 1)[-1]
+        if local_name not in targets:
+            continue
+        text = _normalize_whitespace("".join(element.itertext()))
+        if text:
+            values[local_name].append(text)
+    return values
+
+
+def _extract_nse_listing_entities(
+    payload: dict[str, object] | list[object],
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    if isinstance(payload, dict):
+        rows = payload.get("data")
+    else:
+        rows = payload
+    if not isinstance(rows, list):
+        return [], []
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        ticker = _normalize_whitespace(str(row.get("symbol", ""))).upper()
+        company_name = _smart_titlecase_company_name(
+            _normalize_whitespace(
+                str(row.get("companyName") or row.get("name") or "")
+            )
+        )
+        if not ticker or not company_name:
+            continue
+        aliases = _build_united_kingdom_company_aliases(company_name, ticker)
+        issuer_entities.append(
+            {
+                "entity_type": "organization",
+                "canonical_text": company_name,
+                "aliases": aliases,
+                "entity_id": f"finance-in-issuer:{ticker}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "in",
+                        "category": "issuer",
+                        "ticker": ticker,
+                        "exchange_code": "NSE",
+                        "exchange_name": "National Stock Exchange of India",
+                        "isin": _normalize_whitespace(str(row.get("isin", ""))).upper(),
+                        "listing_date": _normalize_whitespace(
+                            str(row.get("listingDate") or row.get("date") or "")
+                        ),
+                        "industry": _normalize_whitespace(str(row.get("industry", ""))),
+                        "series": _normalize_whitespace(str(row.get("series", ""))),
+                        "status": _normalize_whitespace(str(row.get("status", ""))),
+                        "face_value": _normalize_whitespace(str(row.get("faceValue", ""))),
+                        "paid_up_value": _normalize_whitespace(str(row.get("paidUpValue", ""))),
+                        "market_lot": _normalize_whitespace(str(row.get("marketLot", ""))),
+                    }.items()
+                    if value
+                },
+            }
+        )
+        ticker_entities.append(
+            {
+                "entity_type": "ticker",
+                "canonical_text": ticker,
+                "aliases": _unique_aliases([ticker, company_name, *aliases]),
+                "entity_id": f"finance-in-ticker:{ticker}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "in",
+                        "category": "ticker",
+                        "issuer_name": company_name,
+                        "exchange_code": "NSE",
+                        "exchange_name": "National Stock Exchange of India",
+                        "isin": _normalize_whitespace(str(row.get("isin", ""))).upper(),
+                        "listing_date": _normalize_whitespace(
+                            str(row.get("listingDate") or row.get("date") or "")
+                        ),
+                        "industry": _normalize_whitespace(str(row.get("industry", ""))),
+                        "series": _normalize_whitespace(str(row.get("series", ""))),
+                    }.items()
+                    if value
+                },
+            }
+        )
+    return issuer_entities, ticker_entities
+
+
+def _extract_nse_shareholding_master_entities(
+    payload: dict[str, object] | list[object],
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    if isinstance(payload, dict):
+        rows = payload.get("data")
+    else:
+        rows = payload
+    if not isinstance(rows, list):
+        return [], []
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    seen_tickers: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        ticker = _normalize_whitespace(str(row.get("symbol", ""))).upper()
+        company_name = _smart_titlecase_company_name(
+            _normalize_whitespace(str(row.get("name") or ""))
+        )
+        if not ticker or not company_name or ticker in seen_tickers:
+            continue
+        seen_tickers.add(ticker)
+        aliases = _build_united_kingdom_company_aliases(company_name, ticker)
+        issuer_entities.append(
+            {
+                "entity_type": "organization",
+                "canonical_text": company_name,
+                "aliases": aliases,
+                "entity_id": f"finance-in-issuer:{ticker}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "in",
+                        "category": "issuer",
+                        "ticker": ticker,
+                        "exchange_code": "NSE",
+                        "exchange_name": "National Stock Exchange of India",
+                        "isin": _normalize_whitespace(str(row.get("isin", ""))).upper(),
+                        "industry": _normalize_whitespace(str(row.get("industry", ""))),
+                        "shareholding_date": _normalize_whitespace(str(row.get("date", ""))),
+                        "promoter_shareholding_percent": _normalize_shareholding_percentage(
+                            row.get("pr_and_prgrp", "")
+                        ),
+                        "public_shareholding_percent": _normalize_shareholding_percentage(
+                            row.get("public_val", "")
+                        ),
+                        "employee_trusts_percent": _normalize_shareholding_percentage(
+                            row.get("employeeTrusts", "")
+                        ),
+                    }.items()
+                    if value
+                },
+            }
+        )
+        ticker_entities.append(
+            {
+                "entity_type": "ticker",
+                "canonical_text": ticker,
+                "aliases": _unique_aliases([ticker, company_name, *aliases]),
+                "entity_id": f"finance-in-ticker:{ticker}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "in",
+                        "category": "ticker",
+                        "issuer_name": company_name,
+                        "exchange_code": "NSE",
+                        "exchange_name": "National Stock Exchange of India",
+                        "isin": _normalize_whitespace(str(row.get("isin", ""))).upper(),
+                        "industry": _normalize_whitespace(str(row.get("industry", ""))),
+                        "shareholding_date": _normalize_whitespace(str(row.get("date", ""))),
+                    }.items()
+                    if value
+                },
+            }
+        )
+    return issuer_entities, ticker_entities
+
+
+def _extract_nse_governance_people_entities(
+    xml_text: str,
+    *,
+    company_name: str,
+    ticker: str,
+) -> list[dict[str, object]]:
+    columns = _extract_xbrl_local_name_values(
+        xml_text,
+        "NameOfTheDirector",
+        "DirectorIdentificationNumberOfDirector",
+        "PermanentAccountNumberOfDirector",
+        "PositionOfDirectorInBoardOne",
+        "PositionOfDirectorInBoardTwo",
+        "PositionOfDirectorInBoardThree",
+        "DateOfAppointmentOfDirector",
+        "DateOfReappointmentOfDirector",
+        "TenureOfDirector",
+        "DateOfBirth",
+    )
+    names = columns.get("NameOfTheDirector", [])
+    people_entities: list[dict[str, object]] = []
+    for index, raw_name in enumerate(names):
+        canonical_name, aliases = _normalize_person_name_aliases(raw_name)
+        if not canonical_name:
+            continue
+        role_titles = _unique_aliases(
+            [
+                _normalize_whitespace(
+                    columns.get(column_name, [])[index]
+                    if index < len(columns.get(column_name, []))
+                    else ""
+                )
+                for column_name in (
+                    "PositionOfDirectorInBoardOne",
+                    "PositionOfDirectorInBoardTwo",
+                    "PositionOfDirectorInBoardThree",
+                )
+            ]
+        )
+        primary_role_title = role_titles[0] if role_titles else "Director"
+        normalized_primary_role = _normalize_whitespace(primary_role_title).casefold()
+        role_class = (
+            "executive_officer"
+            if any(
+                token in normalized_primary_role
+                for token in ("chief", "executive", "managing", "secretary")
+            )
+            else "director"
+        )
+        metadata = {
+            key: value
+            for key, value in {
+                "country_code": "in",
+                "category": "public_company_person",
+                "role_class": role_class,
+                "role_title": primary_role_title,
+                "board_positions": role_titles,
+                "employer_name": company_name,
+                "employer_ticker": ticker,
+                "exchange_code": "NSE",
+                "source_name": "nse-corporate-governance-xbrl",
+                "director_identification_number": (
+                    columns.get("DirectorIdentificationNumberOfDirector", [])[index]
+                    if index < len(columns.get("DirectorIdentificationNumberOfDirector", []))
+                    else ""
+                ),
+                "permanent_account_number": (
+                    columns.get("PermanentAccountNumberOfDirector", [])[index]
+                    if index < len(columns.get("PermanentAccountNumberOfDirector", []))
+                    else ""
+                ),
+                "appointment_date": (
+                    columns.get("DateOfAppointmentOfDirector", [])[index]
+                    if index < len(columns.get("DateOfAppointmentOfDirector", []))
+                    else ""
+                ),
+                "reappointment_date": (
+                    columns.get("DateOfReappointmentOfDirector", [])[index]
+                    if index < len(columns.get("DateOfReappointmentOfDirector", []))
+                    else ""
+                ),
+                "tenure": (
+                    columns.get("TenureOfDirector", [])[index]
+                    if index < len(columns.get("TenureOfDirector", []))
+                    else ""
+                ),
+                "date_of_birth": (
+                    columns.get("DateOfBirth", [])[index]
+                    if index < len(columns.get("DateOfBirth", []))
+                    else ""
+                ),
+            }.items()
+            if value
+        }
+        people_entities.append(
+            {
+                "entity_type": "person",
+                "canonical_text": canonical_name,
+                "aliases": aliases,
+                "entity_id": (
+                    f"finance-in-person:{ticker}:{_slug(canonical_name)}:{_slug(role_class)}"
+                ),
+                "metadata": metadata,
+            }
+        )
+    return people_entities
+
+
+def _extract_nse_shareholding_entities(
+    xml_text: str,
+    *,
+    company_name: str,
+    ticker: str,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    columns = _extract_xbrl_local_name_values(
+        xml_text,
+        "NameOfTheShareholder",
+        "PermanentAccountNumberOfShareholder",
+        "NumberOfShares",
+        "ShareholdingAsAPercentageOfTotalNumberOfShares",
+    )
+    names = columns.get("NameOfTheShareholder", [])
+    organization_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    for index, raw_name in enumerate(names):
+        shareholder_name = _normalize_whitespace(raw_name)
+        if not shareholder_name:
+            continue
+        shares_held = (
+            columns.get("NumberOfShares", [])[index]
+            if index < len(columns.get("NumberOfShares", []))
+            else ""
+        )
+        shareholding_percent = _normalize_shareholding_percentage(
+            columns.get("ShareholdingAsAPercentageOfTotalNumberOfShares", [])[index]
+            if index
+            < len(columns.get("ShareholdingAsAPercentageOfTotalNumberOfShares", []))
+            else ""
+        )
+        permanent_account_number = (
+            columns.get("PermanentAccountNumberOfShareholder", [])[index]
+            if index < len(columns.get("PermanentAccountNumberOfShareholder", []))
+            else ""
+        )
+        metadata = {
+            key: value
+            for key, value in {
+                "country_code": "in",
+                "issuer_name": company_name,
+                "issuer_ticker": ticker,
+                "shares_held": _normalize_whitespace(str(shares_held)),
+                "shareholding_percent": shareholding_percent,
+                "permanent_account_number": _normalize_whitespace(
+                    str(permanent_account_number)
+                ),
+                "source_name": "nse-shareholding-pattern-xbrl",
+            }.items()
+            if value
+        }
+        if _looks_like_organization_name(shareholder_name):
+            canonical_name = _smart_titlecase_company_name(shareholder_name)
+            organization_entities.append(
+                {
+                    "entity_type": "organization",
+                    "canonical_text": canonical_name,
+                    "aliases": _build_united_kingdom_company_aliases(
+                        canonical_name,
+                        shareholder_name,
+                    ),
+                    "entity_id": f"finance-in-shareholder-org:{_slug(canonical_name)}",
+                    "metadata": {
+                        **metadata,
+                        "category": "public_company_shareholder_organization",
+                    },
+                }
+            )
+            continue
+        canonical_name, aliases = _normalize_person_name_aliases(
+            _smart_titlecase_person_name(shareholder_name)
+        )
+        if not canonical_name:
+            continue
+        people_entities.append(
+            {
+                "entity_type": "person",
+                "canonical_text": canonical_name,
+                "aliases": aliases,
+                "entity_id": f"finance-in-person:{ticker}:{_slug(canonical_name)}:shareholder",
+                "metadata": {
+                    **metadata,
+                    "category": "public_company_person",
+                    "role_class": "shareholder",
+                    "role_title": "Substantial Shareholder",
+                    "employer_name": company_name,
+                    "employer_ticker": ticker,
+                },
+            }
+        )
+    return organization_entities, people_entities
+
+
+def _normalize_xlsx_header_alias(value: str) -> str:
+    return _normalize_whitespace(_ascii_fold_alias(value) or value).casefold()
+
+
+def _extract_biva_issuer_records(xlsx_path: Path) -> list[dict[str, str]]:
+    with zipfile.ZipFile(xlsx_path) as archive:
+        shared_strings = _load_xlsx_shared_strings(archive)
+        for _, worksheet_path in _load_xlsx_sheet_targets(archive):
+            rows = _iter_xlsx_sheet_rows(
+                archive,
+                worksheet_path=worksheet_path,
+                shared_strings=shared_strings,
+            )
+            if not rows:
+                continue
+            normalized_aliases = {
+                _normalize_xlsx_header_alias(source): target
+                for source, target in _BIVA_HEADER_ALIASES.items()
+            }
+            header_row = rows[0]
+            header_map = {
+                index: normalized_aliases[_normalize_xlsx_header_alias(value)]
+                for index, value in enumerate(header_row)
+                if _normalize_xlsx_header_alias(value) in normalized_aliases
+            }
+            if set(header_map.values()) != set(_BIVA_HEADER_ALIASES.values()):
+                continue
+            records: list[dict[str, str]] = []
+            for row in rows[1:]:
+                mapped = {
+                    target: _normalize_whitespace(row[index]) if index < len(row) else ""
+                    for index, target in header_map.items()
+                }
+                ticker = _normalize_whitespace(mapped.get("ticker", "")).upper()
+                company_name = _smart_titlecase_company_name(
+                    _normalize_whitespace(mapped.get("company_name", ""))
+                )
+                if not ticker or not company_name:
+                    continue
+                records.append(
+                    {
+                        "ticker": ticker,
+                        "company_name": company_name,
+                    }
+                )
+            return records
+    return []
+
+
+def _extract_biva_representante_records(xlsx_path: Path) -> list[dict[str, str]]:
+    with zipfile.ZipFile(xlsx_path) as archive:
+        shared_strings = _load_xlsx_shared_strings(archive)
+        for _, worksheet_path in _load_xlsx_sheet_targets(archive):
+            rows = _iter_xlsx_sheet_rows(
+                archive,
+                worksheet_path=worksheet_path,
+                shared_strings=shared_strings,
+            )
+            if not rows:
+                continue
+            normalized_aliases = {
+                _normalize_xlsx_header_alias(source): target
+                for source, target in _BIVA_REPRESENTANTE_HEADER_ALIASES.items()
+            }
+            header_row = rows[0]
+            header_map = {
+                index: normalized_aliases[_normalize_xlsx_header_alias(value)]
+                for index, value in enumerate(header_row)
+                if _normalize_xlsx_header_alias(value) in normalized_aliases
+            }
+            if "ticker" not in header_map.values():
+                continue
+            records: list[dict[str, str]] = []
+            for row in rows[1:]:
+                mapped = {
+                    target: _normalize_whitespace(row[index]) if index < len(row) else ""
+                    for index, target in header_map.items()
+                }
+                ticker = _normalize_whitespace(mapped.get("ticker", "")).upper()
+                if not ticker:
+                    continue
+                mapped["ticker"] = ticker
+                records.append(mapped)
+            return records
+    return []
+
+
+def _extract_bmv_mobile_quote_records(payload_text: str) -> list[dict[str, str]]:
+    payload = _parse_jsonp_payload(payload_text)
+    if not isinstance(payload, dict):
+        return []
+    response = payload.get("response")
+    if not isinstance(response, dict):
+        return []
+    quote_rows = response.get("clavesCotizacion")
+    if not isinstance(quote_rows, list):
+        return []
+    records: list[dict[str, str]] = []
+    for row in quote_rows:
+        if not isinstance(row, dict):
+            continue
+        ticker = _normalize_whitespace(str(row.get("clave", ""))).upper()
+        series = _normalize_whitespace(str(row.get("serie", ""))).upper()
+        if not ticker:
+            continue
+        records.append(
+            {
+                "ticker": ticker,
+                "series": series,
+                "price": _normalize_whitespace(str(row.get("precio", ""))),
+                "change_percent": _normalize_shareholding_percentage(row.get("porcentaje", "")),
+            }
+        )
+    return records
+
+
+def _fetch_bmv_search_records(
+    *,
+    market_code: str,
+    instrument_code: str,
+    user_agent: str,
+) -> list[dict[str, object]]:
+    with httpx.Client(
+        headers={
+            "User-Agent": user_agent,
+            "Referer": _BMV_ISSUERS_INFORMATION_URL,
+            "Accept": "application/json,text/plain;q=0.9,*/*;q=0.1",
+        },
+        follow_redirects=True,
+        timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+        verify=_httpx_verify_for_source_url(_BMV_ISSUERS_INFORMATION_URL),
+    ) as client:
+        landing_response = client.get(_BMV_ISSUERS_INFORMATION_URL)
+        landing_response.raise_for_status()
+        response = client.get(
+            _BMV_ISSUER_SEARCH_URL,
+            params={
+                "idTipoMercado": market_code,
+                "idTipoInstrumento": instrument_code,
+                "idTipoEmpresa": "",
+                "idSector": "",
+                "idSubsector": "",
+                "idRamo": "",
+                "idSubramo": "",
+            },
+        )
+        response.raise_for_status()
+    payload = _parse_jsonp_payload(response.text)
+    if not isinstance(payload, dict):
+        return []
+    response_payload = payload.get("response")
+    if not isinstance(response_payload, dict):
+        return []
+    rows = response_payload.get("resultado")
+    if not isinstance(rows, list):
+        return []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _download_bmv_profile_page(
+    *,
+    record: dict[str, object],
+    profile_dir: Path,
+    user_agent: str,
+) -> tuple[Path, str]:
+    issuer_id = _normalize_whitespace(str(record.get("idEmisora", "")))
+    ticker = _normalize_whitespace(str(record.get("claveEmisora", ""))).upper()
+    if not issuer_id or not ticker:
+        raise ValueError("BMV profile record missing issuer identifier")
+    destination = profile_dir / f"{ticker.casefold()}-{issuer_id}.html"
+    profile_url = _BMV_PROFILE_URL_TEMPLATE.format(issuer_id=quote(issuer_id, safe=""))
+    if destination.exists():
+        return destination, profile_url
+    resolved_url = _download_source(profile_url, destination, user_agent=user_agent)
+    return destination, resolved_url
+
+
+def _extract_bmv_profile_details(
+    html_text: str,
+    *,
+    company_name: str,
+    ticker: str,
+    issuer_id: str,
+    market_code: str,
+    source_name: str,
+    profile_url: str,
+) -> tuple[dict[str, object], list[dict[str, object]], list[str]]:
+    metadata: dict[str, object] = {
+        "bmv_profile_url": profile_url,
+    }
+    for link_pattern, metadata_key in (
+        (_BMV_CORPORATIVE_INFORMATION_LINK_PATTERN, "bmv_corporative_information_url"),
+        (_BMV_FINANCIAL_INFORMATION_LINK_PATTERN, "bmv_financial_information_url"),
+    ):
+        match = link_pattern.search(html_text)
+        if match is not None:
+            metadata[metadata_key] = urljoin(profile_url, match.group("url"))
+    row_map = _extract_bmv_profile_row_map(html_text)
+    for row_key, metadata_key in (
+        ("web site", "website"),
+        ("date of incorporation", "date_of_incorporation"),
+        ("date of listing on the exchange", "listing_date"),
+        ("telephone", "contact_phone"),
+        ("e-mail", "contact_email"),
+        ("corporate offices", "address"),
+        ("sector", "sector"),
+        ("sub sector", "sub_sector"),
+        ("branch", "branch"),
+        ("sub branch", "sub_branch"),
+        ("economic activity", "economic_activity"),
+    ):
+        value = row_map.get(row_key, "")
+        if value:
+            metadata[metadata_key] = value
+    equity_series = _extract_bmv_profile_equity_series(html_text)
+    if equity_series:
+        metadata["equity_series"] = equity_series
+    people_entities: list[dict[str, object]] = []
+    investor_relations_name, investor_relations_aliases = _normalize_bmv_person_name(
+        row_map.get("investor relations", "")
+    )
+    if investor_relations_name:
+        people_entities.append(
+            {
+                "entity_type": "person",
+                "canonical_text": investor_relations_name,
+                "aliases": investor_relations_aliases,
+                "entity_id": (
+                    f"finance-mx-person:{ticker}:{_slug(investor_relations_name)}:investor-relations"
+                ),
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "mx",
+                        "category": "public_company_person",
+                        "employer_name": company_name,
+                        "employer_ticker": ticker,
+                        "exchange_code": "BMV",
+                        "exchange_name": "Bolsa Mexicana de Valores",
+                        "role_class": "investor_relations",
+                        "role_title": "Investor Relations Contact",
+                        "email": str(metadata.get("contact_email", "")),
+                        "phone": str(metadata.get("contact_phone", "")),
+                        "source_name": source_name,
+                        "profile_url": profile_url,
+                    }.items()
+                    if value
+                },
+            }
+        )
+        metadata["investor_relations_name"] = investor_relations_name
+    for section_title, default_role_class in (
+        ("Main Executives", "executive_officer"),
+        ("Board of Directors", "director"),
+    ):
+        for row in _extract_bmv_profile_people_rows(html_text, section_title):
+            person_name, aliases = _normalize_bmv_person_name(row["name"])
+            if not person_name:
+                continue
+            role_title = row["role_title"]
+            role_class = _classify_bmv_person_role(
+                role_title,
+                default_role_class=default_role_class,
+            )
+            entity_metadata = {
+                "country_code": "mx",
+                "category": "public_company_person",
+                "employer_name": company_name,
+                "employer_ticker": ticker,
+                "exchange_code": "BMV",
+                "exchange_name": "Bolsa Mexicana de Valores",
+                "role_class": role_class,
+                "role_title": role_title,
+                "source_name": source_name,
+                "profile_url": profile_url,
+            }
+            adviser_quality = row.get("adviser_quality", "")
+            if adviser_quality:
+                entity_metadata["adviser_quality"] = adviser_quality
+            people_entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_text": person_name,
+                    "aliases": aliases,
+                    "entity_id": (
+                        f"finance-mx-person:{ticker}:{_slug(person_name)}:{_slug(role_class)}"
+                    ),
+                    "metadata": entity_metadata,
+                }
+            )
+    return metadata, people_entities, equity_series
+
+
+def _extract_bmv_profile_row_map(html_text: str) -> dict[str, str]:
+    row_map: dict[str, str] = {}
+    for table_pattern in (
+        _BMV_PROFILE_DESC_TABLE_PATTERN,
+        _BMV_PROFILE_INFO_TABLE_PATTERN,
+    ):
+        for table_match in table_pattern.finditer(html_text):
+            for row_match in _BMV_PROFILE_VALUE_ROW_PATTERN.finditer(table_match.group("body")):
+                label = _normalize_whitespace(_strip_html(row_match.group("label"))).rstrip(":")
+                value = _normalize_whitespace(_strip_html(row_match.group("value")))
+                if label and value:
+                    row_map[label.casefold()] = value
+    return row_map
+
+
+def _extract_bmv_profile_equity_series(html_text: str) -> list[str]:
+    section_match = _BMV_PROFILE_EQUITY_SECTION_PATTERN.search(html_text)
+    if section_match is None:
+        return []
+    series_values: list[str] = []
+    for row_match in _BMV_PROFILE_EQUITY_SERIES_ROW_PATTERN.finditer(section_match.group("body")):
+        series = _normalize_whitespace(_strip_html(row_match.group("series"))).upper()
+        if series:
+            series_values.append(series)
+    return _unique_aliases(series_values)
+
+
+def _extract_bmv_profile_people_rows(
+    html_text: str,
+    section_title: str,
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    section_pattern = _BMV_PROFILE_SECTION_PATTERN_TEMPLATE[section_title]
+    section_match = section_pattern.search(html_text)
+    if section_match is None:
+        return rows
+    for row_match in _BMV_PROFILE_PEOPLE_ROW_PATTERN.finditer(section_match.group("body")):
+        name = _normalize_whitespace(_strip_html(row_match.group("name")))
+        role_title = _normalize_whitespace(_strip_html(row_match.group("role_title")))
+        adviser_quality = _normalize_whitespace(
+            _strip_html(row_match.group("adviser_quality") or "")
+        )
+        if not name or not role_title:
+            continue
+        rows.append(
+            {
+                "name": name,
+                "role_title": role_title,
+                "adviser_quality": adviser_quality,
+            }
+        )
+    return rows
+
+
+def _normalize_bmv_person_name(raw_name: str) -> tuple[str | None, list[str]]:
+    normalized = _normalize_whitespace(raw_name)
+    normalized = re.sub(
+        r"^(?:PRESIDENTE\s+HONORARIO\s+)+",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    normalized = re.sub(
+        r"^(?:(?:LIC|ING|C\.?\s*P|CP|SRA?|DRA?)\.?\s+)+",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    return _normalize_person_name_aliases(normalized)
+
+
+def _classify_bmv_person_role(
+    role_title: str,
+    *,
+    default_role_class: str,
+) -> str:
+    normalized = _normalize_whitespace(_ascii_fold_alias(role_title) or role_title).casefold()
+    if not normalized:
+        return default_role_class
+    if "investor relation" in normalized:
+        return "investor_relations"
+    if any(
+        keyword in normalized
+        for keyword in (
+            "presidente del consejo",
+            "consejero",
+            "consejo",
+            "board",
+            "chair",
+            "adviser",
+            "advisor",
+        )
+    ):
+        return "director"
+    if any(
+        keyword in normalized
+        for keyword in (
+            "director general",
+            "director de",
+            "director corporativo",
+            "president",
+            "finance",
+            "finanzas",
+            "chief",
+            "ceo",
+            "cfo",
+            "coo",
+            "treasurer",
+            "secretary",
+        )
+    ):
+        return "executive_officer"
+    return _classify_finance_person_role(role_title or default_role_class)
+
+
 def _extract_asx_listed_company_entities(
     csv_path: Path,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
@@ -7200,7 +12999,9 @@ def _extract_asx_listed_company_entities(
         (
             index
             for index, line in enumerate(lines)
-            if line.strip().casefold() == "company name,asx code,gics industry group"
+            if "company name" in line.casefold()
+            and "asx code" in line.casefold()
+            and "industry group" in line.casefold()
         ),
         None,
     )
@@ -7208,15 +13009,24 @@ def _extract_asx_listed_company_entities(
         return issuer_entities, ticker_entities
     reader = csv.DictReader(lines[header_index:])
     for row in reader:
-        company_name = str(row.get("Company name", "")).strip()
+        company_name = _smart_titlecase_company_name(
+            _normalize_whitespace(
+                str(row.get("Company name") or row.get("Company Name") or "")
+            )
+        )
         ticker = str(row.get("ASX code", "")).strip().upper()
-        industry_group = str(row.get("GICS industry group", "")).strip()
+        industry_group = _normalize_whitespace(
+            str(row.get("GICS industry group") or row.get("GICs industry group") or "")
+        )
+        listing_date = _normalize_whitespace(
+            str(row.get("Listing date") or row.get("Listing Date") or "")
+        )
+        market_cap = _normalize_whitespace(
+            str(row.get("Market Cap") or row.get("Market cap") or "")
+        )
         if not company_name or not ticker:
             continue
-        issuer_aliases = [company_name, ticker]
-        ascii_alias = _ascii_fold_alias(company_name)
-        if ascii_alias and ascii_alias != company_name:
-            issuer_aliases.append(ascii_alias)
+        issuer_aliases = _build_united_states_company_aliases(company_name, ticker)
         issuer_entities.append(
             {
                 "entity_type": "organization",
@@ -7227,13 +13037,17 @@ def _extract_asx_listed_company_entities(
                     "country_code": "au",
                     "category": "issuer",
                     "ticker": ticker,
+                    "exchange_code": "ASX",
+                    "exchange_name": "Australian Securities Exchange",
                     "industry_group": industry_group,
                 },
             }
         )
-        ticker_aliases = [ticker, company_name]
-        if ascii_alias and ascii_alias != company_name:
-            ticker_aliases.append(ascii_alias)
+        if listing_date:
+            issuer_entities[-1]["metadata"]["listing_date"] = listing_date
+        if market_cap:
+            issuer_entities[-1]["metadata"]["market_cap"] = market_cap
+        ticker_aliases = _unique_aliases([ticker, *issuer_aliases])
         ticker_entities.append(
             {
                 "entity_type": "ticker",
@@ -7244,11 +13058,2292 @@ def _extract_asx_listed_company_entities(
                     "country_code": "au",
                     "category": "ticker",
                     "issuer_name": company_name,
+                    "exchange_code": "ASX",
+                    "exchange_name": "Australian Securities Exchange",
                     "industry_group": industry_group,
                 },
             }
         )
+        if listing_date:
+            ticker_entities[-1]["metadata"]["listing_date"] = listing_date
+        if market_cap:
+            ticker_entities[-1]["metadata"]["market_cap"] = market_cap
     return issuer_entities, ticker_entities
+
+
+def _load_nsx_official_list_records(csv_path: Path) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    raw_payload = csv_path.read_bytes()
+    decoded_payload: str | None = None
+    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            decoded_payload = raw_payload.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    if decoded_payload is None:
+        decoded_payload = raw_payload.decode("utf-8", errors="replace")
+    reader = csv.DictReader(decoded_payload.splitlines())
+    for row in reader:
+        issuer_code = _normalize_whitespace(str(row.get("IssuerCode", ""))).upper()
+        ticker = _normalize_whitespace(str(row.get("SecurityCode", ""))).upper()
+        company_name = _smart_titlecase_company_name(
+            _normalize_whitespace(str(row.get("IssuerDescription", "")))
+        )
+        if not issuer_code or not ticker or not company_name:
+            continue
+        records.append(
+            {
+                "issuer_code": issuer_code,
+                "ticker": ticker,
+                "company_name": company_name,
+                "security_name": _smart_titlecase_company_name(
+                    _normalize_whitespace(str(row.get("SecurityDescription", "")))
+                ),
+                "principal_activities": _normalize_whitespace(
+                    str(row.get("PrincipalActivities", ""))
+                ),
+                "industry": _normalize_whitespace(str(row.get("Industry", ""))),
+                "website": _normalize_whitespace(str(row.get("Website", ""))),
+                "isin": _normalize_whitespace(str(row.get("ISIN", ""))).upper(),
+                "listed_date": _normalize_whitespace(str(row.get("ListedDate", ""))),
+                "chairman": _normalize_whitespace(str(row.get("Chairman", ""))),
+                "ceo": _normalize_whitespace(str(row.get("CEO", ""))),
+                "company_secretary": _normalize_whitespace(
+                    str(row.get("CompanySecretary", ""))
+                ),
+                "directors": _normalize_whitespace(str(row.get("Directors", ""))),
+                "auditor": _normalize_whitespace(str(row.get("Auditor", ""))),
+                "share_registry": _normalize_whitespace(str(row.get("ShareRegistry", ""))),
+                "acn": _normalize_whitespace(str(row.get("ACN", ""))),
+                "abn": _normalize_whitespace(str(row.get("ABN", ""))),
+                "company_base": _normalize_whitespace(str(row.get("CompanyBase", ""))),
+            }
+        )
+    return records
+
+
+def _extract_nsx_official_list_entities(
+    csv_path: Path,
+) -> tuple[list[dict[str, object]], list[dict[str, object]], list[dict[str, object]]]:
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    people_entities: list[dict[str, object]] = []
+    for record in _load_nsx_official_list_records(csv_path):
+        company_name = str(record["company_name"])
+        ticker = str(record["ticker"])
+        issuer_aliases = _build_united_states_company_aliases(
+            company_name,
+            str(record.get("security_name", "")),
+            str(record.get("issuer_code", "")),
+            ticker,
+        )
+        issuer_metadata = {
+            "country_code": "au",
+            "category": "issuer",
+            "ticker": ticker,
+            "issuer_code": str(record.get("issuer_code", "")),
+            "exchange_code": "NSX",
+            "exchange_name": "National Stock Exchange of Australia",
+            "industry_group": str(record.get("industry", "")),
+            "principal_activities": str(record.get("principal_activities", "")),
+            "website": str(record.get("website", "")),
+            "listed_date": str(record.get("listed_date", "")),
+            "auditor": str(record.get("auditor", "")),
+            "share_registry": str(record.get("share_registry", "")),
+            "acn": str(record.get("acn", "")),
+            "abn": str(record.get("abn", "")),
+            "company_base": str(record.get("company_base", "")),
+        }
+        isin = str(record.get("isin", ""))
+        if isin:
+            issuer_metadata["isin"] = isin
+        issuer_entities.append(
+            {
+                "entity_type": "organization",
+                "canonical_text": company_name,
+                "aliases": issuer_aliases,
+                "entity_id": f"finance-au-issuer:nsx:{ticker}",
+                "metadata": {
+                    key: value for key, value in issuer_metadata.items() if value
+                },
+            }
+        )
+        ticker_entities.append(
+            {
+                "entity_type": "ticker",
+                "canonical_text": ticker,
+                "aliases": _unique_aliases([ticker, *issuer_aliases]),
+                "entity_id": f"finance-au-ticker:nsx:{ticker}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "au",
+                        "category": "ticker",
+                        "issuer_name": company_name,
+                        "issuer_code": str(record.get("issuer_code", "")),
+                        "exchange_code": "NSX",
+                        "exchange_name": "National Stock Exchange of Australia",
+                        "industry_group": str(record.get("industry", "")),
+                        "listed_date": str(record.get("listed_date", "")),
+                        "isin": isin,
+                    }.items()
+                    if value
+                },
+            }
+        )
+        people_entities.extend(_build_nsx_people_entities(record))
+    return issuer_entities, ticker_entities, people_entities
+
+
+def _build_nsx_people_entities(record: dict[str, str]) -> list[dict[str, object]]:
+    company_name = str(record.get("company_name", ""))
+    ticker = str(record.get("ticker", ""))
+    entities: list[dict[str, object]] = []
+    for field_name, (role_class, role_title) in _NSX_COMPANY_FIELD_ROLE_TITLES.items():
+        raw_value = _normalize_whitespace(str(record.get(field_name, "")))
+        if not raw_value:
+            continue
+        for person_name in _split_nsx_named_people(raw_value):
+            entity = _build_nsx_person_entity(
+                raw_name=person_name,
+                role_class=role_class,
+                role_title=role_title,
+                company_name=company_name,
+                ticker=ticker,
+            )
+            if entity is not None:
+                entities.append(entity)
+    for person_name in _split_nsx_named_people(str(record.get("directors", ""))):
+        entity = _build_nsx_person_entity(
+            raw_name=person_name,
+            role_class="director",
+            role_title="Director",
+            company_name=company_name,
+            ticker=ticker,
+        )
+        if entity is not None:
+            entities.append(entity)
+    return entities
+
+
+def _split_nsx_named_people(value: str) -> list[str]:
+    normalized = _normalize_whitespace(value).strip(",")
+    if not normalized:
+        return []
+    parts = re.split(r"\s*[;|/]\s*|\s+\band\b\s+", normalized, flags=re.IGNORECASE)
+    if len(parts) == 1 and normalized.count(",") >= 2:
+        parts = [part for part in normalized.split(",") if part.strip()]
+    elif len(parts) == 1 and normalized.count(",") == 1:
+        left, right = [part.strip() for part in normalized.split(",", 1)]
+        if _looks_like_person_name(left) and _looks_like_person_name(right):
+            parts = [left, right]
+    return [
+        _normalize_whitespace(part).strip(",")
+        for part in parts
+        if _normalize_whitespace(part).strip(",")
+    ]
+
+
+def _build_nsx_person_entity(
+    *,
+    raw_name: str,
+    role_class: str,
+    role_title: str,
+    company_name: str,
+    ticker: str,
+) -> dict[str, object] | None:
+    canonical_name, aliases = _normalize_person_name_aliases(raw_name)
+    if not canonical_name:
+        return None
+    return {
+        "entity_type": "person",
+        "canonical_text": canonical_name,
+        "aliases": aliases,
+        "entity_id": f"finance-au-person:nsx:{ticker}:{_slug(canonical_name)}:{_slug(role_class)}",
+        "metadata": {
+            "country_code": "au",
+            "category": role_class,
+            "role_title": role_title,
+            "employer_name": company_name,
+            "employer_ticker": ticker,
+            "exchange_code": "NSX",
+            "exchange_name": "National Stock Exchange of Australia",
+        },
+    }
+
+
+def _extract_nsx_detail_people_entities(
+    html_text: str,
+    *,
+    issuer_code: str,
+    default_company_name: str,
+    default_ticker: str,
+) -> list[dict[str, object]]:
+    company_name = default_company_name
+    heading_match = re.search(
+        r"<h1[^>]*>(?P<name>.*?)</h1>",
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if heading_match is not None:
+        heading_name = _smart_titlecase_company_name(_strip_html(heading_match.group("name")))
+        if heading_name:
+            company_name = heading_name
+    rows = _extract_nsx_detail_rows(html_text)
+    people_entities: list[dict[str, object]] = []
+    for label, raw_value in rows.items():
+        normalized_label = label.casefold()
+        value = _normalize_whitespace(raw_value)
+        if not value:
+            continue
+        if normalized_label == "chairman":
+            role_pairs = [("director", "Chairman")]
+        elif normalized_label in {"managing director / ceo", "managing director/ceo", "ceo"}:
+            role_pairs = [("executive_officer", "Chief Executive Officer")]
+        elif normalized_label == "directors":
+            role_pairs = [("director", "Director")]
+        elif normalized_label in {"company secretary", "company secretary(ies)"}:
+            role_pairs = [("executive_officer", "Company Secretary")]
+        else:
+            continue
+        for role_class, role_title in role_pairs:
+            for person_name in _split_nsx_named_people(value):
+                entity = _build_nsx_person_entity(
+                    raw_name=person_name,
+                    role_class=role_class,
+                    role_title=role_title,
+                    company_name=company_name,
+                    ticker=default_ticker or issuer_code,
+                )
+                if entity is not None:
+                    people_entities.append(entity)
+    return people_entities
+
+
+def _extract_nsx_detail_rows(html_text: str) -> dict[str, str]:
+    rows: dict[str, str] = {}
+    for match in re.finditer(
+        r"<tr[^>]*>\s*<th[^>]*>(?P<label>.*?)</th>\s*<td[^>]*>(?P<value>.*?)</td>\s*</tr>",
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        label = _normalize_whitespace(_strip_html(match.group("label")))
+        value = _normalize_whitespace(_strip_html(match.group("value")))
+        if label and value:
+            rows[label] = value
+    return rows
+
+
+def _extract_tmx_directory_entities(
+    json_path: Path,
+    *,
+    exchange_code: str,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return [], []
+    results = payload.get("results")
+    if not isinstance(results, list):
+        return [], []
+    exchange_name = {
+        "TSX": "Toronto Stock Exchange",
+        "TSXV": "TSX Venture Exchange",
+    }.get(exchange_code, exchange_code)
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    for row in results:
+        if not isinstance(row, dict):
+            continue
+        company_name = _smart_titlecase_company_name(
+            _normalize_whitespace(str(row.get("name", "")))
+        )
+        ticker = _normalize_whitespace(str(row.get("symbol", ""))).upper()
+        if not company_name or not ticker:
+            continue
+        aliases = _build_united_states_company_aliases(company_name, ticker)
+        issuer_entities.append(
+            {
+                "entity_type": "organization",
+                "canonical_text": company_name,
+                "aliases": aliases,
+                "entity_id": f"finance-ca-issuer:{exchange_code.casefold()}:{ticker.casefold()}",
+                "metadata": {
+                    "country_code": "ca",
+                    "category": "issuer",
+                    "ticker": ticker,
+                    "exchange_code": exchange_code,
+                    "exchange_name": exchange_name,
+                },
+            }
+        )
+        instruments = row.get("instruments")
+        if isinstance(instruments, list) and instruments:
+            instrument_items = instruments
+        else:
+            instrument_items = [{"symbol": ticker, "name": company_name}]
+        for instrument in instrument_items:
+            if not isinstance(instrument, dict):
+                continue
+            instrument_ticker = _normalize_whitespace(
+                str(instrument.get("symbol", ticker))
+            ).upper()
+            if not instrument_ticker:
+                continue
+            instrument_name = _smart_titlecase_company_name(
+                _normalize_whitespace(str(instrument.get("name", company_name)))
+            )
+            ticker_entities.append(
+                {
+                    "entity_type": "ticker",
+                    "canonical_text": instrument_ticker,
+                    "aliases": _unique_aliases(
+                        [instrument_ticker, company_name, instrument_name, *aliases]
+                    ),
+                    "entity_id": (
+                        f"finance-ca-ticker:{exchange_code.casefold()}:"
+                        f"{instrument_ticker.casefold()}"
+                    ),
+                    "metadata": {
+                        "country_code": "ca",
+                        "category": "ticker",
+                        "issuer_name": company_name,
+                        "exchange_code": exchange_code,
+                        "exchange_name": exchange_name,
+                    },
+                }
+            )
+    return issuer_entities, ticker_entities
+
+
+def _extract_cse_company_urls(xml_text: str) -> list[str]:
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+    namespace = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    urls = [
+        _normalize_whitespace(url_node.text or "")
+        for url_node in root.findall(".//sm:loc", namespace)
+    ]
+    return [url for url in urls if url]
+
+
+def _extract_cse_company_page_entities(
+    html_text: str,
+    *,
+    source_url: str,
+) -> tuple[dict[str, object] | None, dict[str, object] | None, list[dict[str, object]]]:
+    match = _CSE_NEXT_DATA_PATTERN.search(html_text)
+    if match is None:
+        return None, None, []
+    payload = json.loads(match.group("payload"))
+    page_props = payload.get("props", {}).get("pageProps", {})
+    if not isinstance(page_props, dict):
+        return None, None, []
+    company_info = page_props.get("staticCompanyInfo", {})
+    company_data = page_props.get("staticCompanyData", {})
+    if not isinstance(company_info, dict) or not isinstance(company_data, dict):
+        return None, None, []
+    metadata = company_data.get("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    company_name = _smart_titlecase_company_name(
+        _normalize_whitespace(
+            str(
+                company_info.get("securityName")
+                or metadata.get("security_name")
+                or page_props.get("title")
+                or ""
+            )
+        )
+    )
+    ticker = _normalize_whitespace(
+        str(company_info.get("symbol") or metadata.get("symbol") or page_props.get("symbol") or "")
+    ).upper()
+    if not company_name or not ticker:
+        return None, None, []
+    exchange_code = _normalize_whitespace(
+        str(company_info.get("exchange") or metadata.get("listing_market") or "CSE")
+    ).upper()
+    aliases = _build_united_states_company_aliases(company_name, ticker)
+    issuer_entity: dict[str, object] = {
+        "entity_type": "organization",
+        "canonical_text": company_name,
+        "aliases": aliases,
+        "entity_id": f"finance-ca-issuer:cse:{ticker.casefold()}",
+        "metadata": {
+            key: value
+            for key, value in {
+                "country_code": "ca",
+                "category": "issuer",
+                "ticker": ticker,
+                "exchange_code": exchange_code,
+                "exchange_name": "Canadian Securities Exchange",
+                "listing_date": _normalize_whitespace(
+                    str(metadata.get("listing_date") or company_info.get("listingDate") or "")
+                ),
+                "security_type": _normalize_whitespace(
+                    str(metadata.get("security_type") or company_info.get("mainSecurity") or "")
+                ),
+                "sector": _normalize_whitespace(str(company_info.get("sector", ""))),
+                "status": _normalize_whitespace(str(company_info.get("status", ""))),
+                "website": _normalize_whitespace(
+                    str(metadata.get("company_website_url") or company_info.get("companyWebsite") or "")
+                ),
+                "company_page_url": source_url,
+                "sedar_filings_url": _normalize_whitespace(str(metadata.get("sedar_filings", ""))),
+            }.items()
+            if value
+        },
+    }
+    ticker_entity: dict[str, object] = {
+        "entity_type": "ticker",
+        "canonical_text": ticker,
+        "aliases": _unique_aliases([ticker, company_name, *aliases]),
+        "entity_id": f"finance-ca-ticker:cse:{ticker.casefold()}",
+        "metadata": {
+            key: value
+            for key, value in {
+                "country_code": "ca",
+                "category": "ticker",
+                "issuer_name": company_name,
+                "exchange_code": exchange_code,
+                "exchange_name": "Canadian Securities Exchange",
+                "listing_date": _normalize_whitespace(
+                    str(metadata.get("listing_date") or company_info.get("listingDate") or "")
+                ),
+                "security_type": _normalize_whitespace(
+                    str(metadata.get("security_type") or company_info.get("mainSecurity") or "")
+                ),
+                "sector": _normalize_whitespace(str(company_info.get("sector", ""))),
+                "company_page_url": source_url,
+            }.items()
+            if value
+        },
+    }
+    people_entities: list[dict[str, object]] = []
+    contact_name = _normalize_whitespace(str(company_info.get("contactName", "")))
+    contact_title = _normalize_whitespace(str(company_info.get("contactTitle", "")))
+    if contact_name and contact_title:
+        entity = _build_canada_company_person_entity(
+            raw_name=contact_name,
+            role_title=contact_title,
+            company_name=company_name,
+            ticker=ticker,
+            exchange_code=exchange_code,
+        )
+        if entity is not None:
+            people_entities.append(entity)
+    officers = company_info.get("companyOfficers")
+    if isinstance(officers, list):
+        for officer in officers:
+            if not isinstance(officer, dict):
+                continue
+            entity = _build_canada_company_person_entity(
+                raw_name=_normalize_whitespace(str(officer.get("name", ""))),
+                role_title=_normalize_whitespace(str(officer.get("title", ""))),
+                company_name=company_name,
+                ticker=ticker,
+                exchange_code=exchange_code,
+            )
+            if entity is not None:
+                people_entities.append(entity)
+    return issuer_entity, ticker_entity, people_entities
+
+
+def _build_canada_company_person_entity(
+    *,
+    raw_name: str,
+    role_title: str,
+    company_name: str,
+    ticker: str,
+    exchange_code: str,
+) -> dict[str, object] | None:
+    if not raw_name or not role_title:
+        return None
+    canonical_name, aliases = _normalize_person_name_aliases(raw_name)
+    if not canonical_name:
+        return None
+    role_class = _classify_finance_person_role(role_title)
+    return {
+        "entity_type": "person",
+        "canonical_text": canonical_name,
+        "aliases": aliases,
+        "entity_id": (
+            f"finance-ca-person:{exchange_code.casefold()}:{ticker.casefold()}:"
+            f"{_slug(canonical_name)}:{_slug(role_class)}"
+        ),
+        "metadata": {
+            "country_code": "ca",
+            "category": role_class,
+            "role_title": role_title,
+            "employer_name": company_name,
+            "employer_ticker": ticker,
+            "exchange_code": exchange_code,
+        },
+    }
+
+
+def _fetch_krx_listed_company_payload(
+    *,
+    market_code: str,
+    user_agent: str,
+) -> dict[str, object]:
+    html_text = _download_text(_KRX_LISTED_COMPANIES_URL, user_agent=user_agent)
+    form_payload = _extract_krx_form_payload(html_text, market_code=market_code)
+    headers = {
+        "User-Agent": user_agent,
+        "Referer": _KRX_LISTED_COMPANIES_URL,
+        "X-Requested-With": "XMLHttpRequest",
+    }
+    with httpx.Client(
+        headers=headers,
+        follow_redirects=True,
+        timeout=DEFAULT_COUNTRY_SOURCE_FETCH_TIMEOUT_SECONDS,
+    ) as client:
+        otp_response = client.get(
+            _KRX_GENERATE_OTP_URL,
+            params={
+                "bld": _KRX_LISTED_COMPANIES_BLD,
+                "name": "tablesubmit",
+                **form_payload,
+            },
+        )
+        otp_response.raise_for_status()
+        code = otp_response.text.strip()
+        if not code:
+            raise RuntimeError("KRX GenerateOTP returned an empty code")
+        data_response = client.get(
+            _KRX_DATA_URL,
+            params={
+                **form_payload,
+                "code": code,
+                "bldcode": _KRX_LISTED_COMPANIES_BLD_CODE,
+            },
+        )
+        data_response.raise_for_status()
+        response_payload = data_response.json()
+        if not isinstance(response_payload, dict):
+            raise ValueError("KRX listed-company endpoint returned a non-object payload")
+        return response_payload
+
+
+def _extract_krx_form_payload(html_text: str, *, market_code: str) -> dict[str, str]:
+    form_match = re.search(
+        r'<form[^>]+data-bld="(?P<bld>[^"]+)"(?P<body>.*?)</form>',
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if form_match is None:
+        raise ValueError("Could not find the KRX listed-company search form")
+    form_body = form_match.group("body")
+    payload: dict[str, str] = {"market_gubun": market_code}
+    for input_match in re.finditer(r"<input(?P<attrs>[^>]+)>", form_body, re.IGNORECASE):
+        attrs = input_match.group("attrs")
+        name_match = re.search(r'name="(?P<name>[^"]+)"', attrs, re.IGNORECASE)
+        if name_match is None:
+            continue
+        name = name_match.group("name")
+        input_type = (
+            re.search(r'type="(?P<type>[^"]+)"', attrs, re.IGNORECASE).group("type").casefold()
+            if re.search(r'type="(?P<type>[^"]+)"', attrs, re.IGNORECASE) is not None
+            else "text"
+        )
+        if input_type in {"radio", "checkbox"} and "checked" not in attrs.casefold():
+            continue
+        if name == "market_gubun":
+            continue
+        value_match = re.search(r'value="(?P<value>[^"]*)"', attrs, re.IGNORECASE)
+        payload[name] = html.unescape(value_match.group("value") if value_match else "")
+    for select_match in re.finditer(
+        r'<select(?P<attrs>[^>]+)>(?P<body>.*?)</select>',
+        form_body,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        attrs = select_match.group("attrs")
+        name_match = re.search(r'name="(?P<name>[^"]+)"', attrs, re.IGNORECASE)
+        if name_match is None:
+            continue
+        option_body = select_match.group("body")
+        option_match = re.search(
+            r'<option[^>]+selected[^>]+value="(?P<value>[^"]*)"',
+            option_body,
+            re.IGNORECASE,
+        ) or re.search(
+            r'<option[^>]+value="(?P<value>[^"]*)"',
+            option_body,
+            re.IGNORECASE,
+        )
+        payload[name_match.group("name")] = (
+            html.unescape(option_match.group("value")) if option_match is not None else ""
+        )
+    return payload
+
+
+def _extract_krx_listed_company_entities(
+    json_path: Path,
+    *,
+    market_code: str,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return [], []
+    raw_records = next(
+        (
+            value
+            for value in payload.values()
+            if isinstance(value, list)
+        ),
+        [],
+    )
+    if not isinstance(raw_records, list):
+        return [], []
+    market_name = _KRX_MARKET_CODE_TO_NAME[market_code]
+    market_entity_id = _KRX_MARKET_CODE_TO_ENTITY_ID[market_code]
+    issuer_entities: list[dict[str, object]] = []
+    ticker_entities: list[dict[str, object]] = []
+    for row in raw_records:
+        if not isinstance(row, dict):
+            continue
+        company_name = _smart_titlecase_company_name(
+            _normalize_whitespace(html.unescape(str(row.get("eng_cor_nm", ""))))
+        )
+        ticker = _normalize_whitespace(str(row.get("isu_cd", ""))).upper()
+        if not company_name or not ticker:
+            continue
+        aliases = _unique_aliases([company_name, ticker, _ascii_fold_alias(company_name) or ""])
+        issuer_entities.append(
+            {
+                "entity_type": "organization",
+                "canonical_text": company_name,
+                "aliases": aliases,
+                "entity_id": f"finance-kr-issuer:{market_code}:{ticker.casefold()}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "kr",
+                        "category": "issuer",
+                        "ticker": ticker,
+                        "exchange_code": "KRX",
+                        "exchange_name": "Korea Exchange",
+                        "market_code": market_code,
+                        "market_name": market_name,
+                        "market_entity_id": market_entity_id,
+                        "industry_code": _normalize_whitespace(str(row.get("std_ind_cd", ""))),
+                        "industry_name": _normalize_whitespace(str(row.get("ind_nm", ""))),
+                        "listed_shares_count": _normalize_whitespace(str(row.get("lst_stk_vl", ""))),
+                        "capital": _normalize_whitespace(str(row.get("cpt", ""))),
+                        "par_value": _normalize_whitespace(str(row.get("par_pr", ""))),
+                        "currency_code": _normalize_whitespace(str(row.get("iso_cd", ""))),
+                    }.items()
+                    if value
+                },
+            }
+        )
+        ticker_entities.append(
+            {
+                "entity_type": "ticker",
+                "canonical_text": ticker,
+                "aliases": _unique_aliases([ticker, company_name, *aliases]),
+                "entity_id": f"finance-kr-ticker:{market_code}:{ticker.casefold()}",
+                "metadata": {
+                    key: value
+                    for key, value in {
+                        "country_code": "kr",
+                        "category": "ticker",
+                        "issuer_name": company_name,
+                        "exchange_code": "KRX",
+                        "exchange_name": "Korea Exchange",
+                        "market_code": market_code,
+                        "market_name": market_name,
+                        "market_entity_id": market_entity_id,
+                        "industry_name": _normalize_whitespace(str(row.get("ind_nm", ""))),
+                        "currency_code": _normalize_whitespace(str(row.get("iso_cd", ""))),
+                    }.items()
+                    if value
+                },
+            }
+        )
+    return issuer_entities, ticker_entities
+
+
+def _enrich_australia_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="au",
+        resolution_name="wikidata-australia-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for Australia issuers and related people.",
+        description_hints=_AUSTRALIA_WIKIDATA_DESCRIPTION_HINTS,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_japan_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="jp",
+        resolution_name="wikidata-japan-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for Japan issuers and related public people.",
+        description_hints=_JAPAN_WIKIDATA_DESCRIPTION_HINTS,
+        max_issuer_entities=_BASIC_COUNTRY_WIKIDATA_MAX_ISSUERS,
+        max_people_entities=_BASIC_COUNTRY_WIKIDATA_MAX_PEOPLE,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_canada_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="ca",
+        resolution_name="wikidata-canada-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for Canada issuers and related people.",
+        description_hints=_CANADA_WIKIDATA_DESCRIPTION_HINTS,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_china_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="cn",
+        resolution_name="wikidata-china-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for China issuers and related public people.",
+        description_hints=_CHINA_WIKIDATA_DESCRIPTION_HINTS,
+        max_issuer_entities=_BASIC_COUNTRY_WIKIDATA_MAX_ISSUERS,
+        max_people_entities=_BASIC_COUNTRY_WIKIDATA_MAX_PEOPLE,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_brazil_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="br",
+        resolution_name="wikidata-brazil-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for Brazil issuers and related public people.",
+        description_hints=_BRAZIL_WIKIDATA_DESCRIPTION_HINTS,
+        max_issuer_entities=_BASIC_COUNTRY_WIKIDATA_MAX_ISSUERS,
+        max_people_entities=_BASIC_COUNTRY_WIKIDATA_MAX_PEOPLE,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_indonesia_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="id",
+        resolution_name="wikidata-indonesia-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for Indonesia issuers and related public people.",
+        description_hints=_INDONESIA_WIKIDATA_DESCRIPTION_HINTS,
+        max_issuer_entities=_BASIC_COUNTRY_WIKIDATA_MAX_ISSUERS,
+        max_people_entities=_BASIC_COUNTRY_WIKIDATA_MAX_PEOPLE,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_india_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="in",
+        resolution_name="wikidata-india-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for India issuers and related public people.",
+        description_hints=_INDIA_WIKIDATA_DESCRIPTION_HINTS,
+        max_issuer_entities=_BASIC_COUNTRY_WIKIDATA_MAX_ISSUERS,
+        max_people_entities=_BASIC_COUNTRY_WIKIDATA_MAX_PEOPLE,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_italy_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="it",
+        resolution_name="wikidata-italy-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for Italy issuers and related public people.",
+        description_hints=_ITALY_WIKIDATA_DESCRIPTION_HINTS,
+        max_issuer_entities=_BASIC_COUNTRY_WIKIDATA_MAX_ISSUERS,
+        max_people_entities=_BASIC_COUNTRY_WIKIDATA_MAX_PEOPLE,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_mexico_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="mx",
+        resolution_name="wikidata-mexico-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for Mexico issuers and related public people.",
+        description_hints=_MEXICO_WIKIDATA_DESCRIPTION_HINTS,
+        max_issuer_entities=_BASIC_COUNTRY_WIKIDATA_MAX_ISSUERS,
+        max_people_entities=_BASIC_COUNTRY_WIKIDATA_MAX_PEOPLE,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_south_korea_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="kr",
+        resolution_name="wikidata-south-korea-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for South Korea issuers and related public people.",
+        description_hints=_SOUTH_KOREA_WIKIDATA_DESCRIPTION_HINTS,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_russia_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="ru",
+        resolution_name="wikidata-russia-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for Russia issuers and related public people.",
+        description_hints=_RUSSIA_WIKIDATA_DESCRIPTION_HINTS,
+        max_issuer_entities=_BASIC_COUNTRY_WIKIDATA_MAX_ISSUERS,
+        max_people_entities=_BASIC_COUNTRY_WIKIDATA_MAX_PEOPLE,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_saudi_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="sa",
+        resolution_name="wikidata-saudi-arabia-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for Saudi Arabia issuers and related public people.",
+        description_hints=_SAUDI_ARABIA_WIKIDATA_DESCRIPTION_HINTS,
+        max_issuer_entities=_BASIC_COUNTRY_WIKIDATA_MAX_ISSUERS,
+        max_people_entities=_BASIC_COUNTRY_WIKIDATA_MAX_PEOPLE,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_south_africa_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    return _enrich_basic_country_entities_with_wikidata(
+        country_code="za",
+        resolution_name="wikidata-south-africa-entity-resolution",
+        source_notes="Wikidata QID resolution snapshot for South Africa issuers and related public people.",
+        description_hints=_SOUTH_AFRICA_WIKIDATA_DESCRIPTION_HINTS,
+        max_issuer_entities=_BASIC_COUNTRY_WIKIDATA_MAX_ISSUERS,
+        max_people_entities=_BASIC_COUNTRY_WIKIDATA_MAX_PEOPLE,
+        country_dir=country_dir,
+        issuer_entities=issuer_entities,
+        ticker_entities=ticker_entities,
+        people_entities=people_entities,
+        downloaded_sources=downloaded_sources,
+        user_agent=user_agent,
+    )
+
+
+def _enrich_basic_country_entities_with_wikidata(
+    *,
+    country_code: str,
+    resolution_name: str,
+    source_notes: str,
+    description_hints: tuple[str, ...],
+    max_issuer_entities: int | None = None,
+    max_people_entities: int | None = None,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    warnings: list[str] = []
+    bounded_issuer_entities = issuer_entities
+    bounded_people_entities = people_entities
+    if max_issuer_entities is not None and len(issuer_entities) > max_issuer_entities:
+        bounded_issuer_entities = issuer_entities[:max_issuer_entities]
+        warnings.append(
+            f"bounded_wikidata_issuers:{country_code}:{len(bounded_issuer_entities)}/{len(issuer_entities)}"
+        )
+    if max_people_entities is not None and len(people_entities) > max_people_entities:
+        bounded_people_entities = people_entities[:max_people_entities]
+        warnings.append(
+            f"bounded_wikidata_people:{country_code}:{len(bounded_people_entities)}/{len(people_entities)}"
+        )
+    (
+        resolution_payload,
+        resolution_path,
+        resolution_warnings,
+    ) = _build_basic_country_wikidata_resolution_snapshot(
+        country_code=country_code,
+        description_hints=description_hints,
+        issuer_entities=bounded_issuer_entities,
+        people_entities=bounded_people_entities,
+        country_dir=country_dir,
+        user_agent=user_agent,
+    )
+    warnings.extend(resolution_warnings)
+    if resolution_path is None:
+        return warnings
+    downloaded_sources.append(
+        {
+            "name": resolution_name,
+            "source_url": _WIKIDATA_API_URL,
+            "path": str(resolution_path.relative_to(country_dir)),
+            "category": "knowledge_graph",
+            "notes": source_notes,
+        }
+    )
+    issuer_matches = resolution_payload.get("issuers", {})
+    if isinstance(issuer_matches, dict):
+        for entity in [*issuer_entities, *ticker_entities]:
+            match = issuer_matches.get(_basic_country_wikidata_target_key(entity))
+            if isinstance(match, dict):
+                _merge_wikidata_metadata(entity=entity, match=match)
+    people_matches = resolution_payload.get("people", {})
+    if isinstance(people_matches, dict):
+        for entity in people_entities:
+            match = people_matches.get(str(entity.get("entity_id", "")))
+            if isinstance(match, dict):
+                _merge_wikidata_metadata(entity=entity, match=match)
+    organization_people = resolution_payload.get("organization_people", {})
+    if isinstance(organization_people, dict):
+        _merge_basic_country_wikidata_public_people_entities(
+            country_code=country_code,
+            people_entities=people_entities,
+            issuer_entities=issuer_entities,
+            organization_people=organization_people,
+        )
+    return warnings
+
+
+def _build_basic_country_wikidata_resolution_snapshot(
+    *,
+    country_code: str,
+    description_hints: tuple[str, ...],
+    issuer_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    country_dir: Path,
+    user_agent: str,
+) -> tuple[dict[str, object], Path | None, list[str]]:
+    warnings: list[str] = []
+    search_languages = _basic_country_wikidata_languages(country_code)
+    issuer_matches, issuer_warnings = _resolve_basic_country_issuer_wikidata_matches(
+        country_code=country_code,
+        issuer_entities=issuer_entities,
+        description_hints=description_hints,
+        search_languages=search_languages,
+        user_agent=user_agent,
+    )
+    warnings.extend(issuer_warnings)
+    people_matches, people_warnings = _resolve_basic_country_person_wikidata_matches(
+        people_entities=people_entities,
+        issuer_matches=issuer_matches,
+        description_hints=description_hints,
+        search_languages=search_languages,
+        user_agent=user_agent,
+    )
+    warnings.extend(people_warnings)
+    organization_people, organization_people_warnings = (
+        _build_basic_country_wikidata_public_people_snapshot(
+            country_code=country_code,
+            issuer_entities=issuer_entities,
+            issuer_matches=issuer_matches,
+            label_languages=search_languages,
+            user_agent=user_agent,
+        )
+    )
+    warnings.extend(organization_people_warnings)
+    people_matches.update(
+        _build_basic_country_person_wikidata_matches_from_organization_people(
+            country_code=country_code,
+            people_entities=people_entities,
+            issuer_entities=issuer_entities,
+            organization_people=organization_people,
+        )
+    )
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "country_code": country_code,
+        "generated_at": _utc_timestamp(),
+        "issuers": issuer_matches,
+        "people": people_matches,
+        "organization_people": organization_people,
+    }
+    if not issuer_matches and not people_matches and not organization_people:
+        return payload, None, warnings
+    resolution_path = country_dir / f"wikidata-{country_code}-entity-resolution.json"
+    resolution_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return payload, resolution_path, warnings
+
+
+def _resolve_basic_country_issuer_wikidata_matches(
+    *,
+    country_code: str,
+    issuer_entities: list[dict[str, object]],
+    description_hints: tuple[str, ...],
+    search_languages: tuple[str, ...],
+    user_agent: str,
+) -> tuple[dict[str, dict[str, object]], list[str]]:
+    warnings: list[str] = []
+    search_cache: dict[str, list[dict[str, Any]]] = {}
+    exact_label_candidates_by_target: dict[str, list[str]] = {}
+    exact_label_candidates_by_value: dict[str, list[str]] = {}
+    candidate_ids_by_isin = _query_wikidata_entity_ids_by_string_property(
+        property_id=_WIKIDATA_ISIN_PROPERTY_ID,
+        values=[
+            _normalize_whitespace(str(entity.get("metadata", {}).get("isin", ""))).upper()
+            for entity in issuer_entities
+            if isinstance(entity.get("metadata"), dict)
+            and _normalize_whitespace(str(entity.get("metadata", {}).get("isin", "")))
+        ],
+        user_agent=user_agent,
+        warnings=warnings,
+    )
+    candidate_ids_by_ticker = _query_wikidata_entity_ids_by_string_property(
+        property_id=_WIKIDATA_STOCK_EXCHANGE_TICKER_SYMBOL_PROPERTY_ID,
+        values=[
+            _normalize_whitespace(str(entity.get("metadata", {}).get("ticker", ""))).upper()
+            for entity in issuer_entities
+            if isinstance(entity.get("metadata"), dict)
+            and _normalize_whitespace(str(entity.get("metadata", {}).get("ticker", "")))
+        ],
+        user_agent=user_agent,
+        warnings=warnings,
+    )
+    candidate_ids_by_cnpj = _query_wikidata_entity_ids_by_string_property(
+        property_id=_WIKIDATA_CNPJ_PROPERTY_ID,
+        values=[
+            cnpj_value
+            for entity in issuer_entities
+            if isinstance(entity.get("metadata"), dict)
+            for cnpj_value in _brazil_cnpj_match_values(
+                str(entity.get("metadata", {}).get("cnpj", ""))
+            )
+        ],
+        user_agent=user_agent,
+        warnings=warnings,
+    )
+    candidate_ids_by_website = _query_wikidata_entity_ids_by_casefolded_string_property(
+        property_id=_WIKIDATA_OFFICIAL_WEBSITE_PROPERTY_ID,
+        values=[
+            website_value
+            for entity in issuer_entities
+            if isinstance(entity.get("metadata"), dict)
+            for website_value in _wikidata_website_match_values(
+                str(entity.get("metadata", {}).get("website", ""))
+            )
+        ],
+        user_agent=user_agent,
+        warnings=warnings,
+    )
+    extra_property_values: dict[str, list[str]] = {}
+    for entity in issuer_entities:
+        metadata = entity.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        for property_id, values in _basic_country_extra_wikidata_string_property_specs(
+            country_code=country_code,
+            metadata=metadata,
+        ):
+            extra_property_values.setdefault(property_id, []).extend(values)
+    candidate_ids_by_extra_property = {
+        property_id: _query_wikidata_entity_ids_by_string_property(
+            property_id=property_id,
+            values=_unique_aliases(values),
+            user_agent=user_agent,
+            warnings=warnings,
+        )
+        for property_id, values in extra_property_values.items()
+        if values
+    }
+    target_candidates: dict[str, list[str]] = {}
+    for entity in issuer_entities:
+        target_key = _basic_country_wikidata_target_key(entity)
+        if not target_key:
+            continue
+        metadata = entity.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        candidate_ids: list[str] = []
+        isin = _normalize_whitespace(str(metadata.get("isin", ""))).upper()
+        if isin:
+            candidate_ids.extend(candidate_ids_by_isin.get(isin, []))
+        ticker = _normalize_whitespace(str(metadata.get("ticker", ""))).upper()
+        if ticker:
+            candidate_ids.extend(candidate_ids_by_ticker.get(ticker, []))
+        for cnpj_value in _brazil_cnpj_match_values(str(metadata.get("cnpj", ""))):
+            candidate_ids.extend(candidate_ids_by_cnpj.get(cnpj_value.upper(), []))
+        for website_value in _wikidata_website_match_values(str(metadata.get("website", ""))):
+            candidate_ids.extend(candidate_ids_by_website.get(website_value, []))
+        for property_id, values in _basic_country_extra_wikidata_string_property_specs(
+            country_code=country_code,
+            metadata=metadata,
+        ):
+            property_candidates = candidate_ids_by_extra_property.get(property_id, {})
+            for value in values:
+                candidate_ids.extend(property_candidates.get(value, []))
+        resolved_candidate_ids = _unique_aliases(
+            [candidate_id for candidate_id in candidate_ids if candidate_id]
+        )
+        if resolved_candidate_ids:
+            target_candidates[target_key] = resolved_candidate_ids
+            continue
+        candidate_values = [
+            alias
+            for alias in _build_united_states_company_aliases(
+                str(entity.get("canonical_text", ""))
+            )
+            if alias and not (alias.isupper() and len(alias) <= 5)
+        ]
+        if candidate_values:
+            exact_label_candidates_by_target[target_key] = candidate_values[:2]
+    if exact_label_candidates_by_target:
+        exact_label_candidates_by_value = _query_wikidata_entity_ids_by_exact_label(
+            values=[
+                value
+                for candidate_values in exact_label_candidates_by_target.values()
+                for value in candidate_values
+            ],
+            languages=search_languages,
+            user_agent=user_agent,
+            warnings=warnings,
+        )
+        for target_key, candidate_values in exact_label_candidates_by_target.items():
+            candidate_ids = [
+                candidate_id
+                for candidate_value in candidate_values
+                for candidate_id in exact_label_candidates_by_value.get(candidate_value, [])
+            ]
+            resolved_candidate_ids = _unique_aliases(candidate_ids)
+            if resolved_candidate_ids:
+                target_candidates[target_key] = resolved_candidate_ids
+    for entity in issuer_entities:
+        target_key = _basic_country_wikidata_target_key(entity)
+        if not target_key or target_key in target_candidates:
+            continue
+        candidate_ids: list[str] = []
+        for query in _build_basic_country_wikidata_search_queries(
+            entity,
+            entity_type="organization",
+        ):
+            if query not in search_cache:
+                try:
+                    search_cache[query] = _search_wikidata_entities(
+                        query,
+                        languages=search_languages,
+                        user_agent=user_agent,
+                    )
+                except Exception as exc:
+                    warning_text = f"Wikidata issuer search failed for {query}: {exc}"
+                    if warning_text not in warnings and len(warnings) < 5:
+                        warnings.append(warning_text)
+                    search_cache[query] = []
+            candidate_ids.extend(
+                str(item.get("id", "")).strip()
+                for item in search_cache[query]
+                if isinstance(item, dict)
+            )
+            if _has_exact_basic_country_organization_search_hit(
+                entity,
+                search_cache[query],
+            ):
+                break
+        resolved_candidate_ids = _unique_aliases(
+            [candidate_id for candidate_id in candidate_ids if candidate_id]
+        )
+        if resolved_candidate_ids:
+            target_candidates[target_key] = resolved_candidate_ids
+    entity_payloads = _fetch_wikidata_entity_payloads(
+        entity_ids=[
+            candidate_id
+            for candidate_ids in target_candidates.values()
+            for candidate_id in candidate_ids
+        ],
+        user_agent=user_agent,
+        warnings=warnings,
+    )
+    matches: dict[str, dict[str, object]] = {}
+    for entity in issuer_entities:
+        target_key = _basic_country_wikidata_target_key(entity)
+        if not target_key:
+            continue
+        candidate_ids = target_candidates.get(target_key, [])
+        if not candidate_ids:
+            continue
+        match = _select_best_basic_country_issuer_wikidata_match(
+            entity=entity,
+            candidate_ids=candidate_ids,
+            entity_payloads=entity_payloads,
+            description_hints=description_hints,
+            label_languages=search_languages,
+        )
+        if match is not None:
+            matches[target_key] = match
+    return matches, warnings
+
+
+def _resolve_basic_country_person_wikidata_matches(
+    *,
+    people_entities: list[dict[str, object]],
+    issuer_matches: dict[str, dict[str, object]],
+    description_hints: tuple[str, ...],
+    search_languages: tuple[str, ...],
+    user_agent: str,
+) -> tuple[dict[str, dict[str, object]], list[str]]:
+    search_cache: dict[str, list[dict[str, Any]]] = {}
+    target_candidates: dict[str, list[str]] = {}
+    warnings: list[str] = []
+    for entity in people_entities:
+        entity_id = str(entity.get("entity_id", "")).strip()
+        if not entity_id:
+            continue
+        candidate_ids: list[str] = []
+        for query in _build_basic_country_wikidata_search_queries(entity, entity_type="person"):
+            if query not in search_cache:
+                try:
+                    search_cache[query] = _search_wikidata_entities(
+                        query,
+                        languages=search_languages,
+                        user_agent=user_agent,
+                    )
+                except Exception as exc:
+                    warning_text = f"Wikidata people search failed for {query}: {exc}"
+                    if warning_text not in warnings and len(warnings) < 5:
+                        warnings.append(warning_text)
+                    search_cache[query] = []
+            candidate_ids.extend(
+                str(item.get("id", "")).strip()
+                for item in search_cache[query]
+                if isinstance(item, dict)
+            )
+            if _has_exact_basic_country_person_search_hit(entity, search_cache[query]):
+                break
+        resolved_candidate_ids = _unique_aliases(
+            [candidate_id for candidate_id in candidate_ids if candidate_id]
+        )
+        if resolved_candidate_ids:
+            target_candidates[entity_id] = resolved_candidate_ids
+    entity_payloads = _fetch_wikidata_entity_payloads(
+        entity_ids=[
+            candidate_id
+            for candidate_ids in target_candidates.values()
+            for candidate_id in candidate_ids
+        ],
+        user_agent=user_agent,
+        warnings=warnings,
+    )
+    matches: dict[str, dict[str, object]] = {}
+    for entity in people_entities:
+        entity_id = str(entity.get("entity_id", "")).strip()
+        candidate_ids = target_candidates.get(entity_id, [])
+        if not candidate_ids:
+            continue
+        match = _select_best_basic_country_person_wikidata_match(
+            entity=entity,
+            candidate_ids=candidate_ids,
+            entity_payloads=entity_payloads,
+            issuer_matches=issuer_matches,
+            description_hints=description_hints,
+            label_languages=search_languages,
+        )
+        if match is not None:
+            matches[entity_id] = match
+    return matches, warnings
+
+
+def _build_basic_country_wikidata_public_people_snapshot(
+    *,
+    country_code: str,
+    issuer_entities: list[dict[str, object]],
+    issuer_matches: dict[str, dict[str, object]],
+    label_languages: tuple[str, ...],
+    user_agent: str,
+) -> tuple[dict[str, list[dict[str, object]]], list[str]]:
+    warnings: list[str] = []
+    organization_qids: dict[str, str] = {}
+    for entity in issuer_entities:
+        match = issuer_matches.get(_basic_country_wikidata_target_key(entity))
+        if not isinstance(match, dict):
+            continue
+        entity_id = str(entity.get("entity_id", "")).strip()
+        qid = _normalize_whitespace(str(match.get("qid", "")))
+        if entity_id and qid:
+            organization_qids[entity_id] = qid
+    if not organization_qids:
+        return {}, warnings
+    organization_entity_ids_by_qid: dict[str, list[str]] = {}
+    for entity_id, qid in organization_qids.items():
+        organization_entity_ids_by_qid.setdefault(qid, []).append(entity_id)
+    public_people_rows = _query_basic_country_wikidata_public_people_rows(
+        organization_qids=list(organization_entity_ids_by_qid),
+        label_languages=label_languages,
+        user_agent=user_agent,
+        warnings=warnings,
+    )
+    if not public_people_rows:
+        return {}, warnings
+    organization_people: dict[str, list[dict[str, object]]] = {}
+    seen_roles: set[tuple[str, str, str, str]] = set()
+    role_metadata_by_property = {
+        property_id: (role_class, role_title)
+        for property_id, role_class, role_title in _GERMANY_WIKIDATA_PUBLIC_PEOPLE_PROPERTIES
+    }
+    for row in public_people_rows:
+        organization_qid = str(row.get("organization_qid", "")).strip()
+        property_id = str(row.get("property_id", "")).strip()
+        person_qid = str(row.get("person_qid", "")).strip()
+        person_label = _normalize_whitespace(str(row.get("person_label", "")))
+        if (
+            not organization_qid
+            or property_id not in role_metadata_by_property
+            or not person_qid
+            or not person_label
+        ):
+            continue
+        role_class, role_title = role_metadata_by_property[property_id]
+        canonical_name, aliases = _normalize_person_name_aliases(person_label)
+        if not canonical_name:
+            continue
+        match = {
+            "qid": person_qid,
+            "slug": person_qid,
+            "entity_id": f"wikidata:{person_qid}",
+            "url": _WIKIDATA_ENTITY_URL_TEMPLATE.format(qid=person_qid),
+            "label": person_label,
+            "aliases": aliases,
+        }
+        for employer_entity_id in organization_entity_ids_by_qid.get(organization_qid, []):
+            dedupe_key = (employer_entity_id, person_qid, role_class, role_title)
+            if dedupe_key in seen_roles:
+                continue
+            seen_roles.add(dedupe_key)
+            organization_people.setdefault(employer_entity_id, []).append(
+                {
+                    "country_code": country_code,
+                    "canonical_text": canonical_name,
+                    "aliases": aliases,
+                    "role_class": role_class,
+                    "role_title": role_title,
+                    "source_property_id": property_id,
+                    "organization_qid": organization_qid,
+                    **match,
+                }
+            )
+    for people_records in organization_people.values():
+        people_records.sort(
+            key=lambda item: (
+                str(item.get("role_class", "")).casefold(),
+                str(item.get("canonical_text", "")).casefold(),
+                str(item.get("qid", "")).casefold(),
+            )
+        )
+    return organization_people, warnings
+
+
+def _query_basic_country_wikidata_public_people_rows(
+    *,
+    organization_qids: list[str],
+    label_languages: tuple[str, ...],
+    user_agent: str,
+    warnings: list[str],
+) -> list[dict[str, str]]:
+    resolved_qids = _unique_aliases(
+        [qid for qid in organization_qids if qid.startswith("Q")]
+    )
+    if not resolved_qids:
+        return []
+    property_ids = [
+        property_id for property_id, _, _ in _GERMANY_WIKIDATA_PUBLIC_PEOPLE_PROPERTIES
+    ]
+    rows: list[dict[str, str]] = []
+    for index in range(0, len(resolved_qids), _WIKIDATA_PUBLIC_PEOPLE_ORG_BATCH_SIZE):
+        organization_batch = resolved_qids[
+            index : index + _WIKIDATA_PUBLIC_PEOPLE_ORG_BATCH_SIZE
+        ]
+        for property_index in range(
+            0, len(property_ids), _WIKIDATA_PUBLIC_PEOPLE_PROPERTY_BATCH_SIZE
+        ):
+            property_batch = property_ids[
+                property_index : property_index + _WIKIDATA_PUBLIC_PEOPLE_PROPERTY_BATCH_SIZE
+            ]
+            query = (
+                "SELECT ?organization ?property ?person ?personLabel WHERE { "
+                f"VALUES ?organization {{ {' '.join(f'wd:{qid}' for qid in organization_batch)} }} "
+                f"VALUES ?property {{ {' '.join(f'wdt:{property_id}' for property_id in property_batch)} }} "
+                "?organization ?property ?person . "
+                f"?person wdt:{_WIKIDATA_INSTANCE_OF_PROPERTY_ID} wd:{_WIKIDATA_HUMAN_QID} . "
+                'SERVICE wikibase:label { '
+                f'bd:serviceParam wikibase:language "{_wikidata_label_service_languages(label_languages)}". '
+                "} "
+                "}"
+            )
+            try:
+                payload = _fetch_wikidata_sparql_json(query=query, user_agent=user_agent)
+            except Exception as exc:
+                warning_text = f"Wikidata public-people query failed: {exc}"
+                if warning_text not in warnings and len(warnings) < 5:
+                    warnings.append(warning_text)
+                continue
+            results = payload.get("results")
+            if not isinstance(results, dict):
+                continue
+            bindings = results.get("bindings")
+            if not isinstance(bindings, list):
+                continue
+            for binding in bindings:
+                if not isinstance(binding, dict):
+                    continue
+                organization_binding = binding.get("organization")
+                property_binding = binding.get("property")
+                person_binding = binding.get("person")
+                person_label_binding = binding.get("personLabel")
+                if not all(
+                    isinstance(item, dict)
+                    for item in (
+                        organization_binding,
+                        property_binding,
+                        person_binding,
+                        person_label_binding,
+                    )
+                ):
+                    continue
+                organization_qid = _extract_wikidata_qid_from_uri(
+                    str(organization_binding.get("value", ""))
+                )
+                property_id = _extract_wikidata_property_id_from_uri(
+                    str(property_binding.get("value", ""))
+                )
+                person_qid = _extract_wikidata_qid_from_uri(
+                    str(person_binding.get("value", ""))
+                )
+                person_label = _normalize_whitespace(str(person_label_binding.get("value", "")))
+                if not organization_qid or not property_id or not person_qid or not person_label:
+                    continue
+                rows.append(
+                    {
+                        "organization_qid": organization_qid,
+                        "property_id": property_id,
+                        "person_qid": person_qid,
+                        "person_label": person_label,
+                    }
+                )
+    return rows
+
+
+def _query_wikidata_entity_ids_by_exact_label(
+    *,
+    values: list[str],
+    languages: tuple[str, ...],
+    user_agent: str,
+    warnings: list[str],
+) -> dict[str, list[str]]:
+    normalized_values = _unique_aliases(
+        [_normalize_whitespace(value) for value in values if _normalize_whitespace(value)]
+    )
+    if not normalized_values:
+        return {}
+    matches: dict[str, list[str]] = {value: [] for value in normalized_values}
+    batch_size = 100
+    for index in range(0, len(normalized_values), batch_size):
+        batch = normalized_values[index : index + batch_size]
+        query = (
+            "SELECT ?item ?label WHERE { "
+            f"VALUES ?label {{ {' '.join(_wikidata_exact_label_values(batch, languages=languages))} }} "
+            "?item rdfs:label ?label . "
+            f"FILTER(LANG(?label) IN ({', '.join(json.dumps(language) for language in languages)})) "
+            "}"
+        )
+        try:
+            payload = _fetch_wikidata_sparql_json(query=query, user_agent=user_agent)
+        except Exception as exc:
+            warning_text = f"Wikidata exact-label query failed: {exc}"
+            if warning_text not in warnings and len(warnings) < 5:
+                warnings.append(warning_text)
+            continue
+        results = payload.get("results")
+        if not isinstance(results, dict):
+            continue
+        bindings = results.get("bindings")
+        if not isinstance(bindings, list):
+            continue
+        for binding in bindings:
+            if not isinstance(binding, dict):
+                continue
+            item_binding = binding.get("item")
+            label_binding = binding.get("label")
+            if not isinstance(item_binding, dict) or not isinstance(label_binding, dict):
+                continue
+            qid = _extract_wikidata_qid_from_uri(str(item_binding.get("value", "")))
+            label = _normalize_whitespace(str(label_binding.get("value", "")))
+            if not qid or not label or label not in matches:
+                continue
+            matches[label] = _unique_aliases([*matches[label], qid])
+    return {key: value for key, value in matches.items() if value}
+
+
+def _wikidata_exact_label_values(
+    values: Sequence[str],
+    *,
+    languages: tuple[str, ...],
+) -> list[str]:
+    return [
+        _wikidata_exact_label_literal(value, language=language)
+        for value in values
+        for language in languages
+    ]
+
+
+def _wikidata_exact_label_literal(value: str, *, language: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"@{language}'
+
+
+def _merge_basic_country_wikidata_public_people_entities(
+    *,
+    country_code: str,
+    people_entities: list[dict[str, object]],
+    issuer_entities: list[dict[str, object]],
+    organization_people: dict[str, list[dict[str, object]]],
+) -> None:
+    issuer_lookup = {
+        str(entity.get("entity_id", "")).strip(): entity
+        for entity in issuer_entities
+        if str(entity.get("entity_id", "")).strip()
+    }
+    existing_people_by_id = {
+        str(entity.get("entity_id", "")).strip(): entity
+        for entity in people_entities
+        if str(entity.get("entity_id", "")).strip()
+    }
+    for employer_entity_id, people_records in organization_people.items():
+        employer_entity = issuer_lookup.get(str(employer_entity_id))
+        if employer_entity is None:
+            continue
+        for person_record in people_records:
+            public_person_entity = _build_basic_country_public_person_entity(
+                country_code=country_code,
+                employer_entity=employer_entity,
+                person_record=person_record,
+            )
+            entity_id = str(public_person_entity.get("entity_id", "")).strip()
+            if not entity_id:
+                continue
+            existing_entity = existing_people_by_id.get(entity_id)
+            if existing_entity is None:
+                people_entities.append(public_person_entity)
+                existing_people_by_id[entity_id] = public_person_entity
+                continue
+            existing_entity["aliases"] = _unique_aliases(
+                [
+                    *[
+                        alias
+                        for alias in existing_entity.get("aliases", [])
+                        if isinstance(alias, str)
+                    ],
+                    *[
+                        alias
+                        for alias in public_person_entity.get("aliases", [])
+                        if isinstance(alias, str)
+                    ],
+                ]
+            )
+            existing_metadata = existing_entity.get("metadata")
+            incoming_metadata = public_person_entity.get("metadata")
+            if not isinstance(existing_metadata, dict) or not isinstance(incoming_metadata, dict):
+                continue
+            if not _normalize_whitespace(str(existing_metadata.get("role_title", ""))):
+                existing_metadata["role_title"] = incoming_metadata.get("role_title", "")
+            existing_metadata.setdefault(
+                "wikidata_source_property_id",
+                incoming_metadata.get("wikidata_source_property_id", ""),
+            )
+            existing_metadata.setdefault(
+                "employer_wikidata_qid",
+                incoming_metadata.get("employer_wikidata_qid", ""),
+            )
+            existing_metadata.setdefault(
+                "source_name",
+                incoming_metadata.get("source_name", ""),
+            )
+            _merge_wikidata_metadata(entity=existing_entity, match=person_record)
+
+
+def _build_basic_country_person_wikidata_matches_from_organization_people(
+    *,
+    country_code: str,
+    people_entities: list[dict[str, object]],
+    issuer_entities: list[dict[str, object]],
+    organization_people: dict[str, list[dict[str, object]]],
+) -> dict[str, dict[str, object]]:
+    issuer_lookup = {
+        str(entity.get("entity_id", "")).strip(): entity
+        for entity in issuer_entities
+        if str(entity.get("entity_id", "")).strip()
+    }
+    existing_people_ids = {
+        str(entity.get("entity_id", "")).strip()
+        for entity in people_entities
+        if str(entity.get("entity_id", "")).strip()
+    }
+    matches: dict[str, dict[str, object]] = {}
+    for employer_entity_id, people_records in organization_people.items():
+        employer_entity = issuer_lookup.get(str(employer_entity_id))
+        if employer_entity is None:
+            continue
+        for person_record in people_records:
+            derived_entity = _build_basic_country_public_person_entity(
+                country_code=country_code,
+                employer_entity=employer_entity,
+                person_record=person_record,
+            )
+            entity_id = str(derived_entity.get("entity_id", "")).strip()
+            if entity_id and entity_id in existing_people_ids:
+                matches[entity_id] = {
+                    key: value
+                    for key, value in person_record.items()
+                    if key in {"qid", "slug", "entity_id", "url", "label", "aliases"}
+                }
+    return matches
+
+
+def _build_basic_country_public_person_entity(
+    *,
+    country_code: str,
+    employer_entity: dict[str, object],
+    person_record: dict[str, object],
+) -> dict[str, object]:
+    employer_metadata = employer_entity.get("metadata")
+    if not isinstance(employer_metadata, dict):
+        employer_metadata = {}
+    employer_name = _normalize_whitespace(str(employer_entity.get("canonical_text", "")))
+    employer_ticker = _normalize_whitespace(str(employer_metadata.get("ticker", ""))).upper()
+    employer_isin = _normalize_whitespace(str(employer_metadata.get("isin", ""))).upper()
+    employer_key = (
+        employer_ticker
+        or employer_isin
+        or _slug(str(employer_entity.get("entity_id", "")))
+    )
+    role_class = _normalize_whitespace(str(person_record.get("role_class", "")))
+    canonical_name = _normalize_whitespace(str(person_record.get("canonical_text", "")))
+    aliases = [
+        alias
+        for alias in person_record.get("aliases", [])
+        if isinstance(alias, str)
+    ]
+    metadata: dict[str, object] = {
+        "country_code": country_code,
+        "category": role_class,
+        "role_title": _normalize_whitespace(str(person_record.get("role_title", ""))),
+        "employer_name": employer_name,
+        "source_name": f"wikidata-{country_code}-organization-people",
+        "section_name": _normalize_whitespace(str(person_record.get("role_title", ""))),
+        "wikidata_source_property_id": _normalize_whitespace(
+            str(person_record.get("source_property_id", ""))
+        ),
+        "employer_wikidata_qid": _normalize_whitespace(
+            str(person_record.get("organization_qid", ""))
+        ),
+    }
+    if employer_ticker:
+        metadata["employer_ticker"] = employer_ticker
+    if employer_isin:
+        metadata["employer_isin"] = employer_isin
+    entity = {
+        "entity_type": "person",
+        "canonical_text": canonical_name,
+        "aliases": _unique_aliases(aliases),
+        "entity_id": (
+            f"finance-{country_code}-person:{employer_key}:{_slug(canonical_name)}:{_slug(role_class)}"
+        ),
+        "metadata": metadata,
+    }
+    _merge_wikidata_metadata(entity=entity, match=person_record)
+    return entity
+
+
+def _basic_country_wikidata_target_key(entity: dict[str, object]) -> str:
+    metadata = entity.get("metadata")
+    if isinstance(metadata, dict):
+        isin = _normalize_whitespace(str(metadata.get("isin", ""))).upper()
+        if isin:
+            return f"isin:{isin}"
+        ticker = _normalize_whitespace(str(metadata.get("ticker", ""))).upper()
+        if ticker:
+            return f"ticker:{ticker}"
+    if str(entity.get("entity_type", "")) == "ticker":
+        ticker_text = _normalize_whitespace(str(entity.get("canonical_text", ""))).upper()
+        if ticker_text:
+            return f"ticker:{ticker_text}"
+    entity_id = _normalize_whitespace(str(entity.get("entity_id", "")))
+    if entity_id:
+        return entity_id
+    return _normalize_whitespace(str(entity.get("canonical_text", "")))
+
+
+def _build_basic_country_employer_match_key(metadata: dict[str, object]) -> str:
+    employer_isin = _normalize_whitespace(str(metadata.get("employer_isin", ""))).upper()
+    if employer_isin:
+        return f"isin:{employer_isin}"
+    employer_ticker = _normalize_whitespace(str(metadata.get("employer_ticker", ""))).upper()
+    if employer_ticker:
+        return f"ticker:{employer_ticker}"
+    return ""
+
+
+def _basic_country_wikidata_languages(country_code: str) -> tuple[str, ...]:
+    normalized_country_code = _normalize_whitespace(country_code).casefold()
+    return _BASIC_COUNTRY_WIKIDATA_LANGUAGE_OVERRIDES.get(
+        normalized_country_code,
+        _WIKIDATA_MATCH_PREFERRED_LABEL_LANGUAGES,
+    )
+
+
+def _wikidata_label_service_languages(languages: tuple[str, ...]) -> str:
+    resolved_languages = tuple(
+        language
+        for language in languages
+        if isinstance(language, str) and _normalize_whitespace(language)
+    )
+    if not resolved_languages:
+        return _WIKIDATA_LABEL_SERVICE_LANGUAGES
+    return ",".join(resolved_languages)
+
+
+def _brazil_cnpj_match_values(value: str) -> list[str]:
+    candidate = _normalize_whitespace(value)
+    if not candidate:
+        return []
+    digits = re.sub(r"\D+", "", candidate)
+    values: list[str] = []
+    if digits:
+        values.append(digits)
+        if len(digits) == 14:
+            values.append(
+                f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:14]}"
+            )
+    if candidate not in values:
+        values.append(candidate)
+    return _unique_aliases(values)
+
+
+def _wikidata_website_match_values(value: str) -> list[str]:
+    candidate = _normalize_whitespace(value)
+    if not candidate:
+        return []
+    if not candidate.startswith(("http://", "https://")):
+        candidate = f"https://{candidate.lstrip('/')}"
+    normalized = normalize_source_url(candidate)
+    stripped = normalized.rstrip("/")
+    variants = [normalized, stripped]
+    if stripped.startswith("https://"):
+        variants.append(f"http://{stripped[len('https://'):]}")
+    elif stripped.startswith("http://"):
+        variants.append(f"https://{stripped[len('http://'):]}")
+    return _unique_aliases([variant.casefold() for variant in variants if variant])
+
+
+def _indonesia_npwp_match_values(value: str) -> list[str]:
+    candidate = _normalize_whitespace(value)
+    if not candidate:
+        return []
+    digits = re.sub(r"\D+", "", candidate)
+    values: list[str] = []
+    if digits:
+        values.append(digits)
+        if len(digits) == 15:
+            values.append(
+                f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}.{digits[8]}-"
+                f"{digits[9:12]}.{digits[12:15]}"
+            )
+    if candidate not in values:
+        values.append(candidate)
+    return _unique_aliases(values)
+
+
+def _basic_country_extra_wikidata_string_property_specs(
+    *,
+    country_code: str,
+    metadata: dict[str, object],
+) -> list[tuple[str, list[str]]]:
+    normalized_country_code = _normalize_whitespace(country_code).casefold()
+    specs: list[tuple[str, list[str]]] = []
+    if normalized_country_code == "id":
+        npwp_values = _indonesia_npwp_match_values(str(metadata.get("npwp", "")))
+        if npwp_values:
+            specs.append((_WIKIDATA_NOMOR_POKOK_WAJIB_PAJAK_PROPERTY_ID, npwp_values))
+    if normalized_country_code == "ru":
+        okpo = _normalize_whitespace(
+            str(metadata.get("issuer_okpo", "") or metadata.get("okpo", ""))
+        )
+        if okpo:
+            specs.append((_WIKIDATA_OKPO_ID_PROPERTY_ID, [okpo]))
+    return specs
+
+
+def _build_basic_country_person_match_keys(entity: dict[str, object]) -> set[str]:
+    keys = {
+        _normalize_person_name_for_match(str(entity.get("canonical_text", ""))),
+    }
+    keys.update(
+        _normalize_person_name_for_match(alias)
+        for alias in entity.get("aliases", [])
+        if isinstance(alias, str)
+    )
+    return {key for key in keys if key}
+
+
+def _build_basic_country_wikidata_search_queries(
+    entity: dict[str, object],
+    *,
+    entity_type: str,
+) -> list[str]:
+    queries: list[str] = []
+    candidate_values = [str(entity.get("canonical_text", ""))]
+    candidate_values.extend(
+        alias
+        for alias in entity.get("aliases", [])
+        if isinstance(alias, str)
+    )
+    for candidate in candidate_values:
+        normalized_candidate = _normalize_whitespace(candidate)
+        if not normalized_candidate or normalized_candidate in queries:
+            continue
+        if entity_type == "person":
+            queries.append(normalized_candidate)
+        else:
+            if normalized_candidate.isupper() and len(normalized_candidate) <= 5:
+                continue
+            queries.append(normalized_candidate)
+        if len(queries) >= 4:
+            break
+    return queries
+
+
+def _has_exact_basic_country_person_search_hit(
+    entity: dict[str, object],
+    search_results: list[dict[str, Any]],
+) -> bool:
+    target_keys = _build_basic_country_person_match_keys(entity)
+    return any(
+        _normalize_person_name_for_match(str(item.get("label", ""))) in target_keys
+        for item in search_results
+        if isinstance(item, dict)
+    )
+
+
+def _has_exact_basic_country_organization_search_hit(
+    entity: dict[str, object],
+    search_results: list[dict[str, Any]],
+) -> bool:
+    target_full = _normalize_company_name_for_match(str(entity.get("canonical_text", "")))
+    target_core = _normalize_company_name_for_match(
+        str(entity.get("canonical_text", "")),
+        drop_suffixes=True,
+    )
+    target_keys = {
+        key
+        for key in {
+            target_full,
+            target_core,
+            *(
+                _normalize_company_name_for_match(alias)
+                for alias in entity.get("aliases", [])
+                if isinstance(alias, str)
+            ),
+            *(
+                _normalize_company_name_for_match(alias, drop_suffixes=True)
+                for alias in entity.get("aliases", [])
+                if isinstance(alias, str)
+            ),
+        }
+        if key
+    }
+    if not target_keys:
+        return False
+    for item in search_results:
+        if not isinstance(item, dict):
+            continue
+        candidate_values = [_normalize_whitespace(str(item.get("label", "")))]
+        candidate_values.extend(
+            alias
+            for alias in item.get("aliases", [])
+            if isinstance(alias, str)
+        )
+        candidate_keys = {
+            key
+            for value in candidate_values
+            for key in (
+                _normalize_company_name_for_match(value),
+                _normalize_company_name_for_match(value, drop_suffixes=True),
+            )
+            if key
+        }
+        if target_keys.intersection(candidate_keys):
+            return True
+    return False
+
+
+def _select_best_basic_country_issuer_wikidata_match(
+    *,
+    entity: dict[str, object],
+    candidate_ids: list[str],
+    entity_payloads: dict[str, dict[str, Any]],
+    description_hints: tuple[str, ...],
+    label_languages: tuple[str, ...],
+) -> dict[str, object] | None:
+    scored_candidates: list[tuple[int, str]] = []
+    for candidate_id in candidate_ids:
+        payload = entity_payloads.get(candidate_id)
+        if payload is None:
+            continue
+        score = _score_basic_country_issuer_wikidata_candidate(
+            entity=entity,
+            candidate_payload=payload,
+            description_hints=description_hints,
+        )
+        if score > 0:
+            scored_candidates.append((score, candidate_id))
+    if not scored_candidates:
+        return None
+    scored_candidates.sort(key=lambda item: (-item[0], item[1]))
+    best_score, best_qid = scored_candidates[0]
+    second_score = scored_candidates[1][0] if len(scored_candidates) > 1 else 0
+    if best_score >= 100:
+        pass
+    elif best_score >= 65 and second_score == 0:
+        pass
+    elif best_score >= 80 and best_score - second_score >= 20:
+        pass
+    else:
+        return None
+    return _build_wikidata_resolution_match(
+        best_qid,
+        entity_payloads.get(best_qid),
+        entity_type="organization",
+        alias_builder=_build_basic_country_wikidata_entity_aliases,
+        label_languages=label_languages,
+    )
+
+
+def _select_best_basic_country_person_wikidata_match(
+    *,
+    entity: dict[str, object],
+    candidate_ids: list[str],
+    entity_payloads: dict[str, dict[str, Any]],
+    issuer_matches: dict[str, dict[str, object]],
+    description_hints: tuple[str, ...],
+    label_languages: tuple[str, ...],
+) -> dict[str, object] | None:
+    scored_candidates: list[tuple[int, str]] = []
+    for candidate_id in candidate_ids:
+        payload = entity_payloads.get(candidate_id)
+        if payload is None:
+            continue
+        score = _score_basic_country_person_wikidata_candidate(
+            entity=entity,
+            candidate_payload=payload,
+            issuer_matches=issuer_matches,
+            description_hints=description_hints,
+        )
+        if score > 0:
+            scored_candidates.append((score, candidate_id))
+    if not scored_candidates:
+        return None
+    scored_candidates.sort(key=lambda item: (-item[0], item[1]))
+    best_score, best_qid = scored_candidates[0]
+    second_score = scored_candidates[1][0] if len(scored_candidates) > 1 else 0
+    if best_score < 100:
+        return None
+    if len(scored_candidates) > 1 and best_score - second_score < 20:
+        return None
+    return _build_wikidata_resolution_match(
+        best_qid,
+        entity_payloads.get(best_qid),
+        entity_type="person",
+        alias_builder=_build_basic_country_wikidata_entity_aliases,
+        label_languages=label_languages,
+    )
+
+
+def _score_basic_country_issuer_wikidata_candidate(
+    *,
+    entity: dict[str, object],
+    candidate_payload: dict[str, Any],
+    description_hints: tuple[str, ...],
+) -> int:
+    metadata = entity.get("metadata")
+    if not isinstance(metadata, dict):
+        return 0
+    score = 0
+    target_full = _normalize_company_name_for_match(str(entity.get("canonical_text", "")))
+    target_core = _normalize_company_name_for_match(
+        str(entity.get("canonical_text", "")),
+        drop_suffixes=True,
+    )
+    target_keys = {
+        key
+        for key in {
+            target_full,
+            target_core,
+            *(
+                _normalize_company_name_for_match(alias)
+                for alias in entity.get("aliases", [])
+                if isinstance(alias, str)
+            ),
+            *(
+                _normalize_company_name_for_match(alias, drop_suffixes=True)
+                for alias in entity.get("aliases", [])
+                if isinstance(alias, str)
+            ),
+        }
+        if key
+    }
+    candidate_keys = _extract_wikidata_organization_match_keys(candidate_payload)
+    if target_full and target_full in candidate_keys:
+        score += 60
+    elif target_core and target_core in candidate_keys:
+        score += 40
+    elif target_keys.intersection(candidate_keys):
+        score += 30
+    string_values = _extract_wikidata_string_claim_values(candidate_payload)
+    isin = _normalize_whitespace(str(metadata.get("isin", ""))).upper()
+    if isin and isin in string_values:
+        score += 100
+    ticker = _normalize_whitespace(str(metadata.get("ticker", ""))).upper()
+    if ticker and ticker in string_values:
+        score += 35
+    if any(
+        cnpj_value.upper() in string_values
+        for cnpj_value in _brazil_cnpj_match_values(str(metadata.get("cnpj", "")))
+    ):
+        score += 100
+    if any(
+        website_value.upper() in string_values
+        for website_value in _wikidata_website_match_values(str(metadata.get("website", "")))
+    ):
+        score += 40
+    if any(
+        npwp_value.upper() in string_values
+        for npwp_value in _indonesia_npwp_match_values(str(metadata.get("npwp", "")))
+    ):
+        score += 100
+    issuer_okpo = _normalize_whitespace(
+        str(metadata.get("issuer_okpo", "") or metadata.get("okpo", ""))
+    )
+    if issuer_okpo and issuer_okpo.upper() in string_values:
+        score += 100
+    candidate_description = _extract_wikidata_description(candidate_payload).casefold()
+    if any(keyword in candidate_description for keyword in description_hints):
+        score += 5
+    return score
+
+
+def _score_basic_country_person_wikidata_candidate(
+    *,
+    entity: dict[str, object],
+    candidate_payload: dict[str, Any],
+    issuer_matches: dict[str, dict[str, object]],
+    description_hints: tuple[str, ...],
+) -> int:
+    metadata = entity.get("metadata")
+    if not isinstance(metadata, dict):
+        return 0
+    score = 0
+    target_keys = _build_basic_country_person_match_keys(entity)
+    candidate_keys = _extract_wikidata_person_match_keys(candidate_payload)
+    canonical_key = _normalize_person_name_for_match(str(entity.get("canonical_text", "")))
+    if canonical_key and canonical_key in candidate_keys:
+        score += 100
+    elif target_keys.intersection(candidate_keys):
+        score += 90
+    employer_match_key = _build_basic_country_employer_match_key(metadata)
+    employer_qid = (
+        str(issuer_matches.get(employer_match_key, {}).get("qid", "")).strip()
+        if employer_match_key
+        else ""
+    )
+    if employer_qid:
+        entity_claim_ids = _extract_wikidata_entity_claim_ids(candidate_payload)
+        if employer_qid in entity_claim_ids:
+            score += 40
+    candidate_description = _extract_wikidata_description(candidate_payload).casefold()
+    if any(keyword in candidate_description for keyword in description_hints):
+        score += 5
+    if any(
+        keyword in candidate_description
+        for keyword in ("business", "executive", "director", "chair", "manager", "investor")
+    ):
+        score += 10
+    return score
+
+
+def _build_basic_country_wikidata_entity_aliases(
+    payload: dict[str, Any],
+    *,
+    entity_type: str,
+) -> list[str]:
+    aliases: list[str] = []
+    for text in _extract_wikidata_entity_text_values(payload):
+        normalized_text = _normalize_whitespace(text)
+        if not normalized_text or normalized_text.isdigit():
+            continue
+        if entity_type == "person":
+            _, person_aliases = _normalize_person_name_aliases(normalized_text)
+            aliases.extend(person_aliases)
+            continue
+        if normalized_text.isupper() and len(normalized_text) <= 5:
+            continue
+        aliases.extend(_build_united_states_company_aliases(normalized_text))
+    return _unique_aliases(aliases)
 
 
 def _extract_jpx_english_disclosure_workbook_url(
@@ -9452,6 +17547,582 @@ def _stable_url_file_stem(source_url: str) -> str:
     ]
     digest = sha256(source_url.encode("utf-8")).hexdigest()[:12]
     return "-".join(part for part in stem_parts if part) + f"-{digest}"
+
+
+def _stable_entity_name_fragment(value: str) -> str:
+    normalized = _normalize_whitespace(value)
+    slug_value = _slug(normalized)
+    if slug_value:
+        return slug_value
+    return sha256(normalized.encode("utf-8")).hexdigest()[:12]
+
+
+def _download_saudi_exchange_rendered_page(
+    source_url: str | Path,
+    destination: Path,
+    *,
+    user_agent: str,
+) -> str:
+    normalized_source_url = normalize_source_url(source_url)
+    parsed = urlparse(normalized_source_url)
+    if parsed.scheme in {"http", "https"} and parsed.netloc.casefold() == "www.saudiexchange.sa":
+        chrome_binary = _find_headless_chrome_binary()
+        if chrome_binary is None:
+            raise RuntimeError(
+                "Headless Chrome not available; skipped Saudi Exchange page rendering"
+            )
+        rendered_html = _render_dynamic_page_with_headless_chrome(
+            chrome_binary=chrome_binary,
+            source_url=normalized_source_url,
+            user_agent=_HEADLESS_CHROME_BROWSER_USER_AGENT,
+            page_label="Saudi Exchange rendered page",
+            render_budget_ms=_SAUDI_EXCHANGE_RENDER_BUDGET_MS,
+        )
+        destination.write_text(rendered_html, encoding="utf-8")
+        return normalized_source_url
+    return _download_source(normalized_source_url, destination, user_agent=user_agent)
+
+
+def _download_idx_directory_page(
+    source_url: str | Path,
+    destination: Path,
+    *,
+    user_agent: str,
+) -> str:
+    normalized_source_url = normalize_source_url(source_url)
+    parsed = urlparse(normalized_source_url)
+    if parsed.scheme in {"http", "https"} and parsed.netloc.casefold() == "www.idx.co.id":
+        chrome_binary = _find_headless_chrome_binary()
+        if chrome_binary is None:
+            raise RuntimeError(
+                "Headless Chrome not available; skipped IDX listed-companies page rendering"
+            )
+        rendered_html = _render_dynamic_page_with_headless_chrome(
+            chrome_binary=chrome_binary,
+            source_url=normalized_source_url,
+            user_agent=_HEADLESS_CHROME_BROWSER_USER_AGENT,
+            page_label="IDX listed companies rendered page",
+            render_budget_ms=_IDX_DIRECTORY_RENDER_BUDGET_MS,
+        )
+        destination.write_text(rendered_html, encoding="utf-8")
+        return normalized_source_url
+    return _download_source(normalized_source_url, destination, user_agent=user_agent)
+
+
+def _classify_saudi_exchange_market(profile_url: str) -> str:
+    lowered = urlparse(profile_url).path.casefold()
+    if "company-profile-nomu-parallel" in lowered:
+        return "Nomu Parallel Market"
+    if "company-profile-sukuk" in lowered:
+        return "Sukuk & Bonds"
+    if "company-profile-etf" in lowered:
+        return "ETF"
+    if "company-profile-reit" in lowered:
+        return "REITs"
+    return "Main Market"
+
+
+def _extract_saudi_exchange_issuer_records(html_text: str) -> list[dict[str, str]]:
+    records: dict[str, dict[str, str]] = {}
+    for match in _SAUDI_EXCHANGE_PROFILE_LINK_PATTERN.finditer(html_text):
+        company_symbol = _normalize_whitespace(match.group("symbol"))
+        if not company_symbol:
+            continue
+        profile_path = html.unescape(_normalize_whitespace(match.group("path")))
+        if not profile_path:
+            continue
+        company_name = _smart_titlecase_company_name(
+            _strip_html(html.unescape(match.group("trading_symbol")))
+        )
+        if not company_name:
+            continue
+        record = {
+            "company_symbol": company_symbol,
+            "company_name": company_name,
+            "profile_url": urljoin(_SAUDI_EXCHANGE_ISSUER_DIRECTORY_URL, profile_path),
+            "market_name": _classify_saudi_exchange_market(profile_path),
+        }
+        existing = records.get(company_symbol)
+        if existing is None or len(record["company_name"]) > len(existing["company_name"]):
+            records[company_symbol] = record
+    return sorted(records.values(), key=lambda item: item["company_symbol"])
+
+
+def _looks_like_saudi_organization_name(value: str) -> bool:
+    normalized = _normalize_whitespace(value)
+    if not normalized:
+        return False
+    if any(normalized.startswith(prefix) for prefix in _SAUDI_ARABIC_ORGANIZATION_PREFIXES):
+        return True
+    lowered = (_ascii_fold_alias(normalized) or normalized).casefold()
+    organization_tokens = (
+        "bank",
+        "capital",
+        "company",
+        "corporation",
+        "development",
+        "fund",
+        "group",
+        "holding",
+        "holdings",
+        "industrial",
+        "insurance",
+        "investment",
+        "limited",
+        "llc",
+        "ltd",
+        "partners",
+        "reit",
+    )
+    return any(token in lowered for token in organization_tokens)
+
+
+def _extract_saudi_exchange_company_profile_entities(
+    html_text: str,
+    *,
+    issuer_record: dict[str, str],
+) -> tuple[dict[str, object] | None, dict[str, object] | None, list[dict[str, object]]]:
+    company_name = _smart_titlecase_company_name(
+        _normalize_whitespace(str(issuer_record.get("company_name", "")))
+    )
+    company_symbol = _normalize_whitespace(str(issuer_record.get("company_symbol", "")))
+    profile_match = re.search(
+        (
+            r"var\s+base(?:currentCompany|Comapy)Symbol\d*\s*=\s*"
+            r'\{name:"(?P<name>.*?)",symbol:\'(?P<symbol>[^\']+)\'\}'
+        ),
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if profile_match is not None:
+        company_name = _smart_titlecase_company_name(
+            _strip_html(profile_match.group("name"))
+        ) or company_name
+        company_symbol = (
+            _normalize_whitespace(profile_match.group("symbol")) or company_symbol
+        )
+    if not company_name or not company_symbol:
+        return None, None, []
+
+    company_details: dict[str, str] = {}
+    for match in _SAUDI_EXCHANGE_COMPANY_DETAILS_ITEM_PATTERN.finditer(html_text):
+        label = _normalize_whitespace(_strip_html(match.group("label"))).casefold()
+        value = _normalize_whitespace(_strip_html(match.group("value")))
+        if label and value:
+            company_details[label] = value
+    market_name = _normalize_whitespace(str(issuer_record.get("market_name", ""))) or (
+        _classify_saudi_exchange_market(str(issuer_record.get("profile_url", "")))
+    )
+    isin = company_details.get("isin code", "")
+    aliases = [company_name, company_symbol]
+    if isin:
+        aliases.append(isin)
+    ascii_alias = _ascii_fold_alias(company_name)
+    if ascii_alias and ascii_alias.casefold() != company_name.casefold():
+        aliases.append(ascii_alias)
+
+    investor_relations_match = re.search(
+        r'<div class="investor_relations">(?P<body>.*?)</div>',
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    investor_relations_body = investor_relations_match.group("body") if investor_relations_match else ""
+    contact_name = ""
+    company_address = ""
+    contact_email = ""
+    contact_phone = ""
+    contact_fax = ""
+    company_website = ""
+    if investor_relations_body:
+        field_matches = re.findall(
+            r"<h4>\s*(?P<label>.*?)\s*</h4>\s*<p>(?P<value>.*?)</p>",
+            investor_relations_body,
+            re.IGNORECASE | re.DOTALL,
+        )
+        for raw_label, raw_value in field_matches:
+            label = _normalize_whitespace(_strip_html(raw_label)).casefold().rstrip(":")
+            value = _normalize_whitespace(_strip_html(raw_value))
+            if label == "contact name":
+                contact_name = value
+            elif label == "company address":
+                company_address = value
+            elif label == "company website":
+                website_match = re.search(
+                    r'href=["\'](?P<href>[^"\']+)["\']',
+                    raw_value,
+                    re.IGNORECASE,
+                )
+                company_website = (
+                    _normalize_whitespace(website_match.group("href"))
+                    if website_match is not None
+                    else value
+                )
+            elif label == "contact details":
+                phone_match = re.search(
+                    r"Telephone:\s*(?P<value>[^<]+)",
+                    raw_value,
+                    re.IGNORECASE,
+                )
+                if phone_match is not None:
+                    contact_phone = _normalize_whitespace(phone_match.group("value"))
+                fax_match = re.search(
+                    r"Fax\s*:?\s*(?P<value>[^<]+)",
+                    raw_value,
+                    re.IGNORECASE,
+                )
+                if fax_match is not None:
+                    contact_fax = _normalize_whitespace(fax_match.group("value"))
+                email_match = re.search(
+                    r'mailto:(?P<value>[^"\']+)',
+                    raw_value,
+                    re.IGNORECASE,
+                )
+                if email_match is not None:
+                    contact_email = _normalize_whitespace(email_match.group("value"))
+    if not contact_name:
+        contact_name_match = re.search(
+            r"<h4>\s*Contact Name:\s*</h4>\s*<p>(?P<value>.*?)</p>",
+            html_text,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if contact_name_match is not None:
+            contact_name = _normalize_whitespace(_strip_html(contact_name_match.group("value")))
+
+    issuer_metadata: dict[str, object] = {
+        "country_code": "sa",
+        "category": "issuer",
+        "ticker": company_symbol,
+        "instrument_exchange": "Saudi Exchange",
+        "market_segment": market_name,
+        "source_name": "saudi-exchange-company-profile",
+    }
+    detail_key_to_metadata_key = (
+        ("date established", "date_established"),
+        ("financial year end", "financial_year_end"),
+        ("listing date", "listing_date"),
+        ("external auditors", "external_auditors"),
+        ("isin code", "isin"),
+        ("number of employees", "number_of_employees"),
+    )
+    for detail_key, metadata_key in detail_key_to_metadata_key:
+        value = _normalize_whitespace(company_details.get(detail_key, ""))
+        if value:
+            issuer_metadata[metadata_key] = value
+    if company_address:
+        issuer_metadata["company_address"] = company_address
+    if contact_name:
+        issuer_metadata["investor_relations_contact"] = contact_name
+    if contact_email:
+        issuer_metadata["contact_email"] = contact_email
+    if contact_phone:
+        issuer_metadata["contact_phone"] = contact_phone
+    if contact_fax:
+        issuer_metadata["contact_fax"] = contact_fax
+    if company_website:
+        issuer_metadata["issuer_website"] = company_website
+    issuer_entity: dict[str, object] = {
+        "entity_type": "organization",
+        "canonical_text": company_name,
+        "aliases": _unique_aliases(aliases),
+        "entity_id": f"finance-sa-issuer:{company_symbol}",
+        "metadata": issuer_metadata,
+    }
+
+    ticker_entity: dict[str, object] | None = {
+        "entity_type": "ticker",
+        "canonical_text": company_symbol,
+        "aliases": _unique_aliases([company_symbol, company_name, *( [isin] if isin else [] )]),
+        "entity_id": f"finance-sa-ticker:{company_symbol.casefold()}",
+        "metadata": {
+            "country_code": "sa",
+            "category": "ticker",
+            "ticker": company_symbol,
+            "issuer_name": company_name,
+            "instrument_exchange": "Saudi Exchange",
+            "market_segment": market_name,
+            **({"isin": isin} if isin else {}),
+        },
+    }
+
+    people_entities: list[dict[str, object]] = []
+    for match in re.finditer(
+        (
+            r'<div id="namePopupBox_(?P<box_id>[0-9]+)" class="namePopupBox">'
+            r'(?P<body>.*?)(?=<div id="namePopupBox_[0-9]+" class="namePopupBox">'
+            r'|<div class="investor_relations">|</body>)'
+        ),
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        body = match.group("body")
+        name_match = re.search(
+            r'<div class="hdng">\s*(?P<name>.*?)\s*</div>',
+            body,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if name_match is None:
+            continue
+        canonical_name, aliases = _normalize_person_name_aliases(
+            _strip_html(name_match.group("name"))
+        )
+        if not canonical_name:
+            continue
+        fields: dict[str, str] = {}
+        for field_match in _SAUDI_EXCHANGE_MANAGEMENT_FIELD_PATTERN.finditer(body):
+            label = _normalize_whitespace(_strip_html(field_match.group("label"))).casefold()
+            value = _normalize_whitespace(_strip_html(field_match.group("value")))
+            if label and value:
+                fields[label] = value
+        designation = _normalize_whitespace(fields.get("designation", ""))
+        classification = _normalize_whitespace(fields.get("classification", ""))
+        role_class = (
+            "executive_officer"
+            if designation.casefold() == "senior executives"
+            or classification.casefold() in {"ceo", "cfo"}
+            else "director"
+        )
+        role_title = (
+            designation
+            if designation.casefold() == "chairman"
+            else classification or designation or "Management"
+        )
+        metadata: dict[str, object] = {
+            "country_code": "sa",
+            "category": role_class,
+            "role_title": role_title,
+            "employer_name": company_name,
+            "employer_ticker": company_symbol,
+            "employer_isin": isin,
+            "source_name": "saudi-exchange-company-profile",
+        }
+        session_start = _normalize_whitespace(fields.get("bd session start", ""))
+        if session_start and session_start != "-":
+            metadata["board_session_start"] = session_start
+        session_end = _normalize_whitespace(fields.get("bd session end", ""))
+        if session_end and session_end != "-":
+            metadata["board_session_end"] = session_end
+        people_entities.append(
+            {
+                "entity_type": "person",
+                "canonical_text": canonical_name,
+                "aliases": aliases,
+                "entity_id": (
+                    f"finance-sa-person:{company_symbol}:{_slug(canonical_name)}:{_slug(role_class)}"
+                ),
+                "metadata": metadata,
+            }
+        )
+    if contact_name:
+        canonical_name, aliases = _normalize_person_name_aliases(contact_name)
+        if canonical_name:
+            metadata = {
+                "country_code": "sa",
+                "category": "investor_relations",
+                "role_title": "Investor Relations Contact",
+                "employer_name": company_name,
+                "employer_ticker": company_symbol,
+                "employer_isin": isin,
+                "source_name": "saudi-exchange-company-profile",
+            }
+            if company_address:
+                metadata["contact_address"] = company_address
+            if contact_phone:
+                metadata["contact_phone"] = contact_phone
+            if contact_fax:
+                metadata["contact_fax"] = contact_fax
+            if contact_email:
+                metadata["contact_email"] = contact_email
+            if company_website:
+                metadata["issuer_website"] = company_website
+            people_entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_text": canonical_name,
+                    "aliases": aliases,
+                    "entity_id": (
+                        f"finance-sa-person:{company_symbol}:{_slug(canonical_name)}:investor-relations"
+                    ),
+                    "metadata": metadata,
+                }
+            )
+    return issuer_entity, ticker_entity, people_entities
+
+
+def _build_saudi_exchange_major_shareholder_url(
+    *,
+    profile_html: str,
+    company_symbol: str,
+    snapshot_date: date,
+) -> str | None:
+    base_match = re.search(
+        r'<base href=["\'](?P<href>[^"\']+)["\']',
+        profile_html,
+        re.IGNORECASE,
+    )
+    if base_match is None:
+        return None
+    base_href = _normalize_whitespace(html.unescape(base_match.group("href")))
+    if not base_href:
+        return None
+    route_match = re.search(
+        r"url:'(?P<route>p0/IZ7_[^']*historyOfMajorShareHolder=/)'",
+        profile_html,
+        re.IGNORECASE,
+    )
+    route = (
+        _normalize_whitespace(route_match.group("route"))
+        if route_match is not None
+        else _SAUDI_EXCHANGE_MAJOR_SHAREHOLDER_FRAGMENT_PATH
+    )
+    if not route:
+        return None
+    from_date = (snapshot_date - timedelta(days=31)).strftime("%Y/%m/%d")
+    to_date = snapshot_date.strftime("%Y/%m/%d")
+    query = urlencode(
+        {
+            "symbol": company_symbol,
+            "fromDate": from_date,
+            "toDate": to_date,
+            "history": 0,
+        }
+    )
+    return f"{urljoin(base_href, route)}?{query}"
+
+
+def _extract_saudi_exchange_major_shareholder_entities(
+    html_text: str,
+    *,
+    issuer_record: dict[str, str],
+) -> tuple[list[dict[str, object]], list[dict[str, str]]]:
+    company_name = _normalize_whitespace(str(issuer_record.get("company_name", "")))
+    company_symbol = _normalize_whitespace(str(issuer_record.get("company_symbol", "")))
+    employer_isin = _normalize_whitespace(str(issuer_record.get("isin", "")))
+    people_entities: list[dict[str, object]] = []
+    organization_records: list[dict[str, str]] = []
+    for match in _SAUDI_EXCHANGE_MAJOR_SHAREHOLDER_ROW_PATTERN.finditer(html_text):
+        holder_name = _normalize_whitespace(_strip_html(match.group("shareholder_name")))
+        if not holder_name:
+            continue
+        normalized_record = {
+            "holder_name": holder_name,
+            "employer_name": company_name,
+            "employer_ticker": company_symbol,
+            "employer_isin": employer_isin,
+            "trading_date": _normalize_whitespace(_strip_html(match.group("trading_date"))),
+            "shareholding_percent": _normalize_whitespace(
+                _strip_html(match.group("trading_day_percentage"))
+            ),
+            "previous_shareholding_percent": _normalize_whitespace(
+                _strip_html(match.group("previous_day_percentage"))
+            ),
+            "change_value": _normalize_whitespace(_strip_html(match.group("change_value"))),
+            "source_name": "saudi-exchange-major-shareholders",
+        }
+        if _looks_like_saudi_organization_name(holder_name):
+            organization_records.append(normalized_record)
+            continue
+        canonical_name, aliases = _normalize_person_name_aliases(holder_name)
+        if canonical_name is None:
+            continue
+        people_entities.append(
+            {
+                "entity_type": "person",
+                "canonical_text": canonical_name,
+                "aliases": aliases,
+                "entity_id": (
+                    f"finance-sa-shareholder-person:{company_symbol}:"
+                    f"{_stable_entity_name_fragment(canonical_name)}"
+                ),
+                "metadata": {
+                    "country_code": "sa",
+                    "category": "beneficial_owner",
+                    "role_title": "Major Shareholder",
+                    "employer_name": company_name,
+                    "employer_ticker": company_symbol,
+                    "employer_isin": employer_isin,
+                    "trading_date": normalized_record["trading_date"],
+                    "shareholding_percent": normalized_record["shareholding_percent"],
+                    "previous_shareholding_percent": normalized_record[
+                        "previous_shareholding_percent"
+                    ],
+                    "shareholding_change": normalized_record["change_value"],
+                    "source_name": normalized_record["source_name"],
+                },
+            }
+        )
+    return people_entities, organization_records
+
+
+def _build_saudi_exchange_major_shareholder_organization_entities(
+    *,
+    shareholder_records: list[dict[str, str]],
+) -> list[dict[str, object]]:
+    grouped_records: dict[str, list[dict[str, str]]] = {}
+    for shareholder_record in shareholder_records:
+        holder_name = _normalize_whitespace(str(shareholder_record.get("holder_name", "")))
+        if not holder_name:
+            continue
+        group_key = _normalize_company_name_for_match(holder_name, drop_suffixes=True)
+        if not group_key:
+            group_key = holder_name.casefold()
+        grouped_records.setdefault(group_key, []).append(dict(shareholder_record))
+    entities: list[dict[str, object]] = []
+    for records in grouped_records.values():
+        holder_names = [
+            _normalize_whitespace(str(record.get("holder_name", "")))
+            for record in records
+            if _normalize_whitespace(str(record.get("holder_name", "")))
+        ]
+        if not holder_names:
+            continue
+        preferred_name = max(
+            set(holder_names),
+            key=lambda item: (holder_names.count(item), len(item), item.casefold()),
+        )
+        aliases = _unique_aliases(
+            [
+                *holder_names,
+                *(
+                    [_ascii_fold_alias(preferred_name)]
+                    if _ascii_fold_alias(preferred_name)
+                    and _ascii_fold_alias(preferred_name).casefold()
+                    != preferred_name.casefold()
+                    else []
+                ),
+            ]
+        )
+        entities.append(
+            {
+                "entity_type": "organization",
+                "canonical_text": preferred_name,
+                "aliases": aliases,
+                "entity_id": (
+                    f"finance-sa-major-shareholder-org:"
+                    f"{_stable_entity_name_fragment(preferred_name)}"
+                ),
+                "metadata": {
+                    "country_code": "sa",
+                    "category": "major_shareholder_organization",
+                    "major_shareholding_records": records,
+                    "major_shareholder_of_issuers": _unique_aliases(
+                        [
+                            str(item.get("employer_name", ""))
+                            for item in records
+                            if _normalize_whitespace(str(item.get("employer_name", "")))
+                        ]
+                    ),
+                    "major_shareholder_of_tickers": _unique_aliases(
+                        [
+                            str(item.get("employer_ticker", ""))
+                            for item in records
+                            if _normalize_whitespace(str(item.get("employer_ticker", "")))
+                        ]
+                    ),
+                    "source_name": "saudi-exchange-major-shareholders",
+                },
+            }
+        )
+    return entities
 
 
 def _extract_france_governance_candidate_urls(
@@ -12416,6 +21087,510 @@ def _build_united_kingdom_wikidata_entity_aliases(
     return _unique_aliases(aliases)
 
 
+def _enrich_turkiye_entities_with_wikidata(
+    *,
+    country_dir: Path,
+    issuer_entities: list[dict[str, object]],
+    ticker_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    downloaded_sources: list[dict[str, object]],
+    user_agent: str,
+) -> list[str]:
+    resolution_payload, resolution_path, warnings = (
+        _build_turkiye_wikidata_resolution_snapshot(
+            issuer_entities=issuer_entities,
+            people_entities=people_entities,
+            country_dir=country_dir,
+            user_agent=user_agent,
+        )
+    )
+    if resolution_path is None:
+        return warnings
+    downloaded_sources.append(
+        {
+            "name": "wikidata-turkiye-entity-resolution",
+            "source_url": _WIKIDATA_API_URL,
+            "path": str(resolution_path.relative_to(country_dir)),
+            "category": "knowledge_graph",
+            "notes": "Wikidata QID resolution snapshot for Türkiye issuers and selected public people.",
+        }
+    )
+    issuer_matches = resolution_payload.get("issuers", {})
+    if isinstance(issuer_matches, dict):
+        for entity in [*issuer_entities, *ticker_entities]:
+            match = issuer_matches.get(_turkiye_wikidata_target_key(entity))
+            if isinstance(match, dict):
+                _merge_wikidata_metadata(entity=entity, match=match)
+    people_matches = resolution_payload.get("people", {})
+    if isinstance(people_matches, dict):
+        for entity in people_entities:
+            match = people_matches.get(str(entity.get("entity_id", "")))
+            if isinstance(match, dict):
+                _merge_wikidata_metadata(entity=entity, match=match)
+    return warnings
+
+
+def _build_turkiye_wikidata_resolution_snapshot(
+    *,
+    issuer_entities: list[dict[str, object]],
+    people_entities: list[dict[str, object]],
+    country_dir: Path,
+    user_agent: str,
+) -> tuple[dict[str, object], Path | None, list[str]]:
+    bounded_issuer_entities = sorted(
+        issuer_entities,
+        key=lambda entity: str(entity.get("entity_id", "")),
+    )
+    if len(bounded_issuer_entities) > _TURKIYE_WIKIDATA_MAX_ISSUERS:
+        bounded_issuer_entities = bounded_issuer_entities[:_TURKIYE_WIKIDATA_MAX_ISSUERS]
+    issuer_matches, warnings = _resolve_turkiye_issuer_wikidata_matches(
+        issuer_entities=bounded_issuer_entities,
+        user_agent=user_agent,
+    )
+    public_people_entities = sorted(
+        [
+        entity
+        for entity in people_entities
+        if isinstance(entity.get("metadata"), dict)
+        and str(entity["metadata"].get("category", ""))
+        in _TURKIYE_WIKIDATA_PUBLIC_PERSON_ROLE_CLASSES
+        ],
+        key=lambda entity: str(entity.get("entity_id", "")),
+    )
+    if len(public_people_entities) > _TURKIYE_WIKIDATA_MAX_PUBLIC_PEOPLE:
+        public_people_entities = public_people_entities[
+            :_TURKIYE_WIKIDATA_MAX_PUBLIC_PEOPLE
+        ]
+    people_matches: dict[str, dict[str, object]] = {}
+    if issuer_matches and public_people_entities:
+        public_people_matches, people_warnings = _resolve_turkiye_person_wikidata_matches(
+            people_entities=public_people_entities,
+            issuer_matches=issuer_matches,
+            user_agent=user_agent,
+        )
+        people_matches = public_people_matches
+        for warning in people_warnings:
+            if warning not in warnings and len(warnings) < 10:
+                warnings.append(warning)
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "country_code": "tr",
+        "generated_at": _utc_timestamp(),
+        "issuers": issuer_matches,
+        "people": people_matches,
+    }
+    if not issuer_matches and not people_matches:
+        return payload, None, warnings
+    resolution_path = country_dir / "wikidata-turkiye-entity-resolution.json"
+    resolution_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return payload, resolution_path, warnings
+
+
+def _resolve_turkiye_issuer_wikidata_matches(
+    *,
+    issuer_entities: list[dict[str, object]],
+    user_agent: str,
+) -> tuple[dict[str, dict[str, object]], list[str]]:
+    search_cache: dict[str, list[dict[str, Any]]] = {}
+    target_candidates: dict[str, list[str]] = {}
+    warnings: list[str] = []
+    for entity in issuer_entities:
+        metadata = entity.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        ticker = _normalize_whitespace(str(metadata.get("ticker", ""))).upper()
+        if not ticker:
+            continue
+        target_key = _turkiye_wikidata_target_key(entity)
+        if not target_key:
+            continue
+        candidate_ids: list[str] = []
+        for query in _build_turkiye_wikidata_search_queries(
+            entity,
+            entity_type="organization",
+        ):
+            if query not in search_cache:
+                try:
+                    search_cache[query] = _search_wikidata_entities(
+                        query,
+                        user_agent=user_agent,
+                    )
+                except Exception as exc:
+                    warning_text = f"Wikidata Türkiye issuer search failed for {query}: {exc}"
+                    if warning_text not in warnings and len(warnings) < 10:
+                        warnings.append(warning_text)
+                    search_cache[query] = []
+            candidate_ids.extend(
+                str(item.get("id", "")).strip()
+                for item in search_cache[query]
+                if isinstance(item, dict)
+            )
+        resolved_candidate_ids = _unique_aliases(
+            [candidate_id for candidate_id in candidate_ids if candidate_id]
+        )
+        if resolved_candidate_ids:
+            target_candidates[target_key] = resolved_candidate_ids
+    entity_payloads = _fetch_wikidata_entity_payloads(
+        entity_ids=[
+            candidate_id
+            for candidate_ids in target_candidates.values()
+            for candidate_id in candidate_ids
+        ],
+        user_agent=user_agent,
+        warnings=warnings,
+    )
+    matches: dict[str, dict[str, object]] = {}
+    for entity in issuer_entities:
+        target_key = _turkiye_wikidata_target_key(entity)
+        if not target_key:
+            continue
+        candidate_ids = target_candidates.get(target_key, [])
+        if not candidate_ids:
+            continue
+        match = _select_best_turkiye_issuer_wikidata_match(
+            entity=entity,
+            candidate_ids=candidate_ids,
+            entity_payloads=entity_payloads,
+        )
+        if match is not None:
+            matches[target_key] = match
+    return matches, warnings
+
+
+def _resolve_turkiye_person_wikidata_matches(
+    *,
+    people_entities: list[dict[str, object]],
+    issuer_matches: dict[str, dict[str, object]],
+    user_agent: str,
+) -> tuple[dict[str, dict[str, object]], list[str]]:
+    search_cache: dict[str, list[dict[str, Any]]] = {}
+    target_candidates: dict[str, list[str]] = {}
+    warnings: list[str] = []
+    for entity in people_entities:
+        entity_id = str(entity.get("entity_id", "")).strip()
+        if not entity_id:
+            continue
+        candidate_ids: list[str] = []
+        for query in _build_turkiye_wikidata_search_queries(entity, entity_type="person"):
+            if query not in search_cache:
+                try:
+                    search_cache[query] = _search_wikidata_entities(
+                        query,
+                        user_agent=user_agent,
+                    )
+                except Exception as exc:
+                    warning_text = f"Wikidata Türkiye people search failed for {query}: {exc}"
+                    if warning_text not in warnings and len(warnings) < 10:
+                        warnings.append(warning_text)
+                    search_cache[query] = []
+            candidate_ids.extend(
+                str(item.get("id", "")).strip()
+                for item in search_cache[query]
+                if isinstance(item, dict)
+            )
+            if _has_exact_turkiye_person_search_hit(entity, search_cache[query]):
+                break
+        resolved_candidate_ids = _unique_aliases(
+            [candidate_id for candidate_id in candidate_ids if candidate_id]
+        )
+        if resolved_candidate_ids:
+            target_candidates[entity_id] = resolved_candidate_ids
+    entity_payloads = _fetch_wikidata_entity_payloads(
+        entity_ids=[
+            candidate_id
+            for candidate_ids in target_candidates.values()
+            for candidate_id in candidate_ids
+        ],
+        user_agent=user_agent,
+        warnings=warnings,
+    )
+    matches: dict[str, dict[str, object]] = {}
+    for entity in people_entities:
+        entity_id = str(entity.get("entity_id", "")).strip()
+        candidate_ids = target_candidates.get(entity_id, [])
+        if not candidate_ids:
+            continue
+        match = _select_best_turkiye_person_wikidata_match(
+            entity=entity,
+            candidate_ids=candidate_ids,
+            entity_payloads=entity_payloads,
+            issuer_matches=issuer_matches,
+        )
+        if match is not None:
+            matches[entity_id] = match
+    return matches, warnings
+
+
+def _turkiye_wikidata_target_key(entity: dict[str, object]) -> str:
+    metadata = entity.get("metadata")
+    if isinstance(metadata, dict):
+        company_code = _normalize_whitespace(str(metadata.get("company_code", "")))
+        if company_code:
+            return f"company-code:{company_code}"
+        ticker = _normalize_whitespace(str(metadata.get("ticker", ""))).upper()
+        if ticker:
+            return f"ticker:{ticker}"
+    entity_id = _normalize_whitespace(str(entity.get("entity_id", "")))
+    if entity_id:
+        return entity_id
+    return _normalize_whitespace(str(entity.get("canonical_text", "")))
+
+
+def _build_turkiye_wikidata_search_queries(
+    entity: dict[str, object],
+    *,
+    entity_type: str,
+) -> list[str]:
+    queries: list[str] = []
+    metadata = entity.get("metadata")
+    candidate_values = [str(entity.get("canonical_text", ""))]
+    candidate_values.extend(
+        alias for alias in entity.get("aliases", []) if isinstance(alias, str)
+    )
+    if isinstance(metadata, dict):
+        ticker = _normalize_whitespace(str(metadata.get("ticker", ""))).upper()
+        employer_name = _normalize_whitespace(str(metadata.get("employer_name", "")))
+        canonical_text = _normalize_whitespace(str(entity.get("canonical_text", "")))
+        if entity_type == "organization" and ticker and canonical_text:
+            candidate_values.insert(0, f"{canonical_text} {ticker}")
+        if entity_type == "person" and canonical_text and employer_name:
+            candidate_values.insert(0, f"{canonical_text} {employer_name}")
+    for candidate in candidate_values:
+        normalized_candidate = _normalize_whitespace(candidate)
+        if not normalized_candidate or normalized_candidate in queries:
+            continue
+        if entity_type == "organization":
+            if normalized_candidate.isupper() and len(normalized_candidate) <= 5:
+                continue
+            queries.append(normalized_candidate)
+            stripped = _strip_turkiye_company_legal_suffix(normalized_candidate)
+            if stripped and stripped not in queries:
+                queries.append(stripped)
+        else:
+            queries.append(normalized_candidate)
+        if len(queries) >= 4:
+            break
+    return queries
+
+
+def _has_exact_turkiye_person_search_hit(
+    entity: dict[str, object],
+    search_results: list[dict[str, Any]],
+) -> bool:
+    target_keys = _build_turkiye_person_match_keys(entity)
+    return any(
+        _normalize_person_name_for_match(str(item.get("label", ""))) in target_keys
+        for item in search_results
+        if isinstance(item, dict)
+    )
+
+
+def _select_best_turkiye_issuer_wikidata_match(
+    *,
+    entity: dict[str, object],
+    candidate_ids: list[str],
+    entity_payloads: dict[str, dict[str, Any]],
+) -> dict[str, object] | None:
+    scored_candidates: list[tuple[int, str]] = []
+    for candidate_id in candidate_ids:
+        payload = entity_payloads.get(candidate_id)
+        if payload is None:
+            continue
+        score = _score_turkiye_issuer_wikidata_candidate(
+            entity=entity,
+            candidate_payload=payload,
+        )
+        if score > 0:
+            scored_candidates.append((score, candidate_id))
+    if not scored_candidates:
+        return None
+    scored_candidates.sort(key=lambda item: (-item[0], item[1]))
+    best_score, best_qid = scored_candidates[0]
+    second_score = scored_candidates[1][0] if len(scored_candidates) > 1 else 0
+    if best_score < 60:
+        return None
+    if best_score < 90 and best_score - second_score < 15:
+        return None
+    return _build_wikidata_resolution_match(
+        best_qid,
+        entity_payloads.get(best_qid),
+        entity_type="organization",
+        alias_builder=_build_germany_wikidata_entity_aliases,
+        label_languages=("en", "tr"),
+    )
+
+
+def _select_best_turkiye_person_wikidata_match(
+    *,
+    entity: dict[str, object],
+    candidate_ids: list[str],
+    entity_payloads: dict[str, dict[str, Any]],
+    issuer_matches: dict[str, dict[str, object]],
+) -> dict[str, object] | None:
+    scored_candidates: list[tuple[int, str]] = []
+    for candidate_id in candidate_ids:
+        payload = entity_payloads.get(candidate_id)
+        if payload is None:
+            continue
+        score = _score_turkiye_person_wikidata_candidate(
+            entity=entity,
+            candidate_payload=payload,
+            issuer_matches=issuer_matches,
+        )
+        if score > 0:
+            scored_candidates.append((score, candidate_id))
+    if not scored_candidates:
+        return None
+    scored_candidates.sort(key=lambda item: (-item[0], item[1]))
+    best_score, best_qid = scored_candidates[0]
+    second_score = scored_candidates[1][0] if len(scored_candidates) > 1 else 0
+    if best_score < 100:
+        return None
+    if best_score < 140 and best_score - second_score < 20:
+        return None
+    return _build_wikidata_resolution_match(
+        best_qid,
+        entity_payloads.get(best_qid),
+        entity_type="person",
+        alias_builder=_build_germany_wikidata_entity_aliases,
+        label_languages=("en", "tr"),
+    )
+
+
+def _score_turkiye_issuer_wikidata_candidate(
+    *,
+    entity: dict[str, object],
+    candidate_payload: dict[str, Any],
+) -> int:
+    metadata = entity.get("metadata")
+    if not isinstance(metadata, dict):
+        return 0
+    score = 0
+    target_full = _normalize_company_name_for_match(str(entity.get("canonical_text", "")))
+    target_core = _normalize_company_name_for_match(
+        str(entity.get("canonical_text", "")),
+        drop_suffixes=True,
+    )
+    target_keys = {
+        key
+        for key in {
+            target_full,
+            target_core,
+            *(
+                _normalize_company_name_for_match(alias)
+                for alias in entity.get("aliases", [])
+                if isinstance(alias, str)
+            ),
+            *(
+                _normalize_company_name_for_match(alias, drop_suffixes=True)
+                for alias in entity.get("aliases", [])
+                if isinstance(alias, str)
+            ),
+        }
+        if key
+    }
+    candidate_keys = _extract_wikidata_organization_match_keys(candidate_payload)
+    if target_full and target_full in candidate_keys:
+        score += 70
+    elif target_core and target_core in candidate_keys:
+        score += 50
+    elif target_keys.intersection(candidate_keys):
+        score += 35
+    string_values = _extract_wikidata_string_claim_values(candidate_payload)
+    ticker = _normalize_whitespace(str(metadata.get("ticker", ""))).upper()
+    if ticker and ticker in string_values:
+        score += 30
+    candidate_description = _extract_wikidata_description(candidate_payload).casefold()
+    if any(
+        keyword in candidate_description
+        for keyword in (
+            "turkish",
+            "turkey",
+            "company",
+            "bank",
+            "holding",
+            "investment",
+            "energy",
+            "retailer",
+            "manufacturer",
+        )
+    ):
+        score += 10
+    return score
+
+
+def _score_turkiye_person_wikidata_candidate(
+    *,
+    entity: dict[str, object],
+    candidate_payload: dict[str, Any],
+    issuer_matches: dict[str, dict[str, object]],
+) -> int:
+    metadata = entity.get("metadata")
+    if not isinstance(metadata, dict):
+        return 0
+    score = 0
+    target_keys = _build_turkiye_person_match_keys(entity)
+    candidate_keys = _extract_wikidata_person_match_keys(candidate_payload)
+    canonical_key = _normalize_person_name_for_match(str(entity.get("canonical_text", "")))
+    if canonical_key and canonical_key in candidate_keys:
+        score += 100
+    elif target_keys.intersection(candidate_keys):
+        score += 90
+    employer_match_key = _build_turkiye_employer_match_key(metadata)
+    employer_qid = (
+        str(issuer_matches.get(employer_match_key, {}).get("qid", "")).strip()
+        if employer_match_key
+        else ""
+    )
+    if employer_qid:
+        entity_claim_ids = _extract_wikidata_entity_claim_ids(candidate_payload)
+        if employer_qid in entity_claim_ids:
+            score += 40
+    candidate_description = _extract_wikidata_description(candidate_payload).casefold()
+    if any(
+        keyword in candidate_description
+        for keyword in (
+            "turkish",
+            "business",
+            "executive",
+            "director",
+            "chair",
+            "investor",
+            "banker",
+            "manager",
+        )
+    ):
+        score += 10
+    return score
+
+
+def _build_turkiye_employer_match_key(metadata: dict[str, object]) -> str:
+    employer_company_code = _normalize_whitespace(
+        str(metadata.get("employer_company_code", ""))
+    )
+    if employer_company_code:
+        return f"company-code:{employer_company_code}"
+    employer_ticker = _normalize_whitespace(str(metadata.get("employer_ticker", ""))).upper()
+    if employer_ticker:
+        return f"ticker:{employer_ticker}"
+    return ""
+
+
+def _build_turkiye_person_match_keys(entity: dict[str, object]) -> set[str]:
+    keys = {
+        _normalize_person_name_for_match(str(entity.get("canonical_text", ""))),
+    }
+    keys.update(
+        _normalize_person_name_for_match(alias)
+        for alias in entity.get("aliases", [])
+        if isinstance(alias, str)
+    )
+    return {key for key in keys if key}
+
+
 def _build_france_wikidata_entity_aliases(
     payload: dict[str, Any],
     *,
@@ -12532,7 +21707,7 @@ def _extract_wikidata_description(payload: dict[str, Any]) -> str:
     descriptions = payload.get("descriptions")
     if not isinstance(descriptions, dict):
         return ""
-    for language in ("en", "de", "es"):
+    for language in ("en", "ja", "zh", "ko", "ar", "de", "es", "pt", "id", "ru", "fr", "it", "tr"):
         description = descriptions.get(language)
         if isinstance(description, dict):
             text = _normalize_whitespace(str(description.get("value", "")))
@@ -12639,7 +21814,7 @@ def _wikidata_payload_has_instance_of(
 
 def _normalize_person_name_for_match(value: str) -> str:
     normalized = _normalize_whitespace(_ascii_fold_alias(value) or value).casefold()
-    return " ".join(re.findall(r"[a-z]+", normalized))
+    return " ".join(_UNICODE_LETTER_TOKEN_PATTERN.findall(normalized))
 
 
 def _build_germany_wikidata_entity_aliases(
@@ -12668,7 +21843,7 @@ def _build_wikidata_resolution_match(
     *,
     entity_type: str,
     alias_builder: Any,
-    label_languages: tuple[str, ...] = ("en", "de"),
+    label_languages: tuple[str, ...] = _WIKIDATA_MATCH_PREFERRED_LABEL_LANGUAGES,
 ) -> dict[str, object]:
     label = ""
     aliases: list[str] = []
@@ -12735,23 +21910,35 @@ def _merge_wikidata_metadata(
 def _search_wikidata_entities(
     query: str,
     *,
+    languages: tuple[str, ...] = ("en",),
     user_agent: str,
 ) -> list[dict[str, Any]]:
-    payload = _fetch_wikidata_api_json(
-        params={
-            "action": "wbsearchentities",
-            "format": "json",
-            "language": "en",
-            "type": "item",
-            "limit": str(_WIKIDATA_SEARCH_LIMIT),
-            "search": query,
-        },
-        user_agent=user_agent,
-    )
-    search_results = payload.get("search")
-    if not isinstance(search_results, list):
-        return []
-    return [item for item in search_results if isinstance(item, dict)]
+    results_by_id: dict[str, dict[str, Any]] = {}
+    fallback_results: list[dict[str, Any]] = []
+    for language in languages:
+        payload = _fetch_wikidata_api_json(
+            params={
+                "action": "wbsearchentities",
+                "format": "json",
+                "language": language,
+                "type": "item",
+                "limit": str(_WIKIDATA_SEARCH_LIMIT),
+                "search": query,
+            },
+            user_agent=user_agent,
+        )
+        search_results = payload.get("search")
+        if not isinstance(search_results, list):
+            continue
+        for item in search_results:
+            if not isinstance(item, dict):
+                continue
+            candidate_id = _normalize_whitespace(str(item.get("id", "")))
+            if candidate_id:
+                results_by_id.setdefault(candidate_id, item)
+            else:
+                fallback_results.append(item)
+    return [*results_by_id.values(), *fallback_results]
 
 
 def _fetch_wikidata_entity_payloads(
@@ -12779,7 +21966,7 @@ def _fetch_wikidata_entity_payloads(
                 "action": "wbgetentities",
                 "format": "json",
                 "ids": "|".join(batch),
-                "languages": "en|de",
+                "languages": _WIKIDATA_ENTITY_PAYLOAD_LANGUAGES,
                 "props": "labels|aliases|descriptions|claims",
             },
             user_agent=user_agent,
@@ -16520,10 +25707,287 @@ def _extract_kap_company_directory_records(html_text: str) -> list[dict[str, str
 
 
 def _extract_kap_stock_code(detail_html: str) -> str | None:
+    stock_codes = _extract_kap_stock_codes(detail_html)
+    if stock_codes:
+        return stock_codes[0]
+    return None
+
+
+def _extract_kap_stock_codes(detail_html: str) -> list[str]:
     match = _KAP_STOCK_CODE_PATTERN.search(detail_html)
     if match is None:
-        return None
-    return _repair_kap_embedded_text(match.group("stock_code").strip())
+        return []
+    raw_value = _repair_kap_embedded_text(match.group("stock_code").strip())
+    return _unique_aliases(
+        [
+            _normalize_whitespace(segment).upper()
+            for segment in raw_value.split(",")
+            if _normalize_whitespace(segment)
+        ]
+    )
+
+
+def _extract_kap_detail_text_field(detail_html: str, field_name: str) -> str:
+    match = re.search(
+        rf'\\"{re.escape(field_name)}\\":\\"(?P<value>.*?)\\"',
+        detail_html,
+    )
+    if match is None:
+        return ""
+    return _normalize_whitespace(_repair_kap_embedded_text(match.group("value")))
+
+
+def _extract_kap_detail_number_field(detail_html: str, field_name: str) -> str:
+    match = re.search(
+        rf'\\"{re.escape(field_name)}\\":(?P<value>-?[0-9]+(?:\.[0-9]+)?)',
+        detail_html,
+    )
+    if match is None:
+        return ""
+    return _normalize_whitespace(match.group("value"))
+
+
+def _extract_kap_member_detail_metadata(detail_html: str) -> dict[str, object]:
+    field_map = {
+        "memberOid": "member_oid",
+        "mkkMemberOid": "mkk_member_oid",
+        "kapMemberTitle": "kap_member_title",
+        "kapMemberType": "kap_member_type",
+        "kapMemberState": "kap_member_state",
+        "financialType": "financial_type",
+        "taxNo": "tax_number",
+        "taxOffice": "tax_office",
+        "tradeRegNo": "trade_registry_number",
+        "tradeRegOffice": "trade_registry_office",
+        "tradeRegDate": "trade_registry_date",
+        "relatedMemberOid": "independent_audit_company_oid",
+        "relatedMemberTitle": "independent_audit_company_name",
+        "companyCode": "company_code",
+        "cityName": "city_name",
+        "kapTypes": "kap_types",
+        "sgbfOrtaklikYapisi": "shareholding_structure_flag",
+    }
+    metadata: dict[str, object] = {}
+    for source_key, target_key in field_map.items():
+        value = _extract_kap_detail_text_field(detail_html, source_key)
+        if value:
+            metadata[target_key] = value
+    for source_key, target_key in (
+        ("nonInactiveCount", "active_security_count"),
+        ("paidCapital", "paid_capital"),
+    ):
+        value = _extract_kap_detail_number_field(detail_html, source_key)
+        if value:
+            metadata[target_key] = value
+    return metadata
+
+
+def _extract_kap_text_value(value: dict[str, object], *, key: str) -> str:
+    candidate = value.get(key)
+    if isinstance(candidate, str):
+        return _normalize_whitespace(_repair_kap_embedded_text(candidate))
+    if isinstance(candidate, dict):
+        text_value = candidate.get("text")
+        if isinstance(text_value, str):
+            return _normalize_whitespace(_repair_kap_embedded_text(text_value))
+    return ""
+
+
+def _split_turkiye_market_value(value: str) -> list[str]:
+    normalized_value = _normalize_whitespace(_repair_kap_embedded_text(value))
+    if not normalized_value:
+        return []
+    ascii_value = (_ascii_fold_alias(normalized_value) or normalized_value).casefold()
+    if any(
+        keyword in ascii_value
+        for keyword in (
+            "faaliyet",
+            "aracilik",
+            "kuruluslar",
+            "kurumlari",
+            "bankalar",
+        )
+    ):
+        return []
+    if not any(
+        keyword in ascii_value
+        for keyword in (
+            "borsa",
+            "bist",
+            "market",
+            "pazar",
+            "piyasa",
+            "repo",
+            "opsiyon",
+            "tahvil",
+            "viop",
+        )
+    ):
+        return []
+    segments = re.split(r"\s*,\s*|\s*/\s*", normalized_value)
+    return _unique_aliases(
+        [
+            _normalize_whitespace(segment)
+            for segment in segments
+            if _normalize_whitespace(segment)
+        ]
+    )
+
+
+def _extract_kap_market_records(detail_html: str) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    for item_object in _iter_kap_item_objects(detail_html):
+        item_key = str(item_object.get("itemKey", "")).strip()
+        if item_key not in _TURKIYE_KAP_MARKET_ITEM_KEYS:
+            continue
+        values = item_object.get("value")
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            if not isinstance(value, dict):
+                continue
+            record = {
+                "instrument_type": _extract_kap_text_value(
+                    value,
+                    key="typeOfTheListedOrTradingCapitalMarketInstrument",
+                ),
+                "initial_date_of_listing_or_trading": _extract_kap_text_value(
+                    value,
+                    key="initialDateOfListingOrTrading",
+                ),
+                "country_of_market_or_stock_exchange": _extract_kap_text_value(
+                    value,
+                    key="countryOfTheMarketOrStockExchange",
+                ),
+                "market_or_stock_exchange": _extract_kap_text_value(
+                    value,
+                    key="marketOrStockExchange",
+                ),
+                "relevant_sub_market_or_exchange": _extract_kap_text_value(
+                    value,
+                    key="relevantSubMarketOrExchange",
+                ),
+            }
+            if any(record.values()):
+                records.append(record)
+    if records:
+        return records
+    fallback_markets: list[str] = []
+    for item_object in _iter_kap_item_objects(detail_html):
+        item_key = str(item_object.get("itemKey", "")).strip()
+        if item_key not in _TURKIYE_KAP_MARKET_FALLBACK_ITEM_KEYS:
+            continue
+        value = item_object.get("value")
+        if not isinstance(value, str):
+            continue
+        fallback_markets.extend(_split_turkiye_market_value(value))
+    if not fallback_markets:
+        return []
+    return [
+        {
+            "instrument_type": "",
+            "initial_date_of_listing_or_trading": "",
+            "country_of_market_or_stock_exchange": "Türkiye",
+            "market_or_stock_exchange": "Borsa İstanbul",
+            "relevant_sub_market_or_exchange": market_name,
+        }
+        for market_name in _unique_aliases(fallback_markets)
+    ]
+    return records
+
+
+def _extract_kap_shareholder_entities(
+    *,
+    detail_html: str,
+    company_title: str,
+    stock_code: str | None,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    person_entities: list[dict[str, object]] = []
+    organization_entities: list[dict[str, object]] = []
+    employer_key = stock_code or _slug(company_title)
+    for item_object in _iter_kap_item_objects(detail_html):
+        item_key = str(item_object.get("itemKey", "")).strip()
+        item_name = str(item_object.get("itemName", "")).strip()
+        if item_key not in _TURKIYE_KAP_SHAREHOLDER_ITEM_KEYS:
+            continue
+        values = item_object.get("value")
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            if not isinstance(value, dict):
+                continue
+            shareholder_name = _extract_kap_text_value(value, key="shareholder")
+            if not shareholder_name:
+                continue
+            normalized_stop_name = _normalize_whitespace(
+                (_ascii_fold_alias(shareholder_name) or shareholder_name).upper()
+            )
+            if normalized_stop_name in _TURKIYE_KAP_SHAREHOLDER_STOP_NAMES:
+                continue
+            share_in_capital = _extract_kap_text_value(value, key="shareInCapital")
+            ratio_in_capital = _extract_kap_text_value(value, key="ratioInCapital")
+            monetary_unit = _extract_kap_text_value(value, key="monetaryUnit")
+            base_metadata: dict[str, object] = {
+                "country_code": "tr",
+                "role_title": "Shareholder",
+                "employer_name": company_title,
+                "section_key": item_key,
+                "section_name": item_name,
+                "source_name": "kap-company-details",
+            }
+            if stock_code:
+                base_metadata["employer_ticker"] = stock_code
+            if share_in_capital:
+                base_metadata["share_in_capital"] = share_in_capital
+            if ratio_in_capital:
+                base_metadata["ratio_in_capital"] = ratio_in_capital
+            if monetary_unit:
+                base_metadata["monetary_unit"] = monetary_unit
+            canonical_person_name, person_aliases = _normalize_person_name_aliases(
+                shareholder_name
+            )
+            if (
+                canonical_person_name
+                and not _looks_like_turkiye_organization_name(shareholder_name)
+                and _looks_like_finance_person_name(canonical_person_name)
+            ):
+                metadata = dict(base_metadata)
+                metadata["category"] = "beneficial_owner"
+                person_entities.append(
+                    {
+                        "entity_type": "person",
+                        "canonical_text": canonical_person_name,
+                        "aliases": person_aliases,
+                        "entity_id": (
+                            f"finance-tr-person:{employer_key}:"
+                            f"{_slug(canonical_person_name)}:beneficial-owner"
+                        ),
+                        "metadata": metadata,
+                    }
+                )
+                continue
+            canonical_organization_name = _normalize_whitespace(shareholder_name)
+            if canonical_organization_name == canonical_organization_name.upper():
+                canonical_organization_name = _smart_titlecase_company_name(
+                    canonical_organization_name
+                )
+            metadata = dict(base_metadata)
+            metadata["category"] = "major_shareholder"
+            organization_entities.append(
+                {
+                    "entity_type": "organization",
+                    "canonical_text": canonical_organization_name,
+                    "aliases": _build_turkiye_company_aliases(
+                        canonical_organization_name
+                    ),
+                    "entity_id": (
+                        f"finance-tr-shareholder:{employer_key}:"
+                        f"{_slug(canonical_organization_name)}"
+                    ),
+                    "metadata": metadata,
+                }
+            )
+    return person_entities, organization_entities
 
 
 def _extract_kap_people_entities(
@@ -16545,11 +26009,11 @@ def _extract_kap_people_entities(
             raw_name = str(value.get("nameSurname", "")).strip()
             if not raw_name:
                 continue
-            canonical_name = _smart_titlecase_name(_repair_kap_embedded_text(raw_name))
-            aliases = [canonical_name]
-            ascii_alias = _ascii_fold_alias(canonical_name)
-            if ascii_alias and ascii_alias != canonical_name:
-                aliases.append(ascii_alias)
+            canonical_name, aliases = _normalize_person_name_aliases(
+                _repair_kap_embedded_text(raw_name)
+            )
+            if canonical_name is None:
+                continue
             role_title = _extract_kap_role_title(value, item_name=item_name)
             metadata: dict[str, object] = {
                 "country_code": "tr",
@@ -16558,14 +26022,40 @@ def _extract_kap_people_entities(
                 "employer_name": company_title,
                 "section_key": item_key,
                 "section_name": item_name,
+                "source_name": "kap-company-details",
             }
             if stock_code:
                 metadata["employer_ticker"] = stock_code
+            for source_key, target_key in (
+                ("email", "contact_email"),
+                ("phone", "contact_phone"),
+                ("typeOfLicenceDocument", "licence_document_type"),
+                ("licenceDocumentNo", "licence_document_number"),
+                ("licenceNumber", "licence_document_number"),
+                ("profession", "profession"),
+                (
+                    "positionsHeldInTheCompanyInTheLastFiveYears",
+                    "positions_held_in_company_last_five_years",
+                ),
+                (
+                    "currentPositionsHeldOutsideTheCompany",
+                    "current_positions_held_outside_company",
+                ),
+                ("assignmentDate", "assignment_date"),
+                ("firstChosenDate", "first_chosen_date"),
+                ("shareInCapital", "share_in_capital"),
+                ("executiveOrNon", "executive_status"),
+                ("independentBoardMemberOrNot", "independence_status"),
+                ("committeesChargedAndTask", "committee_roles"),
+            ):
+                field_value = _extract_kap_text_value(value, key=source_key)
+                if field_value:
+                    metadata[target_key] = field_value
             entities.append(
                 {
                     "entity_type": "person",
                     "canonical_text": canonical_name,
-                    "aliases": _unique_aliases(aliases),
+                    "aliases": aliases,
                     "entity_id": (
                         "finance-tr-person:"
                         f"{(stock_code or _slug(company_title))}:"
@@ -16582,6 +26072,8 @@ def _extract_kap_role_title(value: dict[str, object], *, item_name: str) -> str:
     if isinstance(position, str) and position.strip():
         return _repair_kap_embedded_text(position.strip())
     title = value.get("title")
+    if isinstance(title, str) and title.strip():
+        return _repair_kap_embedded_text(title.strip())
     if isinstance(title, dict):
         title_text = title.get("text")
         if isinstance(title_text, str) and title_text.strip():
@@ -16589,28 +26081,134 @@ def _extract_kap_role_title(value: dict[str, object], *, item_name: str) -> str:
     return item_name
 
 
+def _strip_turkiye_company_legal_suffix(value: str) -> str | None:
+    candidate = _normalize_whitespace(value)
+    if not candidate:
+        return None
+    stripped = re.sub(
+        r"\b(?:T\.?\s*A\.?\s*Ş\.?|A\.?\s*Ş\.?|A\.?\s*O\.?)$",
+        "",
+        candidate,
+        flags=re.IGNORECASE,
+    )
+    stripped = _normalize_whitespace(stripped.rstrip("."))
+    if not stripped or stripped.casefold() == candidate.casefold():
+        return None
+    return stripped
+
+
+def _looks_like_turkiye_organization_name(value: str) -> bool:
+    normalized_value = _normalize_whitespace(value)
+    if not normalized_value:
+        return False
+    ascii_value = _ascii_fold_alias(normalized_value) or normalized_value
+    normalized_tokens = [
+        re.sub(r"[^a-z0-9]+", "", token.casefold())
+        for token in re.split(r"\s+", ascii_value)
+        if token
+    ]
+    return any(token in _TURKIYE_ORGANIZATION_CUE_TOKENS for token in normalized_tokens)
+
+
+def _build_turkiye_company_aliases(*values: str) -> list[str]:
+    aliases: list[str] = []
+    pending = [
+        _normalize_whitespace(value)
+        for value in values
+        if _normalize_whitespace(value)
+    ]
+    seen: set[str] = set()
+    while pending:
+        candidate = pending.pop(0)
+        key = candidate.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        aliases.append(candidate)
+        variants: list[str] = []
+        ascii_alias = _ascii_fold_alias(candidate)
+        if ascii_alias and ascii_alias.casefold() != key:
+            variants.append(_normalize_whitespace(ascii_alias))
+        if "." in candidate:
+            variants.append(_normalize_whitespace(candidate.replace(".", "")))
+        if "," in candidate:
+            variants.append(_normalize_whitespace(candidate.replace(",", "")))
+        stripped = _strip_turkiye_company_legal_suffix(candidate)
+        if stripped and stripped.casefold() != key:
+            variants.append(stripped)
+        for variant in variants:
+            normalized_variant = _normalize_whitespace(variant)
+            if normalized_variant and normalized_variant.casefold() not in seen:
+                pending.append(normalized_variant)
+    return aliases
+
+
 def _build_kap_company_entity(
     *,
     company_title: str,
     stock_code: str | None,
+    stock_codes: Sequence[str] | None = None,
+    detail_html: str | None = None,
 ) -> dict[str, object]:
-    aliases = [company_title]
-    ascii_alias = _ascii_fold_alias(company_title)
-    if ascii_alias and ascii_alias != company_title:
-        aliases.append(ascii_alias)
-    if stock_code:
-        aliases.append(stock_code)
+    aliases = _build_turkiye_company_aliases(
+        company_title,
+        *([stock_code] if stock_code else []),
+        *(stock_codes or []),
+    )
     metadata: dict[str, object] = {
         "country_code": "tr",
         "category": "issuer",
     }
     if stock_code:
         metadata["ticker"] = stock_code
-    entity_id_suffix = stock_code or _slug(company_title)
+    normalized_stock_codes = _unique_aliases(
+        [
+            _normalize_whitespace(candidate).upper()
+            for candidate in (stock_codes or [])
+            if _normalize_whitespace(candidate)
+        ]
+    )
+    if len(normalized_stock_codes) > 1:
+        metadata["tickers"] = normalized_stock_codes
+    if detail_html:
+        detail_metadata = _extract_kap_member_detail_metadata(detail_html)
+        metadata.update(detail_metadata)
+        market_records = _extract_kap_market_records(detail_html)
+        if market_records:
+            metadata["market_records"] = market_records
+            primary_market = market_records[0]
+            for source_key, target_key in (
+                ("market_or_stock_exchange", "primary_exchange"),
+                ("relevant_sub_market_or_exchange", "primary_market"),
+                ("country_of_market_or_stock_exchange", "listing_country"),
+                ("instrument_type", "listed_instrument_type"),
+                ("initial_date_of_listing_or_trading", "listing_date"),
+            ):
+                value = _normalize_whitespace(str(primary_market.get(source_key, "")))
+                if value:
+                    metadata[target_key] = value
+            listing_markets = _unique_aliases(
+                [
+                    _normalize_whitespace(
+                        str(record.get("relevant_sub_market_or_exchange", ""))
+                    )
+                    for record in market_records
+                    if _normalize_whitespace(
+                        str(record.get("relevant_sub_market_or_exchange", ""))
+                    )
+                ]
+            )
+            if listing_markets:
+                metadata["listing_markets"] = listing_markets
+    entity_id_suffix = (
+        _normalize_whitespace(str(metadata.get("company_code", "")))
+        or stock_code
+        or _slug(company_title)
+    )
     return {
         "entity_type": "organization",
         "canonical_text": company_title,
-        "aliases": _unique_aliases(aliases),
+        "aliases": aliases,
         "entity_id": f"finance-tr-issuer:{entity_id_suffix}",
         "metadata": metadata,
     }
@@ -16620,23 +26218,208 @@ def _build_kap_ticker_entity(
     *,
     company_title: str,
     stock_code: str,
+    detail_html: str | None = None,
 ) -> dict[str, object]:
-    aliases = [stock_code]
-    ascii_alias = _ascii_fold_alias(company_title)
-    if ascii_alias and ascii_alias != company_title:
-        aliases.append(ascii_alias)
-    aliases.append(company_title)
+    aliases = _build_turkiye_company_aliases(stock_code, company_title)
+    metadata: dict[str, object] = {
+        "country_code": "tr",
+        "category": "ticker",
+        "issuer_name": company_title,
+        "ticker": stock_code,
+    }
+    if detail_html:
+        detail_metadata = _extract_kap_member_detail_metadata(detail_html)
+        for source_key, target_key in (
+            ("company_code", "company_code"),
+            ("mkk_member_oid", "mkk_member_oid"),
+            ("financial_type", "financial_type"),
+            ("kap_member_type", "kap_member_type"),
+        ):
+            value = _normalize_whitespace(str(detail_metadata.get(source_key, "")))
+            if value:
+                metadata[target_key] = value
+        market_records = _extract_kap_market_records(detail_html)
+        if market_records:
+            primary_market = market_records[0]
+            for source_key, target_key in (
+                ("market_or_stock_exchange", "primary_exchange"),
+                ("relevant_sub_market_or_exchange", "primary_market"),
+                ("country_of_market_or_stock_exchange", "listing_country"),
+                ("instrument_type", "listed_instrument_type"),
+                ("initial_date_of_listing_or_trading", "listing_date"),
+            ):
+                value = _normalize_whitespace(str(primary_market.get(source_key, "")))
+                if value:
+                    metadata[target_key] = value
     return {
         "entity_type": "ticker",
         "canonical_text": stock_code,
-        "aliases": _unique_aliases(aliases),
+        "aliases": aliases,
         "entity_id": f"finance-tr-ticker:{stock_code}",
-        "metadata": {
-            "country_code": "tr",
-            "category": "ticker",
-            "issuer_name": company_title,
-        },
+        "metadata": metadata,
     }
+
+
+def _build_turkiye_issuer_lookup(
+    issuer_entities: list[dict[str, object]],
+) -> dict[str, dict[str, dict[str, object]]]:
+    by_company_code: dict[str, dict[str, object]] = {}
+    by_mkk_member_oid: dict[str, dict[str, object]] = {}
+    by_ticker: dict[str, dict[str, object]] = {}
+    by_name: dict[str, dict[str, object]] = {}
+    for entity in issuer_entities:
+        metadata = entity.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        company_code = _normalize_whitespace(str(metadata.get("company_code", "")))
+        if company_code and company_code not in by_company_code:
+            by_company_code[company_code] = entity
+        mkk_member_oid = _normalize_whitespace(str(metadata.get("mkk_member_oid", "")))
+        if mkk_member_oid and mkk_member_oid not in by_mkk_member_oid:
+            by_mkk_member_oid[mkk_member_oid] = entity
+        ticker = _normalize_whitespace(str(metadata.get("ticker", ""))).upper()
+        if ticker and ticker not in by_ticker:
+            by_ticker[ticker] = entity
+        for candidate_ticker in metadata.get("tickers", []):
+            if not isinstance(candidate_ticker, str):
+                continue
+            normalized_candidate_ticker = _normalize_whitespace(candidate_ticker).upper()
+            if normalized_candidate_ticker and normalized_candidate_ticker not in by_ticker:
+                by_ticker[normalized_candidate_ticker] = entity
+        candidate_names = [str(entity.get("canonical_text", ""))]
+        candidate_names.extend(
+            str(alias)
+            for alias in entity.get("aliases", [])
+            if isinstance(alias, str) and _normalize_whitespace(alias)
+        )
+        for candidate_name in candidate_names:
+            for key in (
+                _normalize_company_name_for_match(candidate_name),
+                _normalize_company_name_for_match(candidate_name, drop_suffixes=True),
+            ):
+                if key and key not in by_name:
+                    by_name[key] = entity
+    return {
+        "company_code": by_company_code,
+        "mkk_member_oid": by_mkk_member_oid,
+        "ticker": by_ticker,
+        "name": by_name,
+    }
+
+
+def _find_turkiye_issuer_entity(
+    *,
+    issuer_lookup: dict[str, dict[str, dict[str, object]]],
+    company_code: str = "",
+    mkk_member_oid: str = "",
+    ticker: str = "",
+    issuer_name: str = "",
+) -> dict[str, object] | None:
+    normalized_company_code = _normalize_whitespace(company_code)
+    if normalized_company_code:
+        entity = issuer_lookup["company_code"].get(normalized_company_code)
+        if entity is not None:
+            return entity
+    normalized_mkk_member_oid = _normalize_whitespace(mkk_member_oid)
+    if normalized_mkk_member_oid:
+        entity = issuer_lookup["mkk_member_oid"].get(normalized_mkk_member_oid)
+        if entity is not None:
+            return entity
+    normalized_ticker = _normalize_whitespace(ticker).upper()
+    if normalized_ticker:
+        entity = issuer_lookup["ticker"].get(normalized_ticker)
+        if entity is not None:
+            return entity
+    for key in (
+        _normalize_company_name_for_match(issuer_name),
+        _normalize_company_name_for_match(issuer_name, drop_suffixes=True),
+    ):
+        if not key:
+            continue
+        entity = issuer_lookup["name"].get(key)
+        if entity is not None:
+            return entity
+    return None
+
+
+def _enrich_turkiye_ticker_entities_with_issuer_metadata(
+    *,
+    ticker_entities: list[dict[str, object]],
+    issuer_entities: list[dict[str, object]],
+) -> None:
+    issuer_lookup = _build_turkiye_issuer_lookup(issuer_entities)
+    for entity in ticker_entities:
+        metadata = entity.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        issuer_entity = _find_turkiye_issuer_entity(
+            issuer_lookup=issuer_lookup,
+            company_code=str(metadata.get("company_code", "")),
+            mkk_member_oid=str(metadata.get("mkk_member_oid", "")),
+            ticker=str(metadata.get("ticker", "")) or str(entity.get("canonical_text", "")),
+            issuer_name=str(metadata.get("issuer_name", "")),
+        )
+        if issuer_entity is None:
+            continue
+        issuer_metadata = issuer_entity.get("metadata")
+        if not isinstance(issuer_metadata, dict):
+            continue
+        for source_key, target_key in (
+            ("company_code", "company_code"),
+            ("mkk_member_oid", "mkk_member_oid"),
+            ("primary_exchange", "primary_exchange"),
+            ("primary_market", "primary_market"),
+            ("listing_country", "listing_country"),
+            ("listed_instrument_type", "listed_instrument_type"),
+        ):
+            source_value = _normalize_whitespace(str(issuer_metadata.get(source_key, "")))
+            if source_value and not _normalize_whitespace(str(metadata.get(target_key, ""))):
+                metadata[target_key] = source_value
+
+
+def _enrich_turkiye_people_with_issuer_metadata(
+    *,
+    people_entities: list[dict[str, object]],
+    issuer_entities: list[dict[str, object]],
+) -> None:
+    issuer_lookup = _build_turkiye_issuer_lookup(issuer_entities)
+    for entity in people_entities:
+        metadata = entity.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        issuer_entity = _find_turkiye_issuer_entity(
+            issuer_lookup=issuer_lookup,
+            company_code=str(metadata.get("employer_company_code", "")),
+            mkk_member_oid=str(metadata.get("employer_mkk_member_oid", "")),
+            ticker=str(metadata.get("employer_ticker", "")),
+            issuer_name=str(metadata.get("employer_name", "")),
+        )
+        if issuer_entity is None:
+            continue
+        issuer_metadata = issuer_entity.get("metadata")
+        if not isinstance(issuer_metadata, dict):
+            continue
+        for source_key, target_key in (
+            ("ticker", "employer_ticker"),
+            ("company_code", "employer_company_code"),
+            ("mkk_member_oid", "employer_mkk_member_oid"),
+            ("primary_exchange", "employer_exchange"),
+            ("primary_market", "employer_market"),
+        ):
+            source_value = _normalize_whitespace(str(issuer_metadata.get(source_key, "")))
+            if source_value and not _normalize_whitespace(str(metadata.get(target_key, ""))):
+                metadata[target_key] = source_value
+        issuer_tickers = issuer_metadata.get("tickers")
+        if (
+            isinstance(issuer_tickers, list)
+            and issuer_tickers
+            and not metadata.get("employer_tickers")
+        ):
+            metadata["employer_tickers"] = [
+                _normalize_whitespace(str(ticker)).upper()
+                for ticker in issuer_tickers
+                if _normalize_whitespace(str(ticker))
+            ]
 
 
 def _iter_kap_item_objects(detail_html: str) -> list[dict[str, object]]:
@@ -17076,11 +26859,21 @@ def _normalize_company_name_for_match(
 ) -> str:
     normalized = _normalize_whitespace(_ascii_fold_alias(value) or value).casefold()
     normalized = normalized.replace("&", " and ")
-    tokens = re.findall(r"[a-z0-9]+", normalized)
+    tokens = _UNICODE_ALNUM_TOKEN_PATTERN.findall(normalized)
     if drop_suffixes:
-        tokens = [
-            token for token in tokens if token not in _COMPANIES_HOUSE_COMPANY_SUFFIX_TOKENS
-        ]
+        while tokens and tokens[-1] in _GENERIC_COMPANY_SUFFIX_TOKENS:
+            tokens.pop()
+        stripped_suffix = True
+        while stripped_suffix and tokens:
+            stripped_suffix = False
+            for suffix_pattern in _GENERIC_COMPANY_SUFFIX_END_PATTERNS:
+                if len(tokens) < len(suffix_pattern):
+                    continue
+                if tuple(tokens[-len(suffix_pattern) :]) != suffix_pattern:
+                    continue
+                del tokens[-len(suffix_pattern) :]
+                stripped_suffix = True
+                break
     return " ".join(tokens)
 
 
@@ -17152,14 +26945,17 @@ def _looks_like_person_name(value: str) -> bool:
     parts = [part for part in re.split(r"\s+", value) if part]
     if len(parts) < 2:
         return False
-    if any(len(part) == 1 for part in parts):
-        return False
+    full_length_parts = 0
     for part in parts:
         normalized = part.replace(".", "").replace("'", "").replace("-", "")
         if not normalized or not normalized[0].isalpha():
             return False
         if not all(character.isalpha() for character in normalized):
             return False
+        if len(normalized) > 1:
+            full_length_parts += 1
+    if full_length_parts < 2:
+        return False
     return True
 
 
@@ -17188,12 +26984,23 @@ def _smart_titlecase_person_name(value: str) -> str:
 _COUNTRY_ENTITY_DERIVERS: dict[str, Any] = {
     "ar": _derive_argentina_byma_entities,
     "au": _derive_australia_asx_entities,
+    "br": _derive_brazil_b3_entities,
+    "ca": _derive_canada_tmx_cse_entities,
+    "cn": _derive_china_cninfo_entities,
     "de": _derive_germany_deutsche_boerse_entities,
     "fr": _derive_france_euronext_entities,
+    "id": _derive_indonesia_idx_entities,
+    "in": _derive_india_nse_entities,
+    "it": _derive_italy_borsa_italiana_entities,
     "jp": _derive_japan_jpx_entities,
+    "kr": _derive_south_korea_krx_entities,
+    "mx": _derive_mexico_biva_bmv_entities,
+    "ru": _derive_russia_moex_entities,
+    "sa": _derive_saudi_exchange_entities,
     "tr": _derive_turkiye_kap_entities,
     "uk": _derive_united_kingdom_fca_companies_house_entities,
     "us": _derive_united_states_sec_entities,
+    "za": _derive_south_africa_jse_entities,
 }
 
 
@@ -17264,7 +27071,11 @@ def _load_curated_entities(path: Path) -> list[dict[str, Any]]:
     entities = payload.get("entities", [])
     if not isinstance(entities, list):
         raise ValueError(f"Curated finance country entities must be a list: {path}")
-    return [entity for entity in entities if isinstance(entity, dict)]
+    return [
+        _backfill_entity_wikidata_metadata(entity)
+        for entity in entities
+        if isinstance(entity, dict)
+    ]
 
 
 def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:

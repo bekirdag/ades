@@ -170,8 +170,11 @@ def _refinement_depth_option(options: dict[str, object] | None) -> str:
 def _string_option(options: dict[str, object] | None, key: str) -> str | None:
     if not options or key not in options:
         return None
-    value = str(options[key]).strip()
-    return value or None
+    value = options[key]
+    if not isinstance(value, str):
+        raise ValueError(f"Invalid string option for {key}.")
+    normalized = value.strip()
+    return normalized or None
 
 
 def _raise_configuration_http_exception(exc: Exception) -> None:
@@ -249,13 +252,11 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        settings = runtime_state.current_settings()
-        if settings.service_prewarm_enabled:
-            try:
-                runtime_state.prewarm_active_packs()
-            except (FileNotFoundError, UnsupportedRuntimeConfigurationError, ValueError):
-                # Preserve request-time config errors on the public endpoints.
-                pass
+        try:
+            runtime_state.prewarm_active_packs()
+        except (FileNotFoundError, UnsupportedRuntimeConfigurationError, ValueError):
+            # Preserve request-time config errors on the public endpoints.
+            pass
         yield
 
     app = FastAPI(title="ades", version=__version__, lifespan=lifespan)
@@ -1228,10 +1229,6 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 request.text,
                 pack=resolved_pack,
                 content_type=request.content_type,
-                domain_hint=request.domain_hint
-                or _string_option(request.options, "domain_hint"),
-                retrieval_profile=request.retrieval_profile
-                or _string_option(request.options, "retrieval_profile"),
                 output_path=request.output.path if request.output else None,
                 output_dir=request.output.directory if request.output else None,
                 pretty_output=request.output.pretty if request.output else True,
@@ -1246,6 +1243,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 ),
                 refine_links=bool(_bool_option(request.options, "refine_links")),
                 refinement_depth=_refinement_depth_option(request.options),
+                domain_hint=_string_option(request.options, "domain_hint"),
+                country_hint=_string_option(request.options, "country_hint"),
                 registry=runtime_state.ensure_registry(),
             )
         except FileNotFoundError as exc:
@@ -1268,10 +1267,6 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 request.path,
                 pack=resolved_pack,
                 content_type=request.content_type,
-                domain_hint=request.domain_hint
-                or _string_option(request.options, "domain_hint"),
-                retrieval_profile=request.retrieval_profile
-                or _string_option(request.options, "retrieval_profile"),
                 output_path=request.output.path if request.output else None,
                 output_dir=request.output.directory if request.output else None,
                 pretty_output=request.output.pretty if request.output else True,
@@ -1286,6 +1281,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 ),
                 refine_links=bool(_bool_option(request.options, "refine_links")),
                 refinement_depth=_refinement_depth_option(request.options),
+                domain_hint=_string_option(request.options, "domain_hint"),
+                country_hint=_string_option(request.options, "country_hint"),
                 registry=runtime_state.ensure_registry(),
             )
         except FileNotFoundError as exc:
@@ -1322,10 +1319,6 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 request.paths,
                 pack=request.pack,
                 content_type=request.content_type,
-                domain_hint=request.domain_hint
-                or _string_option(request.options, "domain_hint"),
-                retrieval_profile=request.retrieval_profile
-                or _string_option(request.options, "retrieval_profile"),
                 output_dir=request.output.directory if request.output else None,
                 pretty_output=request.output.pretty if request.output else True,
                 storage_root=storage_root,
@@ -1353,6 +1346,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 ),
                 refine_links=bool(_bool_option(request.options, "refine_links")),
                 refinement_depth=_refinement_depth_option(request.options),
+                domain_hint=_string_option(request.options, "domain_hint"),
+                country_hint=_string_option(request.options, "country_hint"),
                 registry=runtime_state.ensure_registry(),
             )
         except FileNotFoundError as exc:

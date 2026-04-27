@@ -1126,12 +1126,12 @@ def registry_refresh_generated_packs(
         min=0,
         help="Maximum ambiguous alias keys allowed after generation. If omitted, ades uses the pack-specific default quality budget.",
     ),
-    max_dropped_alias_ratio: float = typer.Option(
-        0.5,
+    max_dropped_alias_ratio: float | None = typer.Option(
+        None,
         "--max-dropped-alias-ratio",
         min=0.0,
         max=1.0,
-        help="Maximum acceptable dropped-alias ratio after normalization and pruning.",
+        help="Maximum acceptable dropped-alias ratio after normalization and pruning. If omitted, ades uses the pack-specific default quality budget.",
     ),
 ) -> None:
     """Refresh one or more generated packs into a quality-gated registry release."""

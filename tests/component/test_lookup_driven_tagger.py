@@ -379,6 +379,32 @@ def test_tagger_uses_bundle_backed_general_pack_source(tmp_path: Path) -> None:
     assert ("Beacon", "organization") in pairs
 
 
+def test_tagger_trims_structural_org_role_suffix_and_skips_plural_generic_phrase(
+    tmp_path: Path,
+) -> None:
+    pack_dir = create_bundle_backed_general_pack_source(tmp_path / "bundle-pack")
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            '"Budget airlines are like weights when it comes to airfares," '
+            "said Atmosphere Research Group airline analyst Henry Harteveldt."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+    texts = {entity.text for entity in response.entities}
+
+    assert "Budget airlines" not in texts
+    assert "Atmosphere Research Group airline" not in texts
+    assert ("Atmosphere Research Group", "organization") in pairs
+
+
 def test_tagger_bundle_backed_pack_resolves_alias_collisions(tmp_path: Path) -> None:
     pack_dir = create_bundle_backed_general_pack_source_with_alias_collision(
         tmp_path / "bundle-pack"
@@ -758,6 +784,31 @@ def test_tagger_backfills_heuristic_definition_and_contextual_acronyms(
     assert ("NSF", "organization") in pairs
 
 
+def test_tagger_backfills_contextual_acronym_with_following_railroad_noun(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = create_general_generation_bundle(tmp_path / "bundle")
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    pack_dir = Path(generated.pack_dir)
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text="CSX railroad's profit jumped after the company cut expenses.",
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+
+    assert ("CSX", "organization") in pairs
+
+
 def test_tagger_extends_trailing_structural_org_suffixes(tmp_path: Path) -> None:
     pack_dir = create_bundle_backed_general_pack_source(tmp_path / "bundle-pack")
     install_pack_dir = tmp_path / "packs" / "general-en"
@@ -892,6 +943,59 @@ def test_tagger_suppresses_additional_surname_coreference_mention_types(
     assert "ford" not in lowered
     assert "davis" not in lowered
     assert "by ford" not in lowered
+
+
+def test_tagger_suppresses_reported_object_and_leadership_surname_coreference(
+    tmp_path: Path,
+) -> None:
+    pack_dir = _create_person_surname_conflict_general_pack_source(tmp_path / "bundle-pack")
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "Jerome Powell spoke earlier in the day. "
+            "Analysts told Powell to stay in place. "
+            "Later, Powell led a first round of talks with staff."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+    lowered = {entity.text.casefold() for entity in response.entities}
+
+    assert ("Jerome Powell", "person") in pairs
+    assert ("Powell", "location") not in pairs
+    assert "powell" not in lowered
+
+
+def test_tagger_suppresses_went_public_surname_coreference_location_false_positive(
+    tmp_path: Path,
+) -> None:
+    pack_dir = _create_person_surname_conflict_general_pack_source(tmp_path / "bundle-pack")
+    install_pack_dir = tmp_path / "packs" / "general-en"
+    install_pack_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(pack_dir, install_pack_dir)
+
+    response = tag_text(
+        text=(
+            "Premier Doug Ford criticized the proposal earlier. "
+            "Ford went public in April with his concerns."
+        ),
+        pack="general-en",
+        content_type="text/plain",
+        storage_root=tmp_path,
+    )
+
+    pairs = {(entity.text, entity.label) for entity in response.entities}
+    lowered = {entity.text.casefold() for entity in response.entities}
+
+    assert ("Doug Ford", "person") in pairs
+    assert ("Ford", "location") not in pairs
+    assert "ford" not in lowered
 
 
 def test_tagger_backfills_structured_organizations_and_skips_dateline_noise(

@@ -239,6 +239,25 @@ class QdrantVectorSearchClient:
                 mapping[alias_name] = collection_name
         return mapping
 
+    def get_collection_info(self, collection_name: str) -> dict[str, Any]:
+        payload = self._request("GET", f"/collections/{collection_name}")
+        result = payload.get("result")
+        if isinstance(result, dict):
+            return result
+        return {}
+
+    def get_collection_point_count(self, collection_name: str) -> int | None:
+        result = self.get_collection_info(collection_name)
+        for key in ("points_count", "vectors_count"):
+            raw_value = result.get(key)
+            if isinstance(raw_value, bool):
+                continue
+            if isinstance(raw_value, int):
+                return raw_value
+            if isinstance(raw_value, float):
+                return int(raw_value)
+        return None
+
     def set_alias(self, alias_name: str, collection_name: str) -> None:
         existing = self.list_aliases().get(alias_name)
         actions: list[dict[str, Any]] = []

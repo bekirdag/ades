@@ -1306,6 +1306,83 @@ def test_analyze_alias_candidates_from_db_reuses_candidate_store(
     )
 
 
+def test_analyze_alias_candidates_from_db_streams_alias_clusters(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_db_path = tmp_path / "source.sqlite"
+    refreshed_db_path = tmp_path / "refreshed.sqlite"
+    analyze_alias_candidates(
+        [
+            build_alias_candidate(
+                alias_key="us",
+                display_text="US",
+                label="location",
+                canonical_text="United States",
+                record={
+                    "entity_id": "wikidata:Q30",
+                    "source_name": "wikidata-general-entities",
+                    "source_priority": 0.8,
+                    "population": 331_000_000,
+                },
+                generated=True,
+            ),
+            build_alias_candidate(
+                alias_key="us",
+                display_text="US",
+                label="organization",
+                canonical_text="Unified Systems",
+                record={
+                    "entity_id": "synthetic:organization:unified-systems",
+                    "source_name": "synthetic-general",
+                    "source_priority": 0.3,
+                    "popularity_weight": 0.2,
+                },
+                generated=True,
+            ),
+            build_alias_candidate(
+                alias_key="north harbor",
+                display_text="North Harbor",
+                label="location",
+                canonical_text="North Harbor",
+                record={
+                    "entity_id": "synthetic:location:north-harbor",
+                    "source_name": "geonames-general-places",
+                    "source_priority": 0.82,
+                    "population": 250000,
+                },
+            ),
+        ],
+        allowed_ambiguous_aliases=set(),
+        analysis_db_path=source_db_path,
+        materialize_retained_aliases=False,
+    )
+
+    def fail_per_alias_reload(*args, **kwargs):
+        raise AssertionError("DB refresh should not reload each alias key separately.")
+
+    monkeypatch.setattr(
+        "ades.packs.alias_analysis._load_cluster_candidates",
+        fail_per_alias_reload,
+    )
+
+    refreshed_result = analyze_alias_candidates_from_db(
+        source_db_path,
+        allowed_ambiguous_aliases=set(),
+        analysis_db_path=refreshed_db_path,
+        materialize_retained_aliases=False,
+    )
+
+    retained_pairs = {
+        (item["text"], item["label"])
+        for item in iter_retained_aliases_from_db(refreshed_db_path)
+    }
+    assert refreshed_result.retained_alias_count == 2
+    assert ("US", "location") in retained_pairs
+    assert ("North Harbor", "location") in retained_pairs
+    assert ("US", "organization") not in retained_pairs
+
+
 def test_alias_analysis_blocks_single_token_person_aliases() -> None:
     result = analyze_alias_candidates(
         [

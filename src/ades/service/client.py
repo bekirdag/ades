@@ -21,6 +21,7 @@ _SERVICE_MODE_AUTO = "auto"
 _SERVICE_MODE_IN_PROCESS = "in_process"
 _SERVICE_MODE_SERVICE = "service"
 _REQUEST_TIMEOUT_SECONDS = 3600.0
+_TAG_REQUEST_TIMEOUT_SECONDS = 60.0
 _STARTUP_TIMEOUT_SECONDS = 8.0
 
 
@@ -58,6 +59,10 @@ def _parse_bool_env(value: str | None, *, default: bool) -> bool:
     )
 
 
+def _current_service_mode() -> str:
+    return _normalize_service_mode(os.environ.get(SERVICE_MODE_ENV))
+
+
 def _client_host(host: str) -> str:
     raw = host.strip()
     if raw in {"", "0.0.0.0", "::", "[::]"}:
@@ -76,7 +81,7 @@ def should_use_local_service(settings: Settings | None = None) -> bool:
     """Return whether CLI tagging should prefer the warm local service."""
 
     resolved = settings or get_settings()
-    mode = _normalize_service_mode(os.environ.get(SERVICE_MODE_ENV))
+    mode = _current_service_mode()
     if mode == _SERVICE_MODE_SERVICE:
         return True
     if mode == _SERVICE_MODE_IN_PROCESS:
@@ -250,7 +255,7 @@ def _options_payload(
     refine_links: bool = False,
     refinement_depth: str = "light",
     domain_hint: str | None = None,
-    retrieval_profile: str | None = None,
+    country_hint: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     if debug:
@@ -265,10 +270,10 @@ def _options_payload(
         payload["refine_links"] = True
     if refinement_depth != "light":
         payload["refinement_depth"] = refinement_depth
-    if domain_hint:
-        payload["domain_hint"] = domain_hint
-    if retrieval_profile:
-        payload["retrieval_profile"] = retrieval_profile
+    if domain_hint is not None and domain_hint.strip():
+        payload["domain_hint"] = domain_hint.strip()
+    if country_hint is not None and country_hint.strip():
+        payload["country_hint"] = country_hint.strip()
     return payload
 
 
@@ -288,7 +293,7 @@ def tag_via_local_service(
     refine_links: bool = False,
     refinement_depth: str = "light",
     domain_hint: str | None = None,
-    retrieval_profile: str | None = None,
+    country_hint: str | None = None,
 ) -> TagResponse:
     """Tag inline text through the warm local HTTP service."""
 
@@ -306,17 +311,40 @@ def tag_via_local_service(
             refine_links=refine_links,
             refinement_depth=refinement_depth,
             domain_hint=domain_hint,
-            retrieval_profile=retrieval_profile,
+            country_hint=country_hint,
         ),
     }
-    if domain_hint:
-        payload["domain_hint"] = domain_hint
-    if retrieval_profile:
-        payload["retrieval_profile"] = retrieval_profile
     output = _output_payload(path=output_path, directory=output_dir, pretty=pretty_output)
     if output is not None:
         payload["output"] = output
-    response = _request_json("POST", f"{service_base_url(resolved)}/v0/tag", payload=payload)
+    try:
+        response = _request_json(
+            "POST",
+            f"{service_base_url(resolved)}/v0/tag",
+            payload=payload,
+            timeout_seconds=_TAG_REQUEST_TIMEOUT_SECONDS,
+        )
+    except LocalServiceUnavailableError:
+        if _current_service_mode() == _SERVICE_MODE_SERVICE:
+            raise
+        from ..api import tag as api_tag
+
+        return api_tag(
+            text,
+            pack=pack,
+            content_type=content_type,
+            output_path=output_path,
+            output_dir=output_dir,
+            pretty_output=pretty_output,
+            debug=debug,
+            hybrid=hybrid,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
+            domain_hint=domain_hint,
+            country_hint=country_hint,
+        )
     return TagResponse.model_validate(response)
 
 
@@ -336,7 +364,7 @@ def tag_file_via_local_service(
     refine_links: bool = False,
     refinement_depth: str = "light",
     domain_hint: str | None = None,
-    retrieval_profile: str | None = None,
+    country_hint: str | None = None,
 ) -> TagResponse:
     """Tag one local file through the warm local HTTP service."""
 
@@ -353,19 +381,42 @@ def tag_file_via_local_service(
             refine_links=refine_links,
             refinement_depth=refinement_depth,
             domain_hint=domain_hint,
-            retrieval_profile=retrieval_profile,
+            country_hint=country_hint,
         ),
     }
-    if domain_hint:
-        payload["domain_hint"] = domain_hint
-    if retrieval_profile:
-        payload["retrieval_profile"] = retrieval_profile
     if content_type is not None:
         payload["content_type"] = content_type
     output = _output_payload(path=output_path, directory=output_dir, pretty=pretty_output)
     if output is not None:
         payload["output"] = output
-    response = _request_json("POST", f"{service_base_url(resolved)}/v0/tag/file", payload=payload)
+    try:
+        response = _request_json(
+            "POST",
+            f"{service_base_url(resolved)}/v0/tag/file",
+            payload=payload,
+            timeout_seconds=_TAG_REQUEST_TIMEOUT_SECONDS,
+        )
+    except LocalServiceUnavailableError:
+        if _current_service_mode() == _SERVICE_MODE_SERVICE:
+            raise
+        from ..api import tag_file as api_tag_file
+
+        return api_tag_file(
+            path,
+            pack=pack,
+            content_type=content_type,
+            output_path=output_path,
+            output_dir=output_dir,
+            pretty_output=pretty_output,
+            debug=debug,
+            hybrid=hybrid,
+            include_related_entities=include_related_entities,
+            include_graph_support=include_graph_support,
+            refine_links=refine_links,
+            refinement_depth=refinement_depth,
+            domain_hint=domain_hint,
+            country_hint=country_hint,
+        )
     return TagResponse.model_validate(response)
 
 
@@ -398,7 +449,7 @@ def tag_files_via_local_service(
     refine_links: bool = False,
     refinement_depth: str = "light",
     domain_hint: str | None = None,
-    retrieval_profile: str | None = None,
+    country_hint: str | None = None,
 ) -> BatchTagResponse:
     """Tag multiple local files through the warm local HTTP service."""
 
@@ -423,13 +474,9 @@ def tag_files_via_local_service(
             refine_links=refine_links,
             refinement_depth=refinement_depth,
             domain_hint=domain_hint,
-            retrieval_profile=retrieval_profile,
+            country_hint=country_hint,
         ),
     }
-    if domain_hint:
-        payload["domain_hint"] = domain_hint
-    if retrieval_profile:
-        payload["retrieval_profile"] = retrieval_profile
     if pack is not None:
         payload["pack"] = pack
     if content_type is not None:

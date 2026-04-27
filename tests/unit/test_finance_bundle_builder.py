@@ -245,6 +245,51 @@ def test_build_finance_source_bundle_preserves_optional_curated_fields(
     assert custom_record["metadata"] == {"region": "test"}
 
 
+def test_build_finance_source_bundle_backfills_wikidata_slug_from_qid(
+    tmp_path: Path,
+) -> None:
+    snapshots = create_finance_raw_snapshots(tmp_path)
+    curated_payload = json.loads(snapshots["curated_entities"].read_text(encoding="utf-8"))
+    curated_payload["entities"].append(
+        {
+            "entity_type": "organization",
+            "canonical_text": "Wikidata Backfill Corp",
+            "aliases": ["Wikidata Backfill Corp"],
+            "metadata": {"wikidata_qid": "Q424242"},
+        }
+    )
+    snapshots["curated_entities"].write_text(
+        json.dumps(curated_payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    result = build_finance_source_bundle(
+        sec_companies_path=snapshots["sec_companies"],
+        sec_submissions_path=snapshots["sec_submissions"],
+        sec_companyfacts_path=snapshots["sec_companyfacts"],
+        symbol_directory_path=snapshots["symbol_directory"],
+        other_listed_path=snapshots["other_listed"],
+        finance_people_path=snapshots["finance_people"],
+        curated_entities_path=snapshots["curated_entities"],
+        output_dir=tmp_path / "bundles",
+    )
+
+    entity_records = [
+        json.loads(line)
+        for line in Path(result.entities_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    backfill_record = next(
+        item
+        for item in entity_records
+        if item["canonical_text"] == "Wikidata Backfill Corp"
+    )
+    assert backfill_record["metadata"]["wikidata_qid"] == "Q424242"
+    assert backfill_record["metadata"]["wikidata_slug"] == "Q424242"
+    assert backfill_record["metadata"]["wikidata_entity_id"] == "wikidata:Q424242"
+    assert backfill_record["metadata"]["wikidata_url"] == "https://www.wikidata.org/wiki/Q424242"
+
+
 def test_build_finance_source_bundle_drops_surname_only_people_aliases(
     tmp_path: Path,
 ) -> None:

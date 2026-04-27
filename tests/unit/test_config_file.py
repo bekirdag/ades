@@ -52,6 +52,42 @@ def test_settings_can_load_values_from_toml_config(tmp_path: Path, monkeypatch) 
     assert settings.config_path == config_path
 
 
+def test_settings_can_load_vector_routing_maps_from_toml_config(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config_path = tmp_path / "ades.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "[ades]",
+                '[ades.vector_search_domain_pack_routes]',
+                'business = "business-custom-en"',
+                '[ades.vector_search_pack_collection_aliases]',
+                'business-custom-en = "ades-qids-business-custom-current"',
+                '[ades.vector_search_country_aliases]',
+                'great-britain = "uk"',
+                'south-korea = "kr"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ADES_CONFIG_FILE", str(config_path))
+
+    settings = Settings.from_env()
+
+    assert settings.vector_search_domain_pack_routes == {
+        "business": "business-custom-en",
+    }
+    assert settings.vector_search_pack_collection_aliases == {
+        "business-custom-en": "ades-qids-business-custom-current",
+    }
+    assert settings.vector_search_country_aliases == {
+        "great-britain": "uk",
+        "south-korea": "kr",
+    }
+
+
 def test_settings_reject_missing_explicit_config_file(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -102,5 +138,20 @@ def test_settings_reject_invalid_port_value(tmp_path: Path, monkeypatch) -> None
     with pytest.raises(
         InvalidConfigurationError,
         match="Invalid ades port",
+    ):
+        Settings.from_env()
+
+
+def test_settings_reject_invalid_vector_country_aliases_json(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config_path = tmp_path / "ades.toml"
+    config_path.write_text("", encoding="utf-8")
+    monkeypatch.setenv("ADES_CONFIG_FILE", str(config_path))
+    monkeypatch.setenv("ADES_VECTOR_SEARCH_COUNTRY_ALIASES", "not-json")
+
+    with pytest.raises(
+        InvalidConfigurationError,
+        match="Invalid ades vector search country aliases",
     ):
         Settings.from_env()

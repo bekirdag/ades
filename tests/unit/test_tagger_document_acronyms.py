@@ -143,6 +143,76 @@ def test_contextual_org_acronym_backfill_skips_title_media_and_generic_policy_no
     assert augmented == []
 
 
+def test_contextual_org_acronym_backfill_skips_geopolitical_acronyms() -> None:
+    full_text = "The UK market reacted while the US dollar rose."
+    normalized = normalize_text(full_text, "text/plain")
+
+    augmented = _backfill_contextual_org_acronym_entities(
+        [],
+        normalized_input=normalized,
+        runtime=SimpleNamespace(pack_id="business-vector-en", domain="business"),
+    )
+
+    assert augmented == []
+
+
+def test_contextual_org_acronym_backfill_prefers_exact_registry_location_candidates() -> None:
+    full_text = "He told CNBC while the UAE market reacted."
+    normalized = normalize_text(full_text, "text/plain")
+
+    class _StubRegistry:
+        def lookup_candidates(
+            self,
+            candidate_text: str,
+            *,
+            pack_id: str | None = None,
+            exact_alias: bool = False,
+            active_only: bool = False,
+            limit: int = 50,
+        ) -> list[dict[str, str | float | bool | None]]:
+            del active_only, limit
+            assert exact_alias is True
+            entries = {
+                ("general-en", "UAE"): [
+                    {
+                        "kind": "alias",
+                        "value": "UAE",
+                        "label": "location",
+                        "pack_id": "general-en",
+                        "domain": "general",
+                        "score": 0.8845,
+                        "canonical_text": "United Arab Emirates",
+                        "entity_id": "geonames:290557",
+                    }
+                ]
+            }
+            if pack_id is not None:
+                return entries.get((pack_id, candidate_text), [])
+            return []
+
+    augmented = _backfill_contextual_org_acronym_entities(
+        [],
+        normalized_input=normalized,
+        runtime=SimpleNamespace(
+            pack_id="general-en",
+            pack_chain=["general-en"],
+            domain="general",
+            labels=("organization", "location"),
+        ),
+        registry=_StubRegistry(),
+    )
+
+    pairs = {
+        (entity.entity.text, entity.entity.label, entity.lane, entity.entity.link.canonical_text)
+        for entity in augmented
+        if entity.entity.link is not None
+    }
+
+    assert ("UAE", "location", "deterministic_alias", "United Arab Emirates") in pairs
+    assert ("UAE", "organization", "contextual_org_acronym_backfill", "UAE") not in pairs
+    assert ("CNBC", "organization", "contextual_org_acronym_backfill", "CNBC") in pairs
+
+
 def test_heuristic_definition_acronym_backfill_recovers_parenthetical_and_comma_definitions() -> None:
     full_text = (
         "The Indian Youth Congress (IYC) met delegates. "
@@ -630,3 +700,101 @@ def test_heuristic_structured_org_and_location_backfill_recover_solutions_and_lo
     assert ("Ramsey Solutions", "organization", "heuristic_structured_org_backfill") in pairs
     assert ("island of Nauru", "location", "heuristic_structured_location_backfill") in pairs
     assert all(entity.entity.link is not None for entity in location_augmented)
+
+
+def test_heuristic_structured_org_backfill_trims_conjunction_leads_and_article_spill() -> None:
+    full_text = (
+        "And Bank of America raised its forecast. "
+        "Institute for Government\n\nThe panel responded. "
+        "Federal Trade Commission for comment declined to respond. "
+        "Organization for Economic Co-operation and Development countries were compared. "
+        "Bank of England officials spoke."
+    )
+    normalized = normalize_text(full_text, "text/plain")
+
+    augmented = _backfill_heuristic_structured_organization_entities(
+        [],
+        normalized_input=normalized,
+        runtime=SimpleNamespace(
+            pack_id="general-en",
+            domain="general",
+            labels=("organization", "location"),
+        ),
+    )
+
+    pairs = {(entity.entity.text, entity.entity.label, entity.lane) for entity in augmented}
+    texts = {entity.entity.text for entity in augmented}
+
+    assert ("Bank of America", "organization", "heuristic_structured_org_backfill") in pairs
+    assert ("Federal Trade Commission", "organization", "heuristic_structured_org_backfill") in pairs
+    assert ("Institute for Government", "organization", "heuristic_structured_org_backfill") in pairs
+    assert (
+        "Organization for Economic Co-operation and Development",
+        "organization",
+        "heuristic_structured_org_backfill",
+    ) in pairs
+    assert ("Bank of England", "organization", "heuristic_structured_org_backfill") in pairs
+    assert "And Bank" not in texts
+    assert "And Bank of America" not in texts
+    assert "Federal Trade Commission for comment" not in texts
+    assert "Institute for Government The" not in texts
+    assert "Organization for Economic Co" not in texts
+    assert all(entity.entity.link is not None for entity in augmented)
+
+
+def test_heuristic_structured_org_backfill_skips_low_signal_network_phrases() -> None:
+    full_text = (
+        "Officers uncovered a network of crypto ATMs across the city. "
+        "National Commission for Women responded later."
+    )
+    normalized = normalize_text(full_text, "text/plain")
+
+    augmented = _backfill_heuristic_structured_organization_entities(
+        [],
+        normalized_input=normalized,
+        runtime=SimpleNamespace(
+            pack_id="general-en",
+            domain="general",
+            labels=("organization", "location"),
+        ),
+    )
+
+    pairs = {(entity.entity.text, entity.entity.label, entity.lane) for entity in augmented}
+    texts = {entity.entity.text for entity in augmented}
+
+    assert "network of crypto ATMs" not in texts
+    assert (
+        "National Commission for Women",
+        "organization",
+        "heuristic_structured_org_backfill",
+    ) in pairs
+
+
+def test_heuristic_structured_org_backfill_trims_role_suffixes_and_common_plural_phrases() -> None:
+    full_text = (
+        '"Budget airlines are like weights when it comes to airfares," '
+        "said Atmosphere Research Group airline analyst Henry Harteveldt."
+    )
+    normalized = normalize_text(full_text, "text/plain")
+
+    augmented = _backfill_heuristic_structured_organization_entities(
+        [],
+        normalized_input=normalized,
+        runtime=SimpleNamespace(
+            pack_id="general-en",
+            domain="general",
+            labels=("organization", "location"),
+        ),
+    )
+
+    pairs = {(entity.entity.text, entity.entity.label, entity.lane) for entity in augmented}
+    texts = {entity.entity.text for entity in augmented}
+
+    assert "Budget airlines" not in texts
+    assert "Atmosphere Research Group airline" not in texts
+    assert (
+        "Atmosphere Research Group",
+        "organization",
+        "heuristic_structured_org_backfill",
+    ) in pairs
+    assert all(entity.entity.link is not None for entity in augmented)

@@ -123,11 +123,15 @@ def test_tag_endpoint_can_request_related_entity_enrichment(
         include_graph_support: bool = False,
         refine_links: bool = False,
         refinement_depth: str = "light",
+        domain_hint: str | None = None,
+        country_hint: str | None = None,
     ):
         assert include_related_entities is True
         assert include_graph_support is True
         assert refine_links is True
         assert refinement_depth == "deep"
+        assert domain_hint is None
+        assert country_hint is None
         return response.model_copy(
             update={
                 "related_entities": [
