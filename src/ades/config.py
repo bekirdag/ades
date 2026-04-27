@@ -240,6 +240,7 @@ class Settings:
     news_context_artifact_path: Path | None = None
     news_context_min_supporting_seeds: int = DEFAULT_NEWS_CONTEXT_MIN_SUPPORTING_SEEDS
     news_context_min_pair_count: int = DEFAULT_NEWS_CONTEXT_MIN_PAIR_COUNT
+    service_prewarm_enabled: bool = True
     config_path: Path | None = None
 
     @classmethod
@@ -428,6 +429,12 @@ class Settings:
             env_name="ADES_NEWS_CONTEXT_MIN_PAIR_COUNT",
             config_name="news_context_min_pair_count",
         )
+        service_prewarm_enabled = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_SERVICE_PREWARM_ENABLED",
+            config_name="service_prewarm_enabled",
+        )
 
         raw_port = port if port is not None else DEFAULT_PORT
         resolved_port = _coerce_int(raw_port, name="ades port")
@@ -562,6 +569,14 @@ class Settings:
             if news_context_min_pair_count is not None
             else DEFAULT_NEWS_CONTEXT_MIN_PAIR_COUNT
         )
+        resolved_service_prewarm_enabled = (
+            _coerce_bool(
+                service_prewarm_enabled,
+                name="ades service prewarm enabled",
+            )
+            if service_prewarm_enabled is not None
+            else True
+        )
         if resolved_graph_context_max_depth < 1:
             raise InvalidConfigurationError(
                 f"Invalid ades graph context max depth: {resolved_graph_context_max_depth!r}"
@@ -657,6 +672,7 @@ class Settings:
                 resolved_news_context_min_supporting_seeds
             ),
             news_context_min_pair_count=resolved_news_context_min_pair_count,
+            service_prewarm_enabled=resolved_service_prewarm_enabled,
             config_path=config_path,
         )
 

@@ -199,6 +199,7 @@ from .vector.builder import (
     DEFAULT_QID_GRAPH_ALLOWED_PREDICATES,
     DEFAULT_QID_GRAPH_DIMENSIONS,
     build_qid_graph_index as run_build_qid_graph_index,
+    build_qid_graph_index_from_store as run_build_qid_graph_index_from_store,
 )
 from .vector.graph_builder import build_qid_graph_store as run_build_qid_graph_store
 from .vector.evaluation import (
@@ -260,6 +261,7 @@ def _resolve_settings(
         news_context_artifact_path=base.news_context_artifact_path,
         news_context_min_supporting_seeds=base.news_context_min_supporting_seeds,
         news_context_min_pair_count=base.news_context_min_pair_count,
+        service_prewarm_enabled=base.service_prewarm_enabled,
         config_path=base.config_path,
     )
 
@@ -2514,6 +2516,7 @@ def tag(
     refine_links: bool = False,
     refinement_depth: str = "light",
     domain_hint: str | None = None,
+    retrieval_profile: str | None = None,
     country_hint: str | None = None,
     registry: PackRegistry | None = None,
     runtime: PackRuntime | None = None,
@@ -2581,6 +2584,7 @@ def tag_file(
     refine_links: bool = False,
     refinement_depth: str = "light",
     domain_hint: str | None = None,
+    retrieval_profile: str | None = None,
     country_hint: str | None = None,
     registry: PackRegistry | None = None,
     runtime: PackRuntime | None = None,
@@ -2673,6 +2677,7 @@ def tag_files(
     refine_links: bool = False,
     refinement_depth: str = "light",
     domain_hint: str | None = None,
+    retrieval_profile: str | None = None,
     country_hint: str | None = None,
     registry: PackRegistry | None = None,
     runtime: PackRuntime | None = None,
@@ -3148,6 +3153,56 @@ def build_qid_graph_index(
             if allowed_predicates is not None
             else list(DEFAULT_QID_GRAPH_ALLOWED_PREDICATES)
         ),
+        qdrant_url=resolved_qdrant_url,
+        qdrant_api_key=resolved_qdrant_api_key,
+        collection_name=collection_name,
+        publish_alias=resolved_publish_alias,
+    )
+    _record_vector_build_state_if_supported(settings, response)
+    return response
+
+
+def build_qid_graph_index_from_store(
+    bundle_dirs: Iterable[str | Path],
+    *,
+    graph_store_path: str | Path,
+    output_dir: str | Path,
+    storage_root: str | Path | None = None,
+    dimensions: int = DEFAULT_QID_GRAPH_DIMENSIONS,
+    allowed_predicates: Iterable[str] | None = None,
+    neighbor_limit_per_qid: int = 128,
+    qdrant_url: str | None = None,
+    qdrant_api_key: str | None = None,
+    collection_name: str | None = None,
+    publish_alias: str | None = None,
+) -> VectorIndexBuildResponse:
+    """Build one hosted QID graph artifact from an existing explicit graph store."""
+
+    settings = _resolve_settings(storage_root=storage_root)
+    resolved_qdrant_url = qdrant_url if qdrant_url is not None else settings.vector_search_url
+    resolved_qdrant_api_key = (
+        qdrant_api_key if qdrant_api_key is not None else settings.vector_search_api_key
+    )
+    resolved_publish_alias = (
+        publish_alias
+        if publish_alias is not None
+        else (
+            settings.vector_search_collection_alias
+            if resolved_qdrant_url and settings.vector_search_enabled
+            else None
+        )
+    )
+    response = run_build_qid_graph_index_from_store(
+        bundle_dirs,
+        graph_store_path=graph_store_path,
+        output_dir=output_dir,
+        dimensions=dimensions,
+        allowed_predicates=(
+            list(allowed_predicates)
+            if allowed_predicates is not None
+            else list(DEFAULT_QID_GRAPH_ALLOWED_PREDICATES)
+        ),
+        neighbor_limit_per_qid=neighbor_limit_per_qid,
         qdrant_url=resolved_qdrant_url,
         qdrant_api_key=resolved_qdrant_api_key,
         collection_name=collection_name,
