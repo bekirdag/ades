@@ -5,13 +5,16 @@ from ades.config import Settings
 from ades.service.models import EntityLink, EntityMatch, TagMetrics, TagResponse, TopicMatch
 from ades.vector import graph_builder as graph_builder_module
 from ades.vector.context_engine import (
+    _PairSupport,
     _SeedDecision,
+    _SeedRecord,
     _apply_surface_conflict_filters,
     _discover_related_entities,
     _graph_context_anchor_seeds_from_decisions,
     _is_graph_seed_eligible,
     _linked_seed_records,
     _related_discovery_seed_qids,
+    _seed_decisions,
     apply_graph_context,
 )
 from ades.vector.graph_store import GraphNodeStats, SharedGraphNode
@@ -1532,6 +1535,103 @@ def test_graph_seed_eligibility_rejects_collective_head_alias_mismatch() -> None
     )
 
     assert _is_graph_seed_eligible(entity) is False
+
+
+def test_seed_decisions_downgrade_unsupported_domain_actors_instead_of_suppressing() -> None:
+    entities = [
+        EntityMatch(
+            text="Iran",
+            label="location",
+            start=0,
+            end=4,
+            confidence=0.68,
+            relevance=0.68,
+            mention_count=2,
+            provenance=_exact_alias_provenance("Iran"),
+            link=EntityLink(
+                entity_id="wikidata:Q794",
+                canonical_text="Iran",
+                provider="lookup.alias.exact",
+            ),
+        ),
+        EntityMatch(
+            text="Strait of Hormuz",
+            label="location",
+            start=28,
+            end=44,
+            confidence=0.66,
+            relevance=0.66,
+            mention_count=2,
+            provenance=_exact_alias_provenance("Strait of Hormuz"),
+            link=EntityLink(
+                entity_id="wikidata:Q34675",
+                canonical_text="Strait of Hormuz",
+                provider="lookup.alias.exact",
+            ),
+        ),
+        EntityMatch(
+            text="Trump",
+            label="person",
+            start=92,
+            end=97,
+            confidence=0.46,
+            relevance=0.46,
+            mention_count=2,
+            provenance=_exact_alias_provenance("Trump"),
+            link=EntityLink(
+                entity_id="wikidata:Q22686",
+                canonical_text="Donald Trump",
+                provider="lookup.alias.exact",
+            ),
+        ),
+        EntityMatch(
+            text="the US",
+            label="location",
+            start=150,
+            end=156,
+            confidence=0.46,
+            relevance=0.46,
+            mention_count=3,
+            provenance=_exact_alias_provenance("the US"),
+            link=EntityLink(
+                entity_id="wikidata:Q30",
+                canonical_text="United States",
+                provider="lookup.alias.exact",
+            ),
+        ),
+    ]
+    seeds = [
+        _SeedRecord(
+            entity_index=index,
+            entity_id=entity.link.entity_id,
+            qid=entity.link.entity_id.removeprefix("wikidata:"),
+            entity=entity,
+        )
+        for index, entity in enumerate(entities)
+        if entity.link is not None
+    ]
+    pair_support = {
+        ("Q794", "Q34675"): _PairSupport(score=0.2, shared_context_qids={"Q6256"}),
+        ("Q34675", "Q794"): _PairSupport(score=0.2, shared_context_qids={"Q6256"}),
+    }
+
+    decisions, _ = _seed_decisions(
+        seeds,
+        pair_support=pair_support,
+        node_stats={
+            "Q30": GraphNodeStats(qid="Q30", degree_total=800),
+            "Q22686": GraphNodeStats(qid="Q22686"),
+        },
+        settings=Settings(graph_context_min_supporting_seeds=2),
+        refinement_depth="light",
+        document_extent=260,
+    )
+
+    decision_by_id = {decision.entity_id: decision for decision in decisions}
+    assert decision_by_id["wikidata:Q22686"].action == "downgrade"
+    assert decision_by_id["wikidata:Q30"].action == "downgrade"
+    assert decision_by_id["wikidata:Q22686"].supporting_seed_count == 0
+    assert decision_by_id["wikidata:Q30"].supporting_seed_count == 0
 
 
 def test_apply_graph_context_preserves_isolated_named_exact_org_as_downgraded_seed(

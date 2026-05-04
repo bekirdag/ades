@@ -45,6 +45,12 @@ _BODY_ACTOR_MAX_START_RATIO = 0.74
 _BODY_ACTOR_MIN_BASELINE = 0.34
 _BODY_ACTOR_MIN_PEER_SUPPORT = 0.02
 _BODY_ACTOR_LOCAL_BONUS = 0.04
+_DOMAIN_ACTOR_MAX_START_RATIO = 0.78
+_DOMAIN_ACTOR_MAX_GENERICITY_PENALTY = 0.18
+_DOMAIN_ACTOR_WEAK_BASELINE = 0.42
+_DOMAIN_ACTOR_STRONG_BASELINE = 0.68
+_DOMAIN_ACTOR_MIN_LOCAL_SCORE = 0.48
+_DOMAIN_LOCATION_STRONG_BASELINE = 0.66
 _LATE_TAIL_START_RATIO = 0.8
 _LATE_TAIL_SINGLE_MENTION_PENALTY = 0.08
 _SURFACE_STOPWORDS = frozenset(
@@ -74,6 +80,23 @@ _PERSON_TITLE_SURFACE_TOKENS = frozenset(
         "ms",
         "rt",
         "sir",
+    }
+)
+_GOVERNANCE_ROLE_SURFACE_TOKENS = frozenset(
+    {
+        "chancellor",
+        "congress",
+        "governor",
+        "lawmaker",
+        "lawmakers",
+        "mayor",
+        "minister",
+        "parliament",
+        "president",
+        "prime",
+        "representative",
+        "secretary",
+        "senator",
     }
 )
 _EMAIL_ENTITY_ID_MARKER = ":email_address:"
@@ -474,6 +497,102 @@ def _is_acronym_support_entity(entity: EntityMatch) -> bool:
     return "acronym" in provider or "acronym" in match_path
 
 
+def _mention_count(entity: EntityMatch) -> int:
+    try:
+        return max(1, int(entity.mention_count))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _canonical_initialism(tokens: tuple[str, ...]) -> str:
+    return "".join(token[0] for token in tokens if token).upper()
+
+
+def _looks_like_initialism_alias(
+    entity: EntityMatch,
+    canonical_tokens: tuple[str, ...] | None = None,
+) -> bool:
+    if entity.link is None:
+        return False
+    if canonical_tokens is None:
+        canonical_tokens = _surface_tokens(entity.link.canonical_text)
+    initialism = _canonical_initialism(canonical_tokens)
+    if len(initialism) < 2:
+        return False
+    raw_tokens = re.findall(r"[A-Za-z]+", entity.text or "")
+    if not raw_tokens:
+        return False
+    candidates: set[str] = set()
+    compact = "".join(raw_tokens)
+    if 2 <= len(compact) <= 8 and compact.isupper():
+        candidates.add(compact)
+    upper_joined = "".join(token for token in raw_tokens if token.isupper())
+    if 2 <= len(upper_joined) <= 8:
+        candidates.add(upper_joined)
+    candidates.update(token for token in raw_tokens if 2 <= len(token) <= 8 and token.isupper())
+    return initialism in candidates
+
+
+def _surface_matches_canonical_actor(entity: EntityMatch) -> bool:
+    if entity.link is None:
+        return False
+    text_tokens = _surface_tokens(entity.text)
+    canonical_tokens = _surface_tokens(entity.link.canonical_text)
+    if not text_tokens or not canonical_tokens:
+        return False
+    if _token_overlap(text_tokens, canonical_tokens) >= 0.50:
+        return True
+    return _looks_like_initialism_alias(entity, canonical_tokens)
+
+
+def _has_governance_role_surface(entity: EntityMatch) -> bool:
+    return bool(set(_surface_tokens(entity.text)) & _GOVERNANCE_ROLE_SURFACE_TOKENS)
+
+
+def _should_preserve_domain_actor(
+    entity: EntityMatch,
+    *,
+    document_extent: int,
+    baseline_score: float,
+    local_score: float,
+    genericity_penalty: float,
+) -> bool:
+    if entity.link is None or document_extent <= 0:
+        return False
+    if not _link_entity_id(entity).startswith("wikidata:Q"):
+        return False
+    if not _is_exact_alias(entity):
+        return False
+    if genericity_penalty > _DOMAIN_ACTOR_MAX_GENERICITY_PENALTY:
+        return False
+    if _entity_start_ratio(entity, document_extent=document_extent) > _DOMAIN_ACTOR_MAX_START_RATIO:
+        return False
+    if not _surface_matches_canonical_actor(entity):
+        return False
+
+    label = entity.label.casefold()
+    mention_count = _mention_count(entity)
+    has_governance_role = _has_governance_role_surface(entity)
+    text_tokens = _surface_tokens(entity.text)
+    initialism_alias = _looks_like_initialism_alias(entity)
+
+    if label == "person":
+        if baseline_score >= _DOMAIN_ACTOR_STRONG_BASELINE and (mention_count > 1 or has_governance_role):
+            return True
+        return (
+            baseline_score >= _DOMAIN_ACTOR_WEAK_BASELINE
+            and local_score >= _DOMAIN_ACTOR_MIN_LOCAL_SCORE
+            and (mention_count > 1 or has_governance_role)
+        )
+
+    if label == "location":
+        if mention_count > 1 and baseline_score >= _DOMAIN_ACTOR_WEAK_BASELINE:
+            return True
+        return baseline_score >= _DOMAIN_LOCATION_STRONG_BASELINE and (len(text_tokens) >= 2 or initialism_alias)
+
+    return False
+
+
 def _should_preserve_body_actor(
     entity: EntityMatch,
     *,
@@ -823,6 +942,15 @@ def _seed_decisions(
             seed.entity,
             document_extent=document_extent,
             mean_peer_support=mean_peer_support,
+            genericity_penalty=genericity_penalty,
+        ):
+            action = "downgrade"
+            score_delta = -0.04 if refinement_depth == "light" else -0.06
+        if action == "suppress" and _should_preserve_domain_actor(
+            seed.entity,
+            document_extent=document_extent,
+            baseline_score=baseline_score,
+            local_score=local_score,
             genericity_penalty=genericity_penalty,
         ):
             action = "downgrade"
