@@ -1,9 +1,8 @@
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 from ades.config import Settings
-from ades.service.models import EntityLink, EntityMatch, TagResponse
+from ades.service.models import EntityLink, EntityMatch, TagMetrics, TagResponse, TopicMatch
 from ades.vector import graph_builder as graph_builder_module
 from ades.vector.context_engine import (
     _SeedDecision,
@@ -320,10 +319,7 @@ class _FakeRelatedEntityStore:
         return list(self._shared_ancestors)
 
     def node_stats_batch(self, qids) -> dict[str, GraphNodeStats]:
-        return {
-            qid: self._node_stats_by_qid.get(qid, GraphNodeStats(qid=qid))
-            for qid in qids
-        }
+        return {qid: self._node_stats_by_qid.get(qid, GraphNodeStats(qid=qid)) for qid in qids}
 
 
 def _response_with_three_linked_entities() -> TagResponse:
@@ -799,6 +795,56 @@ def test_apply_graph_context_suppresses_isolated_low_fit_seed(tmp_path: Path) ->
         item["entity_id"] == "wikidata:Q3" and item["action"] == "suppress"
         for item in refined.refinement_debug["seed_decisions"]
     )
+
+
+def test_apply_graph_context_syncs_metrics_after_suppression(tmp_path: Path) -> None:
+    artifact_path = _build_graph_artifact(tmp_path)
+    response = _response_with_three_linked_entities().model_copy(
+        update={
+            "metrics": TagMetrics(
+                input_char_count=40,
+                normalized_char_count=40,
+                token_count=8,
+                segment_count=1,
+                entity_count=3,
+                entities_per_100_tokens=37.5,
+                per_label_counts={"organization": 2, "person": 1},
+                per_lane_counts={"deterministic_alias": 3},
+            ),
+            "topics": [
+                TopicMatch(
+                    label="news",
+                    evidence_count=3,
+                    entity_labels=["organization", "person"],
+                )
+            ],
+        }
+    )
+    settings = Settings(
+        graph_context_enabled=True,
+        graph_context_artifact_path=artifact_path,
+        graph_context_seed_neighbor_limit=24,
+        graph_context_candidate_limit=64,
+        graph_context_min_supporting_seeds=2,
+    )
+
+    refined = apply_graph_context(
+        response,
+        settings=settings,
+        include_related_entities=True,
+        include_graph_support=True,
+        refine_links=True,
+        refinement_depth="deep",
+    )
+
+    assert refined.metrics is not None
+    assert refined.metrics.entity_count == 2
+    assert refined.metrics.entities_per_100_tokens == 25.0
+    assert refined.metrics.per_label_counts == {"organization": 2}
+    assert refined.metrics.per_lane_counts == {}
+    assert refined.topics == [
+        TopicMatch(label="news", evidence_count=2, entity_labels=["organization"])
+    ]
 
 
 def test_apply_graph_context_support_only_mode_keeps_entities(tmp_path: Path) -> None:
@@ -1412,7 +1458,9 @@ def test_discover_related_entities_keeps_high_degree_supported_organization_cand
     assert debug["ranked_candidate_qids"] == ["Q400"]
 
 
-def test_discover_related_entities_rejects_supported_organization_below_low_coherence_floor() -> None:
+def test_discover_related_entities_rejects_supported_organization_below_low_coherence_floor() -> (
+    None
+):
     store = _FakeRelatedEntityStore(
         shared_neighbors=[
             SharedGraphNode(
@@ -1631,9 +1679,9 @@ def test_apply_graph_context_support_only_mode_preseed_filters_conflicting_alias
     assert refined.graph_support.seed_entity_ids == ["wikidata:Q6383803"]
     assert refined.refinement_debug is not None
     assert refined.refinement_debug["preseed_suppressed_entity_ids"] == ["wikidata:Q5236641"]
-    assert refined.refinement_debug["preseed_surface_filter_debug"]["surface_conflict_suppressed"] == [
-        "wikidata:Q5236641"
-    ]
+    assert refined.refinement_debug["preseed_surface_filter_debug"][
+        "surface_conflict_suppressed"
+    ] == ["wikidata:Q5236641"]
 
 
 def test_surface_conflict_filter_suppresses_low_value_email_entity() -> None:
@@ -1965,7 +2013,9 @@ def test_surface_conflict_filter_keeps_supported_downgraded_late_tail_org_alias(
     assert debug["late_tail_exact_alias_suppressed"] == []
 
 
-def test_surface_conflict_filter_keeps_named_downgraded_late_tail_org_alias_without_support() -> None:
+def test_surface_conflict_filter_keeps_named_downgraded_late_tail_org_alias_without_support() -> (
+    None
+):
     entity = EntityMatch(
         text="ABC News",
         label="organization",

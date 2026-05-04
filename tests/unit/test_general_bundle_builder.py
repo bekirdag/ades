@@ -5,6 +5,7 @@ import zipfile
 
 from ades.packs.general_bundle import (
     _iter_wikidata_general_entities,
+    _prune_general_aliases,
     build_general_source_bundle,
 )
 from tests.general_bundle_helpers import create_general_raw_snapshots
@@ -100,8 +101,7 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
         for item in entity_records
     )
     assert any(
-        item["entity_type"] == "organization"
-        and item["canonical_text"] == "Org Zeta"
+        item["entity_type"] == "organization" and item["canonical_text"] == "Org Zeta"
         for item in entity_records
     )
     assert any(
@@ -134,13 +134,9 @@ def test_build_general_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     )
     assert "ZetaSurname" not in person_zeta_record["aliases"]
     assert "Person Zeta Honorific" in person_zeta_record["aliases"]
-    mira_record = next(
-        item for item in entity_records if item["canonical_text"] == "Person Eta"
-    )
+    mira_record = next(item for item in entity_records if item["canonical_text"] == "Person Eta")
     assert mira_record["aliases"] == ["Person Eta Variant"]
-    ilya_record = next(
-        item for item in entity_records if item["canonical_text"] == "Person Theta"
-    )
+    ilya_record = next(item for item in entity_records if item["canonical_text"] == "Person Theta")
     assert ilya_record["aliases"] == ["Person Theta Variant"]
     metro_gamma_record = next(
         item for item in entity_records if item["canonical_text"] == "Metro Gamma"
@@ -244,9 +240,7 @@ def test_build_general_source_bundle_prunes_low_signal_geonames_locations(
         if line.strip()
     ]
     location_names = {
-        item["canonical_text"]
-        for item in entity_records
-        if item["entity_type"] == "location"
+        item["canonical_text"] for item in entity_records if item["entity_type"] == "location"
     }
     assert "Metro Beta" in location_names
     assert "Lima" in location_names
@@ -317,12 +311,15 @@ def test_build_general_source_bundle_accepts_official_geonames_zip(
 ) -> None:
     snapshots = create_general_raw_snapshots(tmp_path)
     geonames_zip_path = snapshots["geonames_places"].with_suffix(".zip")
-    geonames_rows = "\n".join(
-        [
-            "745044\tMetro Alpha\tMetro Alpha\tMetro Alpha Historic,Byzantium\t41.0\t29.0\tP\tPPLA\tTR\t\t34\t\t\t\t15462452\t100\t100\tEurope/Istanbul\t2026-01-01",
-            "2643743\tMetro Beta\tMetro Beta\tMetro Beta Alt\t51.5\t-0.1\tP\tPPLC\tGB\t\tENG\t\t\t\t8900000\t10\t10\tEurope/London\t2026-01-01",
-        ]
-    ) + "\n"
+    geonames_rows = (
+        "\n".join(
+            [
+                "745044\tMetro Alpha\tMetro Alpha\tMetro Alpha Historic,Byzantium\t41.0\t29.0\tP\tPPLA\tTR\t\t34\t\t\t\t15462452\t100\t100\tEurope/Istanbul\t2026-01-01",
+                "2643743\tMetro Beta\tMetro Beta\tMetro Beta Alt\t51.5\t-0.1\tP\tPPLC\tGB\t\tENG\t\t\t\t8900000\t10\t10\tEurope/London\t2026-01-01",
+            ]
+        )
+        + "\n"
+    )
     with zipfile.ZipFile(geonames_zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("allCountries.txt", geonames_rows)
 
@@ -339,9 +336,7 @@ def test_build_general_source_bundle_accepts_official_geonames_zip(
         if line.strip()
     ]
     location_names = {
-        item["canonical_text"]
-        for item in entity_records
-        if item["entity_type"] == "location"
+        item["canonical_text"] for item in entity_records if item["entity_type"] == "location"
     }
     assert "Metro Alpha" in location_names
     assert "Metro Beta" in location_names
@@ -380,9 +375,7 @@ def test_build_general_source_bundle_keeps_only_stable_geonames_place_classes(
         if line.strip()
     ]
     location_names = {
-        item["canonical_text"]
-        for item in entity_records
-        if item["entity_type"] == "location"
+        item["canonical_text"] for item in entity_records if item["entity_type"] == "location"
     }
     assert "Metro Capital" in location_names
     assert "Metro Large" in location_names
@@ -535,12 +528,32 @@ def test_build_general_source_bundle_drops_low_support_single_token_locations(
         if line.strip()
     ]
     location_names = {
-        item["canonical_text"]
-        for item in entity_records
-        if item["entity_type"] == "location"
+        item["canonical_text"] for item in entity_records if item["entity_type"] == "location"
     }
     assert "Letter" not in location_names
     assert "London" in location_names
+
+
+def test_general_person_alias_pruning_keeps_high_support_surname_alias() -> None:
+    aliases = _prune_general_aliases(
+        entity_type="person",
+        canonical_text="Avery Marshfield",
+        aliases=["Marshfield", "Avery Marshfield Variant"],
+        support_count=300,
+    )
+
+    assert aliases == ["Marshfield", "Avery Marshfield Variant"]
+
+
+def test_general_person_alias_pruning_drops_low_support_surname_alias() -> None:
+    aliases = _prune_general_aliases(
+        entity_type="person",
+        canonical_text="Avery Marshfield",
+        aliases=["Marshfield", "Avery Marshfield Variant"],
+        support_count=12,
+    )
+
+    assert aliases == ["Avery Marshfield Variant"]
 
 
 def test_iter_wikidata_general_entities_jsonl_skips_filtered_rows(tmp_path: Path) -> None:

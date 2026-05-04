@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from statistics import mean
 
@@ -38,6 +39,7 @@ _TITLECASE_COMMON_ALIAS_SUPPRESS_RELEVANCE_THRESHOLD = 0.6
 _WEAK_LED_EXACT_ALIAS_SUPPRESS_RELEVANCE_THRESHOLD = 0.5
 _LATE_TAIL_ALIAS_SUPPRESS_RELEVANCE_THRESHOLD = 0.58
 _COMMON_ALIAS_WORD_ZIPF_MIN = 4.85
+_NAMED_EXACT_ORGANIZATION_MAX_GENERICITY_PENALTY = 0.18
 _BODY_ACTOR_MIN_START_RATIO = 0.08
 _BODY_ACTOR_MAX_START_RATIO = 0.74
 _BODY_ACTOR_MIN_BASELINE = 0.34
@@ -158,7 +160,18 @@ _GRAPH_SEED_COLLAPSED_CANONICAL_BASELINE_THRESHOLD = 0.82
 _GRAPH_SEED_GENERIC_HEAD_BASELINE_THRESHOLD = 0.72
 _GRAPH_SEED_COLLECTIVE_HEAD_BASELINE_THRESHOLD = 0.78
 _ORG_FRAGMENT_TOKENS = frozenset(
-    {"joint", "task", "force", "committee", "council", "command", "affairs", "authority", "service", "services"}
+    {
+        "joint",
+        "task",
+        "force",
+        "committee",
+        "council",
+        "command",
+        "affairs",
+        "authority",
+        "service",
+        "services",
+    }
 )
 _COLLECTIVE_GROUP_HEAD_TOKENS = frozenset(
     {
@@ -321,9 +334,7 @@ def _graph_context_anchor_seed_sort_key(
     )
     local_score = _entity_local_score(seed.entity, document_extent=document_extent)
     mention_count = (
-        int(seed.entity.mention_count)
-        if isinstance(seed.entity.mention_count, int)
-        else 1
+        int(seed.entity.mention_count) if isinstance(seed.entity.mention_count, int) else 1
     )
     baseline = _entity_baseline_score(seed.entity)
     start = int(seed.entity.start) if isinstance(seed.entity.start, int) else 0
@@ -351,9 +362,7 @@ def _graph_context_anchor_seeds(
             document_extent=document_extent,
         ),
     )
-    selected_ids = {
-        seed.entity_id for seed in ranked[:_GRAPH_CONTEXT_ANCHOR_SEED_LIMIT]
-    }
+    selected_ids = {seed.entity_id for seed in ranked[:_GRAPH_CONTEXT_ANCHOR_SEED_LIMIT]}
     return [seed for seed in seeds if seed.entity_id in selected_ids]
 
 
@@ -410,9 +419,7 @@ def _graph_context_anchor_seeds_from_decisions(
 ) -> list[_SeedRecord]:
     if len(seeds) <= _GRAPH_CONTEXT_ANCHOR_SEED_LIMIT:
         return seeds
-    decision_by_entity_id = {
-        decision.entity_id: decision for decision in decisions
-    }
+    decision_by_entity_id = {decision.entity_id: decision for decision in decisions}
     candidate_seeds = [
         seed
         for seed in seeds
@@ -432,9 +439,7 @@ def _graph_context_anchor_seeds_from_decisions(
             document_extent=document_extent,
         ),
     )
-    selected_ids = {
-        seed.entity_id for seed in ranked[:_GRAPH_CONTEXT_ANCHOR_SEED_LIMIT]
-    }
+    selected_ids = {seed.entity_id for seed in ranked[:_GRAPH_CONTEXT_ANCHOR_SEED_LIMIT]}
     return [seed for seed in seeds if seed.entity_id in selected_ids]
 
 
@@ -504,7 +509,7 @@ def _should_preserve_named_exact_organization(
         return False
     if baseline_score < 0.5:
         return False
-    if genericity_penalty >= 0.08:
+    if genericity_penalty > _NAMED_EXACT_ORGANIZATION_MAX_GENERICITY_PENALTY:
         return False
     if entity.link.canonical_text.casefold() != entity.text.casefold():
         return False
@@ -517,6 +522,50 @@ def _should_preserve_named_exact_organization(
         return True
     lexical_tokens = [token for token in _surface_tokens(entity.text) if len(token) >= 4]
     return any(_wordfreq_zipf_en(token) < _COMMON_ALIAS_WORD_ZIPF_MIN for token in lexical_tokens)
+
+
+def _response_entity_sync_updates(
+    response: TagResponse,
+    entities: list[EntityMatch],
+) -> dict[str, object]:
+    updates: dict[str, object] = {"entities": entities}
+    if response.metrics is not None:
+        entity_count = len(entities)
+        per_label_counts = Counter(entity.label for entity in entities)
+        per_lane_counts = Counter(
+            entity.provenance.lane
+            for entity in entities
+            if entity.provenance is not None and entity.provenance.lane
+        )
+        updates["metrics"] = response.metrics.model_copy(
+            update={
+                "entity_count": entity_count,
+                "entities_per_100_tokens": (
+                    round((entity_count * 100 / response.metrics.token_count), 4)
+                    if response.metrics.token_count
+                    else 0.0
+                ),
+                "per_label_counts": dict(sorted(per_label_counts.items())),
+                "per_lane_counts": dict(sorted(per_lane_counts.items())),
+            }
+        )
+    if len(response.topics) == 1:
+        label_counts = Counter(entity.label for entity in entities)
+        updates["topics"] = [
+            response.topics[0].model_copy(
+                update={
+                    "evidence_count": len(entities),
+                    "entity_labels": [
+                        label
+                        for label, _ in sorted(
+                            label_counts.items(),
+                            key=lambda item: (-item[1], item[0]),
+                        )
+                    ],
+                }
+            )
+        ]
+    return updates
 
 
 def _token_overlap(left: tuple[str, ...], right: tuple[str, ...]) -> float:
@@ -645,10 +694,7 @@ def _pair_supports(
         left_neighbors = neighbor_maps.get(left_qid, {})
         for right_qid in seed_qids[left_index + 1 :]:
             right_neighbors = neighbor_maps.get(right_qid, {})
-            shared_nodes = (
-                set(left_neighbors).intersection(right_neighbors)
-                - {left_qid, right_qid}
-            )
+            shared_nodes = set(left_neighbors).intersection(right_neighbors) - {left_qid, right_qid}
             direct_score = 0.0
             if right_qid in left_neighbors:
                 direct_score = max(direct_score, _neighbor_weight(left_neighbors[right_qid]) * 0.75)
@@ -673,7 +719,9 @@ def _pair_supports(
                 stats = node_stats.get(ancestor_qid, GraphNodeStats(qid=ancestor_qid))
                 ancestor_score += 0.3 * _specificity_weight(stats)
                 shared_context_qids.add(ancestor_qid)
-            total_score = min(1.0, direct_score + min(shared_score, 0.75) + min(ancestor_score, 0.4))
+            total_score = min(
+                1.0, direct_score + min(shared_score, 0.75) + min(ancestor_score, 0.4)
+            )
             pair_support[(left_qid, right_qid)] = _PairSupport(
                 score=round(total_score, 6),
                 shared_context_qids=shared_context_qids,
@@ -743,7 +791,11 @@ def _seed_decisions(
                 and cluster_fit < _SUPPRESS_CLUSTER_FIT_THRESHOLD
             ):
                 action = "suppress"
-            elif mean_peer_support < 0.14 and local_score < 0.56 and cluster_fit < _DOWNGRADE_CLUSTER_FIT_THRESHOLD:
+            elif (
+                mean_peer_support < 0.14
+                and local_score < 0.56
+                and cluster_fit < _DOWNGRADE_CLUSTER_FIT_THRESHOLD
+            ):
                 action = "downgrade"
                 score_delta = -0.06 if refinement_depth == "light" else -0.08
             elif (
@@ -752,7 +804,9 @@ def _seed_decisions(
                 and baseline_score < 0.82
             ):
                 action = "boost"
-                score_delta = min(0.08 if refinement_depth == "light" else 0.11, mean_peer_support * 0.18)
+                score_delta = min(
+                    0.08 if refinement_depth == "light" else 0.11, mean_peer_support * 0.18
+                )
         elif seed_count == 2:
             if (
                 not supporting_seed_ids
@@ -814,8 +868,7 @@ def _related_discovery_seed_qids(decisions: list[_SeedDecision]) -> tuple[str, .
             or decision.mean_peer_support >= _RELATED_DISCOVERY_MIN_MEAN_SUPPORT
             or (
                 decision.supporting_seed_count > 0
-                and decision.cluster_fit
-                >= _RELATED_DISCOVERY_MIN_CLUSTER_FIT_WITH_SUPPORT
+                and decision.cluster_fit >= _RELATED_DISCOVERY_MIN_CLUSTER_FIT_WITH_SUPPORT
             )
         ):
             strong_seed_qids.append(decision.qid)
@@ -853,7 +906,9 @@ def _should_suppress_lowercase_geonames(entity: EntityMatch) -> bool:
     text_tokens = _surface_tokens(entity.text)
     if len(text_tokens) < 2:
         return False
-    canonical_tokens = _surface_tokens(entity.link.canonical_text if entity.link is not None else "")
+    canonical_tokens = _surface_tokens(
+        entity.link.canonical_text if entity.link is not None else ""
+    )
     return _token_overlap(text_tokens, canonical_tokens) == 0.0
 
 
@@ -941,11 +996,7 @@ def _is_graph_seed_eligible(entity: EntityMatch) -> bool:
     ):
         return False
     overlap = _token_overlap(text_tokens, canonical_tokens)
-    if (
-        exact_alias
-        and overlap == 0.0
-        and baseline < _GRAPH_SEED_ZERO_OVERLAP_BASELINE_THRESHOLD
-    ):
+    if exact_alias and overlap == 0.0 and baseline < _GRAPH_SEED_ZERO_OVERLAP_BASELINE_THRESHOLD:
         return False
     if (
         exact_alias
@@ -1051,11 +1102,7 @@ def _preseed_surface_filtered_entities(
             if other_index == index or other_index in suppressed_preseed_indexes:
                 continue
             other_id = _link_entity_id(other_entity)
-            if (
-                not other_id
-                or other_id == entity_id
-                or other_entity.label != "person"
-            ):
+            if not other_id or other_id == entity_id or other_entity.label != "person":
                 continue
             other_tokens = token_cache[other_index]
             if len(other_tokens) <= len(lexical_tokens):
@@ -1108,7 +1155,10 @@ def _is_titlecase_common_alias(entity: EntityMatch, *, decision: _SeedDecision |
     if any(not token.isalpha() for token in raw_tokens):
         return False
     if len(raw_tokens) == 1:
-        return raw_tokens[0][0].isupper() and _wordfreq_zipf_en(raw_tokens[0]) >= _COMMON_ALIAS_WORD_ZIPF_MIN
+        return (
+            raw_tokens[0][0].isupper()
+            and _wordfreq_zipf_en(raw_tokens[0]) >= _COMMON_ALIAS_WORD_ZIPF_MIN
+        )
     first, second = raw_tokens
     if not first[0].isupper():
         return False
@@ -1209,17 +1259,21 @@ def _apply_surface_conflict_filters(
     document_extent: int | None = None,
 ) -> tuple[list[EntityMatch], list[str], dict[str, object]]:
     if not entities:
-        return entities, [], {
-            "email_address_suppressed": [],
-            "lowercase_geonames_suppressed": [],
-            "generic_lowercase_location_suppressed": [],
-            "numeric_fragment_suppressed": [],
-            "titlecase_common_alias_suppressed": [],
-            "weak_led_exact_alias_suppressed": [],
-            "late_tail_exact_alias_suppressed": [],
-            "acronym_fragment_suppressed": [],
-            "surface_conflict_suppressed": [],
-        }
+        return (
+            entities,
+            [],
+            {
+                "email_address_suppressed": [],
+                "lowercase_geonames_suppressed": [],
+                "generic_lowercase_location_suppressed": [],
+                "numeric_fragment_suppressed": [],
+                "titlecase_common_alias_suppressed": [],
+                "weak_led_exact_alias_suppressed": [],
+                "late_tail_exact_alias_suppressed": [],
+                "acronym_fragment_suppressed": [],
+                "surface_conflict_suppressed": [],
+            },
+        )
 
     token_cache: list[tuple[str, ...]] = [_surface_tokens(entity.text) for entity in entities]
     email_suppressions: list[str] = []
@@ -1324,9 +1378,7 @@ def _apply_surface_conflict_filters(
             break
 
     filtered_entities = [
-        entity
-        for index, entity in enumerate(entities)
-        if index not in suppressed_indexes
+        entity for index, entity in enumerate(entities) if index not in suppressed_indexes
     ]
     suppressed_entity_ids = [
         *email_suppressions,
@@ -1339,17 +1391,21 @@ def _apply_surface_conflict_filters(
         *acronym_fragment_suppressions,
         *surface_conflict_suppressions,
     ]
-    return filtered_entities, suppressed_entity_ids, {
-        "email_address_suppressed": email_suppressions,
-        "lowercase_geonames_suppressed": lexical_suppressions,
-        "generic_lowercase_location_suppressed": generic_location_suppressions,
-        "numeric_fragment_suppressed": numeric_fragment_suppressions,
-        "titlecase_common_alias_suppressed": titlecase_common_alias_suppressions,
-        "weak_led_exact_alias_suppressed": weak_led_alias_suppressions,
-        "late_tail_exact_alias_suppressed": late_tail_alias_suppressions,
-        "acronym_fragment_suppressed": acronym_fragment_suppressions,
-        "surface_conflict_suppressed": surface_conflict_suppressions,
-    }
+    return (
+        filtered_entities,
+        suppressed_entity_ids,
+        {
+            "email_address_suppressed": email_suppressions,
+            "lowercase_geonames_suppressed": lexical_suppressions,
+            "generic_lowercase_location_suppressed": generic_location_suppressions,
+            "numeric_fragment_suppressed": numeric_fragment_suppressions,
+            "titlecase_common_alias_suppressed": titlecase_common_alias_suppressions,
+            "weak_led_exact_alias_suppressed": weak_led_alias_suppressions,
+            "late_tail_exact_alias_suppressed": late_tail_alias_suppressions,
+            "acronym_fragment_suppressed": acronym_fragment_suppressions,
+            "surface_conflict_suppressed": surface_conflict_suppressions,
+        },
+    )
 
 
 def _score_related_candidate(
@@ -1559,7 +1615,9 @@ def _discover_related_entities(
         "shared_neighbor_candidates": len(shared_neighbors),
         "shared_ancestor_candidates": len(shared_ancestors),
         "related_seed_qids": list(related_seed_qids),
-        "ranked_candidate_qids": [item.qid for item in ranked_candidates[: settings.graph_context_related_limit]],
+        "ranked_candidate_qids": [
+            item.qid for item in ranked_candidates[: settings.graph_context_related_limit]
+        ],
     }
 
 
@@ -1674,9 +1732,7 @@ def apply_graph_context(
                 document_extent=document_extent,
             )
             surviving_seed_qids = tuple(
-                decision.qid
-                for decision in anchor_decisions
-                if decision.action != "suppress"
+                decision.qid for decision in anchor_decisions if decision.action != "suppress"
             )
             related_seed_qids = _related_discovery_seed_qids(anchor_decisions)
             related_entities, related_debug = (
@@ -1781,9 +1837,9 @@ def apply_graph_context(
     graph_support.downgraded_entity_ids = downgraded_entity_ids
     graph_support.suppressed_entity_ids = suppressed_entity_ids
     graph_support.suppressed_entity_count = len(suppressed_entity_ids)
-    return response.model_copy(
-        update={
-            "entities": refined_entities,
+    response_updates = _response_entity_sync_updates(response, refined_entities)
+    response_updates.update(
+        {
             "related_entities": related_entities,
             "refinement_applied": bool(
                 boosted_entity_ids or downgraded_entity_ids or suppressed_entity_ids
@@ -1817,3 +1873,4 @@ def apply_graph_context(
             "graph_support": graph_support,
         }
     )
+    return response.model_copy(update=response_updates)

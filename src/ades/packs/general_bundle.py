@@ -19,9 +19,7 @@ _PLAIN_SINGLE_TOKEN_PERSON_ALIAS_RE = re.compile(r"^[A-Za-z][A-Za-z'-]*$")
 _GENERAL_SINGLE_TOKEN_ALPHA_RE = re.compile(r"^[A-Za-z][A-Za-z'-]*$")
 _GENERAL_LOCATION_ASCII_TOKEN_RE = re.compile(r"^[A-Za-z][A-Za-z'-]*$")
 _GENERAL_LOCATION_LOWERCASE_TOKEN_RE = re.compile(r"^[a-z][a-z'-]*$")
-_GENERAL_DOMAIN_RE = re.compile(
-    r"(?i)^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
-)
+_GENERAL_DOMAIN_RE = re.compile(r"(?i)^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 _GENERAL_ORG_SUFFIX_TOKENS = {
     "ag",
     "analytics",
@@ -74,6 +72,7 @@ _GENERAL_REAL_SUPPORT_MIN_ALIAS_COUNT_BY_TYPE = {
     "location": 1,
 }
 _GENERAL_REAL_SUPPORT_MIN_SHORT_WIKIDATA_LOCATION_SITELINKS = 10
+_GENERAL_PERSON_SINGLE_TOKEN_ALIAS_MIN_SUPPORT = 250
 
 
 @dataclass(frozen=True)
@@ -283,7 +282,9 @@ def _iter_geonames_locations(path: Path) -> Iterator[dict[str, Any]]:
             return
         delimiter = "\t" if "\t" in first_line else ("|" if "|" in first_line else ",")
         handle.seek(0)
-        header_fields = [field.strip().casefold() for field in first_line.rstrip("\n\r").split(delimiter)]
+        header_fields = [
+            field.strip().casefold() for field in first_line.rstrip("\n\r").split(delimiter)
+        ]
         if _looks_like_geonames_header(header_fields):
             reader = csv.DictReader(handle, delimiter=delimiter)
         else:
@@ -294,23 +295,16 @@ def _iter_geonames_locations(path: Path) -> Iterator[dict[str, Any]]:
             )
         for row in reader:
             name = _clean_text(
-                row.get("name")
-                or row.get("Name")
-                or row.get("asciiname")
-                or row.get("ascii_name")
+                row.get("name") or row.get("Name") or row.get("asciiname") or row.get("ascii_name")
             )
             if not name:
                 continue
             population = _coerce_int(row.get("population"))
             feature_class = _clean_text(
-                row.get("feature class")
-                or row.get("feature_class")
-                or row.get("featureClass")
+                row.get("feature class") or row.get("feature_class") or row.get("featureClass")
             )
             feature_code = _clean_text(
-                row.get("feature code")
-                or row.get("feature_code")
-                or row.get("featureCode")
+                row.get("feature code") or row.get("feature_code") or row.get("featureCode")
             )
             if not _should_keep_geonames_location_row(
                 feature_class=feature_class,
@@ -320,12 +314,11 @@ def _iter_geonames_locations(path: Path) -> Iterator[dict[str, Any]]:
                 continue
             if not _should_keep_general_location_text(name, population=population):
                 continue
-            source_id = _clean_text(
-                row.get("geonameid") or row.get("geoname_id") or row.get("id")
-            ) or name.casefold()
-            alternates = _clean_text(
-                row.get("alternatenames") or row.get("alternate_names")
+            source_id = (
+                _clean_text(row.get("geonameid") or row.get("geoname_id") or row.get("id"))
+                or name.casefold()
             )
+            alternates = _clean_text(row.get("alternatenames") or row.get("alternate_names"))
             aliases = _prune_general_aliases(
                 entity_type="location",
                 canonical_text=name,
@@ -421,11 +414,7 @@ def _open_geonames_text_stream(path: Path) -> io.TextIOBase:
 
 
 def _select_geonames_zip_member(archive: zipfile.ZipFile) -> str:
-    member_names = [
-        info.filename
-        for info in archive.infolist()
-        if not info.is_dir()
-    ]
+    member_names = [info.filename for info in archive.infolist() if not info.is_dir()]
     if not member_names:
         raise ValueError("GeoNames zip archive is empty.")
     preferred_names = [
@@ -438,15 +427,11 @@ def _select_geonames_zip_member(archive: zipfile.ZipFile) -> str:
         return text_members[0]
     if len(member_names) == 1:
         return member_names[0]
-    raise ValueError(
-        f"GeoNames zip archive contains multiple candidate members: {member_names}"
-    )
+    raise ValueError(f"GeoNames zip archive contains multiple candidate members: {member_names}")
 
 
 def _looks_like_geonames_header(fields: list[str]) -> bool:
-    return "name" in fields and (
-        "geonameid" in fields or "geoname_id" in fields or "id" in fields
-    )
+    return "name" in fields and ("geonameid" in fields or "geoname_id" in fields or "id" in fields)
 
 
 def _should_keep_geonames_location_row(
@@ -529,10 +514,7 @@ def _normalize_wikidata_general_entity(item: dict[str, Any]) -> dict[str, Any] |
     aliases = item.get("aliases") or item.get("alt_labels") or []
     if not isinstance(aliases, list):
         aliases = [aliases]
-    source_id = (
-        _clean_text(item.get("entity_id") or item.get("id"))
-        or canonical_text.casefold()
-    )
+    source_id = _clean_text(item.get("entity_id") or item.get("id")) or canonical_text.casefold()
     popularity = _coerce_int(
         item.get("popularity") or item.get("sitelinks") or item.get("sitelink_count")
     )
@@ -660,7 +642,9 @@ def _resolve_input_file(path: str | Path, *, label: str) -> Path:
 
 
 def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
-    path.write_text("".join(json.dumps(record, sort_keys=True) + "\n" for record in records), encoding="utf-8")
+    path.write_text(
+        "".join(json.dumps(record, sort_keys=True) + "\n" for record in records), encoding="utf-8"
+    )
 
 
 def _clean_text(value: Any) -> str | None:
@@ -686,19 +670,22 @@ def _prune_general_aliases(
             continue
         if cleaned.casefold() == canonical_text.casefold():
             continue
-        if (
-            entity_type == "location"
-            and not _should_keep_general_location_text(
-                cleaned,
-                population=popularity,
-                support_count=support_count,
-            )
+        if entity_type == "location" and not _should_keep_general_location_text(
+            cleaned,
+            population=popularity,
+            support_count=support_count,
         ):
             continue
         if (
             entity_type == "person"
             and canonical_token_count > 1
             and _PLAIN_SINGLE_TOKEN_PERSON_ALIAS_RE.fullmatch(cleaned) is not None
+            and not _should_keep_supported_person_single_token_alias(
+                cleaned,
+                canonical_text=canonical_text,
+                popularity=popularity,
+                support_count=support_count,
+            )
         ):
             continue
         if (
@@ -732,6 +719,27 @@ def _has_structural_org_suffix(value: str) -> bool:
     if len(tokens) < 2:
         return False
     return tokens[-1] in _GENERAL_ORG_SUFFIX_TOKENS
+
+
+def _should_keep_supported_person_single_token_alias(
+    value: str,
+    *,
+    canonical_text: str,
+    popularity: int | None,
+    support_count: int | None,
+) -> bool:
+    canonical_tokens = [
+        token for token in re.findall(r"[A-Za-z][A-Za-z'-]*", canonical_text) if token.strip()
+    ]
+    if len(canonical_tokens) < 2:
+        return True
+    normalized_value = value.casefold()
+    if normalized_value != canonical_tokens[-1].casefold():
+        return False
+    if len(normalized_value) < 5:
+        return False
+    support = support_count if support_count is not None else popularity
+    return (support or 0) >= _GENERAL_PERSON_SINGLE_TOKEN_ALIAS_MIN_SUPPORT
 
 
 def _should_keep_general_wikidata_entity(
@@ -777,7 +785,10 @@ def _should_keep_general_wikidata_entity(
             2 if popularity_signal == "fallback" else 1,
         )
         return alias_count >= minimum_aliases
-    if entity_type == "organization" and alias_count >= _GENERAL_REAL_SUPPORT_MIN_ALIAS_COUNT_BY_TYPE.get(entity_type, 0):
+    if (
+        entity_type == "organization"
+        and alias_count >= _GENERAL_REAL_SUPPORT_MIN_ALIAS_COUNT_BY_TYPE.get(entity_type, 0)
+    ):
         return True
     if entity_type == "organization" and _has_structural_org_suffix(canonical_text):
         return True
@@ -814,10 +825,7 @@ def _should_keep_general_location_text(
         and support_count >= _GENERAL_REAL_SUPPORT_MIN_SHORT_WIKIDATA_LOCATION_SITELINKS
     ):
         return True
-    if (
-        len(cleaned) <= 5
-        and population_value < _GENERAL_LOCATION_MIN_POPULATION_FOR_SHORT_ASCII
-    ):
+    if len(cleaned) <= 5 and population_value < _GENERAL_LOCATION_MIN_POPULATION_FOR_SHORT_ASCII:
         return False
     return True
 
