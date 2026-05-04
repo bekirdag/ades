@@ -180,8 +180,38 @@ jobs:
           set -euo pipefail
           release_id="$1"
           wheel_name="$2"
-          /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --upgrade "/mnt/ades/app/releases/$release_id/$wheel_name" "psycopg[binary]>=3.2,<4.0"
-          ln -sfn "/mnt/ades/repo/releases/$release_id" /mnt/ades/repo/current
+          release_root="/mnt/ades/repo/releases/$release_id"
+          pack_entry_count() {
+            local manifest_path="$1"
+            python3 - "$manifest_path" <<'PY'
+          import json
+          import sys
+
+          try:
+              with open(sys.argv[1], encoding="utf-8") as handle:
+                  payload = json.load(handle)
+              print(int((payload.get("matcher") or {}).get("entry_count") or 0))
+          except Exception:
+              print(0)
+          PY
+          }
+          /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --force-reinstall --no-deps "/mnt/ades/app/releases/$release_id/$wheel_name"
+          /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --upgrade "psycopg[binary]>=3.2,<4.0"
+          previous_repo_current="$(readlink -f /mnt/ades/repo/current 2>/dev/null || true)"
+          switch_repo_current=1
+          if [ -n "$previous_repo_current" ] \
+            && [ -f "$previous_repo_current/packs/general-en/manifest.json" ] \
+            && [ -f "$release_root/packs/general-en/manifest.json" ]; then
+            existing_general_entries="$(pack_entry_count "$previous_repo_current/packs/general-en/manifest.json")"
+            new_general_entries="$(pack_entry_count "$release_root/packs/general-en/manifest.json")"
+            if [ "$existing_general_entries" -ge 1000000 ] && [ "$new_general_entries" -lt 1000000 ]; then
+              echo "Prepared deploy registry has starter general-en ($new_general_entries entries); preserving existing repo current with $existing_general_entries entries."
+              switch_repo_current=0
+            fi
+          fi
+          if [ "$switch_repo_current" -eq 1 ]; then
+            ln -sfn "$release_root" /mnt/ades/repo/current
+          fi
           XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user restart ades.service
           timeout 90s bash -c 'until curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/healthz >/dev/null; do sleep 2; done'
           curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/v0/status >/dev/null
