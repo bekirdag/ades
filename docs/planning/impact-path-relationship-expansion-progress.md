@@ -17,10 +17,10 @@ Plan: docs/planning/impact-path-relationship-expansion-plan.md
 3. Local tests for builder, deterministic expansion, graceful degradation, and API contract. Targeted tests passing.
 4. Public refs-only HTTP wiring. Implemented behind disabled-by-default runtime flag.
 5. Local full validation. Done.
-6. Commit, push, deploy to prod, and prod smoke tests. Done for commit `4275fdb`.
+6. Commit, push, deploy to prod, and prod smoke tests. Done for commits `4275fdb` and `22cd323`.
 7. Packaged starter source lane for all eight inner-ring families. Done.
 8. Refs-only golden-set evaluator with latency and relation-family metrics. Done.
-9. CI deploy workflow uploads the starter market graph artifact and writes the prod impact-expansion drop-in. In progress; added locally, pending next deploy validation.
+9. CI deploy workflow uploads the starter market graph artifact and writes the prod impact-expansion drop-in. Done in GitHub Actions run `25387351241`.
 
 ## Notes
 
@@ -39,3 +39,7 @@ Plan: docs/planning/impact-path-relationship-expansion-plan.md
 - Production `/v0/tag` with `general-en` and `include_impact_paths=True` returned Iran and Strait of Hormuz entities plus the expected crude-oil impact path and OPEC+ passive path.
 - Added packaged starter resources under `src/ades/resources/impact/phase1_starter`.
 - Added `src/ades/impact/evaluation.py`; the starter golden set currently covers 8 refs-only cases with 0.125 empty-path rate from the intentional negative case and p95 around 1ms locally.
+- Production deploy run `25387351241` completed successfully for commit `22cd323` in 7m24s.
+- Production artifact verification: `/home/deploy/.local/share/ades-artifacts/market-graph/current/market_graph_store.sqlite` exists and `ADES_IMPACT_EXPANSION_ENABLED=true` is active in the user systemd drop-in.
+- Production smoke after `22cd323`: public `/v0/impact/expand` returned the Strait of Hormuz -> crude oil candidate path and Iran -> OPEC+ passive path with no impact warnings.
+- Production `/v0/tag` with `general-en` and `include_impact_paths=True` returned Iran and Strait of Hormuz entities plus the expected crude-oil impact path and OPEC+ passive path.
