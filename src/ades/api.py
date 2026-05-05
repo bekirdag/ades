@@ -220,7 +220,12 @@ from .impact.expansion import (
     enrich_tag_response_with_impact_paths,
     expand_impact_paths as run_expand_impact_paths,
 )
+from .impact.evaluation import (
+    ImpactGoldenSetReport,
+    evaluate_impact_golden_set as run_evaluate_impact_golden_set,
+)
 from .impact.graph_builder import build_market_graph_store as run_build_market_graph_store
+from .impact.starter import build_starter_market_graph_store as run_build_starter_market_graph_store
 
 if TYPE_CHECKING:
     from .packs.quality_common import PackQualityResult
@@ -3312,6 +3317,40 @@ def build_market_graph_store(
         node_tsv_paths=node_tsv_paths,
         graph_version=graph_version,
         artifact_version=artifact_version,
+    )
+
+
+def build_starter_market_graph_store(
+    *,
+    output_dir: str | Path,
+    artifact_version: str = "2026-05-05T00:00:00Z",
+) -> MarketGraphStoreBuildResponse:
+    """Build the packaged starter market impact graph artifact."""
+
+    return run_build_starter_market_graph_store(
+        output_dir=output_dir,
+        artifact_version=artifact_version,
+    )
+
+
+def evaluate_impact_expansion_golden_set(
+    *,
+    golden_set_path: str | Path,
+    artifact_path: str | Path | None = None,
+    enabled_packs: Iterable[str] | None = None,
+    max_depth: int = 2,
+    max_candidates: int = 25,
+    max_paths_per_candidate: int = 3,
+) -> ImpactGoldenSetReport:
+    """Evaluate refs-only impact expansion against a golden set."""
+
+    return run_evaluate_impact_golden_set(
+        golden_set_path=golden_set_path,
+        artifact_path=artifact_path,
+        enabled_packs=tuple(enabled_packs) if enabled_packs is not None else None,
+        max_depth=max_depth,
+        max_candidates=max_candidates,
+        max_paths_per_candidate=max_paths_per_candidate,
     )
 
 

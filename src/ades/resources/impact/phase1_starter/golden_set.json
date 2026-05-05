@@ -1,0 +1,59 @@
+{
+  "name": "phase1_starter",
+  "description": "Refs-only starter evaluation for the eight inner-ring relationship families.",
+  "default_enabled_packs": ["general-en", "finance-en"],
+  "cases": [
+    {
+      "name": "hormuz_crude_oil",
+      "entity_refs": ["ades:heuristic_structural_location:general-en:location:strait-of-hormuz", "wikidata:Q794"],
+      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
+      "expected_passive_refs": ["wikidata:Q121826282"],
+      "expected_relation_families": ["chokepoint_affects_commodity", "commodity_traded_in_currency", "country_member_of_bloc", "country_produces_commodity"]
+    },
+    {
+      "name": "fed_usd_and_rates",
+      "entity_refs": ["wikidata:Q53536"],
+      "expected_candidate_refs": ["ades:impact:currency:usd", "ades:impact:rate:fed-funds"],
+      "expected_relation_families": ["central_bank_affects_currency", "central_bank_affects_rates"]
+    },
+    {
+      "name": "ecb_eur_and_rates",
+      "entity_refs": ["wikidata:Q8901"],
+      "expected_candidate_refs": ["ades:impact:currency:eur", "ades:impact:rate:ecb-policy-rates"],
+      "expected_relation_families": ["central_bank_affects_currency", "central_bank_affects_rates"]
+    },
+    {
+      "name": "us_crude_exports",
+      "entity_refs": ["geonames:6252001"],
+      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
+      "expected_relation_families": ["commodity_traded_in_currency", "country_exports_commodity"]
+    },
+    {
+      "name": "russia_crude_production",
+      "entity_refs": ["wikidata:Q159"],
+      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
+      "expected_relation_families": ["commodity_traded_in_currency", "country_produces_commodity"]
+    },
+    {
+      "name": "oil_usd_chain",
+      "entity_refs": ["ades:impact:commodity:crude-oil"],
+      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
+      "expected_relation_families": ["commodity_traded_in_currency"]
+    },
+    {
+      "name": "ofac_sanctions",
+      "entity_refs": ["ades:impact:sanctions:ofac"],
+      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
+      "expected_passive_refs": ["wikidata:Q794", "wikidata:Q121826282"],
+      "expected_relation_families": ["commodity_traded_in_currency", "country_member_of_bloc", "country_produces_commodity", "sanction_affects_country", "sanction_affects_commodity"]
+    },
+    {
+      "name": "negative_empty_refs",
+      "entity_refs": ["ades:impact:unknown:not-in-graph"],
+      "expected_candidate_refs": [],
+      "expected_passive_refs": [],
+      "expected_relation_families": [],
+      "negative": true
+    }
+  ]
+}

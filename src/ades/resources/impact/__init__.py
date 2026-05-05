@@ -1,0 +1,1 @@
+"""Packaged impact relationship resources."""

@@ -207,6 +207,12 @@ Environment=ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED=false
 The artifact is read-only at request time. Missing or unreadable artifacts should
 return empty impact candidates with a warning instead of breaking extraction.
 
+The deploy workflow now builds the packaged starter market graph from
+`src/ades/resources/impact/phase1_starter`, uploads it under
+`/mnt/ades/impact/releases/<release_id>/`, copies it to
+`/home/deploy/.local/share/ades-artifacts/market-graph/current/`, and writes the
+`impact-expansion.conf` drop-in before restarting `ades.service`.
+
 Latest verified live smoke on `2026-04-21` using `/home/deploy/deleteme.txt`:
 
 - host-local plain `POST /v0/tag/file`: `29` entities, `0` related entities, no graph metadata, about `14.485s`

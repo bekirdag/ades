@@ -42,6 +42,17 @@ jobs:
       - name: Build wheel
         run: python -m build --wheel
 
+      - name: Build starter impact graph artifact
+        run: |
+          set -euo pipefail
+          mkdir -p dist/impact-market-graph
+          python - <<'PY'
+          from ades.impact.starter import build_starter_market_graph_store
+
+          response = build_starter_market_graph_store(output_dir="dist/impact-market-graph")
+          print(response.model_dump_json(indent=2))
+          PY
+
       - name: Prepare deploy registry
         shell: bash
         run: |
@@ -119,10 +130,14 @@ jobs:
           upload_registry() {
             tar -C dist/registry -cf - . | "${ssh_cmd[@]}" "tar -C /mnt/ades/repo/releases/$release_id -xf -"
           }
+          upload_impact_graph() {
+            tar -C dist/impact-market-graph -cf - . | "${ssh_cmd[@]}" "tar -C /mnt/ades/impact/releases/$release_id -xf -"
+          }
 
-          retry 5 "${ssh_cmd[@]}" "mkdir -p /mnt/ades/app/releases/$release_id /mnt/ades/repo/releases/$release_id"
+          retry 5 "${ssh_cmd[@]}" "mkdir -p /mnt/ades/app/releases/$release_id /mnt/ades/repo/releases/$release_id /mnt/ades/impact/releases/$release_id"
           retry 5 "${scp_cmd[@]}" "$wheel_path" "$ADES_DEPLOY_USER@$ADES_DEPLOY_HOST:/mnt/ades/app/releases/$release_id/$wheel_name"
           retry 5 upload_registry
+          retry 5 upload_impact_graph
 
       - name: Sync registry to object storage
         if: ${{ env.ADES_PACK_OBJECT_STORAGE_BUCKET != '' && env.ADES_PACK_OBJECT_STORAGE_ENDPOINT != '' && env.ADES_PACK_OBJECT_STORAGE_ACCESS_KEY_ID != '' && env.ADES_PACK_OBJECT_STORAGE_SECRET_ACCESS_KEY != '' }}
@@ -197,6 +212,27 @@ jobs:
           }
           /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --force-reinstall --no-deps "/mnt/ades/app/releases/$release_id/$wheel_name"
           /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --upgrade "psycopg[binary]>=3.2,<4.0"
+          impact_release_root="/mnt/ades/impact/releases/$release_id"
+          impact_current_root="$HOME/.local/share/ades-artifacts/market-graph/current"
+          if [ -f "$impact_release_root/market_graph_store.sqlite" ]; then
+            mkdir -p "$impact_current_root" "$HOME/.config/systemd/user/ades.service.d"
+            cp "$impact_release_root/market_graph_store.sqlite" "$impact_current_root/market_graph_store.sqlite"
+            if [ -f "$impact_release_root/market_graph_store_manifest.json" ]; then
+              cp "$impact_release_root/market_graph_store_manifest.json" "$impact_current_root/market_graph_store_manifest.json"
+            fi
+            cat > "$HOME/.config/systemd/user/ades.service.d/impact-expansion.conf" <<EOF
+          [Service]
+          Environment=ADES_IMPACT_EXPANSION_ENABLED=true
+          Environment=ADES_IMPACT_EXPANSION_ARTIFACT_PATH=$impact_current_root/market_graph_store.sqlite
+          Environment=ADES_IMPACT_EXPANSION_MAX_DEPTH=2
+          Environment=ADES_IMPACT_EXPANSION_SEED_LIMIT=16
+          Environment=ADES_IMPACT_EXPANSION_MAX_CANDIDATES=25
+          Environment=ADES_IMPACT_EXPANSION_MAX_EDGES_PER_SEED=64
+          Environment=ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE=3
+          Environment=ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED=false
+          EOF
+            XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user daemon-reload
+          fi
           previous_repo_current="$(readlink -f /mnt/ades/repo/current 2>/dev/null || true)"
           switch_repo_current=1
           if [ -n "$previous_repo_current" ] \

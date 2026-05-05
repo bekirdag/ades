@@ -1,0 +1,19 @@
+entity_ref	canonical_name	entity_type	library_id	is_tradable	is_seed_eligible	identifiers_json	packs
+ades:heuristic_structural_location:finance-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	{}	finance-en
+ades:heuristic_structural_location:general-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	{}	general-en
+wikidata:Q899	Suez Canal	chokepoint		0	1	{"wikidata":"Q899"}	general-en
+wikidata:Q794	Iran	country		0	1	{"wikidata":"Q794"}	general-en,finance-en
+wikidata:Q159	Russia	country		0	1	{"wikidata":"Q159"}	general-en,finance-en
+geonames:6252001	United States	country		0	1	{"geonames":"6252001"}	general-en,finance-en
+wikidata:Q458	European Union	bloc		0	1	{"wikidata":"Q458"}	general-en
+wikidata:Q53536	Federal Reserve System	central_bank		0	1	{"wikidata":"Q53536"}	general-en,finance-en
+wikidata:Q8901	European Central Bank	central_bank		0	1	{"wikidata":"Q8901"}	general-en,finance-en
+ades:impact:sanctions:ofac	Office of Foreign Assets Control	sanctions_body		0	1	{"homepage":"https://ofac.treasury.gov"}	general-en,finance-en
+wikidata:Q121826282	OPEC+	organization		0	1	{"wikidata":"Q121826282"}	general-en,finance-en
+ades:impact:commodity:crude-oil	Crude oil	commodity		1	1	{"commodity":"crude-oil"}	general-en,finance-en
+ades:impact:commodity:natural-gas	Natural gas	commodity		1	1	{"commodity":"natural-gas"}	general-en,finance-en
+ades:impact:commodity:gold	Gold	commodity		1	1	{"commodity":"gold"}	general-en,finance-en
+ades:impact:currency:usd	US dollar	currency		1	1	{"iso4217":"USD"}	general-en,finance-en
+ades:impact:currency:eur	Euro	currency		1	1	{"iso4217":"EUR"}	general-en,finance-en
+ades:impact:rate:fed-funds	Federal funds rate	rate		1	1	{"rate":"fed-funds"}	general-en,finance-en
+ades:impact:rate:ecb-policy-rates	ECB policy rates	rate		1	1	{"rate":"ecb-policy-rates"}	general-en,finance-en

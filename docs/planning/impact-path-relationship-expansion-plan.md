@@ -1,6 +1,6 @@
 # Impact Path Relationship Expansion Plan
 
-Status: Phase 1 implemented; Phase 2+ data/evaluation pending
+Status: Phase 1 deployed; starter source lane and refs-only evaluator implemented; full Phase 2 data/evaluation pending
 Last merged: 2026-05-05
 Scope: ADES relationship expansion for finance, economy, politics, policy, sanctions, commodities, currencies, rates, and geopolitics/security news with market transmission.
 
@@ -706,6 +706,13 @@ Practical note: GLEIF LEI Level 2 is valuable but large and frequently updated. 
 No public HTTP endpoint in Phase 1.
 
 ### Phase 2: Inner-Ring Data Build and Evaluation
+
+Implementation status as of 2026-05-05:
+
+- starter normalized TSV rows exist in `src/ades/resources/impact/phase1_starter`,
+- the starter lane contains at least one reviewed row for each inner-ring family,
+- a refs-only starter golden set and evaluator exist,
+- the full official-source build and the required 20 to 30 article golden set are still pending.
 
 1. Build normalized source lanes for the eight inner-ring relationship families.
 2. Build the first full `market_graph_store.sqlite` artifact.

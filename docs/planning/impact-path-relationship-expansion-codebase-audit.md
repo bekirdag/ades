@@ -1,6 +1,6 @@
 # Impact Path Relationship Expansion Codebase Audit
 
-Status: implementation audit
+Status: post-Phase-1 implementation audit
 Date: 2026-05-05
 
 ## Completed / Aligned
@@ -11,28 +11,25 @@ Date: 2026-05-05
 - `DEFAULT_STORAGE_ROOT` already points at `/mnt/githubActions/ades_big_data`.
 - API/service routes already parse opt-in tagging options through `TagRequest.options`.
 - Production deployment flow exists and can deploy a new wheel without changing runtime pack artifacts.
+- `src/ades/impact` now contains the market graph builder, read-only store, deterministic expansion runtime, packaged starter resources, and refs-only evaluator.
+- `market_graph_store.sqlite` now has `build_metadata`, `impact_nodes`, `impact_edges`, and `impact_edge_packs`.
+- Build-time `seed_degree`, artifact metadata, pack-scoped edges, deterministic dedupe, and graceful artifact warnings are implemented.
+- Python API, optional tag enrichment, and refs-only HTTP endpoint are implemented.
+- The packaged starter lane covers the eight inner-ring relation families with reviewed source rows.
+- The production workflow now builds and uploads the starter market graph artifact and writes the prod impact-expansion drop-in.
 
 ## Partially Completed
 
-- Graph artifact patterns exist for Wikidata/QID relationships, but not for market transmission edges.
-- Related entities and graph support exist, but they are neutral QID-context enrichment, not auditable impact paths.
-- Pack-scoped graph build endpoints exist for QID graph stores, but not for market graph artifacts.
-- Tag responses can carry optional enrichment fields, but no `impact_paths` payload exists yet.
+- Phase 2 evaluation mechanics exist, but the current golden set is a starter refs-only set, not the required 20 to 30 manually reviewed article set.
+- Source-lane ingestion exists for reviewed TSVs, but bulk official-source download/normalization lanes are not implemented yet.
+- Public HTTP exists earlier than the original plan sequence; this is acceptable because it is refs-only, bounded, and deployed behind the feature flag, but the plan should treat the endpoint as Phase 1.5 rather than fully validated Phase 3.
 
 ## Missing
 
-- `src/ades/impact` package for market graph build/read/expansion logic.
-- `market_graph_store.sqlite` schema with `build_metadata`, `impact_nodes`, `impact_edges`, and `impact_edge_packs`.
-- Normalized TSV source-lane ingestion contract for nodes and edges.
-- Build-time `seed_degree` generation.
-- Artifact metadata in expansion results: `graph_version`, `artifact_version`, and `artifact_hash`.
-- Disabled-by-default `impact_expansion` runtime settings and environment/config parsing.
-- Python API for `expand_impact_paths`.
-- Optional tag response enrichment behind explicit request plus feature flag.
-- Pydantic response models for source entities, relationship paths, candidates, passive paths, and builder responses.
-- Graceful warnings for missing, unreadable, or disabled market graph artifacts.
-- Tests for direct tradables, derived candidates, zero-degree seed skipping, deterministic ordering, deduplication, and artifact failures.
-- Golden evaluation set and real inner-ring source lanes.
+- Full Phase 2 official-source build: bulk/refreshable source lanes for EIA/OPEC/JODI/WITS/BIS/central-bank/sanctions data.
+- Manual 20 to 30 article golden set with text-level extraction plus impact evaluation.
+- License review and source manifest records for restricted or unclear-license sources before normalized outputs are written.
+- Concrete promotion thresholds for p95 latency and empty-path rate based on the full Phase 2 evaluation.
 
 ## Misaligned
 
@@ -40,7 +37,7 @@ Date: 2026-05-05
 - Existing `related_entities` are neutral related nodes, not terminal tradable candidates with relationship provenance.
 - Existing graph code traverses predicates, while the plan requires explicit relation families and edge-level `direction_hint`.
 - Existing vector proposal logic is for QID related entity discovery; impact vector proposals must remain disabled until graph-supported admission is built.
-- The plan says public HTTP should wait until Python validation, so the first implementation should keep HTTP impact exposure private or absent.
+- The plan says public HTTP should wait until Python validation, but the implemented refs-only endpoint shipped early behind feature and caller opt-in flags. Keep it, but do not market it as Phase 3 complete until the full article golden set passes.
 
 ## Issues / Risks
 
@@ -49,4 +46,4 @@ Date: 2026-05-05
 - Company-level relationships are high-risk and should remain deferred except official sanctions-list direct evidence.
 - The feature must not mutate or weaken the existing hybrid/vector extraction system.
 - Large source downloads and generated graph intermediates must stay out of git and under `/mnt/githubActions/ades_big_data`.
-- The full plan includes data acquisition, licensing review, evaluation, and deployment; the first code pass can complete Phase 1 infrastructure, but Phase 2+ requires curated source data and reviewed golden articles.
+- The full plan includes data acquisition, licensing review, evaluation, and deployment; the runtime and starter lane are complete, but Phase 2+ requires curated source data and reviewed golden articles.
