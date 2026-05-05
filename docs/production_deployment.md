@@ -172,6 +172,41 @@ print(json.dumps(payload.get("related_entities"), indent=2, sort_keys=True))
 PY
 ```
 
+## Production Impact Expansion Runtime
+
+The market impact expansion lane is a separate optional artifact from the QID
+graph-context store. It is disabled by default and only runs when callers request
+impact paths.
+
+Required runtime values when enabled:
+
+- `impact_expansion_enabled = true`
+- `impact_expansion_artifact_path = "/home/deploy/.local/share/ades-artifacts/market-graph/current/market_graph_store.sqlite"`
+- optional tuning:
+  - `impact_expansion_max_depth = 2`
+  - `impact_expansion_seed_limit = 16`
+  - `impact_expansion_max_candidates = 25`
+  - `impact_expansion_max_edges_per_seed = 64`
+  - `impact_expansion_max_paths_per_candidate = 3`
+  - `impact_expansion_vector_proposals_enabled = false`
+
+Suggested `systemd --user` drop-in:
+
+```ini
+[Service]
+Environment=ADES_IMPACT_EXPANSION_ENABLED=true
+Environment=ADES_IMPACT_EXPANSION_ARTIFACT_PATH=/home/deploy/.local/share/ades-artifacts/market-graph/current/market_graph_store.sqlite
+Environment=ADES_IMPACT_EXPANSION_MAX_DEPTH=2
+Environment=ADES_IMPACT_EXPANSION_SEED_LIMIT=16
+Environment=ADES_IMPACT_EXPANSION_MAX_CANDIDATES=25
+Environment=ADES_IMPACT_EXPANSION_MAX_EDGES_PER_SEED=64
+Environment=ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE=3
+Environment=ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED=false
+```
+
+The artifact is read-only at request time. Missing or unreadable artifacts should
+return empty impact candidates with a warning instead of breaking extraction.
+
 Latest verified live smoke on `2026-04-21` using `/home/deploy/deleteme.txt`:
 
 - host-local plain `POST /v0/tag/file`: `29` entities, `0` related entities, no graph metadata, about `14.485s`

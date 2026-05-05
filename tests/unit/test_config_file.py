@@ -88,6 +88,29 @@ def test_settings_can_load_vector_routing_maps_from_toml_config(
     }
 
 
+def test_settings_can_load_impact_expansion_from_env(tmp_path: Path, monkeypatch) -> None:
+    artifact_path = tmp_path / "market_graph_store.sqlite"
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ENABLED", "true")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ARTIFACT_PATH", str(artifact_path))
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_MAX_DEPTH", "2")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_SEED_LIMIT", "12")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_MAX_CANDIDATES", "30")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_MAX_EDGES_PER_SEED", "40")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE", "2")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED", "false")
+
+    settings = Settings.from_env()
+
+    assert settings.impact_expansion_enabled is True
+    assert settings.impact_expansion_artifact_path == artifact_path
+    assert settings.impact_expansion_max_depth == 2
+    assert settings.impact_expansion_seed_limit == 12
+    assert settings.impact_expansion_max_candidates == 30
+    assert settings.impact_expansion_max_edges_per_seed == 40
+    assert settings.impact_expansion_max_paths_per_candidate == 2
+    assert settings.impact_expansion_vector_proposals_enabled is False
+
+
 def test_settings_reject_missing_explicit_config_file(
     tmp_path: Path, monkeypatch
 ) -> None:

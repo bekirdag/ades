@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
 from .config import Settings, get_settings
 from .distribution import (
@@ -119,8 +119,10 @@ from .service.models import (
     BatchRerunDiff,
     BatchSourceSummary,
     BatchTagResponse,
+    ImpactExpansionResult,
     LookupCandidate,
     LookupResponse,
+    MarketGraphStoreBuildResponse,
     ReleaseManifestResponse,
     ReleasePublishResponse,
     ReleaseValidationResponse,
@@ -155,13 +157,13 @@ from .service.models import (
     ExtractionQualityReportResponse,
     LabelQualityDeltaResponse,
     MatcherBackendCandidateResponse,
-    MatcherBenchmarkSpikeReportResponse,
+    MatcherBenchmarkSpikeReportResponse,  # noqa: F401
     LiveNewsArticleResultResponse,
     LiveNewsEntityResponse,
     LiveNewsFailureResponse,
     LiveNewsIssueResponse,
     RegistryBenchmarkMatcherBackendsResponse,
-    RegistryBenchmarkMatcherBackendsRequest,
+    RegistryBenchmarkMatcherBackendsRequest,  # noqa: F401
     RegistryBenchmarkRuntimeResponse,
     RegistryEvaluateLiveNewsFeedbackResponse,
     RuntimeDiskBenchmarkResponse,
@@ -182,7 +184,7 @@ from .service.models import (
     TagResponse,
     VectorCaseResultResponse,
     VectorIndexBuildResponse,
-    VectorQualityReportResponse,
+    VectorQualityReportResponse,  # noqa: F401
 )
 from .storage.paths import build_storage_layout, ensure_storage_layout
 from .storage.results import (
@@ -214,6 +216,15 @@ from .vector.evaluation import (
     VectorReleaseThresholds,
 )
 from .vector.service import enrich_tag_response_with_related_entities
+from .impact.expansion import (
+    enrich_tag_response_with_impact_paths,
+    expand_impact_paths as run_expand_impact_paths,
+)
+from .impact.graph_builder import build_market_graph_store as run_build_market_graph_store
+
+if TYPE_CHECKING:
+    from .packs.quality_common import PackQualityResult
+    from .packs.reporting import GeneratedPackReport
 
 
 def _resolve_settings(
@@ -261,6 +272,18 @@ def _resolve_settings(
         news_context_artifact_path=base.news_context_artifact_path,
         news_context_min_supporting_seeds=base.news_context_min_supporting_seeds,
         news_context_min_pair_count=base.news_context_min_pair_count,
+        impact_expansion_enabled=base.impact_expansion_enabled,
+        impact_expansion_artifact_path=base.impact_expansion_artifact_path,
+        impact_expansion_max_depth=base.impact_expansion_max_depth,
+        impact_expansion_seed_limit=base.impact_expansion_seed_limit,
+        impact_expansion_max_candidates=base.impact_expansion_max_candidates,
+        impact_expansion_max_edges_per_seed=base.impact_expansion_max_edges_per_seed,
+        impact_expansion_max_paths_per_candidate=(
+            base.impact_expansion_max_paths_per_candidate
+        ),
+        impact_expansion_vector_proposals_enabled=(
+            base.impact_expansion_vector_proposals_enabled
+        ),
         service_prewarm_enabled=base.service_prewarm_enabled,
         config_path=base.config_path,
     )
@@ -2515,6 +2538,10 @@ def tag(
     include_graph_support: bool = False,
     refine_links: bool = False,
     refinement_depth: str = "light",
+    include_impact_paths: bool = False,
+    impact_max_depth: int | None = None,
+    impact_seed_limit: int | None = None,
+    impact_max_candidates: int | None = None,
     domain_hint: str | None = None,
     retrieval_profile: str | None = None,
     country_hint: str | None = None,
@@ -2556,6 +2583,14 @@ def tag(
         domain_hint=domain_hint,
         country_hint=country_hint,
     )
+    response = enrich_tag_response_with_impact_paths(
+        response,
+        settings=settings,
+        include_impact_paths=include_impact_paths,
+        max_depth=impact_max_depth,
+        impact_expansion_seed_limit=impact_seed_limit,
+        max_candidates=impact_max_candidates,
+    )
     if output_path is not None or output_dir is not None:
         response = persist_tag_response_json(
             response,
@@ -2583,6 +2618,10 @@ def tag_file(
     include_graph_support: bool = False,
     refine_links: bool = False,
     refinement_depth: str = "light",
+    include_impact_paths: bool = False,
+    impact_max_depth: int | None = None,
+    impact_seed_limit: int | None = None,
+    impact_max_candidates: int | None = None,
     domain_hint: str | None = None,
     retrieval_profile: str | None = None,
     country_hint: str | None = None,
@@ -2636,6 +2675,14 @@ def tag_file(
         domain_hint=domain_hint,
         country_hint=country_hint,
     )
+    response = enrich_tag_response_with_impact_paths(
+        response,
+        settings=settings,
+        include_impact_paths=include_impact_paths,
+        max_depth=impact_max_depth,
+        impact_expansion_seed_limit=impact_seed_limit,
+        max_candidates=impact_max_candidates,
+    )
     if output_path is not None or output_dir is not None:
         response = persist_tag_response_json(
             response,
@@ -2676,6 +2723,10 @@ def tag_files(
     include_graph_support: bool = False,
     refine_links: bool = False,
     refinement_depth: str = "light",
+    include_impact_paths: bool = False,
+    impact_max_depth: int | None = None,
+    impact_seed_limit: int | None = None,
+    impact_max_candidates: int | None = None,
     domain_hint: str | None = None,
     retrieval_profile: str | None = None,
     country_hint: str | None = None,
@@ -2813,6 +2864,14 @@ def tag_files(
                             domain_hint=domain_hint,
                             country_hint=country_hint,
                         )
+                        repaired_response = enrich_tag_response_with_impact_paths(
+                            repaired_response,
+                            settings=settings,
+                            include_impact_paths=include_impact_paths,
+                            max_depth=impact_max_depth,
+                            impact_expansion_seed_limit=impact_seed_limit,
+                            max_candidates=impact_max_candidates,
+                        )
                         repaired_response = persist_tag_response_json(
                             repaired_response,
                             pack_id=resolved_pack,
@@ -2859,6 +2918,14 @@ def tag_files(
             refinement_depth=refinement_depth,
             domain_hint=domain_hint,
             country_hint=country_hint,
+        )
+        response = enrich_tag_response_with_impact_paths(
+            response,
+            settings=settings,
+            include_impact_paths=include_impact_paths,
+            max_depth=impact_max_depth,
+            impact_expansion_seed_limit=impact_seed_limit,
+            max_candidates=impact_max_candidates,
         )
         record_tag_observation(settings.storage_root, response)
         items.append(response)
@@ -3226,6 +3293,55 @@ def build_qid_graph_store(
         truthy_path=truthy_path,
         output_dir=output_dir,
         allowed_predicates=allowed_predicates,
+    )
+
+
+def build_market_graph_store(
+    *,
+    edge_tsv_paths: Iterable[str | Path],
+    output_dir: str | Path,
+    node_tsv_paths: Iterable[str | Path] = (),
+    graph_version: str = "market-graph-v1",
+    artifact_version: str | None = None,
+) -> MarketGraphStoreBuildResponse:
+    """Build one market impact graph store artifact from normalized TSV lanes."""
+
+    return run_build_market_graph_store(
+        edge_tsv_paths=edge_tsv_paths,
+        output_dir=output_dir,
+        node_tsv_paths=node_tsv_paths,
+        graph_version=graph_version,
+        artifact_version=artifact_version,
+    )
+
+
+def expand_impact_paths(
+    entity_refs: Iterable[str],
+    *,
+    language: str = "en",
+    enabled_packs: Iterable[str] | None = None,
+    max_depth: int | None = None,
+    impact_expansion_seed_limit: int | None = None,
+    max_candidates: int | None = None,
+    include_passive_paths: bool = True,
+    vector_proposals_enabled: bool | None = None,
+    storage_root: str | Path | None = None,
+    artifact_path: str | Path | None = None,
+) -> ImpactExpansionResult:
+    """Expand ADES entity refs into deterministic market impact paths."""
+
+    settings = _resolve_settings(storage_root=storage_root)
+    return run_expand_impact_paths(
+        entity_refs,
+        language=language,
+        enabled_packs=enabled_packs,
+        max_depth=max_depth,
+        impact_expansion_seed_limit=impact_expansion_seed_limit,
+        max_candidates=max_candidates,
+        include_passive_paths=include_passive_paths,
+        vector_proposals_enabled=vector_proposals_enabled,
+        settings=settings,
+        artifact_path=artifact_path,
     )
 
 

@@ -89,6 +89,11 @@ DEFAULT_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS = 2
 DEFAULT_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT = 8
 DEFAULT_NEWS_CONTEXT_MIN_SUPPORTING_SEEDS = 2
 DEFAULT_NEWS_CONTEXT_MIN_PAIR_COUNT = 1
+DEFAULT_IMPACT_EXPANSION_MAX_DEPTH = 2
+DEFAULT_IMPACT_EXPANSION_SEED_LIMIT = 16
+DEFAULT_IMPACT_EXPANSION_MAX_CANDIDATES = 25
+DEFAULT_IMPACT_EXPANSION_MAX_EDGES_PER_SEED = 64
+DEFAULT_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE = 3
 CONFIG_FILE_ENV = "ADES_CONFIG_FILE"
 DATABASE_URL_ENV = "ADES_DATABASE_URL"
 DEFAULT_CONFIG_PATHS = (
@@ -240,6 +245,16 @@ class Settings:
     news_context_artifact_path: Path | None = None
     news_context_min_supporting_seeds: int = DEFAULT_NEWS_CONTEXT_MIN_SUPPORTING_SEEDS
     news_context_min_pair_count: int = DEFAULT_NEWS_CONTEXT_MIN_PAIR_COUNT
+    impact_expansion_enabled: bool = False
+    impact_expansion_artifact_path: Path | None = None
+    impact_expansion_max_depth: int = DEFAULT_IMPACT_EXPANSION_MAX_DEPTH
+    impact_expansion_seed_limit: int = DEFAULT_IMPACT_EXPANSION_SEED_LIMIT
+    impact_expansion_max_candidates: int = DEFAULT_IMPACT_EXPANSION_MAX_CANDIDATES
+    impact_expansion_max_edges_per_seed: int = DEFAULT_IMPACT_EXPANSION_MAX_EDGES_PER_SEED
+    impact_expansion_max_paths_per_candidate: int = (
+        DEFAULT_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE
+    )
+    impact_expansion_vector_proposals_enabled: bool = False
     service_prewarm_enabled: bool = True
     config_path: Path | None = None
 
@@ -429,6 +444,54 @@ class Settings:
             env_name="ADES_NEWS_CONTEXT_MIN_PAIR_COUNT",
             config_name="news_context_min_pair_count",
         )
+        impact_expansion_enabled = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_IMPACT_EXPANSION_ENABLED",
+            config_name="impact_expansion_enabled",
+        )
+        impact_expansion_artifact_path = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_IMPACT_EXPANSION_ARTIFACT_PATH",
+            config_name="impact_expansion_artifact_path",
+        )
+        impact_expansion_max_depth = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_IMPACT_EXPANSION_MAX_DEPTH",
+            config_name="impact_expansion_max_depth",
+        )
+        impact_expansion_seed_limit = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_IMPACT_EXPANSION_SEED_LIMIT",
+            config_name="impact_expansion_seed_limit",
+        )
+        impact_expansion_max_candidates = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_IMPACT_EXPANSION_MAX_CANDIDATES",
+            config_name="impact_expansion_max_candidates",
+        )
+        impact_expansion_max_edges_per_seed = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_IMPACT_EXPANSION_MAX_EDGES_PER_SEED",
+            config_name="impact_expansion_max_edges_per_seed",
+        )
+        impact_expansion_max_paths_per_candidate = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE",
+            config_name="impact_expansion_max_paths_per_candidate",
+        )
+        impact_expansion_vector_proposals_enabled = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED",
+            config_name="impact_expansion_vector_proposals_enabled",
+        )
         service_prewarm_enabled = _value_from_env_or_config(
             env_map,
             config_values,
@@ -569,6 +632,62 @@ class Settings:
             if news_context_min_pair_count is not None
             else DEFAULT_NEWS_CONTEXT_MIN_PAIR_COUNT
         )
+        resolved_impact_expansion_enabled = (
+            _coerce_bool(
+                impact_expansion_enabled,
+                name="ades impact expansion enabled",
+            )
+            if impact_expansion_enabled is not None
+            else False
+        )
+        resolved_impact_expansion_max_depth = (
+            _coerce_int(
+                impact_expansion_max_depth,
+                name="ades impact expansion max depth",
+            )
+            if impact_expansion_max_depth is not None
+            else DEFAULT_IMPACT_EXPANSION_MAX_DEPTH
+        )
+        resolved_impact_expansion_seed_limit = (
+            _coerce_int(
+                impact_expansion_seed_limit,
+                name="ades impact expansion seed limit",
+            )
+            if impact_expansion_seed_limit is not None
+            else DEFAULT_IMPACT_EXPANSION_SEED_LIMIT
+        )
+        resolved_impact_expansion_max_candidates = (
+            _coerce_int(
+                impact_expansion_max_candidates,
+                name="ades impact expansion max candidates",
+            )
+            if impact_expansion_max_candidates is not None
+            else DEFAULT_IMPACT_EXPANSION_MAX_CANDIDATES
+        )
+        resolved_impact_expansion_max_edges_per_seed = (
+            _coerce_int(
+                impact_expansion_max_edges_per_seed,
+                name="ades impact expansion max edges per seed",
+            )
+            if impact_expansion_max_edges_per_seed is not None
+            else DEFAULT_IMPACT_EXPANSION_MAX_EDGES_PER_SEED
+        )
+        resolved_impact_expansion_max_paths_per_candidate = (
+            _coerce_int(
+                impact_expansion_max_paths_per_candidate,
+                name="ades impact expansion max paths per candidate",
+            )
+            if impact_expansion_max_paths_per_candidate is not None
+            else DEFAULT_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE
+        )
+        resolved_impact_expansion_vector_proposals_enabled = (
+            _coerce_bool(
+                impact_expansion_vector_proposals_enabled,
+                name="ades impact expansion vector proposals enabled",
+            )
+            if impact_expansion_vector_proposals_enabled is not None
+            else False
+        )
         resolved_service_prewarm_enabled = (
             _coerce_bool(
                 service_prewarm_enabled,
@@ -615,6 +734,36 @@ class Settings:
             raise InvalidConfigurationError(
                 "Invalid ades news context min pair count: "
                 f"{resolved_news_context_min_pair_count!r}"
+            )
+        if resolved_impact_expansion_max_depth < 1:
+            raise InvalidConfigurationError(
+                "Invalid ades impact expansion max depth: "
+                f"{resolved_impact_expansion_max_depth!r}"
+            )
+        if resolved_impact_expansion_max_depth > 4:
+            raise InvalidConfigurationError(
+                "Invalid ades impact expansion max depth: "
+                f"{resolved_impact_expansion_max_depth!r}"
+            )
+        if resolved_impact_expansion_seed_limit <= 0:
+            raise InvalidConfigurationError(
+                "Invalid ades impact expansion seed limit: "
+                f"{resolved_impact_expansion_seed_limit!r}"
+            )
+        if resolved_impact_expansion_max_candidates < 0:
+            raise InvalidConfigurationError(
+                "Invalid ades impact expansion max candidates: "
+                f"{resolved_impact_expansion_max_candidates!r}"
+            )
+        if resolved_impact_expansion_max_edges_per_seed <= 0:
+            raise InvalidConfigurationError(
+                "Invalid ades impact expansion max edges per seed: "
+                f"{resolved_impact_expansion_max_edges_per_seed!r}"
+            )
+        if resolved_impact_expansion_max_paths_per_candidate <= 0:
+            raise InvalidConfigurationError(
+                "Invalid ades impact expansion max paths per candidate: "
+                f"{resolved_impact_expansion_max_paths_per_candidate!r}"
             )
 
         return cls(
@@ -672,6 +821,24 @@ class Settings:
                 resolved_news_context_min_supporting_seeds
             ),
             news_context_min_pair_count=resolved_news_context_min_pair_count,
+            impact_expansion_enabled=resolved_impact_expansion_enabled,
+            impact_expansion_artifact_path=(
+                Path(str(impact_expansion_artifact_path)).expanduser()
+                if impact_expansion_artifact_path
+                else None
+            ),
+            impact_expansion_max_depth=resolved_impact_expansion_max_depth,
+            impact_expansion_seed_limit=resolved_impact_expansion_seed_limit,
+            impact_expansion_max_candidates=resolved_impact_expansion_max_candidates,
+            impact_expansion_max_edges_per_seed=(
+                resolved_impact_expansion_max_edges_per_seed
+            ),
+            impact_expansion_max_paths_per_candidate=(
+                resolved_impact_expansion_max_paths_per_candidate
+            ),
+            impact_expansion_vector_proposals_enabled=(
+                resolved_impact_expansion_vector_proposals_enabled
+            ),
             service_prewarm_enabled=resolved_service_prewarm_enabled,
             config_path=config_path,
         )

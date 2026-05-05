@@ -21,6 +21,7 @@ from ..api import (
     fetch_general_source_snapshot,
     build_medical_source_bundle,
     fetch_medical_source_snapshot,
+    build_market_graph_store,
     build_qid_graph_store,
     build_registry,
     compare_extraction_quality_reports,
@@ -30,6 +31,7 @@ from ..api import (
     evaluate_extraction_release_thresholds,
     evaluate_vector_quality,
     evaluate_vector_release_thresholds_from_report,
+    expand_impact_paths,
     generate_pack_source,
     get_pack,
     get_pack_health,
@@ -68,7 +70,11 @@ from .models import (
     BatchFileTagRequest,
     BatchTagResponse,
     FileTagRequest,
+    ImpactExpansionRequest,
+    ImpactExpansionResult,
     LookupResponse,
+    MarketGraphStoreBuildRequest,
+    MarketGraphStoreBuildResponse,
     NpmInstallerInfo,
     PackSummary,
     PackHealthResponse,
@@ -175,6 +181,31 @@ def _string_option(options: dict[str, object] | None, key: str) -> str | None:
         raise ValueError(f"Invalid string option for {key}.")
     normalized = value.strip()
     return normalized or None
+
+
+def _int_option(options: dict[str, object] | None, key: str) -> int | None:
+    if not options or key not in options:
+        return None
+    value = options[key]
+    if isinstance(value, bool):
+        raise ValueError(f"Invalid integer option for {key}.")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid integer option for {key}.") from exc
+    return parsed
+
+
+def _list_string_option(options: dict[str, object] | None, key: str) -> list[str] | None:
+    if not options or key not in options:
+        return None
+    value = options[key]
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, list):
+        result = [str(item).strip() for item in value if str(item).strip()]
+        return result
+    raise ValueError(f"Invalid list option for {key}.")
 
 
 def _request_string_option(
@@ -542,6 +573,28 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 truthy_path=request.truthy_path,
                 output_dir=request.output_dir,
                 allowed_predicates=request.predicate or None,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post(
+        "/v0/registry/build-market-graph-store",
+        response_model=MarketGraphStoreBuildResponse,
+    )
+    def runtime_build_market_graph_store(
+        request: MarketGraphStoreBuildRequest,
+    ) -> MarketGraphStoreBuildResponse:
+        """Build one market impact graph store from normalized TSV source lanes."""
+
+        try:
+            return build_market_graph_store(
+                edge_tsv_paths=request.edge_tsv_paths,
+                output_dir=request.output_dir,
+                node_tsv_paths=request.node_tsv_paths,
+                graph_version=request.graph_version,
+                artifact_version=request.artifact_version,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1237,6 +1290,27 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.post("/v0/impact/expand", response_model=ImpactExpansionResult)
+    def runtime_expand_impact_paths(
+        request: ImpactExpansionRequest,
+    ) -> ImpactExpansionResult:
+        """Expand ADES entity refs into deterministic market impact paths."""
+
+        try:
+            return expand_impact_paths(
+                request.entity_refs,
+                language=request.language,
+                enabled_packs=request.enabled_packs,
+                max_depth=request.max_depth,
+                impact_expansion_seed_limit=request.impact_expansion_seed_limit,
+                max_candidates=request.max_candidates,
+                include_passive_paths=request.include_passive_paths,
+                vector_proposals_enabled=request.vector_proposals_enabled,
+                storage_root=storage_root,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.post("/v0/tag", response_model=TagResponse)
     def runtime_tag(request: TagRequest) -> TagResponse:
         """Tag text through the local in-process pipeline."""
@@ -1262,6 +1336,15 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 ),
                 refine_links=bool(_bool_option(request.options, "refine_links")),
                 refinement_depth=_refinement_depth_option(request.options),
+                include_impact_paths=bool(
+                    _bool_option(request.options, "include_impact_paths")
+                ),
+                impact_max_depth=_int_option(request.options, "impact_max_depth"),
+                impact_seed_limit=_int_option(request.options, "impact_seed_limit"),
+                impact_max_candidates=_int_option(
+                    request.options,
+                    "impact_max_candidates",
+                ),
                 domain_hint=_request_string_option(
                     request.domain_hint,
                     request.options,
@@ -1309,6 +1392,15 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 ),
                 refine_links=bool(_bool_option(request.options, "refine_links")),
                 refinement_depth=_refinement_depth_option(request.options),
+                include_impact_paths=bool(
+                    _bool_option(request.options, "include_impact_paths")
+                ),
+                impact_max_depth=_int_option(request.options, "impact_max_depth"),
+                impact_seed_limit=_int_option(request.options, "impact_seed_limit"),
+                impact_max_candidates=_int_option(
+                    request.options,
+                    "impact_max_candidates",
+                ),
                 domain_hint=_request_string_option(
                     request.domain_hint,
                     request.options,
@@ -1383,6 +1475,15 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 ),
                 refine_links=bool(_bool_option(request.options, "refine_links")),
                 refinement_depth=_refinement_depth_option(request.options),
+                include_impact_paths=bool(
+                    _bool_option(request.options, "include_impact_paths")
+                ),
+                impact_max_depth=_int_option(request.options, "impact_max_depth"),
+                impact_seed_limit=_int_option(request.options, "impact_seed_limit"),
+                impact_max_candidates=_int_option(
+                    request.options,
+                    "impact_max_candidates",
+                ),
                 domain_hint=_request_string_option(
                     request.domain_hint,
                     request.options,

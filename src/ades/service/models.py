@@ -1613,6 +1613,94 @@ class GraphSupport(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class ImpactPathEdge(BaseModel):
+    """One source-provenanced market graph edge in an impact path."""
+
+    source_ref: str
+    target_ref: str
+    relation: str
+    evidence_level: Literal["direct", "shallow", "inferred"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    direction_hint: str
+    source_name: str
+    source_url: str
+    source_snapshot: str
+    source_year: int | None = None
+
+
+class ImpactRelationshipPath(BaseModel):
+    """One bounded relationship path from a source entity to a terminal entity."""
+
+    path_depth: int = Field(ge=0)
+    edges: list[ImpactPathEdge] = Field(default_factory=list)
+
+
+class ImpactSourceEntity(BaseModel):
+    """Mentioned ADES entity considered by impact expansion."""
+
+    entity_ref: str
+    name: str
+    entity_type: str | None = None
+    library_id: str | None = None
+    is_graph_seed: bool = False
+    seed_degree: int = Field(default=0, ge=0)
+    is_tradable: bool = False
+
+
+class ImpactCandidate(BaseModel):
+    """Tradable terminal candidate returned by impact expansion."""
+
+    entity_ref: str
+    name: str
+    entity_type: str | None = None
+    is_tradable: bool = True
+    evidence_level: Literal["direct", "shallow", "inferred"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    source_entity_refs: list[str] = Field(default_factory=list)
+    relationship_paths: list[ImpactRelationshipPath] = Field(default_factory=list)
+
+
+class ImpactPassivePath(BaseModel):
+    """Non-tradable contextual entity reached by impact expansion."""
+
+    entity_ref: str
+    name: str
+    entity_type: str | None = None
+    source_entity_refs: list[str] = Field(default_factory=list)
+    relationship_paths: list[ImpactRelationshipPath] = Field(default_factory=list)
+
+
+class ImpactExpansionResult(BaseModel):
+    """Top-level market impact expansion payload."""
+
+    graph_version: str | None = None
+    artifact_version: str | None = None
+    artifact_hash: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    source_entities: list[ImpactSourceEntity] = Field(default_factory=list)
+    candidates: list[ImpactCandidate] = Field(default_factory=list)
+    passive_paths: list[ImpactPassivePath] = Field(default_factory=list)
+
+
+class ImpactExpansionRequest(BaseModel):
+    """Request body for refs-only impact path expansion."""
+
+    entity_refs: list[str] = Field(default_factory=list)
+    language: str = "en"
+    enabled_packs: list[str] | None = None
+    max_depth: int = Field(default=2, ge=1, le=4)
+    impact_expansion_seed_limit: int = Field(default=16, ge=1)
+    max_candidates: int = Field(default=25, ge=0)
+    include_passive_paths: bool = True
+    vector_proposals_enabled: bool = False
+
+    @model_validator(mode="after")
+    def validate_entity_refs(self) -> "ImpactExpansionRequest":
+        if not any(str(ref).strip() for ref in self.entity_refs):
+            raise ValueError("At least one entity_ref is required.")
+        return self
+
+
 class EntityMatch(BaseModel):
     """Single extracted entity."""
 
@@ -1897,6 +1985,7 @@ class TagResponse(BaseModel):
     refinement_score: float | None = None
     refinement_debug: dict[str, Any] | None = None
     graph_support: GraphSupport | None = None
+    impact_paths: ImpactExpansionResult | None = None
     topics: list[TopicMatch] = Field(default_factory=list)
     metrics: TagMetrics | None = None
     debug: TagDebug | None = None
@@ -2151,4 +2240,40 @@ class QidGraphStoreBuildResponse(BaseModel):
     max_degree_total: int = 0
     mean_degree_total: float = 0.0
     p95_degree_total: int = 0
+    warnings: list[str] = Field(default_factory=list)
+
+
+class MarketGraphStoreBuildRequest(BaseModel):
+    """Request body for building one market impact graph store."""
+
+    node_tsv_paths: list[str] = Field(default_factory=list)
+    edge_tsv_paths: list[str] = Field(default_factory=list)
+    output_dir: str
+    graph_version: str = "market-graph-v1"
+    artifact_version: str | None = None
+
+    @model_validator(mode="after")
+    def validate_edge_tsv_paths(self) -> "MarketGraphStoreBuildRequest":
+        if not self.edge_tsv_paths:
+            raise ValueError("At least one edge TSV path is required.")
+        return self
+
+
+class MarketGraphStoreBuildResponse(BaseModel):
+    """Stable result payload for one market impact graph store build."""
+
+    output_dir: str
+    manifest_path: str
+    artifact_path: str
+    graph_version: str
+    artifact_version: str
+    artifact_hash: str
+    builder_version: str
+    node_count: int
+    edge_count: int
+    source_manifest_hash: str
+    node_tsv_paths: list[str] = Field(default_factory=list)
+    edge_tsv_paths: list[str] = Field(default_factory=list)
+    pack_ids: list[str] = Field(default_factory=list)
+    processed_edge_row_count: int = 0
     warnings: list[str] = Field(default_factory=list)
