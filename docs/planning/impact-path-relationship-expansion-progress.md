@@ -26,6 +26,15 @@ Plan: docs/planning/impact-path-relationship-expansion-plan.md
 - Validation passed: `git diff --check`.
 - Validation passed: `docdexd hook pre-commit --repo /home/wodo/apps/ades`.
 - Packaging check passed: `python -m build --wheel --outdir /tmp/ades_wheel_check`; the wheel includes `ades/resources/impact/phase1_starter/source_manifest.json`.
+- Committed implementation as `7ae455d` (`Align impact expansion plan implementation`) and pushed to `main`.
+- Production deploy run `25389897550` completed successfully in 8m06s for commit `7ae455d`.
+- Production health/status smoke passed: `https://api.adestool.com/healthz` returned ok; `/v0/status` reported `production_server`, PostgreSQL metadata, compiled matcher extraction, and PostgreSQL operator lookup.
+- Production refs-only `/v0/impact/expand` for Strait of Hormuz plus Iran returned `ades:impact:commodity:crude-oil` and `wikidata:Q121826282` with no warnings.
+- Production seed-limit smoke passed: with `impact_expansion_seed_limit=1`, only the selected Strait of Hormuz source is marked `is_graph_seed=true`; Iran remains `is_graph_seed=false` with `impact_seed_limit_truncated`.
+- Production `/v0/tag` with `include_impact_paths=true` returned Iran and Strait of Hormuz source entities plus the crude-oil impact candidate with no impact warnings.
+- Production graph-context smoke passed without forcing spaCy hybrid: Federal Reserve and ECB extracted, `graph_support.applied=true`, one related graph entity returned, and no warnings.
+- Remote deployed wheel exposes `ades/resources/impact/phase1_starter/source_manifest.json` with 11 source records.
+- Note: explicitly forcing `hybrid=true` still returns the existing `hybrid_unavailable:spaCy is not installed for hybrid span proposal` warning on prod; graph-context enrichment is active without forcing that optional lane.
 
 ## Milestones
 
