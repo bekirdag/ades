@@ -80,3 +80,39 @@ Started: 2026-05-05
   - `politics-vector-en` Nigel Farage -> DXY, USD, global equities, global policy risk.
   - `economics-vector-en` Strait of Hormuz -> crude oil and USD through the reviewed starter path.
   - `business-vector-en` Strait of Hormuz / United States -> crude oil plus USD/DXY/global proxies.
+
+## 2026-05-05 Production Promotion
+
+- Final promoted run id: `20260505Tmillion-finance-country-proxy-r3`.
+- Local source lane:
+  - path: `/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/finance_country_proxy/20260505Tmillion-finance-country-proxy-r3`
+  - source nodes: 254,563
+  - source edges: 1,610,498
+  - covered source entities: 246,491
+  - uncovered source entities: 0
+- Local and production SQLite artifact:
+  - local path: `/mnt/githubActions/ades_big_data/artifacts/market-graph/20260505Tmillion-finance-country-proxy-r3/market_graph_store.sqlite`
+  - production current path: `/home/deploy/.local/share/ades-artifacts/market-graph/current/market_graph_store.sqlite`
+  - artifact version: `20260505Tmillion-finance-country-proxy-r3`
+  - artifact hash: `sha256:cadefe5d80c9c7c0646cbc31cf16c5e382289c2f0930939d79c34f9a8e82e4be`
+  - artifact nodes: 254,575
+  - artifact edges: 1,610,513
+- The GitHub Actions deployment for commit `4b11454` completed successfully, then the r3 million-edge artifact was uploaded to prod and `ades.service` was restarted with `ADES_IMPACT_EXPANSION_ARTIFACT_PATH` pointing at the promoted graph.
+- Production health after promotion:
+  - `https://api.adestool.com/healthz`: 200
+  - `https://api.adestool.com/v0/status`: 200, `runtime_target=production_server`, `metadata_backend=postgresql`, `exact_extraction_backend=compiled_matcher`
+- Production relationship API checks:
+  - `/v0/impact/expand` for `ades:heuristic_structural_location:economics-vector-en:location:strait-of-hormuz` returns crude oil and USD when no pack filter is supplied.
+  - `/v0/impact/expand` for `wikidata:Q318471` returns DXY, global policy risk, USD, and global equities when no pack filter is supplied.
+  - `/v0/impact/expand` for `wikidata:Q794` returns crude oil, USD, global equities, DXY, and global policy risk.
+  - Explicit `enabled_packs` remains a strict filter; clients that want global tradable terminal assets should omit it or include the terminal-owning packs.
+- Production unseen RSS smoke checks:
+  - BBC Business, "UK long-term borrowing costs reach 28-year high" with `business-vector-en`: extracted UK government and returned DXY, global policy risk, USD, and global equities.
+  - Guardian Business, "UK electric car sales leap could be hit by Iran war inflation and energy price rises" with `general-en`: extracted Iran and SMMT, then returned crude oil, USD, global equities, DXY, and global policy risk.
+  - Guardian Politics, "Rachel Reeves and Scott Bessent argued in person about Iran war" with `politics-vector-en`: extracted Scott Bessent and returned DXY, global policy risk, USD, and global equities.
+- Full local validation before promotion:
+  - `python -m ruff check src/ades/impact/finance_country_proxy.py src/ades/impact/expansion.py tests/unit/test_finance_country_proxy_impact.py tests/unit/test_impact_expansion.py`: passed.
+  - `python -m pytest tests/unit/test_finance_country_proxy_impact.py tests/unit/test_impact_expansion.py tests/unit/test_impact_starter_evaluation.py tests/api/test_impact_expansion_endpoint.py -q`: 18 passed.
+  - `python -m pytest -q`: 1,426 passed.
+  - `git diff --check`: passed.
+  - `docdexd hook pre-commit --repo /home/wodo/apps/ades`: passed.
