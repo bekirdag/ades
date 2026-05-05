@@ -221,7 +221,9 @@ from .impact.expansion import (
     expand_impact_paths as run_expand_impact_paths,
 )
 from .impact.evaluation import (
+    ImpactArticleGoldenSetReport,
     ImpactGoldenSetReport,
+    evaluate_impact_article_golden_set as run_evaluate_impact_article_golden_set,
     evaluate_impact_golden_set as run_evaluate_impact_golden_set,
 )
 from .impact.graph_builder import build_market_graph_store as run_build_market_graph_store
@@ -3351,6 +3353,34 @@ def evaluate_impact_expansion_golden_set(
         max_depth=max_depth,
         max_candidates=max_candidates,
         max_paths_per_candidate=max_paths_per_candidate,
+    )
+
+
+def evaluate_impact_article_golden_set(
+    *,
+    golden_set_path: str | Path,
+    artifact_path: str | Path | None = None,
+    enabled_packs: Iterable[str] | None = None,
+    default_pack: str | None = None,
+    storage_root: str | Path | None = None,
+    max_depth: int = 2,
+    impact_expansion_seed_limit: int | None = None,
+    max_candidates: int = 25,
+    max_paths_per_candidate: int = 3,
+) -> ImpactArticleGoldenSetReport:
+    """Evaluate article text extraction plus impact expansion against a golden set."""
+
+    return run_evaluate_impact_article_golden_set(
+        golden_set_path=golden_set_path,
+        artifact_path=artifact_path,
+        enabled_packs=tuple(enabled_packs) if enabled_packs is not None else None,
+        default_pack=default_pack,
+        storage_root=storage_root,
+        max_depth=max_depth,
+        impact_expansion_seed_limit=impact_expansion_seed_limit,
+        max_candidates=max_candidates,
+        max_paths_per_candidate=max_paths_per_candidate,
+        tagger=tag,
     )
 
 

@@ -1,6 +1,6 @@
 # Impact Path Relationship Expansion Codebase Audit
 
-Status: post-Phase-1 implementation audit
+Status: implementation-alignment audit
 Date: 2026-05-05
 
 ## Completed / Aligned
@@ -17,12 +17,20 @@ Date: 2026-05-05
 - Python API, optional tag enrichment, and refs-only HTTP endpoint are implemented.
 - The packaged starter lane covers the eight inner-ring relation families with reviewed source rows.
 - The production workflow now builds and uploads the starter market graph artifact and writes the prod impact-expansion drop-in.
+- Runtime expansion is read-only, bounded by max depth, seed count, edge count, path count, and candidate count.
+- `max_candidates` is applied after terminal candidate dedupe, preserving the plan's dedupe-before-cap requirement.
+- Root impact payloads do not add bullish, bearish, or direction fields.
+- `src/ades/impact/expansion.py` now reports `is_graph_seed=true` only for entities selected after `impact_expansion_seed_limit`.
+- `src/ades/impact/graph_builder.py` now enforces the documented `source_year` and `notes` edge TSV columns and includes notes in the source-manifest hash.
+- The packaged starter lane now has a `source_manifest.json` accessor through `starter_source_manifest_path()`.
+- `src/ades/impact/evaluation.py` now includes an article-text evaluator that runs extraction first and then expands impact paths from extracted ADES refs.
 
 ## Partially Completed
 
-- Phase 2 evaluation mechanics exist, but the current golden set is a starter refs-only set, not the required 20 to 30 manually reviewed article set.
+- Phase 2 evaluation mechanics exist, including article-text evaluation support, but the checked-in golden set is still a starter refs-only set, not the required 20 to 30 manually reviewed article set.
 - Source-lane ingestion exists for reviewed TSVs, but bulk official-source download/normalization lanes are not implemented yet.
 - Public HTTP exists earlier than the original plan sequence; this is acceptable because it is refs-only, bounded, and deployed behind the feature flag, but the plan should treat the endpoint as Phase 1.5 rather than fully validated Phase 3.
+- The starter source manifest records reviewed starter provenance, but full raw-source manifests and fetch manifests for Phase 2 bulk sources are still pending.
 
 ## Missing
 
@@ -47,3 +55,10 @@ Date: 2026-05-05
 - The feature must not mutate or weaken the existing hybrid/vector extraction system.
 - Large source downloads and generated graph intermediates must stay out of git and under `/mnt/githubActions/ades_big_data`.
 - The full plan includes data acquisition, licensing review, evaluation, and deployment; the runtime and starter lane are complete, but Phase 2+ requires curated source data and reviewed golden articles.
+- Article-level quality can look better than reality if refs-only evaluation passes while extraction fails to emit the right ADES refs.
+
+## Issues Resolved In This Pass
+
+- Seed-limit over-reporting is fixed and covered by `test_expand_impact_paths_reports_only_selected_graph_seeds`.
+- Missing `source_year`/`notes` TSV enforcement and notes-sensitive artifact hashing are fixed and covered by builder tests.
+- Article-level evaluator support is implemented and covered by `test_article_golden_set_evaluates_extraction_then_impact`.

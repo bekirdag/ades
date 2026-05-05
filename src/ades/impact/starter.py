@@ -24,6 +24,15 @@ def starter_golden_set_path() -> Iterator[Path]:
 
 
 @contextmanager
+def starter_source_manifest_path() -> Iterator[Path]:
+    """Yield a filesystem path to the packaged starter source manifest."""
+
+    resource = resources.files(STARTER_RESOURCE_PACKAGE) / "source_manifest.json"
+    with resources.as_file(resource) as path:
+        yield Path(path)
+
+
+@contextmanager
 def starter_source_paths() -> Iterator[tuple[Path, Path]]:
     """Yield filesystem paths for the packaged starter node and edge TSVs."""
 

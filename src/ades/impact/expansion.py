@@ -293,13 +293,22 @@ def _expand_with_store(
     candidates_by_ref: dict[str, ImpactCandidate] = {}
     passive_by_ref: dict[str, ImpactPassivePath] = {}
     seed_confidence: dict[str, float] = {}
+    eligible_seed_refs = [
+        entity_ref
+        for entity_ref in requested_refs
+        if (node := nodes.get(entity_ref)) is not None
+        and node.is_seed_eligible
+        and node.seed_degree > 0
+    ]
+    seed_refs = eligible_seed_refs[:seed_limit]
+    seed_ref_set = set(seed_refs)
+    if len(eligible_seed_refs) > len(seed_refs):
+        warnings.append("impact_seed_limit_truncated")
 
     for entity_ref in requested_refs:
         node = nodes.get(entity_ref)
         metadata_for_ref = _metadata_for_ref(entity_ref, node=node, mentions=mentions)
-        is_graph_seed = bool(node and node.is_seed_eligible and node.seed_degree > 0)
-        if is_graph_seed and len(seed_refs) < seed_limit:
-            seed_refs.append(entity_ref)
+        is_graph_seed = entity_ref in seed_ref_set
         seed_confidence[entity_ref] = metadata_for_ref.confidence
         source_entities.append(
             ImpactSourceEntity(

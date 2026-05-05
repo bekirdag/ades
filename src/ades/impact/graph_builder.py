@@ -29,8 +29,10 @@ _REQUIRED_EDGE_COLUMNS = {
     "source_name",
     "source_url",
     "source_snapshot",
+    "source_year",
     "refresh_policy",
     "pack_ids",
+    "notes",
 }
 _ALLOWED_EVIDENCE_LEVELS = {"direct", "shallow", "inferred"}
 
@@ -63,6 +65,7 @@ class _EdgeRecord:
     refresh_policy: str
     version: str
     packs: tuple[str, ...]
+    notes: str
 
     @property
     def dedupe_key(self) -> tuple[str, str, str, str]:
@@ -212,6 +215,7 @@ def _parse_edge_rows(
             source_snapshot = _normalize_text(row.get("source_snapshot"))
             refresh_policy = _normalize_text(row.get("refresh_policy"))
             packs = _parse_string_list(row.get("pack_ids"))
+            notes = _normalize_text(row.get("notes"))
             if not (
                 source_ref
                 and target_ref
@@ -252,6 +256,7 @@ def _parse_edge_rows(
                 refresh_policy=refresh_policy,
                 version=edge_version,
                 packs=packs,
+                notes=notes,
             )
             existing = edges.get(record.dedupe_key)
             if existing is None:
@@ -274,6 +279,7 @@ def _parse_edge_rows(
                 refresh_policy=winner.refresh_policy,
                 version=winner.version,
                 packs=merged_packs,
+                notes=winner.notes,
             )
             warnings.append(f"duplicate_edge_merged:{source_ref}:{relation}:{target_ref}")
     return edges, warnings, processed_row_count

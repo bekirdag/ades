@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from ades.config import Settings
 from ades.impact.expansion import expand_impact_paths
 from ades.impact.graph_builder import build_market_graph_store
@@ -100,6 +102,46 @@ def test_market_graph_builder_merges_edges_and_computes_seed_degree(tmp_path: Pa
         assert edges[0].packs == ("finance-en", "politics-vector-en")
 
 
+def test_market_graph_builder_requires_plan_edge_columns(tmp_path: Path) -> None:
+    node_path, edge_path = _write_market_graph_tsvs(tmp_path)
+    edge_path.write_text(
+        edge_path.read_text(encoding="utf-8")
+        .replace("\tsource_year", "", 1)
+        .replace("\tnotes", "", 1),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing columns"):
+        build_market_graph_store(
+            node_tsv_paths=[node_path],
+            edge_tsv_paths=[edge_path],
+            output_dir=tmp_path / "artifact",
+            artifact_version="2026-05-05T00:00:00Z",
+        )
+
+
+def test_market_graph_builder_hash_includes_edge_notes(tmp_path: Path) -> None:
+    node_path, edge_path = _write_market_graph_tsvs(tmp_path)
+    first = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact-one",
+        artifact_version="2026-05-05T00:00:00Z",
+    )
+    edge_path.write_text(
+        edge_path.read_text(encoding="utf-8").replace("primary", "primary reviewed", 1),
+        encoding="utf-8",
+    )
+    second = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact-two",
+        artifact_version="2026-05-05T00:00:00Z",
+    )
+
+    assert first.source_manifest_hash != second.source_manifest_hash
+
+
 def test_expand_impact_paths_returns_direct_and_derived_candidates(tmp_path: Path) -> None:
     node_path, edge_path = _write_market_graph_tsvs(tmp_path)
     build_response = build_market_graph_store(
@@ -132,6 +174,31 @@ def test_expand_impact_paths_returns_direct_and_derived_candidates(tmp_path: Pat
     assert source_entities["entity_zero"].is_graph_seed is False
     assert source_entities["entity_zero"].seed_degree == 0
     assert result.passive_paths[0].entity_ref in {"entity_hormuz", "entity_opec"}
+
+
+def test_expand_impact_paths_reports_only_selected_graph_seeds(tmp_path: Path) -> None:
+    node_path, edge_path = _write_market_graph_tsvs(tmp_path)
+    build_response = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact",
+        artifact_version="2026-05-05T00:00:00Z",
+    )
+
+    result = expand_impact_paths(
+        ["entity_hormuz", "entity_iran"],
+        enabled_packs=["finance-en", "politics-vector-en"],
+        settings=_settings(Path(build_response.artifact_path)),
+        max_depth=2,
+        impact_expansion_seed_limit=1,
+        max_candidates=10,
+    )
+
+    source_entities = {source.entity_ref: source for source in result.source_entities}
+    assert source_entities["entity_hormuz"].is_graph_seed is True
+    assert source_entities["entity_iran"].is_graph_seed is False
+    assert source_entities["entity_iran"].seed_degree > 0
+    assert result.warnings == ["impact_seed_limit_truncated"]
 
 
 def test_expand_impact_paths_applies_max_candidates_after_dedup(tmp_path: Path) -> None:

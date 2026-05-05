@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "name": "phase1_starter_market_impact_sources",
+  "generated_at": "2026-05-05T00:00:00Z",
+  "description": "Reviewed starter source manifest for the packaged Phase 1 market impact relationship lane.",
+  "storage_policy": "Large raw downloads and normalized bulk outputs belong under /mnt/githubActions/ades_big_data, not in the package.",
+  "normalized_files": [
+    "impact_nodes.tsv",
+    "impact_edges.tsv"
+  ],
+  "sources": [
+    {
+      "source_name": "CME crude oil futures",
+      "source_url": "https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.html",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal crude oil futures market reference."
+    },
+    {
+      "source_name": "CME gold futures",
+      "source_url": "https://www.cmegroup.com/markets/metals/precious/gold.html",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal gold futures market reference."
+    },
+    {
+      "source_name": "ECB key interest rates",
+      "source_url": "https://data.ecb.europa.eu/key-figures/ecb-interest-rates-and-exchange-rates/key-ecb-interest-rates",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2026,
+      "refresh_policy": "monthly",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public central-bank data page; starter row stores only reviewed relationship metadata.",
+      "notes": "Central-bank policy-rate relationship reference."
+    },
+    {
+      "source_name": "EIA International Energy Data",
+      "source_url": "https://www.eia.gov/beta/international/data/browser/",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2025,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government data page; starter row stores only reviewed relationship metadata.",
+      "notes": "Country commodity production/export context reference."
+    },
+    {
+      "source_name": "EIA Petroleum and Other Liquids Data",
+      "source_url": "https://www.eia.gov/petroleum/data.php",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2025,
+      "refresh_policy": "monthly",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government data page; starter row stores only reviewed relationship metadata.",
+      "notes": "Petroleum commodity market relationship reference."
+    },
+    {
+      "source_name": "EIA World Oil Transit Chokepoints",
+      "source_url": "https://www.eia.gov/international/content/analysis/special_topics/World_Oil_Transit_Chokepoints/",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2026,
+      "refresh_policy": "biennial",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government page; starter row stores only reviewed relationship metadata.",
+      "notes": "Chokepoint to commodity transmission reference."
+    },
+    {
+      "source_name": "Federal Reserve Open Market Operations",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/openmarket.htm",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2026,
+      "refresh_policy": "monthly",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public central-bank page; starter row stores only reviewed relationship metadata.",
+      "notes": "Central-bank operations and rate relationship reference."
+    },
+    {
+      "source_name": "OFAC Sanctions List Service",
+      "source_url": "https://ofac.treasury.gov/sanctions-list-service",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2026,
+      "refresh_policy": "daily",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government sanctions page; starter row stores only reviewed relationship metadata.",
+      "notes": "Sanctions list relationship reference."
+    },
+    {
+      "source_name": "OFAC sanctions programs and country information",
+      "source_url": "https://ofac.treasury.gov/sanctions-programs-and-country-information",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2026,
+      "refresh_policy": "daily",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government sanctions page; starter row stores only reviewed relationship metadata.",
+      "notes": "Sanctions program to country relationship reference."
+    },
+    {
+      "source_name": "OPEC Annual Statistical Bulletin",
+      "source_url": "https://publications.opec.org/asb/Home",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2025,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public multilateral publication landing page; starter row stores only reviewed relationship metadata.",
+      "notes": "Oil producer bloc and commodity context reference."
+    },
+    {
+      "source_name": "OPEC member countries",
+      "source_url": "https://www.opec.org/opec_web/en/about_us/25.htm",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2025,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public multilateral membership page; starter row stores only reviewed relationship metadata.",
+      "notes": "Country membership to producer bloc relationship reference."
+    }
+  ]
+}
