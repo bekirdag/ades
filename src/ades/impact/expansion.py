@@ -47,6 +47,22 @@ def _normalize_refs(entity_refs: Iterable[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(str(ref).strip() for ref in entity_refs if str(ref).strip()))
 
 
+def _heuristic_structural_equivalent_refs(entity_ref: str) -> tuple[str, ...]:
+    parts = entity_ref.split(":")
+    if len(parts) < 5 or parts[0] != "ades":
+        return ()
+    if not parts[1].startswith("heuristic_structural_"):
+        return ()
+    equivalent_refs: list[str] = []
+    for pack_id in ("general-en", "finance-en"):
+        if parts[2] == pack_id:
+            continue
+        candidate_parts = list(parts)
+        candidate_parts[2] = pack_id
+        equivalent_refs.append(":".join(candidate_parts))
+    return tuple(equivalent_refs)
+
+
 def _clamp_confidence(value: float | None) -> float:
     if value is None:
         return 1.0
@@ -287,16 +303,31 @@ def _expand_with_store(
     include_passive_paths: bool,
     warnings: list[str],
 ) -> ImpactExpansionResult:
-    nodes = store.node_batch(requested_refs)
+    requested_ref_candidates = {
+        entity_ref: (entity_ref, *_heuristic_structural_equivalent_refs(entity_ref))
+        for entity_ref in requested_refs
+    }
+    lookup_refs = _normalize_refs(
+        candidate
+        for candidates in requested_ref_candidates.values()
+        for candidate in candidates
+    )
+    nodes = store.node_batch(lookup_refs)
+    traversal_ref_by_requested = {
+        entity_ref: next(
+            (candidate for candidate in candidates if candidate in nodes),
+            entity_ref,
+        )
+        for entity_ref, candidates in requested_ref_candidates.items()
+    }
     source_entities: list[ImpactSourceEntity] = []
-    seed_refs: list[str] = []
     candidates_by_ref: dict[str, ImpactCandidate] = {}
     passive_by_ref: dict[str, ImpactPassivePath] = {}
     seed_confidence: dict[str, float] = {}
     eligible_seed_refs = [
         entity_ref
         for entity_ref in requested_refs
-        if (node := nodes.get(entity_ref)) is not None
+        if (node := nodes.get(traversal_ref_by_requested.get(entity_ref, entity_ref))) is not None
         and node.is_seed_eligible
         and node.seed_degree > 0
     ]
@@ -306,7 +337,8 @@ def _expand_with_store(
         warnings.append("impact_seed_limit_truncated")
 
     for entity_ref in requested_refs:
-        node = nodes.get(entity_ref)
+        traversal_ref = traversal_ref_by_requested.get(entity_ref, entity_ref)
+        node = nodes.get(entity_ref) or nodes.get(traversal_ref)
         metadata_for_ref = _metadata_for_ref(entity_ref, node=node, mentions=mentions)
         is_graph_seed = entity_ref in seed_ref_set
         seed_confidence[entity_ref] = metadata_for_ref.confidence
@@ -336,10 +368,10 @@ def _expand_with_store(
     queue: list[_TraversalState] = [
         _TraversalState(
             seed_ref=seed_ref,
-            current_ref=seed_ref,
+            current_ref=traversal_ref_by_requested.get(seed_ref, seed_ref),
             depth=0,
             edges=(),
-            visited_refs=(seed_ref,),
+            visited_refs=(traversal_ref_by_requested.get(seed_ref, seed_ref),),
             edge_confidence=1.0,
         )
         for seed_ref in seed_refs
@@ -478,7 +510,7 @@ def enrich_tag_response_with_impact_paths(
     mentions = _mentions_from_entities(response.entities)
     result = expand_impact_paths(
         mentions.keys(),
-        enabled_packs=enabled_packs if enabled_packs is not None else [response.pack],
+        enabled_packs=enabled_packs,
         max_depth=max_depth,
         impact_expansion_seed_limit=impact_expansion_seed_limit,
         max_candidates=max_candidates,

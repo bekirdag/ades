@@ -3,9 +3,10 @@ from pathlib import Path
 import pytest
 
 from ades.config import Settings
-from ades.impact.expansion import expand_impact_paths
+from ades.impact.expansion import enrich_tag_response_with_impact_paths, expand_impact_paths
 from ades.impact.graph_builder import build_market_graph_store
 from ades.impact.graph_store import MarketGraphStore
+from ades.service.models import EntityLink, EntityMatch, TagResponse
 
 
 def _write_market_graph_tsvs(root: Path) -> tuple[Path, Path]:
@@ -219,6 +220,95 @@ def test_expand_impact_paths_applies_max_candidates_after_dedup(tmp_path: Path) 
     )
 
     assert [candidate.entity_ref for candidate in result.candidates] == ["entity_crude_oil"]
+
+
+def test_tag_impact_enrichment_does_not_filter_to_response_pack_by_default(
+    tmp_path: Path,
+) -> None:
+    node_path, edge_path = _write_market_graph_tsvs(tmp_path)
+    build_response = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact",
+        artifact_version="2026-05-05T00:00:00Z",
+    )
+    response = TagResponse(
+        version="0.3.1",
+        pack="politics-vector-en",
+        language="en",
+        content_type="text/plain",
+        entities=[
+            EntityMatch(
+                text="Hormuz",
+                label="location",
+                start=0,
+                end=6,
+                confidence=0.99,
+                link=EntityLink(
+                    entity_id="entity_hormuz",
+                    canonical_text="Strait of Hormuz",
+                    provider="ades",
+                ),
+            )
+        ],
+        timing_ms=1,
+    )
+
+    enriched = enrich_tag_response_with_impact_paths(
+        response,
+        settings=_settings(Path(build_response.artifact_path)),
+        include_impact_paths=True,
+        max_depth=1,
+        max_candidates=5,
+    )
+
+    assert enriched.impact_paths is not None
+    assert {
+        candidate.entity_ref for candidate in enriched.impact_paths.candidates
+    } == {"entity_crude_oil"}
+
+
+def test_expand_impact_paths_resolves_cross_pack_structural_refs(tmp_path: Path) -> None:
+    node_path, edge_path = _write_market_graph_tsvs(tmp_path)
+    node_path.write_text(
+        node_path.read_text(encoding="utf-8")
+        + (
+            "ades:heuristic_structural_location:general-en:location:strait-of-hormuz"
+            "\tStrait of Hormuz\tchokepoint\tgeneral-en\t0\t1\t{}\tgeneral-en\n"
+        ),
+        encoding="utf-8",
+    )
+    edge_path.write_text(
+        edge_path.read_text(encoding="utf-8")
+        + (
+            "ades:heuristic_structural_location:general-en:location:strait-of-hormuz"
+            "\tentity_crude_oil\tchokepoint_affects_commodity\tdirect\t0.92"
+            "\tsupply_risk\tEIA\thttps://example.test/eia\t2026-05-05\t2024"
+            "\tannual\tfinance-en\tprimary\n"
+        ),
+        encoding="utf-8",
+    )
+    build_response = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact",
+        artifact_version="2026-05-05T00:00:00Z",
+    )
+
+    result = expand_impact_paths(
+        ["ades:heuristic_structural_location:economics-vector-en:location:strait-of-hormuz"],
+        settings=_settings(Path(build_response.artifact_path)),
+        max_depth=1,
+        max_candidates=5,
+    )
+
+    assert {
+        candidate.entity_ref for candidate in result.candidates
+    } == {"entity_crude_oil"}
+    assert result.source_entities[0].entity_ref == (
+        "ades:heuristic_structural_location:economics-vector-en:location:strait-of-hormuz"
+    )
+    assert result.source_entities[0].is_graph_seed is True
 
 
 def test_expand_impact_paths_degrades_when_artifact_missing(tmp_path: Path) -> None:

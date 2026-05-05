@@ -210,15 +210,56 @@ jobs:
               print(0)
           PY
           }
+          impact_edge_count() {
+            local impact_root="$1"
+            python3 - "$impact_root" <<'PY'
+          import json
+          import sqlite3
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          manifest_path = root / "market_graph_store_manifest.json"
+          if manifest_path.exists():
+              try:
+                  with manifest_path.open(encoding="utf-8") as handle:
+                      payload = json.load(handle)
+                  print(int(payload.get("edge_count") or 0))
+                  raise SystemExit(0)
+              except Exception:
+                  pass
+          artifact_path = root / "market_graph_store.sqlite"
+          if artifact_path.exists():
+              try:
+                  connection = sqlite3.connect(f"file:{artifact_path}?mode=ro", uri=True)
+                  try:
+                      print(int(connection.execute("SELECT COUNT(*) FROM impact_edges").fetchone()[0]))
+                      raise SystemExit(0)
+                  finally:
+                      connection.close()
+              except Exception:
+                  pass
+          print(0)
+          PY
+          }
           /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --force-reinstall --no-deps "/mnt/ades/app/releases/$release_id/$wheel_name"
           /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --upgrade "psycopg[binary]>=3.2,<4.0"
           impact_release_root="/mnt/ades/impact/releases/$release_id"
           impact_current_root="$HOME/.local/share/ades-artifacts/market-graph/current"
           if [ -f "$impact_release_root/market_graph_store.sqlite" ]; then
             mkdir -p "$impact_current_root" "$HOME/.config/systemd/user/ades.service.d"
-            cp "$impact_release_root/market_graph_store.sqlite" "$impact_current_root/market_graph_store.sqlite"
-            if [ -f "$impact_release_root/market_graph_store_manifest.json" ]; then
-              cp "$impact_release_root/market_graph_store_manifest.json" "$impact_current_root/market_graph_store_manifest.json"
+            switch_impact_current=1
+            existing_impact_edges="$(impact_edge_count "$impact_current_root")"
+            new_impact_edges="$(impact_edge_count "$impact_release_root")"
+            if [ "$existing_impact_edges" -ge 1000000 ] && [ "$new_impact_edges" -lt 1000000 ]; then
+              echo "Prepared deploy impact graph is starter-sized ($new_impact_edges edges); preserving existing current graph with $existing_impact_edges edges."
+              switch_impact_current=0
+            fi
+            if [ "$switch_impact_current" -eq 1 ]; then
+              cp "$impact_release_root/market_graph_store.sqlite" "$impact_current_root/market_graph_store.sqlite"
+              if [ -f "$impact_release_root/market_graph_store_manifest.json" ]; then
+                cp "$impact_release_root/market_graph_store_manifest.json" "$impact_current_root/market_graph_store_manifest.json"
+              fi
             fi
             cat > "$HOME/.config/systemd/user/ades.service.d/impact-expansion.conf" <<EOF
           [Service]
