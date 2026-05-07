@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import shutil
 
 from ades import build_registry, generate_pack_source, pull_pack, tag
@@ -12,6 +13,74 @@ from tests.pack_generation_helpers import (
     create_noisy_general_generation_bundle,
     create_pre_resolved_general_generation_bundle,
 )
+
+
+def _create_country_finance_generation_bundle(root: Path) -> Path:
+    bundle_dir = root / "finance-tr-bundle"
+    normalized_dir = bundle_dir / "normalized"
+    normalized_dir.mkdir(parents=True, exist_ok=True)
+
+    bundle_manifest = {
+        "schema_version": 1,
+        "pack_id": "finance-tr-en",
+        "version": "0.2.0",
+        "language": "en",
+        "domain": "finance",
+        "tier": "domain",
+        "description": "Generated Türkiye finance entities.",
+        "tags": ["finance", "generated", "english", "tr", "country"],
+        "dependencies": [],
+        "label_mappings": {
+            "issuer": "organization",
+            "ticker": "ticker",
+            "shareholder": "organization",
+        },
+        "stoplisted_aliases": [],
+        "allowed_ambiguous_aliases": [],
+        "sources": [
+            {
+                "name": "borsa-istanbul-symbols",
+                "snapshot_uri": "s3://ades-bundles/finance-country/tr/symbols.jsonl",
+                "license_class": "ship-now",
+                "license": "ship-now",
+                "retrieved_at": "2026-05-07T09:00:00Z",
+                "record_count": 3,
+            }
+        ],
+    }
+    (bundle_dir / "bundle.json").write_text(
+        json.dumps(bundle_manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    entities = [
+        {
+            "entity_id": "finance-tr-ticker:AKCNS",
+            "entity_type": "ticker",
+            "canonical_text": "AKCNS",
+            "aliases": ["AKCANSA CIMENTO SANAYI VE TICARET"],
+            "source_name": "borsa-istanbul-symbols",
+        },
+        {
+            "entity_id": "finance-tr-ticker:SAHOL",
+            "entity_type": "ticker",
+            "canonical_text": "SAHOL",
+            "aliases": ["HACI OMER SABANCI HOLDING"],
+            "source_name": "borsa-istanbul-symbols",
+        },
+        {
+            "entity_id": "finance-tr-shareholder:BESLR:yildiz-holding-anonim-sirketi",
+            "entity_type": "shareholder",
+            "canonical_text": "Yildiz Holding Anonim Sirketi",
+            "aliases": ["Yildiz Holding Anonim Sirketi"],
+            "source_name": "borsa-istanbul-symbols",
+        },
+    ]
+    (normalized_dir / "entities.jsonl").write_text(
+        "".join(json.dumps(item) + "\n" for item in entities),
+        encoding="utf-8",
+    )
+    (normalized_dir / "rules.jsonl").write_text("", encoding="utf-8")
+    return bundle_dir
 
 
 def test_public_api_can_generate_build_install_and_tag_generated_pack(
@@ -60,6 +129,37 @@ def test_public_api_can_generate_build_install_and_tag_generated_pack(
     assert ("TICKA", "ticker") in entities
     assert ("EXCHX", "exchange") in entities
     assert ("USD 12.5", "currency_amount") in entities
+
+
+def test_country_finance_pack_derives_runtime_short_company_aliases(tmp_path: Path) -> None:
+    bundle_dir = _create_country_finance_generation_bundle(tmp_path / "bundle")
+
+    generated = generate_pack_source(
+        bundle_dir,
+        output_dir=tmp_path / "generated-packs",
+    )
+    registry = build_registry([generated.pack_dir], output_dir=tmp_path / "registry")
+
+    install_root = tmp_path / "install"
+    pull_pack("finance-tr-en", storage_root=install_root, registry_url=registry.index_url)
+
+    response = tag(
+        "Sabanci Holding is selling Akcansa while Yildiz Holding watches.",
+        pack="finance-tr-en",
+        storage_root=install_root,
+    )
+    entities = {
+        (entity.text, entity.label, entity.link.entity_id if entity.link else None)
+        for entity in response.entities
+    }
+
+    assert ("Akcansa", "ticker", "finance-tr-ticker:AKCNS") in entities
+    assert ("Sabanci Holding", "ticker", "finance-tr-ticker:SAHOL") in entities
+    assert (
+        "Yildiz Holding",
+        "organization",
+        "finance-tr-shareholder:BESLR:yildiz-holding-anonim-sirketi",
+    ) in entities
 
 
 def test_public_api_can_generate_and_tag_general_pack_variants(tmp_path: Path) -> None:

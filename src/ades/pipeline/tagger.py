@@ -5,9 +5,11 @@ from __future__ import annotations
 from bisect import bisect_right
 from collections import Counter
 from dataclasses import dataclass, replace
+import json
 import os
 from pathlib import Path
 import re
+from threading import RLock
 from time import perf_counter
 import unicodedata
 
@@ -1511,6 +1513,7 @@ _HEURISTIC_STRUCTURAL_LOCATION_RE = re.compile(
 
 _LANE_PRIORITY = {
     "runtime_g20_country_alias": 4,
+    "runtime_finance_country_short_alias": 4,
     "deterministic_rule": 3,
     "deterministic_alias": 2,
     "document_acronym_backfill": 2,
@@ -1541,6 +1544,17 @@ class RuntimeG20CountryAlias:
     canonical_text: str
     alias: str
     case_sensitive: bool
+
+
+@dataclass(frozen=True)
+class RuntimeFinanceCountryShortAlias:
+    """One runtime-derived short alias for a country finance entity."""
+
+    entity_id: str
+    canonical_text: str
+    label: str
+    alias: str
+    source_pack: str
 
 
 @dataclass
@@ -1728,6 +1742,82 @@ def _build_runtime_g20_country_aliases() -> tuple[RuntimeG20CountryAlias, ...]:
 
 
 _RUNTIME_G20_COUNTRY_ALIASES = _build_runtime_g20_country_aliases()
+_FINANCE_COUNTRY_PACK_ID_RE = re.compile(r"^finance-[a-z]{2}-en$")
+_FINANCE_COUNTRY_SHORT_ALIAS_CACHE: dict[
+    tuple[str, int, int],
+    dict[str, tuple[RuntimeFinanceCountryShortAlias, ...]],
+] = {}
+_FINANCE_COUNTRY_SHORT_ALIAS_CACHE_LOCK = RLock()
+_FINANCE_COUNTRY_SHORT_ALIAS_LABELS = {"organization", "ticker"}
+_FINANCE_COUNTRY_SHORT_ALIAS_BUSINESS_TOKENS = {
+    "a",
+    "ab",
+    "ag",
+    "anonim",
+    "as",
+    "aş",
+    "bhd",
+    "co",
+    "corp",
+    "corporation",
+    "gmbh",
+    "inc",
+    "incorporated",
+    "kk",
+    "limited",
+    "llc",
+    "ltd",
+    "nv",
+    "oyj",
+    "plc",
+    "pte",
+    "sa",
+    "sanayi",
+    "sanayii",
+    "sirketi",
+    "spa",
+    "tbk",
+    "ticaret",
+    "ve",
+}
+_FINANCE_COUNTRY_SHORT_ALIAS_DESCRIPTOR_TOKENS = _FINANCE_COUNTRY_SHORT_ALIAS_BUSINESS_TOKENS | {
+    "bank",
+    "bankasi",
+    "banka",
+    "cement",
+    "cimento",
+    "cimsa",
+    "company",
+    "energy",
+    "finance",
+    "financial",
+    "group",
+    "holding",
+    "holdings",
+    "insurance",
+    "investment",
+    "investments",
+    "mining",
+    "real",
+    "reit",
+    "resources",
+    "services",
+    "steel",
+    "technology",
+    "telecom",
+    "trust",
+    "ventures",
+}
+_FINANCE_COUNTRY_SHORT_ALIAS_STOPLIST = (
+    _GENERIC_SINGLE_TOKEN_HEADS
+    | _GENERIC_PHRASE_LEADS
+    | _AUXILIARY_LOOKUP_TOKENS
+    | _CALENDAR_SINGLE_TOKEN_WORDS
+    | _NUMBER_SINGLE_TOKEN_WORDS
+    | _RUNTIME_GENERIC_SINGLE_TOKEN_ALIAS_TEXTS
+    | _FINANCE_COUNTRY_SHORT_ALIAS_DESCRIPTOR_TOKENS
+    | {"haci", "hacı", "omer", "ömer"}
+)
 
 
 def _runtime_country_alias_pattern(alias: RuntimeG20CountryAlias) -> re.Pattern[str]:
@@ -1784,6 +1874,212 @@ def _extract_runtime_g20_country_alias_entities(
                     ),
                     domain=runtime.domain,
                     lane="runtime_g20_country_alias",
+                    normalized_start=normalized_start,
+                    normalized_end=normalized_end,
+                )
+            )
+    return extracted
+
+
+def _normalize_finance_country_alias_token(token: str) -> str:
+    return normalize_lookup_text(token).replace(".", "")
+
+
+def _is_finance_country_short_alias_candidate(value: str) -> bool:
+    normalized = normalize_lookup_text(value)
+    if len(normalized) < 4:
+        return False
+    if normalized in _FINANCE_COUNTRY_SHORT_ALIAS_STOPLIST:
+        return False
+    if not any(character.isalpha() for character in value):
+        return False
+    return True
+
+
+def _strip_finance_country_legal_suffix(tokens: list[str]) -> list[str]:
+    stripped = list(tokens)
+    while stripped and _normalize_finance_country_alias_token(stripped[-1]) in (
+        _FINANCE_COUNTRY_SHORT_ALIAS_BUSINESS_TOKENS - {"holding", "holdings"}
+    ):
+        stripped.pop()
+    return stripped
+
+
+def _derive_finance_country_short_alias_values(value: str) -> set[str]:
+    tokens = [token for token in TOKEN_RE.findall(value) if any(ch.isalpha() for ch in token)]
+    if not tokens:
+        return set()
+    stripped = _strip_finance_country_legal_suffix(tokens)
+    if not stripped:
+        return set()
+
+    aliases: set[str] = set()
+    normalized_tail = _normalize_finance_country_alias_token(stripped[-1])
+    if normalized_tail in {"holding", "holdings"} and len(stripped) >= 2:
+        aliases.add(" ".join(stripped[-2:]))
+        aliases.add(stripped[-2])
+    else:
+        aliases.add(stripped[0])
+        if (
+            len(stripped) >= 2
+            and _normalize_finance_country_alias_token(stripped[1])
+            not in _FINANCE_COUNTRY_SHORT_ALIAS_DESCRIPTOR_TOKENS
+        ):
+            aliases.add(" ".join(stripped[:2]))
+
+    return {
+        alias
+        for alias in aliases
+        if _is_finance_country_short_alias_candidate(alias)
+    }
+
+
+def _load_runtime_finance_country_short_aliases(
+    *,
+    storage_root: Path,
+    runtime: PackRuntime,
+) -> dict[str, tuple[RuntimeFinanceCountryShortAlias, ...]]:
+    if not _FINANCE_COUNTRY_PACK_ID_RE.fullmatch(runtime.pack_id):
+        return {}
+    aliases_path = (
+        Path(storage_root).expanduser().resolve()
+        / "packs"
+        / runtime.pack_id
+        / "aliases.json"
+    )
+    try:
+        stat = aliases_path.stat()
+    except OSError:
+        return {}
+    cache_key = (str(aliases_path), int(stat.st_mtime_ns), int(stat.st_size))
+    with _FINANCE_COUNTRY_SHORT_ALIAS_CACHE_LOCK:
+        cached = _FINANCE_COUNTRY_SHORT_ALIAS_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
+    try:
+        payload = json.loads(aliases_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    records_by_alias: dict[str, dict[str, RuntimeFinanceCountryShortAlias]] = {}
+    alias_items = payload.get("aliases", []) if isinstance(payload, dict) else []
+    for item in alias_items:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or "").strip()
+        if label not in _FINANCE_COUNTRY_SHORT_ALIAS_LABELS:
+            continue
+        entity_id = str(item.get("entity_id") or "").strip()
+        canonical_text = str(item.get("canonical_text") or "").strip()
+        source_text = str(item.get("text") or "").strip()
+        if not entity_id or not canonical_text or not source_text:
+            continue
+        if not (
+            entity_id.startswith(f"{runtime.pack_id.removesuffix('-en')}-ticker:")
+            or entity_id.startswith(f"{runtime.pack_id.removesuffix('-en')}-shareholder:")
+            or entity_id.startswith(f"{runtime.pack_id.removesuffix('-en')}-issuer:")
+        ):
+            continue
+        for alias in _derive_finance_country_short_alias_values(source_text):
+            normalized = normalize_lookup_text(alias)
+            if not normalized:
+                continue
+            records_by_alias.setdefault(normalized, {})[entity_id] = RuntimeFinanceCountryShortAlias(
+                entity_id=entity_id,
+                canonical_text=canonical_text,
+                label=label,
+                alias=alias,
+                source_pack=runtime.pack_id,
+            )
+
+    resolved: dict[str, tuple[RuntimeFinanceCountryShortAlias, ...]] = {}
+    for normalized_alias, by_entity_id in records_by_alias.items():
+        records = tuple(
+            sorted(
+                by_entity_id.values(),
+                key=lambda item: (item.label != "ticker", item.entity_id, item.canonical_text),
+            )
+        )
+        if len(records) > 1 and len(TOKEN_RE.findall(records[0].alias)) == 1:
+            continue
+        resolved[normalized_alias] = records[:3]
+
+    with _FINANCE_COUNTRY_SHORT_ALIAS_CACHE_LOCK:
+        _FINANCE_COUNTRY_SHORT_ALIAS_CACHE[cache_key] = resolved
+    return resolved
+
+
+def _runtime_finance_country_short_alias_surface_allowed(surface: str) -> bool:
+    tokens = [token for token in TOKEN_RE.findall(surface) if any(ch.isalpha() for ch in token)]
+    if len(tokens) != 1:
+        return True
+    token = tokens[0]
+    if token.isupper():
+        return True
+    return any(character.isupper() for character in token[:1])
+
+
+def _extract_runtime_finance_country_short_alias_entities(
+    *,
+    normalized_input: NormalizedText,
+    runtime: PackRuntime,
+    storage_root: Path,
+) -> list[ExtractedCandidate]:
+    alias_map = _load_runtime_finance_country_short_aliases(
+        storage_root=storage_root,
+        runtime=runtime,
+    )
+    if not alias_map:
+        return []
+
+    extracted: list[ExtractedCandidate] = []
+    seen_spans: set[tuple[int, int, str]] = set()
+    for start, end, candidate_text in _iter_candidate_windows(
+        normalized_input.text,
+        max_tokens=3,
+    ):
+        if not _runtime_finance_country_short_alias_surface_allowed(candidate_text):
+            continue
+        records = alias_map.get(normalize_lookup_text(candidate_text))
+        if not records:
+            continue
+        normalized_start = start
+        normalized_end = end
+        raw_start, raw_end = normalized_input.raw_span(normalized_start, normalized_end)
+        matched_text = normalized_input.text[normalized_start:normalized_end]
+        for record in records:
+            key = (raw_start, raw_end, record.entity_id)
+            if key in seen_spans:
+                continue
+            seen_spans.add(key)
+            extracted.append(
+                ExtractedCandidate(
+                    entity=EntityMatch(
+                        text=matched_text,
+                        label=record.label,
+                        start=raw_start,
+                        end=raw_end,
+                        aliases=[record.canonical_text, record.alias],
+                        confidence=0.88,
+                        provenance=_build_provenance(
+                            match_kind="alias",
+                            match_path="runtime.finance_country_short_alias",
+                            match_source=record.alias,
+                            source_pack=record.source_pack,
+                            source_domain=runtime.domain,
+                            lane="runtime_finance_country_short_alias",
+                        ),
+                        link=_build_entity_link(
+                            provider="runtime.finance_country_short_alias",
+                            pack_id=record.source_pack,
+                            label=record.label,
+                            canonical_text=record.canonical_text,
+                            entity_id=record.entity_id,
+                        ),
+                    ),
+                    domain=runtime.domain,
+                    lane="runtime_finance_country_short_alias",
                     normalized_start=normalized_start,
                     normalized_end=normalized_end,
                 )
@@ -6619,6 +6915,7 @@ def _score_entity_relevance(
     occurrence_bonus = min(0.18, max(0, _count_occurrences(text, occurrence_text) - 1) * 0.06)
     lane_bonus = {
         "runtime_g20_country_alias": 0.2,
+        "runtime_finance_country_short_alias": 0.18,
         "deterministic_rule": 0.18,
         "deterministic_alias": 0.12,
         "heuristic_structured_org_backfill": 0.14,
@@ -7705,6 +8002,19 @@ def tag_text(
         runtime_g20_country_backfilled
     )
     coherent = _apply_repeated_surface_consistency(runtime_g20_country_deduped)
+    runtime_finance_country_short_alias_backfilled = (
+        coherent
+        + _extract_runtime_finance_country_short_alias_entities(
+            normalized_input=normalized_input,
+            runtime=runtime,
+            storage_root=storage_root,
+        )
+    )
+    (
+        runtime_finance_country_short_alias_deduped,
+        runtime_finance_country_short_alias_duplicate_discards,
+    ) = _dedupe_exact_candidates(runtime_finance_country_short_alias_backfilled)
+    coherent = _apply_repeated_surface_consistency(runtime_finance_country_short_alias_deduped)
     acronym_backfilled = _backfill_document_acronym_entities(
         coherent,
         normalized_input=normalized_input,
@@ -7740,6 +8050,7 @@ def tag_text(
         + extension_duplicate_discards
         + heuristic_definition_duplicate_discards
         + runtime_g20_country_duplicate_discards
+        + runtime_finance_country_short_alias_duplicate_discards
         + acronym_duplicate_discards
     )
     if debug_payload is not None and total_duplicate_discards:
