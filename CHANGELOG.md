@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.2](https://github.com/bekirdag/ades/compare/ades-tool-v0.3.1...ades-tool-v0.3.2) (2026-05-07)
+
+
+### Bug Fixes
+
+* disable service prewarm on constrained prod startup ([2f7a123](https://github.com/bekirdag/ades/commit/2f7a123200c15442f78344bb608330e7b8fbea37))
+* harden production deploy workflow ([1917272](https://github.com/bekirdag/ades/commit/1917272abc05f56deade0ea3d4835d7b76ad72cd))
+* reload nginx during prod verification ([9e32f1a](https://github.com/bekirdag/ades/commit/9e32f1ae9854315febd1c667d7983128dc0e345c))
+* repair deploy install script quoting ([b2c0f7e](https://github.com/bekirdag/ades/commit/b2c0f7ebacb0f20563321889f8bfe77d59a80258))
+* retry flaky production ssh deploys ([da6244a](https://github.com/bekirdag/ades/commit/da6244ada5efc294d50b26a10eaccb5097babc4c))
+
 ## [0.3.1](https://github.com/bekirdag/ades/compare/ades-tool-v0.3.0...ades-tool-v0.3.1) (2026-04-22)
 
 
