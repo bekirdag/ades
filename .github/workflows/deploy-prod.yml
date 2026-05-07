@@ -210,6 +210,56 @@ jobs:
               print(0)
           PY
           }
+          merge_release_packs_into_current() {
+            local current_root="$1"
+            local release_root="$2"
+            local release_id="$3"
+            local release_packs_root="$release_root/packs"
+            local current_packs_root="$current_root/packs"
+            local backup_root="$current_root/.pack-backups/$release_id"
+            local merged_count=0
+
+            if [ ! -d "$release_packs_root" ]; then
+              return 0
+            fi
+
+            mkdir -p "$current_packs_root" "$backup_root"
+            for release_pack_dir in "$release_packs_root"/*; do
+              [ -d "$release_pack_dir" ] || continue
+              local pack_id
+              pack_id="$(basename "$release_pack_dir")"
+              local release_manifest="$release_pack_dir/manifest.json"
+              local current_pack_dir="$current_packs_root/$pack_id"
+              local current_manifest="$current_pack_dir/manifest.json"
+              local release_entries
+              local current_entries
+              release_entries="$(pack_entry_count "$release_manifest")"
+              current_entries="$(pack_entry_count "$current_manifest")"
+
+              if [ "$release_entries" -le 0 ]; then
+                echo "Skipping release pack $pack_id because it has no matcher entries."
+                continue
+              fi
+              if [ -f "$current_manifest" ] && [ "$current_entries" -gt "$release_entries" ]; then
+                echo "Skipping release pack $pack_id because current has $current_entries entries and release has $release_entries."
+                continue
+              fi
+
+              local tmp_pack_dir="$current_packs_root/.${pack_id}.tmp-$release_id"
+              rm -rf "$tmp_pack_dir"
+              mkdir -p "$tmp_pack_dir"
+              cp -a "$release_pack_dir/." "$tmp_pack_dir/"
+              if [ -d "$current_pack_dir" ]; then
+                rm -rf "$backup_root/$pack_id"
+                mv "$current_pack_dir" "$backup_root/$pack_id"
+              fi
+              mv "$tmp_pack_dir" "$current_pack_dir"
+              merged_count=$((merged_count + 1))
+              echo "Merged release pack $pack_id into preserved current registry ($release_entries entries)."
+            done
+
+            echo "Merged $merged_count release pack(s) into preserved current registry."
+          }
           impact_edge_count() {
             local impact_root="$1"
             python3 - "$impact_root" <<'PY'
@@ -495,6 +545,7 @@ jobs:
             new_general_entries="$(pack_entry_count "$release_root/packs/general-en/manifest.json")"
             if [ "$existing_general_entries" -ge 1000000 ] && [ "$new_general_entries" -lt 1000000 ]; then
               echo "Prepared deploy registry has starter general-en ($new_general_entries entries); preserving existing repo current with $existing_general_entries entries."
+              merge_release_packs_into_current "$previous_repo_current" "$release_root" "$release_id"
               switch_repo_current=0
             fi
           fi
