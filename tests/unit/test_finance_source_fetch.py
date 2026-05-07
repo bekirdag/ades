@@ -70,6 +70,22 @@ def test_fetch_finance_source_snapshot_writes_immutable_snapshot_dir(tmp_path: P
         item["canonical_text"] == "Brent crude"
         for item in curated_entities.get("entities", [])
     )
+    natural_gas_record = next(
+        item
+        for item in curated_entities.get("entities", [])
+        if item["canonical_text"] == "Natural gas"
+    )
+    assert natural_gas_record["entity_id"] == "ades:impact:commodity:natural-gas"
+    assert "Henry Hub natural gas" in natural_gas_record["aliases"]
+    gas_policy_record = next(
+        item
+        for item in curated_entities.get("entities", [])
+        if item["canonical_text"] == "Gas reservation policy"
+    )
+    assert gas_policy_record["entity_id"] == (
+        "ades:impact:energy-policy:gas-reservation-policy"
+    )
+    assert "gas reservation requirement" in gas_policy_record["aliases"]
 
     bundle = build_finance_source_bundle(
         sec_companies_path=result.sec_companies_path,

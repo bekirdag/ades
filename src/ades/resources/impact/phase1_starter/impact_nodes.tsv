@@ -12,6 +12,8 @@ ades:impact:sanctions:ofac	Office of Foreign Assets Control	sanctions_body		0	1	
 wikidata:Q121826282	OPEC+	organization		0	1	{"wikidata":"Q121826282"}	general-en,finance-en
 ades:impact:commodity:crude-oil	Crude oil	commodity		1	1	{"commodity":"crude-oil"}	general-en,finance-en
 ades:impact:commodity:natural-gas	Natural gas	commodity		1	1	{"commodity":"natural-gas"}	general-en,finance-en
+ades:impact:energy-policy:gas-reservation-policy	Gas reservation policy	policy		0	1	{"category":"energy_regulation"}	finance-en
+ades:impact:energy-sector:gas-producers	Gas producers	sector		0	1	{"category":"energy_supply"}	finance-en
 ades:impact:commodity:gold	Gold	commodity		1	1	{"commodity":"gold"}	general-en,finance-en
 ades:impact:currency:usd	US dollar	currency		1	1	{"iso4217":"USD"}	general-en,finance-en
 ades:impact:currency:eur	Euro	currency		1	1	{"iso4217":"EUR"}	general-en,finance-en

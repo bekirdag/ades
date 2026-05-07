@@ -547,9 +547,38 @@ DEFAULT_CURATED_FINANCE_ENTITIES: tuple[dict[str, object], ...] = (
     ),
     _curated_finance_entity(
         "commodity",
-        "Henry Hub natural gas",
-        aliases=(),
+        "Natural gas",
+        aliases=(
+            "Henry Hub natural gas",
+            "natural gas futures",
+            "gas futures",
+            "liquefied natural gas",
+        ),
+        entity_id="ades:impact:commodity:natural-gas",
         metadata={"category": "energy_benchmark"},
+    ),
+    _curated_finance_entity(
+        "policy",
+        "Gas reservation policy",
+        aliases=(
+            "domestic gas reservation",
+            "gas reservation requirement",
+            "gas supply reservation",
+            "natural gas reservation policy",
+        ),
+        entity_id="ades:impact:energy-policy:gas-reservation-policy",
+        metadata={"category": "energy_regulation"},
+    ),
+    _curated_finance_entity(
+        "sector",
+        "Gas producers",
+        aliases=(
+            "gas producer",
+            "natural gas producer",
+            "natural gas producers",
+        ),
+        entity_id="ades:impact:energy-sector:gas-producers",
+        metadata={"category": "energy_supply"},
     ),
     _curated_finance_entity(
         "commodity",

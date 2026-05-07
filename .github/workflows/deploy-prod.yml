@@ -242,6 +242,217 @@ jobs:
           print(0)
           PY
           }
+          merge_starter_impact_graph() {
+            local current_root="$1"
+            local starter_root="$2"
+            local release_id="$3"
+            python3 - "$current_root" "$starter_root" "$release_id" <<'PY'
+          import hashlib
+          import json
+          import os
+          import shutil
+          import sqlite3
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          current_root = Path(sys.argv[1])
+          starter_root = Path(sys.argv[2])
+          release_id = sys.argv[3]
+          current_db = current_root / "market_graph_store.sqlite"
+          starter_db = starter_root / "market_graph_store.sqlite"
+          if not current_db.exists() or not starter_db.exists():
+              raise SystemExit("current and starter impact graph artifacts are both required")
+
+          tmp_db = current_root / f".market_graph_store.sqlite.{release_id}.tmp"
+          backup_db = current_root / f"market_graph_store.sqlite.before-{release_id}"
+          if tmp_db.exists():
+              tmp_db.unlink()
+          shutil.copy2(current_db, tmp_db)
+
+          connection = sqlite3.connect(str(tmp_db))
+          try:
+              connection.execute("ATTACH DATABASE ? AS starter", (str(starter_db),))
+              before_nodes = int(connection.execute("SELECT COUNT(*) FROM impact_nodes").fetchone()[0])
+              before_edges = int(connection.execute("SELECT COUNT(*) FROM impact_edges").fetchone()[0])
+              connection.execute(
+                  """
+                  INSERT OR REPLACE INTO impact_nodes (
+                    entity_ref,
+                    canonical_name,
+                    entity_type,
+                    library_id,
+                    is_tradable,
+                    is_seed_eligible,
+                    seed_degree,
+                    identifiers_json,
+                    packs_json
+                  )
+                  SELECT
+                    entity_ref,
+                    canonical_name,
+                    entity_type,
+                    library_id,
+                    is_tradable,
+                    is_seed_eligible,
+                    seed_degree,
+                    identifiers_json,
+                    packs_json
+                  FROM starter.impact_nodes
+                  """
+              )
+              connection.execute(
+                  """
+                  INSERT OR IGNORE INTO impact_edges (
+                    edge_id,
+                    source_ref,
+                    target_ref,
+                    relation,
+                    evidence_level,
+                    confidence,
+                    direction_hint,
+                    source_name,
+                    source_url,
+                    source_snapshot,
+                    source_year,
+                    refresh_policy,
+                    version
+                  )
+                  SELECT
+                    edge_id,
+                    source_ref,
+                    target_ref,
+                    relation,
+                    evidence_level,
+                    confidence,
+                    direction_hint,
+                    source_name,
+                    source_url,
+                    source_snapshot,
+                    source_year,
+                    refresh_policy,
+                    version
+                  FROM starter.impact_edges
+                  """
+              )
+              connection.execute(
+                  """
+                  INSERT OR IGNORE INTO impact_edge_packs (edge_id, pack_id)
+                  SELECT edge_id, pack_id
+                  FROM starter.impact_edge_packs
+                  """
+              )
+              connection.execute(
+                  """
+                  UPDATE impact_nodes
+                  SET seed_degree = (
+                    SELECT COUNT(*)
+                    FROM impact_edges
+                    WHERE impact_edges.source_ref = impact_nodes.entity_ref
+                  )
+                  """
+              )
+              node_count = int(connection.execute("SELECT COUNT(*) FROM impact_nodes").fetchone()[0])
+              edge_count = int(connection.execute("SELECT COUNT(*) FROM impact_edges").fetchone()[0])
+              metadata = connection.execute(
+                  """
+                  SELECT graph_version, artifact_version, artifact_hash, builder_version, source_manifest_hash
+                  FROM build_metadata
+                  WHERE id = 1
+                  """
+              ).fetchone()
+              built_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+              if metadata:
+                  graph_version, artifact_version, artifact_hash, builder_version, source_hash = metadata
+                  next_version = f"{artifact_version}+starter-{release_id}"
+                  next_hash = "sha256:" + hashlib.sha256(
+                      f"{artifact_hash}:{release_id}:{node_count}:{edge_count}".encode("utf-8")
+                  ).hexdigest()
+                  connection.execute(
+                      """
+                      UPDATE build_metadata
+                      SET artifact_version = ?,
+                          artifact_hash = ?,
+                          built_at = ?,
+                          node_count = ?,
+                          edge_count = ?
+                      WHERE id = 1
+                      """,
+                      (next_version, next_hash, built_at, node_count, edge_count),
+                  )
+              else:
+                  next_version = f"starter-merged-{release_id}"
+                  next_hash = "sha256:" + hashlib.sha256(
+                      f"{release_id}:{node_count}:{edge_count}".encode("utf-8")
+                  ).hexdigest()
+                  connection.execute(
+                      """
+                      INSERT INTO build_metadata (
+                        id,
+                        graph_version,
+                        artifact_version,
+                        artifact_hash,
+                        builder_version,
+                        built_at,
+                        source_manifest_hash,
+                        node_count,
+                        edge_count
+                      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+                      """,
+                      (
+                          "market-graph-v1",
+                          next_version,
+                          next_hash,
+                          "market-graph-builder-v1",
+                          built_at,
+                          next_hash,
+                          node_count,
+                          edge_count,
+                      ),
+                  )
+              connection.commit()
+          finally:
+              connection.close()
+
+          if not backup_db.exists():
+              shutil.copy2(current_db, backup_db)
+          os.replace(tmp_db, current_db)
+
+          manifest_path = current_root / "market_graph_store_manifest.json"
+          if manifest_path.exists():
+              try:
+                  payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+              except Exception:
+                  payload = {}
+          else:
+              payload = {}
+          payload.update(
+              {
+                  "artifact_path": str(current_db),
+                  "artifact_version": next_version,
+                  "artifact_hash": next_hash,
+                  "built_at": built_at,
+                  "node_count": node_count,
+                  "edge_count": edge_count,
+                  "starter_merge_release_id": release_id,
+              }
+          )
+          manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(
+              json.dumps(
+                  {
+                      "before_nodes": before_nodes,
+                      "before_edges": before_edges,
+                      "after_nodes": node_count,
+                      "after_edges": edge_count,
+                      "inserted_nodes": node_count - before_nodes,
+                      "inserted_edges": edge_count - before_edges,
+                  },
+                  sort_keys=True,
+              )
+          )
+          PY
+          }
           /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --force-reinstall --no-deps "/mnt/ades/app/releases/$release_id/$wheel_name"
           /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --upgrade "psycopg[binary]>=3.2,<4.0"
           impact_release_root="/mnt/ades/impact/releases/$release_id"
@@ -252,7 +463,8 @@ jobs:
             existing_impact_edges="$(impact_edge_count "$impact_current_root")"
             new_impact_edges="$(impact_edge_count "$impact_release_root")"
             if [ "$existing_impact_edges" -ge 1000000 ] && [ "$new_impact_edges" -lt 1000000 ]; then
-              echo "Prepared deploy impact graph is starter-sized ($new_impact_edges edges); preserving existing current graph with $existing_impact_edges edges."
+              echo "Prepared deploy impact graph is starter-sized ($new_impact_edges edges); merging starter rows into existing current graph with $existing_impact_edges edges."
+              merge_starter_impact_graph "$impact_current_root" "$impact_release_root" "$release_id"
               switch_impact_current=0
             fi
             if [ "$switch_impact_current" -eq 1 ]; then

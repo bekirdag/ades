@@ -48,6 +48,12 @@
       "expected_relation_families": ["commodity_traded_in_currency", "country_member_of_bloc", "country_produces_commodity", "sanction_affects_country", "sanction_affects_commodity"]
     },
     {
+      "name": "gas_reservation_policy_natural_gas",
+      "entity_refs": ["ades:impact:energy-policy:gas-reservation-policy"],
+      "expected_candidate_refs": ["ades:impact:commodity:natural-gas", "ades:impact:currency:usd"],
+      "expected_relation_families": ["commodity_traded_in_currency", "energy_policy_affects_commodity"]
+    },
+    {
       "name": "negative_empty_refs",
       "entity_refs": ["ades:impact:unknown:not-in-graph"],
       "expected_candidate_refs": [],

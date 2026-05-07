@@ -20,6 +20,16 @@
       "notes": "Terminal crude oil futures market reference."
     },
     {
+      "source_name": "CME natural gas futures",
+      "source_url": "https://www.cmegroup.com/markets/energy/natural-gas/natural-gas.html",
+      "source_snapshot": "2026-05-07",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal natural gas futures market reference."
+    },
+    {
       "source_name": "CME gold futures",
       "source_url": "https://www.cmegroup.com/markets/metals/precious/gold.html",
       "source_snapshot": "2026-05-05",
@@ -48,6 +58,16 @@
       "normalized_output_allowed": true,
       "license_notes": "Official public U.S. government data page; starter row stores only reviewed relationship metadata.",
       "notes": "Country commodity production/export context reference."
+    },
+    {
+      "source_name": "EIA Natural Gas Data",
+      "source_url": "https://www.eia.gov/naturalgas/",
+      "source_snapshot": "2026-05-07",
+      "source_year": 2026,
+      "refresh_policy": "monthly",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government data page; starter row stores only reviewed relationship metadata.",
+      "notes": "Natural gas market and supply relationship reference."
     },
     {
       "source_name": "EIA Petroleum and Other Liquids Data",
