@@ -47,6 +47,28 @@ COUNTRY_CURRENCY = {
     "za": "ZAR",
 }
 
+COUNTRY_DISPLAY_NAME = {
+    "ar": "Argentina",
+    "au": "Australia",
+    "br": "Brazil",
+    "ca": "Canada",
+    "cn": "China",
+    "de": "Germany",
+    "fr": "France",
+    "id": "Indonesia",
+    "in": "India",
+    "it": "Italy",
+    "jp": "Japan",
+    "kr": "South Korea",
+    "mx": "Mexico",
+    "ru": "Russia",
+    "sa": "Saudi Arabia",
+    "tr": "Turkey",
+    "uk": "United Kingdom",
+    "us": "United States",
+    "za": "South Africa",
+}
+
 DEFAULT_EXTRA_PROXY_PACK_IDS = (
     "business-vector-en",
     "economics-vector-en",
@@ -360,6 +382,16 @@ def _country_proxy_nodes(pack_id: str, country_code: str, currency: str) -> list
     upper_country = country_code.upper()
     return [
         _node_row(
+            entity_ref=f"country:{country_code}",
+            canonical_name=COUNTRY_DISPLAY_NAME.get(country_code, upper_country),
+            entity_type="country",
+            library_id=pack_id,
+            is_tradable=False,
+            is_seed_eligible=True,
+            identifiers={"country_code": country_code},
+            pack_ids=pack_id,
+        ),
+        _node_row(
             entity_ref=f"ades:impact:currency:{currency.casefold()}",
             canonical_name=f"{currency} currency proxy",
             entity_type="currency",
@@ -570,6 +602,73 @@ def _default_proxy_edges(
             source_year=source_year,
             pack_id=pack_id,
             notes="Coverage proxy generated from finance-country pack membership.",
+        )
+        if maybe_edge is not None:
+            yield maybe_edge
+
+
+def _country_context_edges(
+    *,
+    pack_id: str,
+    country_code: str,
+    currency: str,
+    source_url: str,
+    source_snapshot: str,
+    source_year: int,
+) -> Iterator[_Edge]:
+    source_ref = f"country:{country_code}"
+    targets = [
+        (
+            f"ades:impact:currency:{currency.casefold()}",
+            "country_affects_currency_proxy",
+            0.66,
+            "currency_proxy",
+        ),
+        (
+            "ades:impact:indicator:dxy",
+            "country_affects_dxy_proxy",
+            0.57,
+            "dxy_proxy",
+        ),
+        (
+            f"ades:impact:index:{country_code}-market",
+            "country_affects_country_index_proxy",
+            0.60,
+            "country_equity_proxy",
+        ),
+        (
+            f"ades:impact:rates:{country_code}-policy-rate",
+            "country_affects_policy_rate_proxy",
+            0.64,
+            "rates_proxy",
+        ),
+        (
+            f"ades:impact:risk:{country_code}-country-risk",
+            "country_affects_country_risk_proxy",
+            0.62,
+            "country_risk_proxy",
+        ),
+        (
+            "ades:impact:index:global-equities",
+            "country_affects_global_equity_proxy",
+            0.52,
+            "global_equity_proxy",
+        ),
+    ]
+    for target_ref, relation, confidence, direction_hint in targets:
+        maybe_edge = _edge(
+            source_ref=source_ref,
+            target_ref=target_ref,
+            relation=relation,
+            evidence_level="shallow",
+            confidence=confidence,
+            direction_hint=direction_hint,
+            source_name="ades-finance-country-context-proxy",
+            source_url=source_url,
+            source_snapshot=source_snapshot,
+            source_year=source_year,
+            pack_id=pack_id,
+            notes="Generic country context proxy generated from finance-country pack coverage.",
         )
         if maybe_edge is not None:
             yield maybe_edge
@@ -793,7 +892,20 @@ def build_finance_country_proxy_source_lane(
             existing = nodes.get(str(proxy_node["entity_ref"]))
             if existing is None:
                 nodes[str(proxy_node["entity_ref"])] = proxy_node
-            terminal_node_refs.add(str(proxy_node["entity_ref"]))
+            if str(proxy_node.get("is_tradable")) == "true":
+                terminal_node_refs.add(str(proxy_node["entity_ref"]))
+
+        for edge in _country_context_edges(
+            pack_id=pack_id,
+            country_code=country_code,
+            currency=currency,
+            source_url=source_url,
+            source_snapshot=source_snapshot,
+            source_year=source_year,
+        ):
+            all_edges.append(edge)
+            outgoing_sources.add(edge.source_ref)
+            generated_relation_counts[edge.relation] = generated_relation_counts.get(edge.relation, 0) + 1
 
         for entity in entities:
             source_entity_refs.add(entity.entity_ref)

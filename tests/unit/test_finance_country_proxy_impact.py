@@ -142,8 +142,14 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
         "person_affects_employer_ticker",
         "finance-us-ticker:ABC",
     ) in edge_keys
+    assert ("country:us", "country_affects_currency_proxy", "ades:impact:currency:usd") in edge_keys
+    assert (
+        "country:us",
+        "country_affects_policy_rate_proxy",
+        "ades:impact:rates:us-policy-rate",
+    ) in edge_keys
     assert ("finance-us:sec", "entity_affects_dxy_proxy", "ades:impact:indicator:dxy") in edge_keys
-    assert result.edge_count >= 27
+    assert result.edge_count >= 33
 
     assert result.artifact_path is not None
     assert result.artifact_edge_count is not None
@@ -169,6 +175,21 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
     assert {
         candidate.entity_ref for candidate in starter_result.candidates
     } >= {"ades:impact:commodity:crude-oil"}
+
+    country_result = expand_impact_paths(
+        ["country:us"],
+        settings=Settings(
+            impact_expansion_enabled=True,
+            impact_expansion_artifact_path=result.artifact_path,
+        ),
+        max_depth=1,
+        max_candidates=8,
+    )
+    assert {candidate.entity_ref for candidate in country_result.candidates} >= {
+        "ades:impact:currency:usd",
+        "ades:impact:rates:us-policy-rate",
+        "ades:impact:risk:us-country-risk",
+    }
 
 
 def test_finance_country_proxy_generator_can_fallback_to_aliases(tmp_path: Path) -> None:
