@@ -2391,6 +2391,8 @@ def _select_family_preferred_location_candidate(
 ) -> AliasClusterCandidate | None:
     if _is_blocklisted_runtime_single_token(alias_key):
         return None
+    if not _is_single_token_alpha(alias_key):
+        return None
     location_candidates = [
         candidate
         for candidate in candidates
@@ -2408,8 +2410,6 @@ def _select_family_preferred_location_candidate(
         ),
     )
     top_candidate = candidates[0]
-    if top_candidate.label == "location":
-        return None
     if location_candidate.features.popularity_weight < 0.78:
         return None
     if location_candidate.features.source_priority + 0.05 < top_candidate.features.source_priority:

@@ -2266,3 +2266,75 @@ def test_alias_analysis_prefers_strong_location_family_over_org_conflict() -> No
     assert result.retained_alias_count == 1
     assert result.retained_aliases[0]["label"] == "location"
     assert result.blocked_reason_counts["family_preferred_location_alias"] == 1
+
+
+def test_alias_analysis_prefers_top_country_location_over_close_person_conflict() -> None:
+    result = analyze_alias_candidates(
+        [
+            build_alias_candidate(
+                alias_key="china",
+                display_text="China",
+                label="location",
+                canonical_text="China",
+                record={
+                    "entity_id": "wikidata:Q288864",
+                    "source_name": "wikidata-general-entities",
+                    "source_priority": 0.8,
+                    "popularity": 1.0,
+                },
+            ),
+            build_alias_candidate(
+                alias_key="china",
+                display_text="China",
+                label="person",
+                canonical_text="China",
+                record={
+                    "entity_id": "wikidata:Q11617949",
+                    "source_name": "wikidata-general-entities",
+                    "source_priority": 0.8,
+                    "popularity": 0.5,
+                },
+            ),
+        ],
+        allowed_ambiguous_aliases=set(),
+    )
+
+    assert result.retained_alias_count == 1
+    assert result.retained_aliases[0]["label"] == "location"
+    assert result.blocked_reason_counts["family_preferred_location_alias"] == 1
+
+
+def test_alias_analysis_does_not_promote_multi_token_location_over_org_conflict() -> None:
+    result = analyze_alias_candidates(
+        [
+            build_alias_candidate(
+                alias_key="abbey theatre",
+                display_text="Abbey Theatre",
+                label="organization",
+                canonical_text="Abbey Theatre",
+                record={
+                    "entity_id": "wikidata:Q306434",
+                    "source_name": "wikidata-general-entities",
+                    "source_priority": 0.8,
+                    "popularity": 1.0,
+                },
+            ),
+            build_alias_candidate(
+                alias_key="abbey theatre",
+                display_text="Abbey Theatre",
+                label="location",
+                canonical_text="Abbey Theatre",
+                record={
+                    "entity_id": "wikidata:Q20642217",
+                    "source_name": "wikidata-general-entities",
+                    "source_priority": 0.8,
+                    "popularity": 1.0,
+                },
+            ),
+        ],
+        allowed_ambiguous_aliases=set(),
+    )
+
+    assert result.retained_alias_count == 0
+    assert result.ambiguous_alias_count == 1
+    assert result.blocked_reason_counts["ambiguous_natural_language_alias"] == 2
