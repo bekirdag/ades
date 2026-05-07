@@ -20,6 +20,7 @@ import urllib.request
 from urllib.parse import urlparse
 import zipfile
 
+from .g20_country_aliases import DEFAULT_CURATED_G20_COUNTRY_ENTITIES
 from .fetch import normalize_source_url
 
 
@@ -155,7 +156,9 @@ _WIKIDATA_MIN_CANDIDATE_SITELINKS = min(
     DEFAULT_WIKIDATA_MIN_SITELINKS_BY_ENTITY_TYPE.values(),
     default=0,
 )
-DEFAULT_CURATED_GENERAL_ENTITIES: tuple[dict[str, object], ...] = ()
+DEFAULT_CURATED_GENERAL_ENTITIES: tuple[dict[str, object], ...] = (
+    *DEFAULT_CURATED_G20_COUNTRY_ENTITIES,
+)
 _WIKIDATA_TRUTHY_STAGE_SCHEMA_VERSION = 3
 _WIKIDATA_TRUTHY_STAGE_LOGIC_VERSION = 3
 _GEONAMES_OUTPUT_HEADER = (

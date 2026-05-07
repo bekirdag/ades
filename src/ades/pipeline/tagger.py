@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover - packaging/tests install wordfreq
     _wordfreq_zipf_frequency = None
 
 from ..packs.registry import PackRegistry
+from ..packs.g20_country_aliases import DEFAULT_CURATED_G20_COUNTRY_ENTITIES
 from ..packs.runtime import PackRuntime, RuleDefinition, load_pack_runtime
 from .hybrid import ProposalProvider, ProposalSpan, get_proposal_spans, hybrid_enabled
 from ..runtime_matcher import (
@@ -1509,6 +1510,7 @@ _HEURISTIC_STRUCTURAL_LOCATION_RE = re.compile(
 )
 
 _LANE_PRIORITY = {
+    "runtime_g20_country_alias": 4,
     "deterministic_rule": 3,
     "deterministic_alias": 2,
     "document_acronym_backfill": 2,
@@ -1529,6 +1531,16 @@ class ExtractedCandidate:
     lane: str
     normalized_start: int
     normalized_end: int
+
+
+@dataclass(frozen=True)
+class RuntimeG20CountryAlias:
+    """One reviewed G20 country or nationality alias available at runtime."""
+
+    entity_id: str
+    canonical_text: str
+    alias: str
+    case_sensitive: bool
 
 
 @dataclass
@@ -1674,6 +1686,109 @@ def _build_provenance(
         model_name=model_name,
         model_version=model_version,
     )
+
+
+def _is_case_sensitive_country_alias(alias: str) -> bool:
+    normalized = alias.replace(".", "").replace(" ", "")
+    return normalized.isupper() and 1 < len(normalized) <= 4
+
+
+def _build_runtime_g20_country_aliases() -> tuple[RuntimeG20CountryAlias, ...]:
+    records: list[RuntimeG20CountryAlias] = []
+    seen: set[tuple[str, str, bool]] = set()
+    for entity in DEFAULT_CURATED_G20_COUNTRY_ENTITIES:
+        entity_id = str(entity.get("entity_id") or "").strip()
+        canonical_text = str(entity.get("canonical_text") or "").strip()
+        if not entity_id or not canonical_text:
+            continue
+        aliases = [canonical_text]
+        aliases.extend(
+            alias
+            for alias in entity.get("aliases", [])
+            if isinstance(alias, str) and alias.strip()
+        )
+        for alias in aliases:
+            alias = alias.strip()
+            if not alias:
+                continue
+            case_sensitive = _is_case_sensitive_country_alias(alias)
+            key = (entity_id, alias if case_sensitive else alias.casefold(), case_sensitive)
+            if key in seen:
+                continue
+            seen.add(key)
+            records.append(
+                RuntimeG20CountryAlias(
+                    entity_id=entity_id,
+                    canonical_text=canonical_text,
+                    alias=alias,
+                    case_sensitive=case_sensitive,
+                )
+            )
+    return tuple(sorted(records, key=lambda item: (-len(item.alias), item.entity_id, item.alias)))
+
+
+_RUNTIME_G20_COUNTRY_ALIASES = _build_runtime_g20_country_aliases()
+
+
+def _runtime_country_alias_pattern(alias: RuntimeG20CountryAlias) -> re.Pattern[str]:
+    escaped = re.escape(alias.alias)
+    flags = 0 if alias.case_sensitive else re.IGNORECASE
+    return re.compile(rf"(?<![A-Za-z0-9_]){escaped}(?![A-Za-z0-9_])", flags=flags)
+
+
+def _extract_runtime_g20_country_alias_entities(
+    *,
+    normalized_input: NormalizedText,
+    runtime: PackRuntime,
+) -> list[ExtractedCandidate]:
+    if runtime.pack_id != "general-en":
+        return []
+
+    extracted: list[ExtractedCandidate] = []
+    seen_spans: set[tuple[int, int, str]] = set()
+    for country_alias in _RUNTIME_G20_COUNTRY_ALIASES:
+        pattern = _runtime_country_alias_pattern(country_alias)
+        for match in pattern.finditer(normalized_input.text):
+            normalized_start = match.start()
+            normalized_end = match.end()
+            key = (normalized_start, normalized_end, country_alias.entity_id)
+            if key in seen_spans:
+                continue
+            seen_spans.add(key)
+            raw_start, raw_end = normalized_input.raw_span(normalized_start, normalized_end)
+            matched_text = normalized_input.text[normalized_start:normalized_end]
+            extracted.append(
+                ExtractedCandidate(
+                    entity=EntityMatch(
+                        text=matched_text,
+                        label="location",
+                        start=raw_start,
+                        end=raw_end,
+                        aliases=[country_alias.canonical_text, country_alias.alias],
+                        confidence=0.9,
+                        provenance=_build_provenance(
+                            match_kind="alias",
+                            match_path="runtime.g20_country_alias",
+                            match_source=country_alias.alias,
+                            source_pack=runtime.pack_id,
+                            source_domain=runtime.domain,
+                            lane="runtime_g20_country_alias",
+                        ),
+                        link=_build_entity_link(
+                            provider="runtime.g20_country_alias",
+                            pack_id=runtime.pack_id,
+                            label="location",
+                            canonical_text=country_alias.canonical_text,
+                            entity_id=country_alias.entity_id,
+                        ),
+                    ),
+                    domain=runtime.domain,
+                    lane="runtime_g20_country_alias",
+                    normalized_start=normalized_start,
+                    normalized_end=normalized_end,
+                )
+            )
+    return extracted
 
 
 def _extract_rule_entities(
@@ -6503,6 +6618,7 @@ def _score_entity_relevance(
     occurrence_text = _relevance_occurrence_text(candidate)
     occurrence_bonus = min(0.18, max(0, _count_occurrences(text, occurrence_text) - 1) * 0.06)
     lane_bonus = {
+        "runtime_g20_country_alias": 0.2,
         "deterministic_rule": 0.18,
         "deterministic_alias": 0.12,
         "heuristic_structured_org_backfill": 0.14,
@@ -7581,6 +7697,14 @@ def tag_text(
         heuristic_definition_backfilled
     )
     coherent = _apply_repeated_surface_consistency(heuristic_definition_deduped)
+    runtime_g20_country_backfilled = coherent + _extract_runtime_g20_country_alias_entities(
+        normalized_input=normalized_input,
+        runtime=runtime,
+    )
+    runtime_g20_country_deduped, runtime_g20_country_duplicate_discards = _dedupe_exact_candidates(
+        runtime_g20_country_backfilled
+    )
+    coherent = _apply_repeated_surface_consistency(runtime_g20_country_deduped)
     acronym_backfilled = _backfill_document_acronym_entities(
         coherent,
         normalized_input=normalized_input,
@@ -7615,6 +7739,7 @@ def tag_text(
         + heuristic_hyphenated_location_duplicate_discards
         + extension_duplicate_discards
         + heuristic_definition_duplicate_discards
+        + runtime_g20_country_duplicate_discards
         + acronym_duplicate_discards
     )
     if debug_payload is not None and total_duplicate_discards:

@@ -40,3 +40,14 @@ def test_public_api_can_build_general_bundle_then_generate_install_and_tag(
     assert ("Org Alpha", "organization") in entities
     assert ("Metro Alpha", "location") in entities
     assert ("https://portal.example.test", "url") in entities
+
+    country_response = tag(
+        "Turkish economy minister Mehmet Simsek said interest rates will fall.",
+        pack="general-en",
+        storage_root=install_root,
+    )
+    country_entities = {
+        (entity.text, entity.label, entity.link.entity_id if entity.link else None)
+        for entity in country_response.entities
+    }
+    assert ("Turkish", "location", "country:tr") in country_entities

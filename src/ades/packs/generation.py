@@ -27,6 +27,7 @@ from .alias_analysis import (
     iter_retained_aliases_from_db,
     write_alias_analysis_report,
 )
+from .g20_country_aliases import DEFAULT_CURATED_G20_COUNTRY_ALIAS_VALUES
 from .manifest import PackArtifact, PackManifest
 from .manifest import PackMatcher
 from .rule_validation import validate_rule_pattern
@@ -1704,6 +1705,12 @@ def _should_drop_alias(
         ):
             return True
         if label.casefold() in {"person", "location"}:
+            if (
+                label.casefold() == "location"
+                and display_value.casefold()
+                in DEFAULT_CURATED_G20_COUNTRY_ALIAS_VALUES
+            ):
+                return False
             if (
                 label.casefold() == "location"
                 and generated

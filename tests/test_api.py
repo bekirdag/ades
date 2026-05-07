@@ -50,6 +50,34 @@ def test_public_api_status_and_tag(tmp_path: Path, monkeypatch) -> None:
     assert "currency_amount" in labels
 
 
+def test_general_pack_runtime_g20_country_aliases_emit_country_refs(tmp_path: Path) -> None:
+    pull_pack("finance-en", storage_root=tmp_path)
+
+    response = tag(
+        "Turkish economy minister Mehmet Simsek said interest rates will fall.",
+        pack="general-en",
+        storage_root=tmp_path,
+    )
+    country_entities = {
+        (entity.text, entity.label, entity.link.entity_id if entity.link else None)
+        for entity in response.entities
+    }
+
+    assert ("Turkish", "location", "country:tr") in country_entities
+
+    pronoun_response = tag(
+        "They asked us to review the policy.",
+        pack="general-en",
+        storage_root=tmp_path,
+    )
+    pronoun_refs = {
+        entity.link.entity_id
+        for entity in pronoun_response.entities
+        if entity.link is not None
+    }
+    assert "country:us" not in pronoun_refs
+
+
 def test_public_api_activation_and_lookup(tmp_path: Path) -> None:
     pull_pack("finance-en", storage_root=tmp_path)
 

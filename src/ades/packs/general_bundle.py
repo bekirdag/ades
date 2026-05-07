@@ -13,6 +13,10 @@ import shutil
 from typing import Any, Iterator
 import zipfile
 
+from .g20_country_aliases import (
+    DEFAULT_CURATED_G20_COUNTRY_ALIAS_VALUES,
+    DEFAULT_CURATED_G20_COUNTRY_ENTITIES,
+)
 from .source_lock import build_bundle_source_entry, write_sources_lock
 
 _PLAIN_SINGLE_TOKEN_PERSON_ALIAS_RE = re.compile(r"^[A-Za-z][A-Za-z'-]*$")
@@ -197,7 +201,9 @@ def build_general_source_bundle(
                     "location": "location",
                 },
                 "stoplisted_aliases": ["N/A"],
-                "allowed_ambiguous_aliases": [],
+                "allowed_ambiguous_aliases": sorted(
+                    DEFAULT_CURATED_G20_COUNTRY_ALIAS_VALUES
+                ),
                 "sources": sources,
             },
             indent=2,
@@ -459,6 +465,14 @@ def _should_keep_geonames_location_row(
 
 
 def _iter_curated_general_entities(path: Path) -> Iterator[dict[str, Any]]:
+    yielded_entity_ids: set[str] = set()
+    for item in DEFAULT_CURATED_G20_COUNTRY_ENTITIES:
+        normalized = _normalize_curated_general_entity(item)
+        if normalized is None:
+            continue
+        yielded_entity_ids.add(str(normalized["entity_id"]).casefold())
+        yield normalized
+
     if path.suffix.casefold() == ".jsonl":
         with path.open("r", encoding="utf-8") as handle:
             for line in handle:
@@ -470,6 +484,10 @@ def _iter_curated_general_entities(path: Path) -> Iterator[dict[str, Any]]:
                     continue
                 normalized = _normalize_curated_general_entity(item)
                 if normalized is not None:
+                    entity_id = str(normalized["entity_id"]).casefold()
+                    if entity_id in yielded_entity_ids:
+                        continue
+                    yielded_entity_ids.add(entity_id)
                     yield normalized
         return
     else:
@@ -487,6 +505,10 @@ def _iter_curated_general_entities(path: Path) -> Iterator[dict[str, Any]]:
         normalized = _normalize_curated_general_entity(item)
         if normalized is None:
             continue
+        entity_id = str(normalized["entity_id"]).casefold()
+        if entity_id in yielded_entity_ids:
+            continue
+        yielded_entity_ids.add(entity_id)
         yield normalized
 
 
@@ -692,6 +714,7 @@ def _prune_general_aliases(
             entity_type == "location"
             and cleaned.casefold() != canonical_text.casefold()
             and _is_single_token_alpha_alias(cleaned)
+            and cleaned.casefold() not in DEFAULT_CURATED_G20_COUNTRY_ALIAS_VALUES
         ):
             continue
         if (

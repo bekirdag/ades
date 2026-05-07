@@ -1,0 +1,165 @@
+"""Reviewed G20 country aliases for generic location detection."""
+
+from __future__ import annotations
+
+DEFAULT_CURATED_G20_COUNTRY_ENTITIES: tuple[dict[str, object], ...] = (
+    {
+        "entity_id": "country:ar",
+        "entity_type": "location",
+        "canonical_text": "Argentina",
+        "aliases": ["Argentinian", "Argentine"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:au",
+        "entity_type": "location",
+        "canonical_text": "Australia",
+        "aliases": ["Australian"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:br",
+        "entity_type": "location",
+        "canonical_text": "Brazil",
+        "aliases": ["Brazilian"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:ca",
+        "entity_type": "location",
+        "canonical_text": "Canada",
+        "aliases": ["Canadian"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:cn",
+        "entity_type": "location",
+        "canonical_text": "China",
+        "aliases": ["Chinese", "PRC", "People's Republic of China"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:de",
+        "entity_type": "location",
+        "canonical_text": "Germany",
+        "aliases": ["German"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:fr",
+        "entity_type": "location",
+        "canonical_text": "France",
+        "aliases": ["French"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:id",
+        "entity_type": "location",
+        "canonical_text": "Indonesia",
+        "aliases": ["Indonesian"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:in",
+        "entity_type": "location",
+        "canonical_text": "India",
+        "aliases": ["Indian"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:it",
+        "entity_type": "location",
+        "canonical_text": "Italy",
+        "aliases": ["Italian"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:jp",
+        "entity_type": "location",
+        "canonical_text": "Japan",
+        "aliases": ["Japanese"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:kr",
+        "entity_type": "location",
+        "canonical_text": "South Korea",
+        "aliases": ["South Korean", "Republic of Korea"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:mx",
+        "entity_type": "location",
+        "canonical_text": "Mexico",
+        "aliases": ["Mexican"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:ru",
+        "entity_type": "location",
+        "canonical_text": "Russia",
+        "aliases": ["Russian", "Russian Federation"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:sa",
+        "entity_type": "location",
+        "canonical_text": "Saudi Arabia",
+        "aliases": ["Saudi", "Saudi Arabian"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:tr",
+        "entity_type": "location",
+        "canonical_text": "Turkey",
+        "aliases": ["Turkish", "Turkiye", "Türkiye"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:uk",
+        "entity_type": "location",
+        "canonical_text": "United Kingdom",
+        "aliases": ["British", "Britain", "UK", "U.K.", "Great Britain"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:us",
+        "entity_type": "location",
+        "canonical_text": "United States",
+        "aliases": ["American", "US", "U.S.", "USA", "U.S.A."],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+    {
+        "entity_id": "country:za",
+        "entity_type": "location",
+        "canonical_text": "South Africa",
+        "aliases": ["South African"],
+        "description": "G20 country context entity.",
+        "popularity": 1000,
+    },
+)
+
+DEFAULT_CURATED_G20_COUNTRY_ALIAS_VALUES = frozenset(
+    alias.casefold()
+    for entity in DEFAULT_CURATED_G20_COUNTRY_ENTITIES
+    for alias in entity["aliases"]
+    if isinstance(alias, str)
+)
