@@ -565,6 +565,10 @@ jobs:
           Environment=ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE=3
           Environment=ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED=false
           EOF
+            cat > "$HOME/.config/systemd/user/ades.service.d/news-analyze.conf" <<EOF
+          [Service]
+          Environment=ADES_NEWS_ANALYZE_ENABLED=true
+          EOF
             XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user daemon-reload
           fi
           previous_repo_current="$(readlink -f /mnt/ades/repo/current 2>/dev/null || true)"

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from ades.api import expand_impact_paths as api_expand_impact_paths
 from ades.impact.graph_builder import build_market_graph_store
 from ades.service.app import create_app
 
@@ -70,6 +71,8 @@ def _build_artifact(root: Path) -> Path:
             "refresh_policy",
             "pack_ids",
             "notes",
+            "compatible_event_types",
+            "direction_preconditions",
         ],
         [
             [
@@ -86,6 +89,8 @@ def _build_artifact(root: Path) -> Path:
                 "annual",
                 "finance-en",
                 "primary",
+                "shipping_chokepoint_disruption,supply_disruption",
+                "transit_disruption",
             ],
         ],
     )
@@ -126,6 +131,30 @@ def test_impact_expand_endpoint_returns_refs_only_paths(
     assert "direction" not in payload
     assert "bullish" not in payload
     assert "bearish" not in payload
+
+
+def test_api_expand_wrapper_forwards_news_event_context(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact_path = _build_artifact(tmp_path)
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ENABLED", "1")
+
+    result = api_expand_impact_paths(
+        ["entity_hormuz"],
+        artifact_path=artifact_path,
+        max_depth=2,
+        max_candidates=25,
+        compatible_event_types=["shipping_chokepoint_disruption"],
+    )
+
+    assert [candidate.entity_ref for candidate in result.candidates] == [
+        "entity_crude_oil"
+    ]
+    assert result.candidates[0].compatible_event_types == [
+        "shipping_chokepoint_disruption",
+        "supply_disruption",
+    ]
 
 
 def test_impact_expand_endpoint_returns_identity_bridge_refs(

@@ -3341,6 +3341,10 @@ def expand_impact_paths(
     vector_proposals_enabled: bool | None = None,
     storage_root: str | Path | None = None,
     artifact_path: str | Path | None = None,
+    source_mentions: dict[str, object] | None = None,
+    max_edges_per_seed: int | None = None,
+    max_paths_per_candidate: int | None = None,
+    compatible_event_types: Iterable[str] | None = None,
 ) -> ImpactExpansionResult:
     """Expand ADES entity refs into deterministic market impact paths."""
 
@@ -3356,6 +3360,10 @@ def expand_impact_paths(
         vector_proposals_enabled=vector_proposals_enabled,
         settings=settings,
         artifact_path=artifact_path,
+        source_mentions=source_mentions,
+        max_edges_per_seed=max_edges_per_seed,
+        max_paths_per_candidate=max_paths_per_candidate,
+        compatible_event_types=compatible_event_types,
     )
 
 
