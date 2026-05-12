@@ -40,6 +40,56 @@
       "notes": "Terminal gold futures market reference."
     },
     {
+      "source_name": "CME wheat futures",
+      "source_url": "https://www.cmegroup.com/markets/agriculture/grains/wheat.html",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal wheat futures market reference."
+    },
+    {
+      "source_name": "CME corn futures",
+      "source_url": "https://www.cmegroup.com/markets/agriculture/grains/corn.html",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal corn futures market reference."
+    },
+    {
+      "source_name": "CME soybean futures",
+      "source_url": "https://www.cmegroup.com/markets/agriculture/oilseeds/soybean.html",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal soybean futures market reference."
+    },
+    {
+      "source_name": "CME live cattle futures",
+      "source_url": "https://www.cmegroup.com/markets/agriculture/livestock/live-cattle.html",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal live cattle futures market reference."
+    },
+    {
+      "source_name": "CME lean hog futures",
+      "source_url": "https://www.cmegroup.com/markets/agriculture/livestock/lean-hogs.html",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal lean hog futures market reference."
+    },
+    {
       "source_name": "ECB key interest rates",
       "source_url": "https://data.ecb.europa.eu/key-figures/ecb-interest-rates-and-exchange-rates/key-ecb-interest-rates",
       "source_snapshot": "2026-05-05",
@@ -118,6 +168,26 @@
       "normalized_output_allowed": true,
       "license_notes": "Official public U.S. government sanctions page; starter row stores only reviewed relationship metadata.",
       "notes": "Sanctions program to country relationship reference."
+    },
+    {
+      "source_name": "SEC Crypto Assets",
+      "source_url": "https://www.sec.gov/securities-topics/crypto-assets",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "monthly",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public regulator topic page; starter row stores only reviewed relationship metadata.",
+      "notes": "Digital-asset regulation relationship reference."
+    },
+    {
+      "source_name": "USDA World Agricultural Supply and Demand Estimates",
+      "source_url": "https://www.usda.gov/oce/commodity/wasde",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "monthly",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government agriculture outlook page; starter row stores only reviewed relationship metadata.",
+      "notes": "Agriculture and livestock supply-risk relationship reference."
     },
     {
       "source_name": "OPEC Annual Statistical Bulletin",

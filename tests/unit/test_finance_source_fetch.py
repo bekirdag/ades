@@ -86,6 +86,41 @@ def test_fetch_finance_source_snapshot_writes_immutable_snapshot_dir(tmp_path: P
         "ades:impact:energy-policy:gas-reservation-policy"
     )
     assert "gas reservation requirement" in gas_policy_record["aliases"]
+    pollution_record = next(
+        item
+        for item in curated_entities.get("entities", [])
+        if item["canonical_text"] == "Pollution crisis"
+    )
+    assert pollution_record["entity_id"] == "ades:impact:environment:pollution-crisis"
+    assert "environmental contamination" in pollution_record["aliases"]
+    tanker_record = next(
+        item
+        for item in curated_entities.get("entities", [])
+        if item["canonical_text"] == "Oil tanker sanctions"
+    )
+    assert tanker_record["entity_id"] == "ades:impact:shipping:tanker-sanctions"
+    assert "shadow fleet sanctions" in tanker_record["aliases"]
+    crypto_policy_record = next(
+        item
+        for item in curated_entities.get("entities", [])
+        if item["canonical_text"] == "Digital asset regulation"
+    )
+    assert crypto_policy_record["entity_id"] == (
+        "ades:impact:policy:digital-asset-regulation"
+    )
+    assert "crypto regulation" in crypto_policy_record["aliases"]
+    wheat_record = next(
+        item
+        for item in curated_entities.get("entities", [])
+        if item["canonical_text"] == "Wheat"
+    )
+    assert wheat_record["entity_id"] == "ades:impact:commodity:wheat"
+    bitcoin_record = next(
+        item
+        for item in curated_entities.get("entities", [])
+        if item["canonical_text"] == "Bitcoin"
+    )
+    assert bitcoin_record["entity_id"] == "ades:impact:crypto:bitcoin"
 
     bundle = build_finance_source_bundle(
         sec_companies_path=result.sec_companies_path,

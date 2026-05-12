@@ -24,8 +24,8 @@ def test_starter_market_graph_covers_inner_ring_families(tmp_path):
 
     response = build_starter_market_graph_store(output_dir=tmp_path)
 
-    assert response.node_count >= 20
-    assert response.edge_count >= 18
+    assert response.node_count >= 29
+    assert response.edge_count >= 30
     assert response.warnings == []
 
     with sqlite3.connect(response.artifact_path) as connection:
@@ -41,9 +41,13 @@ def test_starter_market_graph_covers_inner_ring_families(tmp_path):
         "central_bank_affects_currency",
         "central_bank_affects_rates",
         "energy_policy_affects_commodity",
+        "digital_asset_policy_affects_crypto",
+        "pollution_affects_agriculture_commodity",
+        "pollution_affects_livestock_commodity",
         "producer_group_affects_commodity",
         "sanction_affects_country",
         "sanction_affects_commodity",
+        "tanker_sanctions_affects_commodity",
     }.issubset(families)
 
 
@@ -57,13 +61,17 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
         )
 
     assert report.warnings == []
-    assert report.case_count == 9
-    assert report.empty_path_rate == 0.1111
+    assert report.case_count == 12
+    assert report.empty_path_rate == 0.0833
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
     assert report.per_relation_family_recall["energy_policy_affects_commodity"] == 1.0
+    assert report.per_relation_family_recall["digital_asset_policy_affects_crypto"] == 1.0
+    assert report.per_relation_family_recall["pollution_affects_agriculture_commodity"] == 1.0
+    assert report.per_relation_family_recall["pollution_affects_livestock_commodity"] == 1.0
     assert report.per_relation_family_recall["sanction_affects_commodity"] == 1.0
+    assert report.per_relation_family_recall["tanker_sanctions_affects_commodity"] == 1.0
 
 
 def test_starter_source_manifest_has_required_fields():

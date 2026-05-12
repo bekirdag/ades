@@ -14,6 +14,15 @@ ades:impact:commodity:crude-oil	Crude oil	commodity		1	1	{"commodity":"crude-oil
 ades:impact:commodity:natural-gas	Natural gas	commodity		1	1	{"commodity":"natural-gas"}	general-en,finance-en
 ades:impact:energy-policy:gas-reservation-policy	Gas reservation policy	policy		0	1	{"category":"energy_regulation"}	finance-en
 ades:impact:energy-sector:gas-producers	Gas producers	sector		0	1	{"category":"energy_supply"}	finance-en
+ades:impact:environment:pollution-crisis	Pollution crisis	environmental_risk		0	1	{"category":"environmental_supply_risk"}	general-en,finance-en
+ades:impact:shipping:tanker-sanctions	Oil tanker sanctions	shipping_risk		0	1	{"category":"energy_shipping_sanctions"}	general-en,finance-en
+ades:impact:policy:digital-asset-regulation	Digital asset regulation	policy		0	1	{"category":"digital_asset_regulation"}	general-en,finance-en
+ades:impact:commodity:wheat	Wheat	commodity		1	1	{"commodity":"wheat"}	general-en,finance-en
+ades:impact:commodity:corn	Corn	commodity		1	1	{"commodity":"corn"}	general-en,finance-en
+ades:impact:commodity:soybeans	Soybeans	commodity		1	1	{"commodity":"soybeans"}	general-en,finance-en
+ades:impact:commodity:live-cattle	Live cattle	commodity		1	1	{"commodity":"live-cattle"}	general-en,finance-en
+ades:impact:commodity:lean-hogs	Lean hogs	commodity		1	1	{"commodity":"lean-hogs"}	general-en,finance-en
+ades:impact:crypto:bitcoin	Bitcoin	crypto		1	1	{"symbol":"BTC"}	general-en,finance-en
 ades:impact:commodity:gold	Gold	commodity		1	1	{"commodity":"gold"}	general-en,finance-en
 ades:impact:currency:usd	US dollar	currency		1	1	{"iso4217":"USD"}	general-en,finance-en
 ades:impact:currency:eur	Euro	currency		1	1	{"iso4217":"EUR"}	general-en,finance-en

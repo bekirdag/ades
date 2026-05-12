@@ -54,6 +54,24 @@
       "expected_relation_families": ["commodity_traded_in_currency", "energy_policy_affects_commodity"]
     },
     {
+      "name": "pollution_agriculture_supply_risk",
+      "entity_refs": ["ades:impact:environment:pollution-crisis"],
+      "expected_candidate_refs": ["ades:impact:commodity:wheat", "ades:impact:commodity:corn", "ades:impact:commodity:soybeans", "ades:impact:commodity:live-cattle", "ades:impact:commodity:lean-hogs", "ades:impact:currency:usd"],
+      "expected_relation_families": ["commodity_traded_in_currency", "pollution_affects_agriculture_commodity", "pollution_affects_livestock_commodity"]
+    },
+    {
+      "name": "tanker_sanctions_crude_oil",
+      "entity_refs": ["ades:impact:shipping:tanker-sanctions"],
+      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
+      "expected_relation_families": ["commodity_traded_in_currency", "tanker_sanctions_affects_commodity"]
+    },
+    {
+      "name": "digital_asset_regulation_bitcoin",
+      "entity_refs": ["ades:impact:policy:digital-asset-regulation"],
+      "expected_candidate_refs": ["ades:impact:crypto:bitcoin"],
+      "expected_relation_families": ["digital_asset_policy_affects_crypto"]
+    },
+    {
       "name": "negative_empty_refs",
       "entity_refs": ["ades:impact:unknown:not-in-graph"],
       "expected_candidate_refs": [],
