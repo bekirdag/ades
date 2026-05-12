@@ -634,6 +634,10 @@ def _normalize_curated_general_entity(item: dict[str, Any]) -> dict[str, Any] | 
     source_features = item.get("source_features")
     if isinstance(source_features, dict):
         record["source_features"] = source_features
+    metadata = item.get("metadata")
+    if isinstance(metadata, dict):
+        record["metadata"] = metadata
+    _copy_alias_quality_fields(item, record)
     return record
 
 
@@ -651,7 +655,35 @@ def _build_general_rule_records() -> list[dict[str, str]]:
             "kind": "regex",
             "pattern": r"https?://[^\s]+",
         },
+        {
+            "name": "source_outlet_byline_marker",
+            "label": "source_outlet",
+            "kind": "regex",
+            "pattern": r"\b(?:Reuters|Associated Press|AP|Bloomberg|France 24|BBC|CNN)\b\s?[-:]",
+        },
+        {
+            "name": "html_fragment",
+            "label": "html_fragment",
+            "kind": "regex",
+            "pattern": r"</?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?>",
+        },
     ]
+
+
+def _copy_alias_quality_fields(source: dict[str, Any], target: dict[str, Any]) -> None:
+    metadata = source.get("metadata")
+    for key in (
+        "alias_quality",
+        "runtime_tier",
+        "weak_alias",
+        "direct_mention_required",
+        "quality_reasons",
+    ):
+        value = source.get(key)
+        if value is None and isinstance(metadata, dict):
+            value = metadata.get(key)
+        if value is not None:
+            target[key] = value
 
 
 def _resolve_input_file(path: str | Path, *, label: str) -> Path:

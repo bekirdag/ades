@@ -26,7 +26,7 @@ def test_build_finance_source_bundle_writes_normalized_bundle(tmp_path: Path) ->
     assert Path(result.sources_lock_path).exists()
     assert result.source_count == 7
     assert result.entity_record_count == 17
-    assert result.rule_record_count == 5
+    assert result.rule_record_count == 10
     assert result.sec_issuer_count == 2
     assert result.symbol_count == 3
     assert result.person_count == 2

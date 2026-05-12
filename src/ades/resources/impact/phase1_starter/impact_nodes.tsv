@@ -1,30 +1,58 @@
 entity_ref	canonical_name	entity_type	library_id	is_tradable	is_seed_eligible	identifiers_json	packs
-ades:heuristic_structural_location:finance-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	{}	finance-en
-ades:heuristic_structural_location:general-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	{}	general-en
-wikidata:Q899	Suez Canal	chokepoint		0	1	{"wikidata":"Q899"}	general-en
-wikidata:Q794	Iran	country		0	1	{"wikidata":"Q794"}	general-en,finance-en
-wikidata:Q159	Russia	country		0	1	{"wikidata":"Q159"}	general-en,finance-en
-geonames:6252001	United States	country		0	1	{"geonames":"6252001"}	general-en,finance-en
-wikidata:Q458	European Union	bloc		0	1	{"wikidata":"Q458"}	general-en
-wikidata:Q53536	Federal Reserve System	central_bank		0	1	{"wikidata":"Q53536"}	general-en,finance-en
-wikidata:Q8901	European Central Bank	central_bank		0	1	{"wikidata":"Q8901"}	general-en,finance-en
-ades:impact:sanctions:ofac	Office of Foreign Assets Control	sanctions_body		0	1	{"homepage":"https://ofac.treasury.gov"}	general-en,finance-en
-wikidata:Q121826282	OPEC+	organization		0	1	{"wikidata":"Q121826282"}	general-en,finance-en
+ades:heuristic_structural_location:finance-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	{"same_as_refs":["ades:heuristic_structural_location:general-en:location:strait-of-hormuz","wikidata:Q79883"],"wikidata":"Q79883"}	finance-en
+ades:heuristic_structural_location:general-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	{"same_as_refs":["ades:heuristic_structural_location:finance-en:location:strait-of-hormuz","wikidata:Q79883"],"wikidata":"Q79883"}	general-en
+ades:impact:commodity:aluminum	Aluminum	commodity		1	1	{"commodity":"aluminum"}	general-en,finance-en
+ades:impact:commodity:cobalt	Cobalt	commodity		1	1	{"commodity":"cobalt"}	general-en,finance-en
+ades:impact:commodity:copper	Copper	commodity		1	1	{"commodity":"copper"}	general-en,finance-en
+ades:impact:commodity:corn	Corn	commodity		1	1	{"commodity":"corn"}	general-en,finance-en
 ades:impact:commodity:crude-oil	Crude oil	commodity		1	1	{"commodity":"crude-oil"}	general-en,finance-en
+ades:impact:commodity:gold	Gold	commodity		1	1	{"commodity":"gold"}	general-en,finance-en
+ades:impact:commodity:iron-ore	Iron ore	commodity		1	1	{"commodity":"iron-ore"}	general-en,finance-en
+ades:impact:commodity:lean-hogs	Lean hogs	commodity		1	1	{"commodity":"lean-hogs"}	general-en,finance-en
+ades:impact:commodity:lithium	Lithium	commodity		1	1	{"commodity":"lithium"}	general-en,finance-en
+ades:impact:commodity:live-cattle	Live cattle	commodity		1	1	{"commodity":"live-cattle"}	general-en,finance-en
 ades:impact:commodity:natural-gas	Natural gas	commodity		1	1	{"commodity":"natural-gas"}	general-en,finance-en
+ades:impact:commodity:rare-earths	Rare earths	commodity		1	1	{"commodity":"rare-earths"}	general-en,finance-en
+ades:impact:commodity:soybeans	Soybeans	commodity		1	1	{"commodity":"soybeans"}	general-en,finance-en
+ades:impact:commodity:tungsten	Tungsten	commodity		1	1	{"commodity":"tungsten"}	general-en,finance-en
+ades:impact:commodity:wheat	Wheat	commodity		1	1	{"commodity":"wheat"}	general-en,finance-en
+ades:impact:crypto:bitcoin	Bitcoin	crypto		1	1	{"symbol":"BTC"}	general-en,finance-en
+ades:impact:currency:eur	Euro	currency		1	1	{"iso4217":"EUR"}	general-en,finance-en
+ades:impact:currency:usd	US dollar	currency		1	1	{"iso4217":"USD"}	general-en,finance-en
 ades:impact:energy-policy:gas-reservation-policy	Gas reservation policy	policy		0	1	{"category":"energy_regulation"}	finance-en
 ades:impact:energy-sector:gas-producers	Gas producers	sector		0	1	{"category":"energy_supply"}	finance-en
 ades:impact:environment:pollution-crisis	Pollution crisis	environmental_risk		0	1	{"category":"environmental_supply_risk"}	general-en,finance-en
-ades:impact:shipping:tanker-sanctions	Oil tanker sanctions	shipping_risk		0	1	{"category":"energy_shipping_sanctions"}	general-en,finance-en
+ades:impact:index:global-equities	Global equities	market_index		1	0	{"category":"global_equity_proxy"}	general-en,finance-en
+ades:impact:indicator:dxy	DXY	currency_index		1	0	{"symbol":"DXY"}	general-en,finance-en
+ades:impact:macro:cpi	Consumer Price Index	macro_indicator		1	1	{"category":"inflation"}	general-en,finance-en
 ades:impact:policy:digital-asset-regulation	Digital asset regulation	policy		0	1	{"category":"digital_asset_regulation"}	general-en,finance-en
-ades:impact:commodity:wheat	Wheat	commodity		1	1	{"commodity":"wheat"}	general-en,finance-en
-ades:impact:commodity:corn	Corn	commodity		1	1	{"commodity":"corn"}	general-en,finance-en
-ades:impact:commodity:soybeans	Soybeans	commodity		1	1	{"commodity":"soybeans"}	general-en,finance-en
-ades:impact:commodity:live-cattle	Live cattle	commodity		1	1	{"commodity":"live-cattle"}	general-en,finance-en
-ades:impact:commodity:lean-hogs	Lean hogs	commodity		1	1	{"commodity":"lean-hogs"}	general-en,finance-en
-ades:impact:crypto:bitcoin	Bitcoin	crypto		1	1	{"symbol":"BTC"}	general-en,finance-en
-ades:impact:commodity:gold	Gold	commodity		1	1	{"commodity":"gold"}	general-en,finance-en
-ades:impact:currency:usd	US dollar	currency		1	1	{"iso4217":"USD"}	general-en,finance-en
-ades:impact:currency:eur	Euro	currency		1	1	{"iso4217":"EUR"}	general-en,finance-en
-ades:impact:rate:fed-funds	Federal funds rate	rate		1	1	{"rate":"fed-funds"}	general-en,finance-en
 ades:impact:rate:ecb-policy-rates	ECB policy rates	rate		1	1	{"rate":"ecb-policy-rates"}	general-en,finance-en
+ades:impact:rate:fed-funds	Federal funds rate	rate		1	1	{"rate":"fed-funds"}	general-en,finance-en
+ades:impact:risk:sanctions-risk	Sanctions risk	risk		1	1	{"category":"risk_indicator"}	general-en,finance-en
+ades:impact:risk:us-country-risk	US Country Risk	risk		1	0	{"country_code":"us","category":"country_risk"}	general-en,finance-en
+ades:impact:sanctions:ofac	Office of Foreign Assets Control	sanctions_body		0	1	{"homepage":"https://ofac.treasury.gov"}	general-en,finance-en
+ades:impact:sector:agriculture	Agriculture	sector		1	1	{"category":"sector"}	general-en,finance-en
+ades:impact:sector:airlines	Airlines	sector		1	1	{"category":"sector"}	general-en,finance-en
+ades:impact:sector:autos	Autos	sector		1	1	{"category":"sector"}	general-en,finance-en
+ades:impact:sector:defense	Defense	sector		1	1	{"category":"sector"}	general-en,finance-en
+ades:impact:sector:energy	Energy	sector		1	1	{"category":"sector"}	general-en,finance-en
+ades:impact:sector:semiconductors	Semiconductors	sector		1	1	{"category":"sector"}	general-en,finance-en
+ades:impact:sector:shipping	Shipping	sector		1	1	{"category":"sector"}	general-en,finance-en
+ades:impact:sector:utilities	Utilities	sector		1	1	{"category":"sector"}	general-en,finance-en
+ades:impact:shipping:tanker-sanctions	Oil tanker sanctions	shipping_risk		0	1	{"category":"energy_shipping_sanctions"}	general-en,finance-en
+ades:market-location:atacama	Atacama Desert	commodity_region		0	1	{"category":"lithium_copper_region"}	general-en,finance-en
+ades:market-location:copperbelt	Copperbelt	commodity_region		0	1	{"category":"copper_cobalt_region"}	general-en,finance-en
+ades:market-location:panama-canal	Panama Canal	chokepoint		0	1	{"same_as_refs":["wikidata:Q7350"],"wikidata":"Q7350"}	general-en,finance-en
+ades:market-location:pilbara	Pilbara	commodity_region		0	1	{"category":"iron_ore_region"}	general-en,finance-en
+ades:market-location:red-sea	Red Sea	chokepoint		0	1	{"same_as_refs":["wikidata:Q23406"],"wikidata":"Q23406"}	general-en,finance-en
+ades:market-location:taiwan-strait	Taiwan Strait	chokepoint		0	1	{"same_as_refs":["wikidata:Q37950"],"wikidata":"Q37950"}	general-en,finance-en
+finance-us-issuer:0001318605	Tesla Inc.	issuer	finance-us-en	0	1	{"same_as_refs":["wikidata:Q478214","FINANCE-US-ISSUER_0001318605"],"ticker_ref":"finance-us-ticker:TSLA"}	finance-us-en
+finance-us-ticker:TSLA	TSLA	ticker	finance-us-en	1	0	{"same_as_refs":["wikidata:Q478214","FINANCE-US-TICKER_TSLA","finance-us-issuer:0001318605"]}	finance-us-en
+geonames:6252001	United States	country		0	1	{"country_code":"us","geonames":"6252001","same_as_refs":["country:us","wikidata:Q30"],"wikidata":"Q30"}	general-en,finance-en
+wikidata:Q121826282	OPEC+	organization		0	1	{"wikidata":"Q121826282"}	general-en,finance-en
+wikidata:Q159	Russia	country		0	1	{"country_code":"ru","geonames_id":"2017370","same_as_refs":["country:ru","geonames:2017370"],"wikidata":"Q159"}	general-en,finance-en
+wikidata:Q458	European Union	bloc		0	1	{"wikidata":"Q458"}	general-en
+wikidata:Q53536	Federal Reserve System	central_bank		0	1	{"wikidata":"Q53536"}	general-en,finance-en
+wikidata:Q794	Iran	country		0	1	{"country_code":"ir","geonames_id":"130758","same_as_refs":["country:ir","geonames:130758"],"wikidata":"Q794"}	general-en,finance-en
+wikidata:Q8901	European Central Bank	central_bank		0	1	{"wikidata":"Q8901"}	general-en,finance-en
+wikidata:Q899	Suez Canal	chokepoint		0	1	{"wikidata":"Q899"}	general-en

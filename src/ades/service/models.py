@@ -173,17 +173,11 @@ class RegistryFetchFinanceSourcesRequest(BaseModel):
     sec_companyfacts_url: str = (
         "https://www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip"
     )
-    symbol_directory_url: str = (
-        "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt"
-    )
-    other_listed_url: str = (
-        "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
-    )
+    symbol_directory_url: str = "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt"
+    other_listed_url: str = "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
     finance_people_url: str | None = None
     derive_finance_people_from_sec: bool = False
-    finance_people_archive_base_url: str = (
-        "https://www.sec.gov/Archives/edgar/data"
-    )
+    finance_people_archive_base_url: str = "https://www.sec.gov/Archives/edgar/data"
     finance_people_max_companies: int | None = None
     user_agent: str = "ades/0.1.0 (ops@adestool.com)"
 
@@ -356,8 +350,7 @@ class RegistryFetchMedicalSourcesRequest(BaseModel):
         "main/src/ontology/doid.obo"
     )
     hgnc_genes_url: str = (
-        "https://storage.googleapis.com/public-download-files/hgnc/json/json/"
-        "hgnc_complete_set.json"
+        "https://storage.googleapis.com/public-download-files/hgnc/json/json/hgnc_complete_set.json"
     )
     uniprot_proteins_url: str = (
         "https://rest.uniprot.org/uniprotkb/search?"
@@ -566,9 +559,7 @@ class RegistryValidateGeneralQualityRequest(BaseModel):
     version: str | None = None
     min_expected_recall: float = Field(1.0, ge=0.0, le=1.0)
     max_unexpected_hits: int = Field(0, ge=0)
-    max_ambiguous_aliases: int = Field(
-        DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES, ge=0
-    )
+    max_ambiguous_aliases: int = Field(DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES, ge=0)
     max_dropped_alias_ratio: float = Field(0.5, ge=0.0, le=1.0)
 
 
@@ -1215,6 +1206,8 @@ class RegistryRefreshGeneratedPacksRequest(BaseModel):
     max_unexpected_hits: int = Field(0, ge=0)
     max_ambiguous_aliases: int | None = Field(None, ge=0)
     max_dropped_alias_ratio: float = Field(0.5, ge=0.0, le=1.0)
+    release_gate_commands: list[str] = Field(default_factory=list)
+    release_gate_working_dir: str | None = None
 
     @model_validator(mode="after")
     def validate_bundle_dirs(self) -> "RegistryRefreshGeneratedPacksRequest":
@@ -1243,6 +1236,9 @@ class RegistryRefreshGeneratedPacksResponse(BaseModel):
     pack_count: int
     passed: bool
     materialize_registry: bool
+    release_gate_commands: list[str] = Field(default_factory=list)
+    release_gate_working_dir: str | None = None
+    release_gate_passed: bool = True
     registry_materialized: bool
     registry: RegistryBuildResponse | None = None
     warnings: list[str] = Field(default_factory=list)
@@ -1629,6 +1625,8 @@ class ImpactPathEdge(BaseModel):
     source_url: str
     source_snapshot: str
     source_year: int | None = None
+    compatible_event_types: list[str] = Field(default_factory=list)
+    direction_preconditions: list[str] = Field(default_factory=list)
 
 
 class ImpactRelationshipPath(BaseModel):
@@ -1643,6 +1641,7 @@ class ImpactSourceEntity(BaseModel):
 
     entity_ref: str
     name: str
+    same_as_refs: list[str] = Field(default_factory=list)
     entity_type: str | None = None
     library_id: str | None = None
     is_graph_seed: bool = False
@@ -1661,6 +1660,7 @@ class ImpactCandidate(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     source_entity_refs: list[str] = Field(default_factory=list)
     relationship_paths: list[ImpactRelationshipPath] = Field(default_factory=list)
+    compatible_event_types: list[str] = Field(default_factory=list)
 
 
 class ImpactPassivePath(BaseModel):
@@ -1702,6 +1702,182 @@ class ImpactExpansionRequest(BaseModel):
         if not any(str(ref).strip() for ref in self.entity_refs):
             raise ValueError("At least one entity_ref is required.")
         return self
+
+
+class NewsAnalyzeSource(BaseModel):
+    """Optional source metadata for a news-analysis request."""
+
+    url: str | None = None
+    publisher: str | None = None
+    source_country: str | None = None
+    published_at: str | None = None
+
+
+class NewsAnalyzeHints(BaseModel):
+    """Optional caller hints for a news-analysis request."""
+
+    country: str | None = None
+    language: str | None = None
+    topics: list[str] = Field(default_factory=list)
+
+
+class NewsAnalyzeOptions(BaseModel):
+    """Options for the normalized news-analysis contract."""
+
+    auto_pack_planning: bool = True
+    debug: bool = False
+    hybrid: bool | None = None
+    include_related_entities: bool = False
+    include_graph_support: bool = False
+    refine_links: bool = True
+    refinement_depth: Literal["light", "deep"] = "light"
+    include_passive_entities: bool = True
+    include_terminal_candidates: bool = True
+    include_relationship_paths: bool = True
+    include_impact_paths: bool = True
+    include_tag_responses: bool = False
+    impact_max_depth: int | None = Field(default=None, ge=1, le=4)
+    impact_seed_limit: int | None = Field(default=None, ge=1)
+    impact_max_candidates: int | None = Field(default=None, ge=0)
+    max_terminal_candidates: int = Field(default=16, ge=0, le=100)
+    max_passive_entities: int = Field(default=64, ge=0, le=200)
+    max_country_finance_packs: int = Field(default=6, ge=0, le=24)
+    max_packs: int = Field(default=24, ge=1, le=24)
+
+
+class NewsAnalyzeRequest(BaseModel):
+    """Request body for normalized news analysis."""
+
+    text: str
+    title: str | None = None
+    description: str | None = None
+    source: NewsAnalyzeSource | None = None
+    hints: NewsAnalyzeHints | None = None
+    content_type: str = "text/plain"
+    domain_hint: str | None = None
+    retrieval_profile: str | None = None
+    country_hint: str | None = None
+    packs: list[str] = Field(default_factory=list)
+    options: NewsAnalyzeOptions = Field(default_factory=NewsAnalyzeOptions)
+
+    @model_validator(mode="after")
+    def validate_text(self) -> "NewsAnalyzeRequest":
+        if not self.text.strip():
+            raise ValueError("text is required.")
+        return self
+
+
+NewsAnalyzePassiveRole = Literal[
+    "country_scope",
+    "actor",
+    "location",
+    "organization",
+    "person",
+    "policy_body",
+    "source_outlet",
+    "context_only",
+]
+
+NewsAnalyzeQualityState = Literal["strong", "medium", "weak", "hidden_artifact"]
+
+
+class NewsAnalyzeCountryScope(BaseModel):
+    """Country context identified for one news-analysis result."""
+
+    country_code: str
+    name: str
+    entity_ref: str
+    source: Literal["country_hint", "source_hint", "entity_match", "text_country_mention"]
+
+
+class NewsAnalyzeTopicScope(BaseModel):
+    """Topic context identified for one news-analysis result."""
+
+    primary: str | None = None
+    secondary: list[str] = Field(default_factory=list)
+    finance_relevant: bool = False
+    politics_relevant: bool = False
+    economics_relevant: bool = False
+
+
+class NewsAnalyzePackDecision(BaseModel):
+    """One pack planner decision for news analysis."""
+
+    pack_id: str
+    selected: bool
+    reason: str
+    country_code: str | None = None
+    detail: str | None = None
+
+
+class NewsEventSignal(BaseModel):
+    """Market-relevant event signal detected in a news article."""
+
+    event_type: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence_text: str
+    evidence_start: int | None = Field(default=None, ge=0)
+    evidence_end: int | None = Field(default=None, ge=0)
+    source_sentence: str
+    compatible_asset_families: list[str] = Field(default_factory=list)
+
+
+class NewsAnalyzePassiveEntity(BaseModel):
+    """Display-aware non-tradable entity extracted from a news article."""
+
+    entity_ref: str
+    name: str
+    entity_type: str | None = None
+    label: str | None = None
+    role: NewsAnalyzePassiveRole = "context_only"
+    quality: NewsAnalyzeQualityState = "medium"
+    display_eligible: bool = True
+    source_pack: str | None = None
+    source_domain: str | None = None
+    aliases: list[str] = Field(default_factory=list)
+    mention_count: int = Field(default=1, ge=1)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    relevance: float | None = Field(default=None, ge=0.0, le=1.0)
+    evidence_text: str | None = None
+    link: EntityLink | None = None
+    provenance: EntityProvenance | None = None
+    quality_reasons: list[str] = Field(default_factory=list)
+
+
+class NewsAnalyzeArtifactVersions(BaseModel):
+    """Artifact version metadata returned with the news-analysis contract."""
+
+    ades_version: str
+    packs: dict[str, str | None] = Field(default_factory=dict)
+    impact_graph_version: str | None = None
+    impact_artifact_version: str | None = None
+    impact_artifact_hash: str | None = None
+
+
+class NewsAnalyzeResponse(BaseModel):
+    """Normalized ADES news-analysis response for downstream consumers."""
+
+    schema_version: str = "ades.news_analysis.v1"
+    version: str
+    language: str = "en"
+    content_type: str
+    packs: list[str] = Field(default_factory=list)
+    packs_used: list[str] = Field(default_factory=list)
+    pack_decisions: list[NewsAnalyzePackDecision] = Field(default_factory=list)
+    country_scope: NewsAnalyzeCountryScope | None = None
+    topic_scope: NewsAnalyzeTopicScope | None = None
+    passive_entities: list[NewsAnalyzePassiveEntity] = Field(default_factory=list)
+    event_signals: list[NewsEventSignal] = Field(default_factory=list)
+    source_entities: list[ImpactSourceEntity] = Field(default_factory=list)
+    terminal_impact_candidates: list[ImpactCandidate] = Field(default_factory=list)
+    impact_paths: ImpactExpansionResult | None = None
+    topics: list[Any] = Field(default_factory=list)
+    artifact_versions: NewsAnalyzeArtifactVersions
+    tag_responses: list[Any] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    quality_flags: list[str] = Field(default_factory=list)
+    timing_ms: int
+    total_time_ms: int | None = None
 
 
 class EntityMatch(BaseModel):
@@ -1777,7 +1953,9 @@ def _merge_duplicate_linked_entities(entities: list[EntityMatch]) -> tuple[list[
             )
         )
 
-    merged.sort(key=lambda item: (item.start, item.end, item.label.casefold(), item.text.casefold()))
+    merged.sort(
+        key=lambda item: (item.start, item.end, item.label.casefold(), item.text.casefold())
+    )
     return merged, merged_count
 
 
@@ -1821,7 +1999,9 @@ def _is_exact_general_output_noise_alias(entity: EntityMatch) -> bool:
     return any(value in _GENERAL_OUTPUT_EXACT_NOISE_TEXTS for value in normalized_values)
 
 
-def _filter_final_output_entities(pack: str, entities: list[EntityMatch]) -> tuple[list[EntityMatch], int]:
+def _filter_final_output_entities(
+    pack: str, entities: list[EntityMatch]
+) -> tuple[list[EntityMatch], int]:
     if pack != "general-en":
         return entities, 0
     kept: list[EntityMatch] = []

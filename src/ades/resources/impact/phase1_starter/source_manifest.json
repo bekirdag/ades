@@ -10,44 +10,14 @@
   ],
   "sources": [
     {
-      "source_name": "CME crude oil futures",
-      "source_url": "https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.html",
-      "source_snapshot": "2026-05-05",
-      "source_year": 2026,
-      "refresh_policy": "annual",
-      "normalized_output_allowed": true,
-      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
-      "notes": "Terminal crude oil futures market reference."
-    },
-    {
-      "source_name": "CME natural gas futures",
-      "source_url": "https://www.cmegroup.com/markets/energy/natural-gas/natural-gas.html",
-      "source_snapshot": "2026-05-07",
-      "source_year": 2026,
-      "refresh_policy": "annual",
-      "normalized_output_allowed": true,
-      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
-      "notes": "Terminal natural gas futures market reference."
-    },
-    {
-      "source_name": "CME gold futures",
-      "source_url": "https://www.cmegroup.com/markets/metals/precious/gold.html",
-      "source_snapshot": "2026-05-05",
-      "source_year": 2026,
-      "refresh_policy": "annual",
-      "normalized_output_allowed": true,
-      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
-      "notes": "Terminal gold futures market reference."
-    },
-    {
-      "source_name": "CME wheat futures",
-      "source_url": "https://www.cmegroup.com/markets/agriculture/grains/wheat.html",
+      "source_name": "Australian Office of the Chief Economist Resources and Energy Quarterly",
+      "source_url": "https://www.industry.gov.au/publications/resources-and-energy-quarterly",
       "source_snapshot": "2026-05-12",
       "source_year": 2026,
-      "refresh_policy": "annual",
+      "refresh_policy": "quarterly",
       "normalized_output_allowed": true,
-      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
-      "notes": "Terminal wheat futures market reference."
+      "license_notes": "Official public Australian government publication page; starter row stores only reviewed relationship metadata.",
+      "notes": "Iron ore region and commodity relationship reference."
     },
     {
       "source_name": "CME corn futures",
@@ -60,14 +30,34 @@
       "notes": "Terminal corn futures market reference."
     },
     {
-      "source_name": "CME soybean futures",
-      "source_url": "https://www.cmegroup.com/markets/agriculture/oilseeds/soybean.html",
+      "source_name": "CME crude oil futures",
+      "source_url": "https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.html",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal crude oil futures market reference."
+    },
+    {
+      "source_name": "CME gold futures",
+      "source_url": "https://www.cmegroup.com/markets/metals/precious/gold.html",
+      "source_snapshot": "2026-05-05",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal gold futures market reference."
+    },
+    {
+      "source_name": "CME lean hog futures",
+      "source_url": "https://www.cmegroup.com/markets/agriculture/livestock/lean-hogs.html",
       "source_snapshot": "2026-05-12",
       "source_year": 2026,
       "refresh_policy": "annual",
       "normalized_output_allowed": true,
       "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
-      "notes": "Terminal soybean futures market reference."
+      "notes": "Terminal lean hog futures market reference."
     },
     {
       "source_name": "CME live cattle futures",
@@ -80,14 +70,34 @@
       "notes": "Terminal live cattle futures market reference."
     },
     {
-      "source_name": "CME lean hog futures",
-      "source_url": "https://www.cmegroup.com/markets/agriculture/livestock/lean-hogs.html",
+      "source_name": "CME natural gas futures",
+      "source_url": "https://www.cmegroup.com/markets/energy/natural-gas/natural-gas.html",
+      "source_snapshot": "2026-05-07",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal natural gas futures market reference."
+    },
+    {
+      "source_name": "CME soybean futures",
+      "source_url": "https://www.cmegroup.com/markets/agriculture/oilseeds/soybean.html",
       "source_snapshot": "2026-05-12",
       "source_year": 2026,
       "refresh_policy": "annual",
       "normalized_output_allowed": true,
       "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
-      "notes": "Terminal lean hog futures market reference."
+      "notes": "Terminal soybean futures market reference."
+    },
+    {
+      "source_name": "CME wheat futures",
+      "source_url": "https://www.cmegroup.com/markets/agriculture/grains/wheat.html",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public market contract page; starter row stores only reviewed relationship metadata.",
+      "notes": "Terminal wheat futures market reference."
     },
     {
       "source_name": "ECB key interest rates",
@@ -150,6 +160,26 @@
       "notes": "Central-bank operations and rate relationship reference."
     },
     {
+      "source_name": "IEA Global Critical Minerals Outlook",
+      "source_url": "https://www.iea.org/reports/global-critical-minerals-outlook-2024",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Public IEA report landing page; starter row stores only reviewed relationship metadata.",
+      "notes": "Battery and critical-mineral supply-chain relationship reference."
+    },
+    {
+      "source_name": "MSCI Global Equity Indexes",
+      "source_url": "https://www.msci.com/our-solutions/indexes/global-equity-indexes",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Public index methodology/overview page; starter row stores only reviewed relationship metadata.",
+      "notes": "Global equity proxy relationship reference."
+    },
+    {
       "source_name": "OFAC Sanctions List Service",
       "source_url": "https://ofac.treasury.gov/sanctions-list-service",
       "source_snapshot": "2026-05-05",
@@ -170,26 +200,6 @@
       "notes": "Sanctions program to country relationship reference."
     },
     {
-      "source_name": "SEC Crypto Assets",
-      "source_url": "https://www.sec.gov/securities-topics/crypto-assets",
-      "source_snapshot": "2026-05-12",
-      "source_year": 2026,
-      "refresh_policy": "monthly",
-      "normalized_output_allowed": true,
-      "license_notes": "Official public regulator topic page; starter row stores only reviewed relationship metadata.",
-      "notes": "Digital-asset regulation relationship reference."
-    },
-    {
-      "source_name": "USDA World Agricultural Supply and Demand Estimates",
-      "source_url": "https://www.usda.gov/oce/commodity/wasde",
-      "source_snapshot": "2026-05-12",
-      "source_year": 2026,
-      "refresh_policy": "monthly",
-      "normalized_output_allowed": true,
-      "license_notes": "Official public U.S. government agriculture outlook page; starter row stores only reviewed relationship metadata.",
-      "notes": "Agriculture and livestock supply-risk relationship reference."
-    },
-    {
       "source_name": "OPEC Annual Statistical Bulletin",
       "source_url": "https://publications.opec.org/asb/Home",
       "source_snapshot": "2026-05-05",
@@ -208,6 +218,116 @@
       "normalized_output_allowed": true,
       "license_notes": "Official public multilateral membership page; starter row stores only reviewed relationship metadata.",
       "notes": "Country membership to producer bloc relationship reference."
+    },
+    {
+      "source_name": "Panama Canal vessel transit statistics",
+      "source_url": "https://pancanal.com/en/statistics/",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "monthly",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public Panama Canal statistics page; starter row stores only reviewed relationship metadata.",
+      "notes": "Canal transit and shipping capacity relationship reference."
+    },
+    {
+      "source_name": "SEC Crypto Assets",
+      "source_url": "https://www.sec.gov/securities-topics/crypto-assets",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "monthly",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public regulator topic page; starter row stores only reviewed relationship metadata.",
+      "notes": "Digital-asset regulation relationship reference."
+    },
+    {
+      "source_name": "SEC company facts",
+      "source_url": "https://www.sec.gov/edgar/sec-api-documentation",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "daily",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public SEC data documentation page; starter row stores only reviewed relationship metadata.",
+      "notes": "Issuer-to-listed-ticker relationship reference."
+    },
+    {
+      "source_name": "SIA State of the U.S. Semiconductor Industry",
+      "source_url": "https://www.semiconductors.org/resources/",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Public industry association resource page; starter row stores only reviewed relationship metadata.",
+      "notes": "Semiconductor supply-chain relationship reference."
+    },
+    {
+      "source_name": "USDA World Agricultural Supply and Demand Estimates",
+      "source_url": "https://www.usda.gov/oce/commodity/wasde",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "monthly",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government agriculture outlook page; starter row stores only reviewed relationship metadata.",
+      "notes": "Agriculture and livestock supply-risk relationship reference."
+    },
+    {
+      "source_name": "USGS Aluminum Statistics and Information",
+      "source_url": "https://www.usgs.gov/centers/national-minerals-information-center/aluminum-statistics-and-information",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government minerals page; starter row stores only reviewed relationship metadata.",
+      "notes": "Aluminum supply relationship reference."
+    },
+    {
+      "source_name": "USGS Copper Statistics and Information",
+      "source_url": "https://www.usgs.gov/centers/national-minerals-information-center/copper-statistics-and-information",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government minerals page; starter row stores only reviewed relationship metadata.",
+      "notes": "Copper supply relationship reference."
+    },
+    {
+      "source_name": "USGS Lithium Statistics and Information",
+      "source_url": "https://www.usgs.gov/centers/national-minerals-information-center/lithium-statistics-and-information",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government minerals page; starter row stores only reviewed relationship metadata.",
+      "notes": "Lithium supply relationship reference."
+    },
+    {
+      "source_name": "USGS Rare Earths Statistics and Information",
+      "source_url": "https://www.usgs.gov/centers/national-minerals-information-center/rare-earths-statistics-and-information",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government minerals page; starter row stores only reviewed relationship metadata.",
+      "notes": "Rare earth strategic-metal relationship reference."
+    },
+    {
+      "source_name": "USGS Tungsten Statistics and Information",
+      "source_url": "https://www.usgs.gov/centers/national-minerals-information-center/tungsten-statistics-and-information",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public U.S. government minerals page; starter row stores only reviewed relationship metadata.",
+      "notes": "Tungsten strategic-metal relationship reference."
+    },
+    {
+      "source_name": "World Bank Worldwide Governance Indicators",
+      "source_url": "https://www.worldbank.org/en/publication/worldwide-governance-indicators",
+      "source_snapshot": "2026-05-12",
+      "source_year": 2026,
+      "refresh_policy": "annual",
+      "normalized_output_allowed": true,
+      "license_notes": "Public World Bank indicator page; starter row stores only reviewed relationship metadata.",
+      "notes": "Country-risk proxy relationship reference."
     }
   ]
 }

@@ -180,9 +180,7 @@ def _load_config_values(path: Path | None) -> dict[str, Any]:
     try:
         payload = tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as exc:
-        raise InvalidConfigurationError(
-            f"Invalid ades config file: {path}: {exc}"
-        ) from exc
+        raise InvalidConfigurationError(f"Invalid ades config file: {path}: {exc}") from exc
     section = payload.get("ades")
     if isinstance(section, dict):
         return dict(section)
@@ -238,9 +236,7 @@ class Settings:
     graph_context_candidate_limit: int = DEFAULT_GRAPH_CONTEXT_CANDIDATE_LIMIT
     graph_context_min_supporting_seeds: int = DEFAULT_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS
     graph_context_vector_proposals_enabled: bool = False
-    graph_context_vector_proposal_limit: int = (
-        DEFAULT_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT
-    )
+    graph_context_vector_proposal_limit: int = DEFAULT_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT
     graph_context_genericity_penalty_enabled: bool = True
     news_context_artifact_path: Path | None = None
     news_context_min_supporting_seeds: int = DEFAULT_NEWS_CONTEXT_MIN_SUPPORTING_SEEDS
@@ -251,10 +247,9 @@ class Settings:
     impact_expansion_seed_limit: int = DEFAULT_IMPACT_EXPANSION_SEED_LIMIT
     impact_expansion_max_candidates: int = DEFAULT_IMPACT_EXPANSION_MAX_CANDIDATES
     impact_expansion_max_edges_per_seed: int = DEFAULT_IMPACT_EXPANSION_MAX_EDGES_PER_SEED
-    impact_expansion_max_paths_per_candidate: int = (
-        DEFAULT_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE
-    )
+    impact_expansion_max_paths_per_candidate: int = DEFAULT_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE
     impact_expansion_vector_proposals_enabled: bool = False
+    news_analyze_enabled: bool = False
     service_prewarm_enabled: bool = True
     config_path: Path | None = None
 
@@ -492,6 +487,12 @@ class Settings:
             env_name="ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED",
             config_name="impact_expansion_vector_proposals_enabled",
         )
+        news_analyze_enabled = _value_from_env_or_config(
+            env_map,
+            config_values,
+            env_name="ADES_NEWS_ANALYZE_ENABLED",
+            config_name="news_analyze_enabled",
+        )
         service_prewarm_enabled = _value_from_env_or_config(
             env_map,
             config_values,
@@ -688,6 +689,14 @@ class Settings:
             if impact_expansion_vector_proposals_enabled is not None
             else False
         )
+        resolved_news_analyze_enabled = (
+            _coerce_bool(
+                news_analyze_enabled,
+                name="ades news analyze enabled",
+            )
+            if news_analyze_enabled is not None
+            else False
+        )
         resolved_service_prewarm_enabled = (
             _coerce_bool(
                 service_prewarm_enabled,
@@ -737,13 +746,11 @@ class Settings:
             )
         if resolved_impact_expansion_max_depth < 1:
             raise InvalidConfigurationError(
-                "Invalid ades impact expansion max depth: "
-                f"{resolved_impact_expansion_max_depth!r}"
+                f"Invalid ades impact expansion max depth: {resolved_impact_expansion_max_depth!r}"
             )
         if resolved_impact_expansion_max_depth > 4:
             raise InvalidConfigurationError(
-                "Invalid ades impact expansion max depth: "
-                f"{resolved_impact_expansion_max_depth!r}"
+                f"Invalid ades impact expansion max depth: {resolved_impact_expansion_max_depth!r}"
             )
         if resolved_impact_expansion_seed_limit <= 0:
             raise InvalidConfigurationError(
@@ -769,9 +776,7 @@ class Settings:
         return cls(
             host=str(host or DEFAULT_HOST),
             port=resolved_port,
-            storage_root=Path(
-                str(storage_root or DEFAULT_STORAGE_ROOT)
-            ).expanduser(),
+            storage_root=Path(str(storage_root or DEFAULT_STORAGE_ROOT)).expanduser(),
             default_pack=str(default_pack or DEFAULT_PACK),
             registry_url=str(registry_url) if registry_url else None,
             runtime_target=normalize_runtime_target(runtime_target),
@@ -779,18 +784,14 @@ class Settings:
             database_url=str(database_url) if database_url else None,
             vector_search_enabled=resolved_vector_search_enabled,
             vector_search_url=str(vector_search_url) if vector_search_url else None,
-            vector_search_api_key=(
-                str(vector_search_api_key) if vector_search_api_key else None
-            ),
+            vector_search_api_key=(str(vector_search_api_key) if vector_search_api_key else None),
             vector_search_collection_alias=str(
                 vector_search_collection_alias or DEFAULT_VECTOR_COLLECTION_ALIAS
             ),
             vector_search_related_limit=resolved_vector_related_limit,
             vector_search_score_threshold=resolved_vector_score_threshold,
             vector_search_domain_pack_routes=resolved_vector_search_domain_pack_routes,
-            vector_search_pack_collection_aliases=(
-                resolved_vector_search_pack_collection_aliases
-            ),
+            vector_search_pack_collection_aliases=(resolved_vector_search_pack_collection_aliases),
             vector_search_country_aliases=resolved_vector_search_country_aliases,
             graph_context_enabled=resolved_graph_context_enabled,
             graph_context_artifact_path=(
@@ -806,9 +807,7 @@ class Settings:
             graph_context_vector_proposals_enabled=(
                 resolved_graph_context_vector_proposals_enabled
             ),
-            graph_context_vector_proposal_limit=(
-                resolved_graph_context_vector_proposal_limit
-            ),
+            graph_context_vector_proposal_limit=(resolved_graph_context_vector_proposal_limit),
             graph_context_genericity_penalty_enabled=(
                 resolved_graph_context_genericity_penalty_enabled
             ),
@@ -817,9 +816,7 @@ class Settings:
                 if news_context_artifact_path
                 else None
             ),
-            news_context_min_supporting_seeds=(
-                resolved_news_context_min_supporting_seeds
-            ),
+            news_context_min_supporting_seeds=(resolved_news_context_min_supporting_seeds),
             news_context_min_pair_count=resolved_news_context_min_pair_count,
             impact_expansion_enabled=resolved_impact_expansion_enabled,
             impact_expansion_artifact_path=(
@@ -830,15 +827,14 @@ class Settings:
             impact_expansion_max_depth=resolved_impact_expansion_max_depth,
             impact_expansion_seed_limit=resolved_impact_expansion_seed_limit,
             impact_expansion_max_candidates=resolved_impact_expansion_max_candidates,
-            impact_expansion_max_edges_per_seed=(
-                resolved_impact_expansion_max_edges_per_seed
-            ),
+            impact_expansion_max_edges_per_seed=(resolved_impact_expansion_max_edges_per_seed),
             impact_expansion_max_paths_per_candidate=(
                 resolved_impact_expansion_max_paths_per_candidate
             ),
             impact_expansion_vector_proposals_enabled=(
                 resolved_impact_expansion_vector_proposals_enabled
             ),
+            news_analyze_enabled=resolved_news_analyze_enabled,
             service_prewarm_enabled=resolved_service_prewarm_enabled,
             config_path=config_path,
         )

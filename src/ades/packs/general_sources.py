@@ -14,14 +14,15 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
-from typing import Any, Iterator
+from typing import Iterator
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 import zipfile
 
-from .g20_country_aliases import DEFAULT_CURATED_G20_COUNTRY_ENTITIES
+from .bdya_phase6 import BDYA_GENERAL_OVERLAY_ENTITIES
 from .fetch import normalize_source_url
+from .g20_country_aliases import DEFAULT_CURATED_G20_COUNTRY_ENTITIES
 
 
 DEFAULT_GENERAL_SOURCE_OUTPUT_ROOT = Path(
@@ -158,6 +159,11 @@ _WIKIDATA_MIN_CANDIDATE_SITELINKS = min(
 )
 DEFAULT_CURATED_GENERAL_ENTITIES: tuple[dict[str, object], ...] = (
     *DEFAULT_CURATED_G20_COUNTRY_ENTITIES,
+)
+
+DEFAULT_CURATED_GENERAL_ENTITIES = (
+    *DEFAULT_CURATED_GENERAL_ENTITIES,
+    *BDYA_GENERAL_OVERLAY_ENTITIES,
 )
 _WIKIDATA_TRUTHY_STAGE_SCHEMA_VERSION = 3
 _WIKIDATA_TRUTHY_STAGE_LOGIC_VERSION = 3

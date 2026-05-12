@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+import hashlib
 from pathlib import Path
+import re
+import time
 
 from fastapi import FastAPI, HTTPException, Query
 
@@ -62,6 +65,10 @@ from ..api import (
 from ..config import Settings
 from ..packs.registry import PackRegistry
 from ..packs.runtime import clear_pack_runtime_cache, load_pack_runtime
+from ..news_events import (
+    extract_news_event_signals,
+    gate_terminal_candidates_by_event_signals,
+)
 from ..runtime_matcher import clear_runtime_matcher_cache, load_runtime_matcher
 from ..storage import UnsupportedRuntimeConfigurationError
 from ..version import __version__
@@ -69,6 +76,7 @@ from .models import (
     AvailablePackSummary,
     BatchFileTagRequest,
     BatchTagResponse,
+    EntityMatch,
     FileTagRequest,
     ImpactExpansionRequest,
     ImpactExpansionResult,
@@ -142,10 +150,18 @@ from .models import (
     RegistryGeneratePackResponse,
     RegistryReportPackRequest,
     RegistryReportPackResponse,
+    NewsAnalyzeArtifactVersions,
+    NewsAnalyzeCountryScope,
+    NewsAnalyzePackDecision,
+    NewsAnalyzePassiveEntity,
+    NewsAnalyzeRequest,
+    NewsAnalyzeResponse,
+    NewsAnalyzeTopicScope,
     StatusResponse,
     TagRequest,
     TagResponse,
 )
+from ..packs.g20_country_aliases import DEFAULT_CURATED_G20_COUNTRY_ENTITIES
 
 
 def _bool_option(options: dict[str, object] | None, key: str) -> bool | None:
@@ -223,6 +239,710 @@ def _request_string_option(
         raise ValueError(f"Invalid string option for {key}.")
     normalized = value.strip()
     return normalized or None
+
+
+_COUNTRY_BY_CODE = {
+    str(entity["entity_id"]).split(":", 1)[1].casefold(): str(entity["canonical_text"])
+    for entity in DEFAULT_CURATED_G20_COUNTRY_ENTITIES
+    if isinstance(entity.get("entity_id"), str) and str(entity["entity_id"]).startswith("country:")
+}
+_NEWS_ANALYZE_BASE_PACKS = (
+    "general-en",
+    "business-vector-en",
+    "economics-vector-en",
+    "politics-vector-en",
+    "finance-en",
+)
+_NEWS_ANALYZE_COUNTRY_FINANCE_PACK_BY_CODE = {
+    "ar": "finance-ar-en",
+    "au": "finance-au-en",
+    "br": "finance-br-en",
+    "ca": "finance-ca-en",
+    "cn": "finance-cn-en",
+    "de": "finance-de-en",
+    "fr": "finance-fr-en",
+    "id": "finance-id-en",
+    "in": "finance-in-en",
+    "it": "finance-it-en",
+    "jp": "finance-jp-en",
+    "kr": "finance-kr-en",
+    "mx": "finance-mx-en",
+    "ru": "finance-ru-en",
+    "sa": "finance-sa-en",
+    "tr": "finance-tr-en",
+    "uk": "finance-uk-en",
+    "us": "finance-us-en",
+    "za": "finance-za-en",
+}
+_COUNTRY_ALIAS_TO_CODE: dict[str, str] = {}
+for _country in DEFAULT_CURATED_G20_COUNTRY_ENTITIES:
+    entity_id = str(_country.get("entity_id", ""))
+    if not entity_id.startswith("country:"):
+        continue
+    code = entity_id.split(":", 1)[1].casefold()
+    _COUNTRY_ALIAS_TO_CODE[str(_country.get("canonical_text", "")).casefold()] = code
+    for _alias in _country.get("aliases", []):
+        if isinstance(_alias, str):
+            _COUNTRY_ALIAS_TO_CODE[_alias.casefold()] = code
+
+_HIDDEN_PASSIVE_ARTIFACT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "url_or_link",
+        re.compile(
+            r"(?:https?://|www\.|[A-Za-z0-9.-]+\.(?:com|org|net|int|gov|edu|io|co|uk|de|fr|tr|cn|jp|br|ca|au)(?:/|\b))",
+            re.IGNORECASE,
+        ),
+    ),
+    ("email", re.compile(r"^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$", re.IGNORECASE)),
+    ("phone_number", re.compile(r"^\+?\d[\d\s().-]{6,}$")),
+    (
+        "percentage",
+        re.compile(
+            r"^[+-]?\d+(?:[.,]\d+)?\s*(?:%|percent|percentage points?|basis points?|bps)$",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "currency_amount",
+        re.compile(
+            r"^(?:[$\u20ac\u00a3\u00a5\u20ba\u20b9\u20a9]|(?:USD|EUR|GBP|JPY|TRY|CNY|CAD|AUD|BRL|INR|KRW|ZAR|SAR|MXN|RUB)\b)\s*[+-]?\d+(?:[.,]\d+)*(?:\s*(?:bn|billion|m|million|k))?$",
+            re.IGNORECASE,
+        ),
+    ),
+    ("html_fragment", re.compile(r"<[^>]+>")),
+)
+_PASSIVE_ARTIFACT_LABELS = {
+    "basis_point",
+    "basis_points",
+    "currency_amount",
+    "date",
+    "email",
+    "html",
+    "link",
+    "money",
+    "numeric",
+    "number",
+    "percentage",
+    "phone",
+    "price",
+    "rate",
+    "url",
+    "website",
+}
+_CURRENCY_AMOUNT_LABELS = {"currency_amount", "money", "price"}
+_PERCENTAGE_LABELS = {"percentage", "basis_point", "basis_points", "rate"}
+_PASSIVE_POLICY_BODY_PATTERN = re.compile(
+    r"\b(?:central bank|federal reserve|fed|ecb|treasury|ministry|minister|"
+    r"parliament|commission|regulator|authority|cabinet|congress|senate|"
+    r"government|court|sec|fda|ofac)\b",
+    re.IGNORECASE,
+)
+_SOURCE_OUTLET_PATTERN = re.compile(
+    r"\b(?:reuters|associated press|ap news|bloomberg|france 24|cnn|bbc|"
+    r"cnbc|marketwatch|wall street journal|financial times)\b",
+    re.IGNORECASE,
+)
+
+
+def _dedupe_string_values(values: list[str | None]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        normalized = value.strip() if isinstance(value, str) else ""
+        key = normalized.casefold()
+        if not normalized or key in seen:
+            continue
+        seen.add(key)
+        result.append(normalized)
+    return result
+
+
+def _score_entity(entity: EntityMatch) -> float | None:
+    scores = [
+        value for value in (entity.relevance, entity.confidence) if isinstance(value, (float, int))
+    ]
+    return float(max(scores)) if scores else None
+
+
+def _entity_ref(entity: EntityMatch) -> str:
+    linked_ref = entity.link.entity_id.strip() if entity.link else ""
+    if linked_ref:
+        return linked_ref
+    digest = hashlib.sha1(f"{entity.label}:{entity.text}".encode("utf-8")).hexdigest()
+    return f"ades:unlinked:{digest[:16]}"
+
+
+def _entity_name(entity: EntityMatch) -> str:
+    if entity.link and entity.link.canonical_text.strip():
+        return entity.link.canonical_text.strip()
+    return entity.text.strip()
+
+
+def _entity_merge_key(entity: EntityMatch) -> str:
+    if entity.link and entity.link.entity_id.strip():
+        return f"ref:{entity.link.entity_id.strip().casefold()}"
+    return f"{entity.label.casefold()}:{_entity_name(entity).casefold()}"
+
+
+def _merge_entity_matches(entities: list[EntityMatch]) -> list[EntityMatch]:
+    by_key: dict[str, EntityMatch] = {}
+    for entity in entities:
+        key = _entity_merge_key(entity)
+        existing = by_key.get(key)
+        if existing is None:
+            by_key[key] = entity
+            continue
+        representative = (
+            entity if (_score_entity(entity) or 0) > (_score_entity(existing) or 0) else existing
+        )
+        by_key[key] = representative.model_copy(
+            update={
+                "aliases": _dedupe_string_values(
+                    [existing.text, entity.text, *existing.aliases, *entity.aliases]
+                ),
+                "mention_count": max(1, existing.mention_count) + max(1, entity.mention_count),
+                "confidence": max(
+                    [
+                        value
+                        for value in (existing.confidence, entity.confidence)
+                        if value is not None
+                    ],
+                    default=None,
+                ),
+                "relevance": max(
+                    [
+                        value
+                        for value in (existing.relevance, entity.relevance)
+                        if value is not None
+                    ],
+                    default=None,
+                ),
+            }
+        )
+    return sorted(
+        by_key.values(),
+        key=lambda item: (-(_score_entity(item) or 0.0), _entity_name(item).casefold()),
+    )
+
+
+def _normalize_news_packs(request: NewsAnalyzeRequest, settings: Settings) -> list[str]:
+    requested = request.packs or [settings.default_pack]
+    return _dedupe_string_values(requested)[: request.options.max_packs]
+
+
+def _pack_is_available(registry: PackRegistry, pack_id: str) -> bool:
+    try:
+        return registry.pack_exists(pack_id, active_only=True)
+    except ValueError:
+        return False
+
+
+def _add_pack_decision(
+    *,
+    decisions: list[NewsAnalyzePackDecision],
+    packs: list[str],
+    registry: PackRegistry,
+    pack_id: str,
+    reason: str,
+    country_code: str | None = None,
+    detail: str | None = None,
+) -> None:
+    if any(decision.pack_id == pack_id for decision in decisions):
+        return
+    selected = _pack_is_available(registry, pack_id)
+    decisions.append(
+        NewsAnalyzePackDecision(
+            pack_id=pack_id,
+            selected=selected,
+            reason=reason,
+            country_code=country_code,
+            detail=detail,
+        )
+    )
+    if selected and pack_id not in packs:
+        packs.append(pack_id)
+
+
+def _build_initial_news_pack_plan(
+    *,
+    request: NewsAnalyzeRequest,
+    settings: Settings,
+    registry: PackRegistry,
+) -> tuple[list[str], list[NewsAnalyzePackDecision]]:
+    packs: list[str] = []
+    decisions: list[NewsAnalyzePackDecision] = []
+    requested_packs = _normalize_news_packs(request, settings)
+    if request.options.auto_pack_planning:
+        for pack_id in _NEWS_ANALYZE_BASE_PACKS:
+            _add_pack_decision(
+                decisions=decisions,
+                packs=packs,
+                registry=registry,
+                pack_id=pack_id,
+                reason="base_required",
+            )
+        for pack_id in requested_packs:
+            _add_pack_decision(
+                decisions=decisions,
+                packs=packs,
+                registry=registry,
+                pack_id=pack_id,
+                reason="request_pack",
+            )
+    else:
+        for pack_id in requested_packs:
+            _add_pack_decision(
+                decisions=decisions,
+                packs=packs,
+                registry=registry,
+                pack_id=pack_id,
+                reason="request_pack",
+            )
+    return packs[: request.options.max_packs], decisions
+
+
+def _country_alias_pattern(alias: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"(?<![A-Za-z0-9]){re.escape(alias)}(?![A-Za-z0-9])",
+        re.IGNORECASE,
+    )
+
+
+def _country_codes_from_text(text: str) -> list[str]:
+    codes: list[str] = []
+    for alias, code in sorted(_COUNTRY_ALIAS_TO_CODE.items(), key=lambda item: -len(item[0])):
+        if len(alias) < 2:
+            continue
+        if _country_alias_pattern(alias).search(text):
+            codes.append(code)
+    return _dedupe_string_values(codes)
+
+
+def _country_codes_from_entities(entities: list[EntityMatch]) -> list[str]:
+    codes: list[str] = []
+    for entity in entities:
+        code = _entity_ref_country_code(entity.link.entity_id if entity.link else None)
+        code = code or _country_code_from_text(_entity_name(entity))
+        if code:
+            codes.append(code)
+    return _dedupe_string_values(codes)
+
+
+def _country_code_candidates_for_pack_plan(
+    *,
+    request: NewsAnalyzeRequest,
+    text: str,
+    entities: list[EntityMatch],
+) -> list[tuple[str, str]]:
+    candidates: list[tuple[str, str]] = []
+
+    def _append(value: str | None, reason: str) -> None:
+        code = _country_code_from_text(value)
+        if code and not any(existing == code for existing, _ in candidates):
+            candidates.append((code, reason))
+
+    _append(request.country_hint, "country_hint")
+    _append(request.hints.country if request.hints else None, "country_hint")
+    _append(request.source.source_country if request.source else None, "source_country")
+    for code in _country_codes_from_text(text):
+        if not any(existing == code for existing, _ in candidates):
+            candidates.append((code, "text_country_mention"))
+    for code in _country_codes_from_entities(entities):
+        if not any(existing == code for existing, _ in candidates):
+            candidates.append((code, "entity_country_match"))
+    return candidates
+
+
+def _add_country_finance_pack_plan(
+    *,
+    decisions: list[NewsAnalyzePackDecision],
+    packs: list[str],
+    registry: PackRegistry,
+    request: NewsAnalyzeRequest,
+    text: str,
+    entities: list[EntityMatch],
+) -> list[str]:
+    selected: list[str] = []
+    if not request.options.auto_pack_planning or request.options.max_country_finance_packs <= 0:
+        return selected
+    for country_code, reason in _country_code_candidates_for_pack_plan(
+        request=request,
+        text=text,
+        entities=entities,
+    ):
+        pack_id = _NEWS_ANALYZE_COUNTRY_FINANCE_PACK_BY_CODE.get(country_code)
+        if not pack_id:
+            continue
+        before = set(packs)
+        _add_pack_decision(
+            decisions=decisions,
+            packs=packs,
+            registry=registry,
+            pack_id=pack_id,
+            reason=reason,
+            country_code=country_code,
+        )
+        if pack_id in packs and pack_id not in before:
+            selected.append(pack_id)
+        if len(selected) >= request.options.max_country_finance_packs:
+            break
+        if len(packs) >= request.options.max_packs:
+            break
+    return selected
+
+
+def _news_analysis_text(request: NewsAnalyzeRequest) -> str:
+    return "\n\n".join(
+        part.strip()
+        for part in (request.title, request.description, request.text)
+        if part and part.strip()
+    )
+
+
+def _news_country_hint(request: NewsAnalyzeRequest) -> tuple[str | None, str | None]:
+    if request.country_hint and request.country_hint.strip():
+        return request.country_hint, "country_hint"
+    if request.hints and request.hints.country and request.hints.country.strip():
+        return request.hints.country, "country_hint"
+    if request.source and request.source.source_country and request.source.source_country.strip():
+        return request.source.source_country, "source_hint"
+    return None, None
+
+
+def _entity_ref_country_code(entity_ref: str | None) -> str | None:
+    if not entity_ref:
+        return None
+    normalized = entity_ref.strip().casefold()
+    if normalized.startswith("country:"):
+        code = normalized.split(":", 1)[1]
+        return code if code in _COUNTRY_BY_CODE or re.fullmatch(r"[a-z]{2}", code) else None
+    return None
+
+
+def _country_code_from_text(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = value.strip().casefold().replace("_", "-")
+    if normalized.startswith("country:"):
+        normalized = normalized.split(":", 1)[1]
+    if normalized in _COUNTRY_BY_CODE:
+        return normalized
+    if re.fullmatch(r"[a-z]{2}", normalized):
+        return normalized
+    return _COUNTRY_ALIAS_TO_CODE.get(normalized)
+
+
+def _build_country_scope(
+    *,
+    country_hint: str | None,
+    hint_source: str | None = None,
+    entities: list[EntityMatch],
+    text: str | None = None,
+) -> NewsAnalyzeCountryScope | None:
+    hinted_code = _country_code_from_text(country_hint)
+    if hinted_code:
+        hinted_name = _COUNTRY_BY_CODE.get(hinted_code)
+        for entity in entities:
+            entity_name = _entity_name(entity)
+            entity_code = _entity_ref_country_code(entity.link.entity_id if entity.link else None)
+            entity_code = entity_code or _country_code_from_text(entity_name)
+            if entity_code == hinted_code:
+                hinted_name = entity_name
+                break
+        return NewsAnalyzeCountryScope(
+            country_code=hinted_code,
+            entity_ref=f"country:{hinted_code}",
+            name=hinted_name or hinted_code.upper(),
+            source=hint_source if hint_source in {"country_hint", "source_hint"} else "country_hint",
+        )
+    for entity in entities:
+        code = _entity_ref_country_code(entity.link.entity_id if entity.link else None)
+        code = code or _country_code_from_text(_entity_name(entity))
+        if code:
+            entity_name = _entity_name(entity)
+            return NewsAnalyzeCountryScope(
+                country_code=code,
+                entity_ref=f"country:{code}",
+                name=_COUNTRY_BY_CODE.get(code, entity_name or code.upper()),
+                source="entity_match",
+            )
+    if text:
+        text_country_codes = _country_codes_from_text(text)
+        if text_country_codes:
+            code = text_country_codes[0]
+            return NewsAnalyzeCountryScope(
+                country_code=code,
+                entity_ref=f"country:{code}",
+                name=_COUNTRY_BY_CODE.get(code, code.upper()),
+                source="text_country_mention",
+            )
+    return None
+
+
+def _text_contains_entity_phrase(text: str | None, name: str) -> bool:
+    if not text or not name.strip():
+        return False
+    pattern = re.compile(
+        rf"(?<![A-Za-z0-9]){re.escape(name.strip())}(?![A-Za-z0-9])",
+        re.IGNORECASE,
+    )
+    return bool(pattern.search(text))
+
+
+def _source_outlet_is_story_subject(
+    *, request: NewsAnalyzeRequest, name: str
+) -> bool:
+    subject_text = "\n".join(
+        part.strip()
+        for part in (request.title, request.description)
+        if part and part.strip()
+    )
+    return _text_contains_entity_phrase(subject_text, name)
+
+
+def _hidden_artifact_reasons(
+    value: str,
+    *,
+    entity: EntityMatch | None = None,
+    source_outlet_artifact: bool = False,
+) -> list[str]:
+    normalized = value.strip()
+    if not normalized:
+        return ["empty_text"]
+    reasons: list[str] = []
+    label = entity.label.strip().casefold() if entity else ""
+    for reason, pattern in _HIDDEN_PASSIVE_ARTIFACT_PATTERNS:
+        if pattern.search(normalized):
+            reasons.append(reason)
+    if label in _PASSIVE_ARTIFACT_LABELS:
+        if label in _CURRENCY_AMOUNT_LABELS:
+            reasons.append("currency_amount")
+        elif label in _PERCENTAGE_LABELS:
+            reasons.append("percentage")
+        else:
+            reasons.append(label)
+    if re.fullmatch(r"[+-]?\d+(?:[.,]\d+)*", normalized):
+        reasons.append("numeric_fragment")
+    if normalized.casefold() in {"read more", "click here", "subscribe", "advertisement"}:
+        reasons.append("boilerplate")
+    if source_outlet_artifact:
+        reasons.append("source_outlet_artifact")
+    return _dedupe_string_values(reasons)
+
+
+def _passive_role(entity: EntityMatch, name: str) -> str:
+    label = entity.label.strip().casefold()
+    entity_type = label
+    if entity.link and entity.link.entity_id.startswith("country:"):
+        return "country_scope"
+    if _country_code_from_text(name):
+        return "country_scope"
+    if _SOURCE_OUTLET_PATTERN.search(name):
+        return "source_outlet"
+    if _PASSIVE_POLICY_BODY_PATTERN.search(name):
+        return "policy_body"
+    if entity_type in {"person", "people"}:
+        return "person"
+    if entity_type in {"location", "place", "city", "region", "country"}:
+        return "location"
+    if entity_type in {"organization", "company", "issuer", "government"}:
+        score = _score_entity(entity)
+        return "actor" if score is not None and score >= 0.75 else "organization"
+    return "context_only"
+
+
+def _passive_quality(entity: EntityMatch, hidden_reasons: list[str]) -> str:
+    if hidden_reasons:
+        return "hidden_artifact"
+    provenance = entity.provenance
+    alias_quality = (
+        provenance.alias_quality.strip().casefold()
+        if provenance and provenance.alias_quality
+        else ""
+    )
+    if provenance and (
+        provenance.weak_alias
+        or alias_quality in {"weak", "low_quality", "suspect", "search_only", "hidden"}
+    ):
+        return "weak"
+    score = _score_entity(entity)
+    if score is None:
+        return "medium"
+    if score >= 0.85:
+        return "strong"
+    if score >= 0.55:
+        return "medium"
+    return "weak"
+
+
+def _is_tradable_entity(entity: EntityMatch, terminal_refs: set[str]) -> bool:
+    entity_ref = _entity_ref(entity).casefold()
+    if entity_ref in terminal_refs:
+        return True
+    label = entity.label.strip().casefold()
+    if label in {"asset", "ticker", "security", "commodity", "currency", "index"}:
+        return True
+    if entity_ref.startswith("finance-") and any(
+        token in entity_ref for token in ("-ticker:", ":ticker:", "currency", "commodity", "index")
+    ):
+        return True
+    return False
+
+
+def _build_passive_entities(
+    *,
+    entities: list[EntityMatch],
+    terminal_candidates: list[object],
+    country_scope: NewsAnalyzeCountryScope | None,
+    max_entities: int,
+    request: NewsAnalyzeRequest,
+) -> list[NewsAnalyzePassiveEntity]:
+    terminal_refs = {
+        getattr(candidate, "entity_ref", "").casefold()
+        for candidate in terminal_candidates
+        if getattr(candidate, "entity_ref", "")
+    }
+    passive_entities: list[NewsAnalyzePassiveEntity] = []
+    for entity in entities:
+        if _is_tradable_entity(entity, terminal_refs):
+            continue
+        name = _entity_name(entity)
+        entity_ref = _entity_ref(entity)
+        role = _passive_role(entity, name)
+        hidden_reasons = _hidden_artifact_reasons(
+            name,
+            entity=entity,
+            source_outlet_artifact=(
+                role == "source_outlet"
+                and not _source_outlet_is_story_subject(request=request, name=name)
+            ),
+        )
+        quality = _passive_quality(entity, hidden_reasons)
+        reasons = _dedupe_string_values(
+            [
+                *hidden_reasons,
+                *(entity.provenance.quality_reasons if entity.provenance else []),
+            ]
+        )
+        passive_entities.append(
+            NewsAnalyzePassiveEntity(
+                entity_ref=entity_ref,
+                name=name,
+                entity_type=entity.label,
+                label=entity.label,
+                role=role,  # type: ignore[arg-type]
+                quality=quality,  # type: ignore[arg-type]
+                display_eligible=quality != "hidden_artifact",
+                source_pack=entity.provenance.source_pack if entity.provenance else None,
+                source_domain=entity.provenance.source_domain if entity.provenance else None,
+                aliases=_dedupe_string_values(entity.aliases)[:12],
+                mention_count=entity.mention_count,
+                confidence=entity.confidence,
+                relevance=entity.relevance,
+                evidence_text=entity.text,
+                link=entity.link,
+                provenance=entity.provenance,
+                quality_reasons=reasons,
+            )
+        )
+    if country_scope and not any(
+        passive.entity_ref.casefold() == country_scope.entity_ref.casefold()
+        for passive in passive_entities
+    ):
+        passive_entities.insert(
+            0,
+            NewsAnalyzePassiveEntity(
+                entity_ref=country_scope.entity_ref,
+                name=country_scope.name,
+                entity_type="country",
+                label="country",
+                role="country_scope",
+                quality="strong",
+                display_eligible=True,
+                aliases=[],
+                mention_count=1,
+                evidence_text=country_scope.name,
+                quality_reasons=["forced_country_scope"],
+            ),
+        )
+    return passive_entities[:max_entities]
+
+
+def _merge_topic_matches(responses: list[TagResponse]) -> list[object]:
+    by_label: dict[str, object] = {}
+    for response in responses:
+        for topic in response.topics:
+            key = topic.label.casefold()
+            existing = by_label.get(key)
+            if existing is None:
+                by_label[key] = topic
+                continue
+            existing_score = getattr(existing, "score", None)
+            topic_score = topic.score
+            by_label[key] = topic.model_copy(
+                update={
+                    "evidence_count": getattr(existing, "evidence_count", 0) + topic.evidence_count,
+                    "score": max(
+                        [value for value in (existing_score, topic_score) if value is not None],
+                        default=None,
+                    ),
+                }
+            )
+    return list(by_label.values())[:16]
+
+
+def _build_topic_scope(
+    *,
+    topics: list[object],
+    request: NewsAnalyzeRequest,
+) -> NewsAnalyzeTopicScope | None:
+    labels = _dedupe_string_values(
+        [
+            *(getattr(topic, "label", None) for topic in topics),
+            request.domain_hint,
+            *((request.hints.topics if request.hints else []) or []),
+        ]
+    )
+    if not labels:
+        return None
+
+    normalized_labels = {label.casefold() for label in labels}
+
+    def _has_any(*needles: str) -> bool:
+        return any(
+            needle in label or label in needle
+            for label in normalized_labels
+            for needle in needles
+        )
+
+    return NewsAnalyzeTopicScope(
+        primary=labels[0],
+        secondary=labels[1:8],
+        finance_relevant=_has_any(
+            "finance",
+            "market",
+            "stocks",
+            "equity",
+            "currency",
+            "commodity",
+        ),
+        politics_relevant=_has_any(
+            "politics",
+            "policy",
+            "geopolitics",
+            "government",
+            "regulation",
+            "sanctions",
+        ),
+        economics_relevant=_has_any(
+            "economics",
+            "economy",
+            "inflation",
+            "rates",
+            "trade",
+            "growth",
+        ),
+    )
 
 
 def _raise_configuration_http_exception(exc: Exception) -> None:
@@ -1212,6 +1932,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 max_unexpected_hits=request.max_unexpected_hits,
                 max_ambiguous_aliases=request.max_ambiguous_aliases,
                 max_dropped_alias_ratio=request.max_dropped_alias_ratio,
+                release_gate_commands=request.release_gate_commands,
+                release_gate_working_dir=request.release_gate_working_dir,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1290,6 +2012,201 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.post("/v0/news/analyze", response_model=NewsAnalyzeResponse)
+    def runtime_news_analyze(request: NewsAnalyzeRequest) -> NewsAnalyzeResponse:
+        """Analyze one news article through the normalized ADES contract."""
+
+        settings = runtime_state.current_settings()
+        if not settings.news_analyze_enabled:
+            raise HTTPException(status_code=404, detail="ADES_NEWS_ANALYZE_DISABLED")
+
+        started_at = time.perf_counter()
+        analysis_text = _news_analysis_text(request)
+        event_signals = extract_news_event_signals(analysis_text)
+        country_hint, country_hint_source = _news_country_hint(request)
+        tag_responses: list[TagResponse] = []
+        warnings: list[str] = []
+        registry = runtime_state.ensure_registry()
+        packs, pack_decisions = _build_initial_news_pack_plan(
+            request=request,
+            settings=settings,
+            registry=registry,
+        )
+
+        def _run_pack_batch(batch_packs: list[str]) -> None:
+            for pack in batch_packs:
+                if any(response.pack == pack for response in tag_responses):
+                    continue
+                try:
+                    runtime_state.prewarm_pack(pack)
+                    response = tag(
+                        analysis_text,
+                        pack=pack,
+                        content_type=request.content_type,
+                        storage_root=storage_root,
+                        debug=request.options.debug,
+                        hybrid=request.options.hybrid,
+                        include_related_entities=request.options.include_related_entities,
+                        include_graph_support=request.options.include_graph_support,
+                        refine_links=request.options.refine_links,
+                        refinement_depth=request.options.refinement_depth,
+                        include_impact_paths=False,
+                        domain_hint=request.domain_hint,
+                        retrieval_profile=request.retrieval_profile,
+                        country_hint=country_hint,
+                        registry=registry,
+                    )
+                except FileNotFoundError as exc:
+                    warnings.append(f"ADES_NEWS_ANALYZE_PACK_NOT_FOUND:{pack}:{str(exc)[:160]}")
+                    continue
+                except (IsADirectoryError, NotADirectoryError, ValueError) as exc:
+                    warnings.append(f"ADES_NEWS_ANALYZE_PACK_FAILED:{pack}:{str(exc)[:160]}")
+                    continue
+                tag_responses.append(response)
+                warnings.extend(response.warnings)
+
+        _run_pack_batch(packs)
+        entities = _merge_entity_matches(
+            [entity for response in tag_responses for entity in response.entities]
+        )
+        country_packs = _add_country_finance_pack_plan(
+            decisions=pack_decisions,
+            packs=packs,
+            registry=registry,
+            request=request,
+            text=analysis_text,
+            entities=entities,
+        )
+        _run_pack_batch(country_packs)
+        if not packs:
+            raise HTTPException(status_code=400, detail="At least one pack is required.")
+        entities = _merge_entity_matches(
+            [entity for response in tag_responses for entity in response.entities]
+        )
+        entity_refs = _dedupe_string_values(
+            [entity.link.entity_id if entity.link else None for entity in entities]
+        )
+
+        impact_paths: ImpactExpansionResult | None = None
+        include_relationships = (
+            request.options.include_impact_paths
+            and request.options.include_relationship_paths
+            and bool(entity_refs)
+        )
+        if include_relationships:
+            try:
+                impact_paths = expand_impact_paths(
+                    entity_refs,
+                    enabled_packs=_dedupe_string_values(
+                        [response.pack for response in tag_responses]
+                    ),
+                    max_depth=request.options.impact_max_depth,
+                    impact_expansion_seed_limit=request.options.impact_seed_limit,
+                    max_candidates=(
+                        request.options.impact_max_candidates
+                        if request.options.impact_max_candidates is not None
+                        else request.options.max_terminal_candidates
+                    ),
+                    include_passive_paths=True,
+                    vector_proposals_enabled=False,
+                    compatible_event_types=[
+                        signal.event_type for signal in event_signals
+                    ],
+                    storage_root=storage_root,
+                )
+            except ValueError as exc:
+                warnings.append(f"ADES_NEWS_ANALYZE_IMPACT_EXPAND_FAILED:{str(exc)[:180]}")
+
+        if impact_paths is not None:
+            warnings.extend(impact_paths.warnings)
+
+        expanded_terminal_candidates = impact_paths.candidates if impact_paths else []
+        if impact_paths is not None:
+            expanded_terminal_candidates, event_gate_warnings = (
+                gate_terminal_candidates_by_event_signals(
+                    expanded_terminal_candidates,
+                    event_signals,
+                )
+            )
+            if event_gate_warnings:
+                warnings.extend(event_gate_warnings)
+                impact_paths = impact_paths.model_copy(
+                    update={
+                        "candidates": expanded_terminal_candidates,
+                        "warnings": _dedupe_string_values(
+                            [*impact_paths.warnings, *event_gate_warnings]
+                        ),
+                    }
+                )
+            else:
+                impact_paths = impact_paths.model_copy(
+                    update={"candidates": expanded_terminal_candidates}
+                )
+        terminal_candidates = (
+            expanded_terminal_candidates[: request.options.max_terminal_candidates]
+            if request.options.include_terminal_candidates
+            else []
+        )
+        country_scope = _build_country_scope(
+            country_hint=country_hint,
+            hint_source=country_hint_source,
+            entities=entities,
+            text=analysis_text,
+        )
+        passive_entities = (
+            _build_passive_entities(
+                entities=entities,
+                terminal_candidates=expanded_terminal_candidates,
+                country_scope=country_scope,
+                max_entities=request.options.max_passive_entities,
+                request=request,
+            )
+            if request.options.include_passive_entities
+            else []
+        )
+        artifact_versions = NewsAnalyzeArtifactVersions(
+            ades_version=__version__,
+            packs={
+                response.pack: response.pack_version for response in tag_responses if response.pack
+            },
+            impact_graph_version=impact_paths.graph_version if impact_paths else None,
+            impact_artifact_version=(impact_paths.artifact_version if impact_paths else None),
+            impact_artifact_hash=impact_paths.artifact_hash if impact_paths else None,
+        )
+        quality_flags: list[str] = []
+        if country_scope is None:
+            quality_flags.append("COUNTRY_SCOPE_MISSING")
+        if any(not passive.display_eligible for passive in passive_entities):
+            quality_flags.append("PASSIVE_HIDDEN_ARTIFACTS_PRESENT")
+        if not terminal_candidates:
+            quality_flags.append("NO_TERMINAL_IMPACT_CANDIDATES")
+
+        topics = _merge_topic_matches(tag_responses)
+        topic_scope = _build_topic_scope(topics=topics, request=request)
+        timing_ms = int((time.perf_counter() - started_at) * 1000)
+        return NewsAnalyzeResponse(
+            version=__version__,
+            language=tag_responses[0].language if tag_responses else "en",
+            content_type=request.content_type,
+            packs=packs,
+            packs_used=_dedupe_string_values([response.pack for response in tag_responses]),
+            pack_decisions=pack_decisions,
+            country_scope=country_scope,
+            topic_scope=topic_scope,
+            passive_entities=passive_entities,
+            event_signals=event_signals,
+            source_entities=impact_paths.source_entities if impact_paths else [],
+            terminal_impact_candidates=terminal_candidates,
+            impact_paths=impact_paths,
+            topics=topics,
+            artifact_versions=artifact_versions,
+            tag_responses=(tag_responses if request.options.include_tag_responses else []),
+            warnings=_dedupe_string_values(warnings)[:32],
+            quality_flags=quality_flags,
+            timing_ms=timing_ms,
+            total_time_ms=timing_ms,
+        )
+
     @app.post("/v0/impact/expand", response_model=ImpactExpansionResult)
     def runtime_expand_impact_paths(
         request: ImpactExpansionRequest,
@@ -1331,14 +2248,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 include_related_entities=bool(
                     _bool_option(request.options, "include_related_entities")
                 ),
-                include_graph_support=bool(
-                    _bool_option(request.options, "include_graph_support")
-                ),
+                include_graph_support=bool(_bool_option(request.options, "include_graph_support")),
                 refine_links=bool(_bool_option(request.options, "refine_links")),
                 refinement_depth=_refinement_depth_option(request.options),
-                include_impact_paths=bool(
-                    _bool_option(request.options, "include_impact_paths")
-                ),
+                include_impact_paths=bool(_bool_option(request.options, "include_impact_paths")),
                 impact_max_depth=_int_option(request.options, "impact_max_depth"),
                 impact_seed_limit=_int_option(request.options, "impact_seed_limit"),
                 impact_max_candidates=_int_option(
@@ -1387,14 +2300,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 include_related_entities=bool(
                     _bool_option(request.options, "include_related_entities")
                 ),
-                include_graph_support=bool(
-                    _bool_option(request.options, "include_graph_support")
-                ),
+                include_graph_support=bool(_bool_option(request.options, "include_graph_support")),
                 refine_links=bool(_bool_option(request.options, "refine_links")),
                 refinement_depth=_refinement_depth_option(request.options),
-                include_impact_paths=bool(
-                    _bool_option(request.options, "include_impact_paths")
-                ),
+                include_impact_paths=bool(_bool_option(request.options, "include_impact_paths")),
                 impact_max_depth=_int_option(request.options, "impact_max_depth"),
                 impact_seed_limit=_int_option(request.options, "impact_seed_limit"),
                 impact_max_candidates=_int_option(
@@ -1470,14 +2379,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 include_related_entities=bool(
                     _bool_option(request.options, "include_related_entities")
                 ),
-                include_graph_support=bool(
-                    _bool_option(request.options, "include_graph_support")
-                ),
+                include_graph_support=bool(_bool_option(request.options, "include_graph_support")),
                 refine_links=bool(_bool_option(request.options, "refine_links")),
                 refinement_depth=_refinement_depth_option(request.options),
-                include_impact_paths=bool(
-                    _bool_option(request.options, "include_impact_paths")
-                ),
+                include_impact_paths=bool(_bool_option(request.options, "include_impact_paths")),
                 impact_max_depth=_int_option(request.options, "impact_max_depth"),
                 impact_seed_limit=_int_option(request.options, "impact_seed_limit"),
                 impact_max_candidates=_int_option(

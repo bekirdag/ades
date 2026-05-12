@@ -127,6 +127,47 @@ def test_matcher_artifact_generation_writes_entry_payloads(tmp_path: Path) -> No
     )
 
 
+def test_matcher_artifact_preserves_alias_quality_metadata(tmp_path: Path) -> None:
+    aliases_path = tmp_path / "aliases.json"
+    aliases_path.write_text(
+        json.dumps(
+            {
+                "aliases": [
+                    {
+                        "text": "OFAC",
+                        "label": "organization",
+                        "canonical_text": "Office of Foreign Assets Control",
+                        "entity_id": "ades:policy-body:us:ofac",
+                        "source_domain": "general",
+                        "alias_quality": "strong",
+                        "weak_alias": False,
+                        "quality_reasons": ["curated_phase6"],
+                        "runtime_tier": "runtime_exact_acronym_high_precision",
+                        "direct_mention_required": True,
+                    }
+                ]
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = build_matcher_artifact_from_aliases_json(
+        aliases_path,
+        output_dir=tmp_path / "matcher",
+        include_runtime_tiers={"runtime_exact_acronym_high_precision"},
+    )
+    matcher = load_runtime_matcher(result.artifact_path, result.entries_path)
+
+    entry = matcher.entry_payloads[0]
+    assert entry.text == "OFAC"
+    assert entry.alias_quality == "strong"
+    assert entry.weak_alias is False
+    assert entry.quality_reasons == ("curated_phase6",)
+    assert entry.runtime_tier == "runtime_exact_acronym_high_precision"
+    assert entry.direct_mention_required is True
+
+
 def test_runtime_matcher_rebuilds_missing_token_trie_index(tmp_path: Path) -> None:
     aliases_path = tmp_path / "aliases.json"
     aliases_path.write_text(

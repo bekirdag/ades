@@ -1,83 +1,255 @@
 {
   "name": "phase1_starter",
   "description": "Refs-only starter evaluation for the eight inner-ring relationship families.",
-  "default_enabled_packs": ["general-en", "finance-en"],
+  "default_enabled_packs": [
+    "general-en",
+    "finance-en"
+  ],
   "cases": [
     {
       "name": "hormuz_crude_oil",
-      "entity_refs": ["ades:heuristic_structural_location:general-en:location:strait-of-hormuz", "wikidata:Q794"],
-      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
-      "expected_passive_refs": ["wikidata:Q121826282"],
-      "expected_relation_families": ["chokepoint_affects_commodity", "commodity_traded_in_currency", "country_member_of_bloc", "country_produces_commodity"]
+      "entity_refs": [
+        "ades:heuristic_structural_location:general-en:location:strait-of-hormuz",
+        "wikidata:Q794"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:commodity:crude-oil",
+        "ades:impact:currency:usd",
+        "ades:impact:sector:airlines"
+      ],
+      "expected_passive_refs": [
+        "wikidata:Q121826282"
+      ],
+      "expected_relation_families": [
+        "chokepoint_affects_commodity",
+        "commodity_traded_in_currency",
+        "country_member_of_bloc",
+        "country_produces_commodity",
+        "energy_input_affects_sector"
+      ]
     },
     {
       "name": "fed_usd_and_rates",
-      "entity_refs": ["wikidata:Q53536"],
-      "expected_candidate_refs": ["ades:impact:currency:usd", "ades:impact:rate:fed-funds"],
-      "expected_relation_families": ["central_bank_affects_currency", "central_bank_affects_rates"]
+      "entity_refs": [
+        "wikidata:Q53536"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:currency:usd",
+        "ades:impact:rate:fed-funds"
+      ],
+      "expected_relation_families": [
+        "central_bank_affects_currency",
+        "central_bank_affects_rates"
+      ]
     },
     {
       "name": "ecb_eur_and_rates",
-      "entity_refs": ["wikidata:Q8901"],
-      "expected_candidate_refs": ["ades:impact:currency:eur", "ades:impact:rate:ecb-policy-rates"],
-      "expected_relation_families": ["central_bank_affects_currency", "central_bank_affects_rates"]
+      "entity_refs": [
+        "wikidata:Q8901"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:currency:eur",
+        "ades:impact:rate:ecb-policy-rates"
+      ],
+      "expected_relation_families": [
+        "central_bank_affects_currency",
+        "central_bank_affects_rates"
+      ]
     },
     {
       "name": "us_crude_exports",
-      "entity_refs": ["geonames:6252001"],
-      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
-      "expected_relation_families": ["commodity_traded_in_currency", "country_exports_commodity"]
+      "entity_refs": [
+        "geonames:6252001"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:commodity:crude-oil",
+        "ades:impact:currency:usd",
+        "ades:impact:sector:airlines"
+      ],
+      "expected_relation_families": [
+        "commodity_traded_in_currency",
+        "country_exports_commodity",
+        "energy_input_affects_sector"
+      ]
     },
     {
       "name": "russia_crude_production",
-      "entity_refs": ["wikidata:Q159"],
-      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
-      "expected_relation_families": ["commodity_traded_in_currency", "country_produces_commodity"]
+      "entity_refs": [
+        "wikidata:Q159"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:commodity:crude-oil",
+        "ades:impact:currency:usd",
+        "ades:impact:sector:airlines"
+      ],
+      "expected_relation_families": [
+        "commodity_traded_in_currency",
+        "country_produces_commodity",
+        "energy_input_affects_sector"
+      ]
     },
     {
       "name": "oil_usd_chain",
-      "entity_refs": ["ades:impact:commodity:crude-oil"],
-      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
-      "expected_relation_families": ["commodity_traded_in_currency"]
+      "entity_refs": [
+        "ades:impact:commodity:crude-oil"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:commodity:crude-oil",
+        "ades:impact:currency:usd",
+        "ades:impact:sector:airlines"
+      ],
+      "expected_relation_families": [
+        "commodity_traded_in_currency",
+        "energy_input_affects_sector"
+      ]
     },
     {
       "name": "ofac_sanctions",
-      "entity_refs": ["ades:impact:sanctions:ofac"],
-      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
-      "expected_passive_refs": ["wikidata:Q794", "wikidata:Q121826282"],
-      "expected_relation_families": ["commodity_traded_in_currency", "country_member_of_bloc", "country_produces_commodity", "sanction_affects_country", "sanction_affects_commodity"]
+      "entity_refs": [
+        "ades:impact:sanctions:ofac"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:commodity:crude-oil",
+        "ades:impact:currency:usd",
+        "ades:impact:risk:sanctions-risk",
+        "ades:impact:sector:airlines"
+      ],
+      "expected_passive_refs": [
+        "wikidata:Q121826282",
+        "wikidata:Q794"
+      ],
+      "expected_relation_families": [
+        "commodity_traded_in_currency",
+        "country_member_of_bloc",
+        "country_produces_commodity",
+        "energy_input_affects_sector",
+        "sanction_affects_commodity",
+        "sanction_affects_country",
+        "sanctions_body_affects_risk_proxy"
+      ]
     },
     {
       "name": "gas_reservation_policy_natural_gas",
-      "entity_refs": ["ades:impact:energy-policy:gas-reservation-policy"],
-      "expected_candidate_refs": ["ades:impact:commodity:natural-gas", "ades:impact:currency:usd"],
-      "expected_relation_families": ["commodity_traded_in_currency", "energy_policy_affects_commodity"]
+      "entity_refs": [
+        "ades:impact:energy-policy:gas-reservation-policy"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:commodity:natural-gas",
+        "ades:impact:currency:usd",
+        "ades:impact:sector:utilities"
+      ],
+      "expected_relation_families": [
+        "commodity_traded_in_currency",
+        "energy_input_affects_sector",
+        "energy_policy_affects_commodity"
+      ]
     },
     {
       "name": "pollution_agriculture_supply_risk",
-      "entity_refs": ["ades:impact:environment:pollution-crisis"],
-      "expected_candidate_refs": ["ades:impact:commodity:wheat", "ades:impact:commodity:corn", "ades:impact:commodity:soybeans", "ades:impact:commodity:live-cattle", "ades:impact:commodity:lean-hogs", "ades:impact:currency:usd"],
-      "expected_relation_families": ["commodity_traded_in_currency", "pollution_affects_agriculture_commodity", "pollution_affects_livestock_commodity"]
+      "entity_refs": [
+        "ades:impact:environment:pollution-crisis"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:commodity:corn",
+        "ades:impact:commodity:lean-hogs",
+        "ades:impact:commodity:live-cattle",
+        "ades:impact:commodity:soybeans",
+        "ades:impact:commodity:wheat",
+        "ades:impact:currency:usd",
+        "ades:impact:macro:cpi",
+        "ades:impact:sector:agriculture"
+      ],
+      "expected_relation_families": [
+        "agriculture_commodity_affects_sector",
+        "commodity_traded_in_currency",
+        "food_commodity_affects_inflation",
+        "pollution_affects_agriculture_commodity",
+        "pollution_affects_livestock_commodity"
+      ]
     },
     {
       "name": "tanker_sanctions_crude_oil",
-      "entity_refs": ["ades:impact:shipping:tanker-sanctions"],
-      "expected_candidate_refs": ["ades:impact:commodity:crude-oil", "ades:impact:currency:usd"],
-      "expected_relation_families": ["commodity_traded_in_currency", "tanker_sanctions_affects_commodity"]
+      "entity_refs": [
+        "ades:impact:shipping:tanker-sanctions"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:commodity:crude-oil",
+        "ades:impact:currency:usd",
+        "ades:impact:sector:airlines"
+      ],
+      "expected_relation_families": [
+        "commodity_traded_in_currency",
+        "energy_input_affects_sector",
+        "tanker_sanctions_affects_commodity"
+      ]
     },
     {
       "name": "digital_asset_regulation_bitcoin",
-      "entity_refs": ["ades:impact:policy:digital-asset-regulation"],
-      "expected_candidate_refs": ["ades:impact:crypto:bitcoin"],
-      "expected_relation_families": ["digital_asset_policy_affects_crypto"]
+      "entity_refs": [
+        "ades:impact:policy:digital-asset-regulation"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:crypto:bitcoin"
+      ],
+      "expected_relation_families": [
+        "digital_asset_policy_affects_crypto"
+      ]
     },
     {
       "name": "negative_empty_refs",
-      "entity_refs": ["ades:impact:unknown:not-in-graph"],
+      "entity_refs": [
+        "ades:impact:unknown:not-in-graph"
+      ],
       "expected_candidate_refs": [],
       "expected_passive_refs": [],
       "expected_relation_families": [],
       "negative": true
+    },
+    {
+      "name": "red_sea_shipping_and_oil",
+      "entity_refs": [
+        "ades:market-location:red-sea"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:commodity:crude-oil",
+        "ades:impact:currency:usd",
+        "ades:impact:sector:airlines",
+        "ades:impact:sector:shipping"
+      ],
+      "expected_relation_families": [
+        "chokepoint_affects_commodity",
+        "chokepoint_affects_sector",
+        "commodity_traded_in_currency",
+        "energy_input_affects_sector"
+      ]
+    },
+    {
+      "name": "copper_supply_chain_semiconductors",
+      "entity_refs": [
+        "ades:impact:commodity:copper"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:commodity:copper",
+        "ades:impact:sector:semiconductors"
+      ],
+      "expected_relation_families": [
+        "industrial_metal_affects_sector"
+      ]
+    },
+    {
+      "name": "tesla_issuer_ticker_bridge",
+      "entity_refs": [
+        "wikidata:Q478214"
+      ],
+      "enabled_packs": [
+        "finance-us-en"
+      ],
+      "expected_candidate_refs": [
+        "finance-us-ticker:TSLA"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker"
+      ]
     }
   ]
 }

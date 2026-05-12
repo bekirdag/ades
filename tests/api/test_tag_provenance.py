@@ -34,7 +34,7 @@ def test_tag_endpoint_returns_provenance_and_link_metadata(tmp_path: Path) -> No
         "source_pack": "general-en",
         "source_domain": "general",
         "alias_quality": None,
-        "weak_alias": None,
+        "weak_alias": False,
         "quality_reasons": [],
     }
     assert organization_entity["link"] == {

@@ -1133,6 +1133,16 @@ def registry_refresh_generated_packs(
         max=1.0,
         help="Maximum acceptable dropped-alias ratio after normalization and pruning. If omitted, ades uses the pack-specific default quality budget.",
     ),
+    release_gate_commands: list[str] = typer.Option(
+        [],
+        "--release-gate-command",
+        help="Shell command to run after pack quality/source checks and before registry materialization. Can be supplied multiple times.",
+    ),
+    release_gate_working_dir: Path | None = typer.Option(
+        None,
+        "--release-gate-working-dir",
+        help="Working directory for release gate commands, for example the BDYA repo root when running pnpm news-analysis:golden:gate.",
+    ),
 ) -> None:
     """Refresh one or more generated packs into a quality-gated registry release."""
 
@@ -1146,6 +1156,8 @@ def registry_refresh_generated_packs(
             max_unexpected_hits=max_unexpected_hits,
             max_ambiguous_aliases=max_ambiguous_aliases,
             max_dropped_alias_ratio=max_dropped_alias_ratio,
+            release_gate_commands=release_gate_commands,
+            release_gate_working_dir=release_gate_working_dir,
         )
     except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
         _exit_with_cli_error(exc)

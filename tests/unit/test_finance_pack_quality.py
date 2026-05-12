@@ -35,7 +35,7 @@ def test_validate_finance_pack_quality_reports_passing_fixture_metrics(tmp_path:
     assert report.precision == 1.0
     assert report.alias_count >= 30
     assert report.unique_canonical_count >= 14
-    assert report.rule_count == 5
+    assert report.rule_count == 10
     assert Path(report.generated_pack_dir).exists()
     assert Path(report.registry_index_path).exists()
     assert Path(report.storage_root).exists()

@@ -22,6 +22,18 @@ from .graph_store import MarketGraphEdge, MarketGraphNode, MarketGraphStore
 
 _DEPTH_DECAY = {0: 1.0, 1: 0.9, 2: 0.75}
 _MAX_DEPTH_CAP = 4
+_EVENT_GATED_PROXY_RELATIONS = {
+    "country_affects_country_risk_proxy",
+    "country_affects_currency_index",
+    "country_affects_dxy_proxy",
+    "country_affects_global_equity_proxy",
+    "country_affects_policy_rate_proxy",
+    "entity_affects_country_risk_proxy",
+    "entity_affects_dxy_proxy",
+    "entity_affects_global_equity_proxy",
+    "entity_affects_global_policy_risk_proxy",
+    "entity_affects_policy_rate_proxy",
+}
 
 
 @dataclass(frozen=True)
@@ -63,6 +75,34 @@ def _heuristic_structural_equivalent_refs(entity_ref: str) -> tuple[str, ...]:
     return tuple(equivalent_refs)
 
 
+def _candidate_refs_for_requested(
+    requested_refs: tuple[str, ...],
+    *,
+    store: MarketGraphStore,
+) -> dict[str, tuple[str, ...]]:
+    base_candidates_by_requested = {
+        entity_ref: _normalize_refs((entity_ref, *_heuristic_structural_equivalent_refs(entity_ref)))
+        for entity_ref in requested_refs
+    }
+    bridge_lookup_refs = _normalize_refs(
+        candidate
+        for candidates in base_candidates_by_requested.values()
+        for candidate in candidates
+    )
+    bridge_refs_by_lookup = store.bridge_refs_batch(bridge_lookup_refs)
+
+    requested_ref_candidates: dict[str, tuple[str, ...]] = {}
+    for entity_ref, base_candidates in base_candidates_by_requested.items():
+        candidate_refs: list[str] = []
+        for candidate_ref in base_candidates:
+            candidate_refs.append(candidate_ref)
+            for bridge_ref in bridge_refs_by_lookup.get(candidate_ref, ()):
+                candidate_refs.append(bridge_ref)
+                candidate_refs.extend(_heuristic_structural_equivalent_refs(bridge_ref))
+        requested_ref_candidates[entity_ref] = _normalize_refs(candidate_refs)
+    return requested_ref_candidates
+
+
 def _clamp_confidence(value: float | None) -> float:
     if value is None:
         return 1.0
@@ -72,6 +112,30 @@ def _clamp_confidence(value: float | None) -> float:
 def _candidate_confidence(seed_confidence: float, edge_confidence: float, depth: int) -> float:
     decay = _DEPTH_DECAY.get(depth, _DEPTH_DECAY[2] * (0.5 ** max(depth - 2, 0)))
     return round(_clamp_confidence(seed_confidence) * edge_confidence * decay, 6)
+
+
+def _edge_effective_confidence(edge: MarketGraphEdge) -> float:
+    evidence_weight = {
+        "direct": 1.0,
+        "shallow": 0.92,
+        "inferred": 0.78,
+    }.get(edge.evidence_level, 0.75)
+    source_weight = 1.0
+    source_url = edge.source_url.casefold()
+    source_name = edge.source_name.casefold()
+    if not (
+        ".gov" in source_url
+        or ".int" in source_url
+        or "central bank" in source_name
+        or "federal reserve" in source_name
+        or "cme " in source_name
+        or "eia " in source_name
+        or "ofac" in source_name
+        or "opec" in source_name
+        or "usda" in source_name
+    ):
+        source_weight = 0.94
+    return _clamp_confidence(edge.confidence * evidence_weight * source_weight)
 
 
 def _mentions_from_entities(entities: Iterable[EntityMatch]) -> dict[str, _MentionMetadata]:
@@ -129,6 +193,8 @@ def _path_edges(edges: tuple[MarketGraphEdge, ...]) -> list[ImpactPathEdge]:
             source_url=edge.source_url,
             source_snapshot=edge.source_snapshot,
             source_year=edge.source_year,
+            compatible_event_types=list(edge.compatible_event_types),
+            direction_preconditions=list(edge.direction_preconditions),
         )
         for edge in edges
     ]
@@ -165,6 +231,30 @@ def _merge_path(
         paths.append(path)
     paths.sort(key=_path_sort_key)
     return paths[:max_paths]
+
+
+def _event_types_from_paths(paths: Iterable[ImpactRelationshipPath]) -> list[str]:
+    return sorted(
+        {
+            event_type
+            for path in paths
+            for edge in path.edges
+            for event_type in edge.compatible_event_types
+        }
+    )
+
+
+def _edge_allowed_by_event_context(
+    edge: MarketGraphEdge,
+    compatible_event_types: set[str],
+) -> bool:
+    if edge.relation not in _EVENT_GATED_PROXY_RELATIONS:
+        return True
+    event_context = {event.casefold() for event in compatible_event_types}
+    edge_event_types = {event.casefold() for event in edge.compatible_event_types}
+    if not edge_event_types:
+        return False
+    return bool(edge_event_types & event_context)
 
 
 def _candidate_sort_key(candidate: ImpactCandidate) -> tuple[object, ...]:
@@ -211,10 +301,12 @@ def expand_impact_paths(
     source_mentions: dict[str, _MentionMetadata] | None = None,
     max_edges_per_seed: int | None = None,
     max_paths_per_candidate: int | None = None,
+    compatible_event_types: Iterable[str] | None = None,
+    storage_root: str | Path | None = None,
 ) -> ImpactExpansionResult:
     """Expand extracted ADES entity refs into deterministic market impact candidates."""
 
-    del language
+    del language, storage_root
     resolved_settings = settings if settings is not None else get_settings()
     if not resolved_settings.impact_expansion_enabled:
         return _artifact_warning_result("impact_expansion_disabled")
@@ -261,6 +353,7 @@ def expand_impact_paths(
         else resolved_settings.impact_expansion_vector_proposals_enabled
     )
     warnings: list[str] = []
+    event_context = {event.casefold() for event in compatible_event_types or () if event}
     if resolved_vector_proposals_enabled:
         warnings.append("impact_vector_proposals_not_implemented")
 
@@ -281,6 +374,7 @@ def expand_impact_paths(
                 max_paths_per_candidate=resolved_path_limit,
                 include_passive_paths=include_passive_paths,
                 warnings=warnings,
+                compatible_event_types=event_context,
             )
     except FileNotFoundError:
         return _artifact_warning_result("market_graph_artifact_missing")
@@ -302,24 +396,43 @@ def _expand_with_store(
     max_paths_per_candidate: int,
     include_passive_paths: bool,
     warnings: list[str],
+    compatible_event_types: set[str],
 ) -> ImpactExpansionResult:
-    requested_ref_candidates = {
-        entity_ref: (entity_ref, *_heuristic_structural_equivalent_refs(entity_ref))
-        for entity_ref in requested_refs
-    }
+    requested_ref_candidates = _candidate_refs_for_requested(requested_refs, store=store)
     lookup_refs = _normalize_refs(
         candidate
         for candidates in requested_ref_candidates.values()
         for candidate in candidates
     )
     nodes = store.node_batch(lookup_refs)
-    traversal_ref_by_requested = {
+    graph_ref_candidates_by_requested = {
+        entity_ref: tuple(candidate for candidate in candidates if candidate in nodes)
+        for entity_ref, candidates in requested_ref_candidates.items()
+    }
+    primary_graph_ref_by_requested = {
         entity_ref: next(
             (candidate for candidate in candidates if candidate in nodes),
             entity_ref,
         )
         for entity_ref, candidates in requested_ref_candidates.items()
     }
+    identity_refs_by_entity = store.identity_refs_for_entity_batch(
+        candidate
+        for candidates in graph_ref_candidates_by_requested.values()
+        for candidate in candidates
+    )
+    same_as_refs_by_requested: dict[str, tuple[str, ...]] = {}
+    for entity_ref, graph_ref_candidates in graph_ref_candidates_by_requested.items():
+        same_as_values: list[str] = [
+            candidate
+            for candidate in graph_ref_candidates
+            if candidate != entity_ref
+        ]
+        for graph_ref in graph_ref_candidates:
+            same_as_values.extend(identity_refs_by_entity.get(graph_ref, ()))
+        same_as_refs_by_requested[entity_ref] = tuple(
+            ref for ref in _normalize_refs(same_as_values) if ref != entity_ref
+        )
     source_entities: list[ImpactSourceEntity] = []
     candidates_by_ref: dict[str, ImpactCandidate] = {}
     passive_by_ref: dict[str, ImpactPassivePath] = {}
@@ -327,9 +440,12 @@ def _expand_with_store(
     eligible_seed_refs = [
         entity_ref
         for entity_ref in requested_refs
-        if (node := nodes.get(traversal_ref_by_requested.get(entity_ref, entity_ref))) is not None
-        and node.is_seed_eligible
-        and node.seed_degree > 0
+        if any(
+            (node := nodes.get(graph_ref)) is not None
+            and node.is_seed_eligible
+            and node.seed_degree > 0
+            for graph_ref in graph_ref_candidates_by_requested.get(entity_ref, ())
+        )
     ]
     seed_refs = eligible_seed_refs[:seed_limit]
     seed_ref_set = set(seed_refs)
@@ -337,11 +453,19 @@ def _expand_with_store(
         warnings.append("impact_seed_limit_truncated")
 
     for entity_ref in requested_refs:
-        traversal_ref = traversal_ref_by_requested.get(entity_ref, entity_ref)
+        traversal_ref = primary_graph_ref_by_requested.get(entity_ref, entity_ref)
+        graph_ref_candidates = graph_ref_candidates_by_requested.get(entity_ref, ())
         node = nodes.get(entity_ref) or nodes.get(traversal_ref)
         metadata_for_ref = _metadata_for_ref(entity_ref, node=node, mentions=mentions)
         is_graph_seed = entity_ref in seed_ref_set
         seed_confidence[entity_ref] = metadata_for_ref.confidence
+        seed_degree = max(
+            (nodes[graph_ref].seed_degree for graph_ref in graph_ref_candidates if graph_ref in nodes),
+            default=0,
+        )
+        is_tradable = any(
+            nodes[graph_ref].is_tradable for graph_ref in graph_ref_candidates if graph_ref in nodes
+        )
         source_entities.append(
             ImpactSourceEntity(
                 entity_ref=entity_ref,
@@ -349,33 +473,54 @@ def _expand_with_store(
                 entity_type=metadata_for_ref.entity_type or (node.entity_type if node else None),
                 library_id=metadata_for_ref.library_id or (node.library_id if node else None),
                 is_graph_seed=is_graph_seed,
-                seed_degree=node.seed_degree if node is not None else 0,
-                is_tradable=node.is_tradable if node is not None else False,
+                seed_degree=seed_degree,
+                is_tradable=is_tradable,
+                same_as_refs=list(same_as_refs_by_requested.get(entity_ref, ())),
             )
         )
-        if node is not None and node.is_tradable:
-            candidates_by_ref[entity_ref] = ImpactCandidate(
-                entity_ref=entity_ref,
-                name=metadata_for_ref.name,
-                entity_type=metadata_for_ref.entity_type or node.entity_type,
-                is_tradable=True,
-                evidence_level="direct",
-                confidence=metadata_for_ref.confidence,
-                source_entity_refs=[entity_ref],
-                relationship_paths=[],
+        for graph_ref in graph_ref_candidates:
+            graph_node = nodes.get(graph_ref)
+            if graph_node is None or not graph_node.is_tradable:
+                continue
+            existing = candidates_by_ref.get(graph_ref)
+            if existing is None:
+                candidates_by_ref[graph_ref] = ImpactCandidate(
+                    entity_ref=graph_ref,
+                    name=graph_node.canonical_name,
+                    entity_type=graph_node.entity_type,
+                    is_tradable=True,
+                    evidence_level="direct",
+                    confidence=metadata_for_ref.confidence,
+                    source_entity_refs=[entity_ref],
+                    relationship_paths=[],
+                )
+                continue
+            candidates_by_ref[graph_ref] = existing.model_copy(
+                update={
+                    "confidence": max(existing.confidence, metadata_for_ref.confidence),
+                    "evidence_level": "direct",
+                    "source_entity_refs": sorted(
+                        set(existing.source_entity_refs) | {entity_ref}
+                    ),
+                }
             )
 
-    queue: list[_TraversalState] = [
-        _TraversalState(
-            seed_ref=seed_ref,
-            current_ref=traversal_ref_by_requested.get(seed_ref, seed_ref),
-            depth=0,
-            edges=(),
-            visited_refs=(traversal_ref_by_requested.get(seed_ref, seed_ref),),
-            edge_confidence=1.0,
-        )
-        for seed_ref in seed_refs
-    ]
+    queue: list[_TraversalState] = []
+    for seed_ref in seed_refs:
+        for graph_ref in graph_ref_candidates_by_requested.get(seed_ref, ()):
+            graph_node = nodes.get(graph_ref)
+            if graph_node is None or not graph_node.is_seed_eligible or graph_node.seed_degree <= 0:
+                continue
+            queue.append(
+                _TraversalState(
+                    seed_ref=seed_ref,
+                    current_ref=graph_ref,
+                    depth=0,
+                    edges=(),
+                    visited_refs=(graph_ref,),
+                    edge_confidence=1.0,
+                )
+            )
     while queue:
         state = queue.pop(0)
         if state.depth >= max_depth:
@@ -386,11 +531,13 @@ def _expand_with_store(
             limit_per_source=max_edges_per_seed,
         ).get(state.current_ref, [])
         for edge in outbound_edges:
+            if not _edge_allowed_by_event_context(edge, compatible_event_types):
+                continue
             if edge.target_ref in state.visited_refs:
                 continue
             next_depth = state.depth + 1
             next_edges = (*state.edges, edge)
-            next_confidence = min(state.edge_confidence, _clamp_confidence(edge.confidence))
+            next_confidence = min(state.edge_confidence, _edge_effective_confidence(edge))
             target_node = store.node(edge.target_ref)
             if target_node is None:
                 continue
@@ -405,6 +552,7 @@ def _expand_with_store(
                 existing = candidates_by_ref.get(edge.target_ref)
                 evidence_level = "shallow" if next_depth == 1 else "inferred"
                 if existing is None:
+                    candidate_event_types = _event_types_from_paths([relationship_path])
                     candidates_by_ref[edge.target_ref] = ImpactCandidate(
                         entity_ref=edge.target_ref,
                         name=target_node.canonical_name,
@@ -414,6 +562,7 @@ def _expand_with_store(
                         confidence=candidate_confidence,
                         source_entity_refs=source_refs,
                         relationship_paths=[relationship_path],
+                        compatible_event_types=candidate_event_types,
                     )
                 else:
                     source_entity_refs = sorted(set(existing.source_entity_refs) | set(source_refs))
@@ -433,6 +582,9 @@ def _expand_with_store(
                             "source_entity_refs": source_entity_refs,
                             "relationship_paths": relationship_paths,
                             "evidence_level": merged_evidence,
+                            "compatible_event_types": _event_types_from_paths(
+                                relationship_paths
+                            ),
                         }
                     )
             elif include_passive_paths:

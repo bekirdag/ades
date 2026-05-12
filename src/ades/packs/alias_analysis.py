@@ -451,6 +451,11 @@ class AliasCandidate:
     generated: bool
     score: float
     features: AliasScoreFeatures
+    alias_quality: str | None = None
+    weak_alias: bool = False
+    quality_reasons: tuple[str, ...] = ()
+    runtime_tier: str | None = None
+    direct_mention_required: bool = False
 
 
 @dataclass(frozen=True)
@@ -469,6 +474,11 @@ class AliasClusterCandidate:
     entity_id: str
     label_candidate_count: int = 1
     non_generated_candidate_count: int = 0
+    alias_quality: str | None = None
+    weak_alias: bool = False
+    quality_reasons: tuple[str, ...] = ()
+    runtime_tier: str | None = None
+    direct_mention_required: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -484,6 +494,11 @@ class AliasClusterCandidate:
             "entity_id": self.entity_id,
             "label_candidate_count": self.label_candidate_count,
             "non_generated_candidate_count": self.non_generated_candidate_count,
+            "alias_quality": self.alias_quality,
+            "weak_alias": self.weak_alias,
+            "quality_reasons": list(self.quality_reasons),
+            "runtime_tier": self.runtime_tier,
+            "direct_mention_required": self.direct_mention_required,
         }
 
 
@@ -627,6 +642,11 @@ def build_alias_candidate(
         generated=generated,
         score=_weighted_authority_score(features),
         features=features,
+        alias_quality=_resolve_alias_quality(record),
+        weak_alias=_resolve_weak_alias(record),
+        quality_reasons=_resolve_quality_reasons(record),
+        runtime_tier=_resolve_runtime_tier_override(record),
+        direct_mention_required=_resolve_direct_mention_required(record),
     )
 
 
@@ -1077,7 +1097,24 @@ def _resolve_candidate_store(
     retain_aliases_in_memory = materialize_retained_aliases or analysis_db_path is None
     retained_aliases: list[dict[str, Any]] = []
     retained_alias_rows: list[
-        tuple[str, str, str, str, int, float, str, str, str, float, float, str]
+        tuple[
+            str,
+            str,
+            str,
+            str,
+            int,
+            float,
+            str,
+            str,
+            str,
+            float,
+            float,
+            str,
+            str | None,
+            int,
+            str,
+            int,
+        ]
     ] = []
     retained_label_counts: dict[str, int] = {}
     blocked_reason_counts: dict[str, int] = {}
@@ -1142,6 +1179,10 @@ def _resolve_candidate_store(
                             4,
                         ),
                         "runtime_tier": runtime_tier,
+                        "alias_quality": representative.alias_quality,
+                        "weak_alias": representative.weak_alias,
+                        "quality_reasons": list(representative.quality_reasons),
+                        "direct_mention_required": representative.direct_mention_required,
                     }
                 )
             else:
@@ -1159,6 +1200,10 @@ def _resolve_candidate_store(
                         round(representative.features.source_priority, 4),
                         round(representative.features.popularity_weight, 4),
                         runtime_tier,
+                        representative.alias_quality,
+                        1 if representative.weak_alias else 0,
+                        json.dumps(list(representative.quality_reasons), sort_keys=True),
+                        1 if representative.direct_mention_required else 0,
                     )
                 )
                 if len(retained_alias_rows) >= 20_000:
@@ -1230,7 +1275,12 @@ def _initialize_analysis_store(connection: sqlite3.Connection) -> None:
             popularity_weight REAL NOT NULL,
             identifier_specificity_weight REAL NOT NULL,
             label_specificity_weight REAL NOT NULL,
-            alias_form_penalty REAL NOT NULL
+            alias_form_penalty REAL NOT NULL,
+            alias_quality TEXT,
+            weak_alias INTEGER NOT NULL DEFAULT 0,
+            quality_reasons_json TEXT NOT NULL DEFAULT '[]',
+            runtime_tier TEXT,
+            direct_mention_required INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS alias_cluster_decisions (
             alias_key TEXT NOT NULL,
@@ -1256,7 +1306,11 @@ def _initialize_analysis_store(connection: sqlite3.Connection) -> None:
             entity_id TEXT NOT NULL DEFAULT '',
             source_priority REAL NOT NULL DEFAULT 0.6,
             popularity_weight REAL NOT NULL DEFAULT 0.5,
-            runtime_tier TEXT NOT NULL DEFAULT 'runtime_exact_high_precision'
+            runtime_tier TEXT NOT NULL DEFAULT 'runtime_exact_high_precision',
+            alias_quality TEXT,
+            weak_alias INTEGER NOT NULL DEFAULT 0,
+            quality_reasons_json TEXT NOT NULL DEFAULT '[]',
+            direct_mention_required INTEGER NOT NULL DEFAULT 0
         );
         DELETE FROM alias_cluster_decisions;
         DELETE FROM retained_aliases;
@@ -1333,8 +1387,13 @@ def _insert_candidates(
             popularity_weight,
             identifier_specificity_weight,
             label_specificity_weight,
-            alias_form_penalty
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            alias_form_penalty,
+            alias_quality,
+            weak_alias,
+            quality_reasons_json,
+            runtime_tier,
+            direct_mention_required
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -1355,6 +1414,11 @@ def _insert_candidates(
                 candidate.features.identifier_specificity_weight,
                 candidate.features.label_specificity_weight,
                 candidate.features.alias_form_penalty,
+                candidate.alias_quality,
+                1 if candidate.weak_alias else 0,
+                json.dumps(list(candidate.quality_reasons), sort_keys=True),
+                candidate.runtime_tier,
+                1 if candidate.direct_mention_required else 0,
             )
             for candidate in candidates
         ],
@@ -1383,7 +1447,12 @@ def _load_cluster_candidates(
             alias_form_penalty,
             source_name,
             source_id,
-            entity_id
+            entity_id,
+            alias_quality,
+            weak_alias,
+            quality_reasons_json,
+            runtime_tier,
+            direct_mention_required
         FROM alias_candidates
         WHERE alias_key = ?
         """,
@@ -1429,6 +1498,11 @@ def _build_cluster_candidates_from_rows(
                 entity_id=str(row[15]),
                 label_candidate_count=label_candidate_counts.get(label, 1),
                 non_generated_candidate_count=label_non_generated_counts.get(label, 0),
+                alias_quality=str(row[16]) if row[16] is not None else None,
+                weak_alias=bool(row[17]),
+                quality_reasons=_parse_quality_reasons(row[18]),
+                runtime_tier=str(row[19]) if row[19] is not None else None,
+                direct_mention_required=bool(row[20]),
             )
             for row in label_specific_rows
         ]
@@ -1437,6 +1511,18 @@ def _build_cluster_candidates_from_rows(
             candidates=cluster_candidates,
         )
     return list(best_by_label.values())
+
+
+def _parse_quality_reasons(raw_value: Any) -> tuple[str, ...]:
+    if raw_value is None:
+        return ()
+    try:
+        payload = json.loads(str(raw_value))
+    except json.JSONDecodeError:
+        return ()
+    if not isinstance(payload, list):
+        return ()
+    return tuple(str(item) for item in payload if str(item).strip())
 
 
 def _iter_cluster_reports(
@@ -1465,7 +1551,12 @@ def _iter_cluster_reports(
             alias_form_penalty,
             source_name,
             source_id,
-            entity_id
+            entity_id,
+            alias_quality,
+            weak_alias,
+            quality_reasons_json,
+            runtime_tier,
+            direct_mention_required
         FROM alias_candidates
         ORDER BY alias_key ASC
         """
@@ -1791,7 +1882,26 @@ def _insert_cluster_decision(
 
 def _insert_retained_aliases(
     connection: sqlite3.Connection,
-    rows: list[tuple[str, str, str, str, int, float, str, str, str, float, float, str]],
+    rows: list[
+        tuple[
+            str,
+            str,
+            str,
+            str,
+            int,
+            float,
+            str,
+            str,
+            str,
+            float,
+            float,
+            str,
+            str | None,
+            int,
+            str,
+            int,
+        ]
+    ],
 ) -> None:
     connection.executemany(
         """
@@ -1807,8 +1917,12 @@ def _insert_retained_aliases(
             entity_id,
             source_priority,
             popularity_weight,
-            runtime_tier
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            runtime_tier,
+            alias_quality,
+            weak_alias,
+            quality_reasons_json,
+            direct_mention_required
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         rows,
     )
@@ -1842,6 +1956,15 @@ def iter_retained_aliases_from_db(
         has_runtime_tier = "runtime_tier" in available_columns
         if has_runtime_tier:
             select_columns.append("runtime_tier")
+        optional_column_names = [
+            "alias_quality",
+            "weak_alias",
+            "quality_reasons_json",
+            "direct_mention_required",
+        ]
+        for column_name in optional_column_names:
+            if column_name in available_columns:
+                select_columns.append(column_name)
         cursor = connection.execute(
             f"""
             SELECT
@@ -1873,7 +1996,14 @@ def iter_retained_aliases_from_db(
                     if has_runtime_tier and optional_fields
                     else "runtime_exact_high_precision"
                 )
-                yield {
+                optional_offset = 1 if has_runtime_tier and optional_fields else 0
+                optional_values = list(optional_fields[optional_offset:])
+                optional_by_name: dict[str, Any] = {}
+                for column_name in optional_column_names:
+                    if column_name not in available_columns or not optional_values:
+                        continue
+                    optional_by_name[column_name] = optional_values.pop(0)
+                payload = {
                     "text": str(display_text),
                     "label": str(label),
                     "generated": bool(generated),
@@ -1885,12 +2015,25 @@ def iter_retained_aliases_from_db(
                     "popularity_weight": round(float(popularity_weight), 4),
                     "runtime_tier": str(runtime_tier),
                 }
+                if optional_by_name.get("alias_quality") is not None:
+                    payload["alias_quality"] = str(optional_by_name["alias_quality"])
+                if optional_by_name.get("weak_alias") is not None:
+                    payload["weak_alias"] = bool(optional_by_name["weak_alias"])
+                if optional_by_name.get("quality_reasons_json") is not None:
+                    payload["quality_reasons"] = list(
+                        _parse_quality_reasons(optional_by_name["quality_reasons_json"])
+                    )
+                if optional_by_name.get("direct_mention_required") is not None:
+                    payload["direct_mention_required"] = bool(
+                        optional_by_name["direct_mention_required"]
+                    )
+                yield payload
     finally:
         connection.close()
 
 
 def build_retained_alias_review_payload(alias: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "text": str(alias.get("text", "")),
         "label": str(alias.get("label", "")),
         "canonical_text": str(alias.get("canonical_text", "")),
@@ -1902,6 +2045,21 @@ def build_retained_alias_review_payload(alias: dict[str, Any]) -> dict[str, Any]
         "popularity_weight": float(alias.get("popularity_weight", 0.0)),
         "runtime_tier": str(alias.get("runtime_tier", "")),
     }
+    if alias.get("alias_quality"):
+        payload["alias_quality"] = str(alias["alias_quality"])
+    if alias.get("weak_alias") is not None:
+        payload["weak_alias"] = bool(alias.get("weak_alias"))
+    if alias.get("quality_reasons"):
+        payload["quality_reasons"] = [
+            str(reason)
+            for reason in alias.get("quality_reasons", [])
+            if str(reason).strip()
+        ]
+    if alias.get("direct_mention_required") is not None:
+        payload["direct_mention_required"] = bool(
+            alias.get("direct_mention_required")
+        )
+    return payload
 
 
 def build_retained_alias_review_key(alias: dict[str, Any]) -> str:
@@ -1940,6 +2098,74 @@ def _resolve_alias_lane(
     if label_key == "ticker" and compact.isalnum() and 1 <= len(compact) <= 6:
         return "exact"
     return "natural"
+
+
+def _metadata_value(record: dict[str, Any], key: str) -> Any:
+    value = record.get(key)
+    if value is not None:
+        return value
+    metadata = record.get("metadata")
+    if isinstance(metadata, dict):
+        return metadata.get(key)
+    return None
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().casefold() in {"1", "true", "yes", "y"}
+
+
+def _resolve_alias_quality(record: dict[str, Any]) -> str | None:
+    value = _clean_text(_metadata_value(record, "alias_quality"))
+    return value or None
+
+
+def _resolve_runtime_tier_override(record: dict[str, Any]) -> str | None:
+    value = _clean_text(_metadata_value(record, "runtime_tier"))
+    if not value:
+        return None
+    normalized = value.casefold()
+    if normalized in {
+        "runtime_exact_acronym_high_precision",
+        "runtime_exact_geopolitical_high_precision",
+        "runtime_exact_high_precision",
+        "search_only",
+        "weak",
+        "hidden",
+    }:
+        return normalized
+    return None
+
+
+def _resolve_weak_alias(record: dict[str, Any]) -> bool:
+    return _coerce_bool(_metadata_value(record, "weak_alias"))
+
+
+def _resolve_direct_mention_required(record: dict[str, Any]) -> bool:
+    return _coerce_bool(_metadata_value(record, "direct_mention_required"))
+
+
+def _resolve_quality_reasons(record: dict[str, Any]) -> tuple[str, ...]:
+    raw_value = _metadata_value(record, "quality_reasons")
+    if raw_value is None:
+        return ()
+    if isinstance(raw_value, str):
+        values: list[Any] = [raw_value]
+    elif isinstance(raw_value, list | tuple | set):
+        values = list(raw_value)
+    else:
+        return ()
+    resolved = tuple(
+        dict.fromkeys(
+            reason
+            for reason in (_clean_text(value) for value in values)
+            if reason
+        )
+    )
+    return resolved
 
 
 def _resolve_score_features(
@@ -2439,6 +2665,16 @@ def _resolve_runtime_tier(
     alias_key: str,
     candidate: AliasClusterCandidate,
 ) -> str:
+    if candidate.runtime_tier:
+        return candidate.runtime_tier
+    if candidate.weak_alias:
+        return "weak"
+    if candidate.alias_quality and candidate.alias_quality.casefold() in {
+        "weak",
+        "search_only",
+        "hidden",
+    }:
+        return candidate.alias_quality.casefold()
     tokens = [
         token
         for token in re.split(r"[\s\-_./]+", alias_key.strip())

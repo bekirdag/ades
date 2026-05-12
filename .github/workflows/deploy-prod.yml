@@ -325,6 +325,23 @@ jobs:
               connection.execute("ATTACH DATABASE ? AS starter", (str(starter_db),))
               before_nodes = int(connection.execute("SELECT COUNT(*) FROM impact_nodes").fetchone()[0])
               before_edges = int(connection.execute("SELECT COUNT(*) FROM impact_edges").fetchone()[0])
+              current_edge_columns = {
+                  str(row[1])
+                  for row in connection.execute("PRAGMA table_info(impact_edges)").fetchall()
+              }
+              starter_edge_columns = {
+                  str(row[1])
+                  for row in connection.execute("PRAGMA starter.table_info(impact_edges)").fetchall()
+              }
+              for column_name in (
+                  "compatible_event_types_json",
+                  "direction_preconditions_json",
+              ):
+                  if column_name not in current_edge_columns:
+                      connection.execute(
+                          f"ALTER TABLE impact_edges ADD COLUMN {column_name} TEXT NOT NULL DEFAULT '[]'"
+                      )
+                      current_edge_columns.add(column_name)
               connection.execute(
                   """
                   INSERT OR REPLACE INTO impact_nodes (
@@ -351,9 +368,19 @@ jobs:
                   FROM starter.impact_nodes
                   """
               )
+              compatible_event_sql = (
+                  "compatible_event_types_json"
+                  if "compatible_event_types_json" in starter_edge_columns
+                  else "'[]'"
+              )
+              direction_preconditions_sql = (
+                  "direction_preconditions_json"
+                  if "direction_preconditions_json" in starter_edge_columns
+                  else "'[]'"
+              )
               connection.execute(
-                  """
-                  INSERT OR IGNORE INTO impact_edges (
+                  f"""
+                  INSERT OR REPLACE INTO impact_edges (
                     edge_id,
                     source_ref,
                     target_ref,
@@ -366,7 +393,9 @@ jobs:
                     source_snapshot,
                     source_year,
                     refresh_policy,
-                    version
+                    version,
+                    compatible_event_types_json,
+                    direction_preconditions_json
                   )
                   SELECT
                     edge_id,
@@ -381,7 +410,9 @@ jobs:
                     source_snapshot,
                     source_year,
                     refresh_policy,
-                    version
+                    version,
+                    {compatible_event_sql},
+                    {direction_preconditions_sql}
                   FROM starter.impact_edges
                   """
               )

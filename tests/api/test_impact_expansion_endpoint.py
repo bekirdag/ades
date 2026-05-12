@@ -39,7 +39,7 @@ def _build_artifact(root: Path) -> Path:
                 "politics-vector-en",
                 "0",
                 "1",
-                "{}",
+                '{"same_as_refs":["wikidata:Q63132"]}',
                 "finance-en",
             ],
             [
@@ -126,6 +126,34 @@ def test_impact_expand_endpoint_returns_refs_only_paths(
     assert "direction" not in payload
     assert "bullish" not in payload
     assert "bearish" not in payload
+
+
+def test_impact_expand_endpoint_returns_identity_bridge_refs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact_path = _build_artifact(tmp_path)
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ARTIFACT_PATH", str(artifact_path))
+    client = TestClient(create_app(storage_root=tmp_path / "storage"))
+
+    response = client.post(
+        "/v0/impact/expand",
+        json={
+            "entity_refs": ["wikidata:Q63132"],
+            "enabled_packs": ["finance-en"],
+            "max_depth": 2,
+            "max_candidates": 25,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [candidate["entity_ref"] for candidate in payload["candidates"]] == [
+        "entity_crude_oil"
+    ]
+    assert payload["source_entities"][0]["entity_ref"] == "wikidata:Q63132"
+    assert "entity_hormuz" in payload["source_entities"][0]["same_as_refs"]
 
 
 def test_market_graph_store_build_endpoint_creates_artifact(tmp_path: Path) -> None:

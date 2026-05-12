@@ -37,7 +37,9 @@ from .packs.finance_sources import (
     DEFAULT_SYMBOL_DIRECTORY_URL,
     fetch_finance_source_snapshot as run_fetch_finance_source_snapshot,
 )
-from .packs.finance_quality import validate_finance_pack_quality as run_validate_finance_pack_quality
+from .packs.finance_quality import (
+    validate_finance_pack_quality as run_validate_finance_pack_quality,
+)
 from .packs.general_bundle import build_general_source_bundle as run_build_general_source_bundle
 from .packs.general_sources import (
     DEFAULT_GENERAL_SOURCE_OUTPUT_ROOT,
@@ -54,7 +56,9 @@ from .packs.general_quality import (
     validate_general_pack_quality as run_validate_general_pack_quality,
 )
 from .packs.medical_bundle import build_medical_source_bundle as run_build_medical_source_bundle
-from .packs.medical_quality import validate_medical_pack_quality as run_validate_medical_pack_quality
+from .packs.medical_quality import (
+    validate_medical_pack_quality as run_validate_medical_pack_quality,
+)
 from .packs.medical_sources import (
     DEFAULT_CLINICAL_TRIALS_MAX_RECORDS,
     DEFAULT_CLINICAL_TRIALS_URL,
@@ -247,7 +251,9 @@ def _resolve_settings(
     return Settings(
         host=host or base.host,
         port=port if port is not None else base.port,
-        storage_root=Path(storage_root).expanduser() if storage_root is not None else base.storage_root,
+        storage_root=Path(storage_root).expanduser()
+        if storage_root is not None
+        else base.storage_root,
         default_pack=default_pack or base.default_pack,
         registry_url=registry_url if registry_url is not None else base.registry_url,
         runtime_target=base.runtime_target,
@@ -260,9 +266,7 @@ def _resolve_settings(
         vector_search_related_limit=base.vector_search_related_limit,
         vector_search_score_threshold=base.vector_search_score_threshold,
         vector_search_domain_pack_routes=dict(base.vector_search_domain_pack_routes),
-        vector_search_pack_collection_aliases=dict(
-            base.vector_search_pack_collection_aliases
-        ),
+        vector_search_pack_collection_aliases=dict(base.vector_search_pack_collection_aliases),
         vector_search_country_aliases=dict(base.vector_search_country_aliases),
         graph_context_enabled=base.graph_context_enabled,
         graph_context_artifact_path=base.graph_context_artifact_path,
@@ -271,9 +275,7 @@ def _resolve_settings(
         graph_context_seed_neighbor_limit=base.graph_context_seed_neighbor_limit,
         graph_context_candidate_limit=base.graph_context_candidate_limit,
         graph_context_min_supporting_seeds=base.graph_context_min_supporting_seeds,
-        graph_context_vector_proposals_enabled=(
-            base.graph_context_vector_proposals_enabled
-        ),
+        graph_context_vector_proposals_enabled=(base.graph_context_vector_proposals_enabled),
         graph_context_vector_proposal_limit=base.graph_context_vector_proposal_limit,
         graph_context_genericity_penalty_enabled=base.graph_context_genericity_penalty_enabled,
         news_context_artifact_path=base.news_context_artifact_path,
@@ -285,12 +287,9 @@ def _resolve_settings(
         impact_expansion_seed_limit=base.impact_expansion_seed_limit,
         impact_expansion_max_candidates=base.impact_expansion_max_candidates,
         impact_expansion_max_edges_per_seed=base.impact_expansion_max_edges_per_seed,
-        impact_expansion_max_paths_per_candidate=(
-            base.impact_expansion_max_paths_per_candidate
-        ),
-        impact_expansion_vector_proposals_enabled=(
-            base.impact_expansion_vector_proposals_enabled
-        ),
+        impact_expansion_max_paths_per_candidate=(base.impact_expansion_max_paths_per_candidate),
+        impact_expansion_vector_proposals_enabled=(base.impact_expansion_vector_proposals_enabled),
+        news_analyze_enabled=base.news_analyze_enabled,
         service_prewarm_enabled=base.service_prewarm_enabled,
         config_path=base.config_path,
     )
@@ -356,10 +355,7 @@ def list_available_packs(
 
     settings = _resolve_settings(registry_url=registry_url)
     index = load_registry_index(settings.registry_url)
-    return [
-        AvailablePackSummary(**pack.to_summary())
-        for pack in index.list_packs()
-    ]
+    return [AvailablePackSummary(**pack.to_summary()) for pack in index.list_packs()]
 
 
 def get_pack(
@@ -571,6 +567,8 @@ def refresh_generated_packs(
     max_unexpected_hits: int = 0,
     max_ambiguous_aliases: int | None = None,
     max_dropped_alias_ratio: float | None = None,
+    release_gate_commands: list[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> RegistryRefreshGeneratedPacksResponse:
     """Refresh one or more generated packs into a quality-gated registry release."""
 
@@ -583,6 +581,8 @@ def refresh_generated_packs(
         max_unexpected_hits=max_unexpected_hits,
         max_ambiguous_aliases=max_ambiguous_aliases,
         max_dropped_alias_ratio=max_dropped_alias_ratio,
+        release_gate_commands=release_gate_commands,
+        release_gate_working_dir=release_gate_working_dir,
     )
     registry_response = (
         RegistryBuildResponse(
@@ -616,6 +616,9 @@ def refresh_generated_packs(
         pack_count=result.pack_count,
         passed=result.passed,
         materialize_registry=result.materialize_registry,
+        release_gate_commands=result.release_gate_commands,
+        release_gate_working_dir=result.release_gate_working_dir,
+        release_gate_passed=result.release_gate_passed,
         registry_materialized=result.registry_materialized,
         registry=registry_response,
         warnings=result.warnings,
@@ -1248,16 +1251,13 @@ def validate_general_pack_quality(
                     for entity in case.expected_entities
                 ],
                 actual_entities=[
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.actual_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.actual_entities
                 ],
                 matched_entities=[
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.matched_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.matched_entities
                 ],
                 missing_entities=[
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.missing_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.missing_entities
                 ],
                 unexpected_entities=[
                     {"text": entity.text, "label": entity.label}
@@ -1335,16 +1335,13 @@ def validate_medical_pack_quality(
                     for entity in case.expected_entities
                 ],
                 actual_entities=[
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.actual_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.actual_entities
                 ],
                 matched_entities=[
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.matched_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.matched_entities
                 ],
                 missing_entities=[
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.missing_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.missing_entities
                 ],
                 unexpected_entities=[
                     {"text": entity.text, "label": entity.label}
@@ -1420,16 +1417,13 @@ def validate_finance_pack_quality(
                     for entity in case.expected_entities
                 ],
                 "actual_entities": [
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.actual_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.actual_entities
                 ],
                 "matched_entities": [
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.matched_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.matched_entities
                 ],
                 "missing_entities": [
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.missing_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.missing_entities
                 ],
                 "unexpected_entities": [
                     {"text": entity.text, "label": entity.label}
@@ -1529,16 +1523,13 @@ def _quality_response_from_result(
                     for entity in case.expected_entities
                 ],
                 actual_entities=[
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.actual_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.actual_entities
                 ],
                 matched_entities=[
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.matched_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.matched_entities
                 ],
                 missing_entities=[
-                    {"text": entity.text, "label": entity.label}
-                    for entity in case.missing_entities
+                    {"text": entity.text, "label": entity.label} for entity in case.missing_entities
                 ],
                 unexpected_entities=[
                     {"text": entity.text, "label": entity.label}
@@ -1562,24 +1553,19 @@ def _extraction_case_response(case: object) -> ExtractionQualityCaseResultRespon
     return ExtractionQualityCaseResultResponse(
         name=str(getattr(case, "name")),
         expected_entities=[
-            _registry_quality_entity(entity)
-            for entity in getattr(case, "expected_entities")
+            _registry_quality_entity(entity) for entity in getattr(case, "expected_entities")
         ],
         actual_entities=[
-            _registry_quality_entity(entity)
-            for entity in getattr(case, "actual_entities")
+            _registry_quality_entity(entity) for entity in getattr(case, "actual_entities")
         ],
         matched_entities=[
-            _registry_quality_entity(entity)
-            for entity in getattr(case, "matched_entities")
+            _registry_quality_entity(entity) for entity in getattr(case, "matched_entities")
         ],
         missing_entities=[
-            _registry_quality_entity(entity)
-            for entity in getattr(case, "missing_entities")
+            _registry_quality_entity(entity) for entity in getattr(case, "missing_entities")
         ],
         unexpected_entities=[
-            _registry_quality_entity(entity)
-            for entity in getattr(case, "unexpected_entities")
+            _registry_quality_entity(entity) for entity in getattr(case, "unexpected_entities")
         ],
         warnings=[str(item) for item in getattr(case, "warnings")],
         token_count=int(getattr(case, "token_count")),
@@ -1622,10 +1608,7 @@ def _extraction_report_response(
         per_label_recall=dict(getattr(report, "per_label_recall")),
         per_lane_counts=dict(getattr(report, "per_lane_counts")),
         warnings=[str(item) for item in getattr(report, "warnings")],
-        cases=[
-            _extraction_case_response(case)
-            for case in getattr(report, "cases")
-        ],
+        cases=[_extraction_case_response(case) for case in getattr(report, "cases")],
     )
 
 
@@ -1701,9 +1684,7 @@ def _vector_quality_report_response(
             else None
         ),
         provider=(
-            str(getattr(report, "provider"))
-            if getattr(report, "provider") is not None
-            else None
+            str(getattr(report, "provider")) if getattr(report, "provider") is not None else None
         ),
         case_count=int(getattr(report, "case_count")),
         top_k=int(getattr(report, "top_k")),
@@ -1719,10 +1700,7 @@ def _vector_quality_report_response(
         p50_latency_ms=int(getattr(report, "p50_latency_ms")),
         p95_latency_ms=int(getattr(report, "p95_latency_ms")),
         warnings=[str(item) for item in getattr(report, "warnings")],
-        cases=[
-            _vector_case_response(case)
-            for case in getattr(report, "cases")
-        ],
+        cases=[_vector_case_response(case) for case in getattr(report, "cases")],
     )
 
 
@@ -1735,11 +1713,7 @@ def _live_news_issue_response(issue: object) -> LiveNewsIssueResponse:
             if getattr(issue, "entity_text") is not None
             else None
         ),
-        label=(
-            str(getattr(issue, "label"))
-            if getattr(issue, "label") is not None
-            else None
-        ),
+        label=(str(getattr(issue, "label")) if getattr(issue, "label") is not None else None),
         candidate_text=(
             str(getattr(issue, "candidate_text"))
             if getattr(issue, "candidate_text") is not None
@@ -1763,11 +1737,7 @@ def _live_news_failure_response(failure: object) -> LiveNewsFailureResponse:
         stage=str(getattr(failure, "stage")),
         url=str(getattr(failure, "url")),
         message=str(getattr(failure, "message")),
-        title=(
-            str(getattr(failure, "title"))
-            if getattr(failure, "title") is not None
-            else None
-        ),
+        title=(str(getattr(failure, "title")) if getattr(failure, "title") is not None else None),
     )
 
 
@@ -1787,14 +1757,8 @@ def _live_news_article_response(article: object) -> LiveNewsArticleResultRespons
         timing_ms=int(getattr(article, "timing_ms")),
         warnings=[str(item) for item in getattr(article, "warnings")],
         issue_types=[str(item) for item in getattr(article, "issue_types")],
-        issues=[
-            _live_news_issue_response(issue)
-            for issue in getattr(article, "issues")
-        ],
-        entities=[
-            _live_news_entity_response(entity)
-            for entity in getattr(article, "entities")
-        ],
+        issues=[_live_news_issue_response(issue) for issue in getattr(article, "issues")],
+        entities=[_live_news_entity_response(entity) for entity in getattr(article, "entities")],
     )
 
 
@@ -1815,22 +1779,15 @@ def _live_news_feedback_response(
         p95_latency_ms=int(getattr(report, "p95_latency_ms")),
         per_source_article_counts=dict(getattr(report, "per_source_article_counts")),
         per_issue_counts=dict(getattr(report, "per_issue_counts")),
-        suggested_fix_classes=[
-            str(item) for item in getattr(report, "suggested_fix_classes")
-        ],
+        suggested_fix_classes=[str(item) for item in getattr(report, "suggested_fix_classes")],
         warnings=[str(item) for item in getattr(report, "warnings")],
         feed_failures=[
-            _live_news_failure_response(item)
-            for item in getattr(report, "feed_failures")
+            _live_news_failure_response(item) for item in getattr(report, "feed_failures")
         ],
         article_failures=[
-            _live_news_failure_response(item)
-            for item in getattr(report, "article_failures")
+            _live_news_failure_response(item) for item in getattr(report, "article_failures")
         ],
-        articles=[
-            _live_news_article_response(item)
-            for item in getattr(report, "articles")
-        ],
+        articles=[_live_news_article_response(item) for item in getattr(report, "articles")],
     )
 
 
@@ -1877,8 +1834,9 @@ def _runtime_benchmark_response(
         operator_lookup=_runtime_latency_response(getattr(report, "operator_lookup")),
         disk_usage=_runtime_disk_response(getattr(report, "disk_usage")),
         quality_report=ExtractionQualityReportResponse(
-            **_extraction_report_response(getattr(report, "quality_report"))
-            .model_dump(mode="json", exclude={"report_path"})
+            **_extraction_report_response(getattr(report, "quality_report")).model_dump(
+                mode="json", exclude={"report_path"}
+            )
         ),
         warnings=[str(item) for item in getattr(report, "warnings")],
     )
@@ -1969,9 +1927,7 @@ def _pack_diff_response(diff: object) -> RegistryPackDiffResponse:
         changed_canonical_aliases=[
             str(item) for item in getattr(diff, "changed_canonical_aliases")
         ],
-        changed_metadata_fields=[
-            str(item) for item in getattr(diff, "changed_metadata_fields")
-        ],
+        changed_metadata_fields=[str(item) for item in getattr(diff, "changed_metadata_fields")],
     )
 
 
@@ -2048,9 +2004,7 @@ def evaluate_live_news_feedback(
             if report_path is not None
             else default_live_news_feedback_report_path(pack_id)
         )
-        persisted_report_path = str(
-            write_live_news_feedback_report(destination, report)
-        )
+        persisted_report_path = str(write_live_news_feedback_report(destination, report))
     return _live_news_feedback_response(report, report_path=persisted_report_path)
 
 
@@ -2159,9 +2113,7 @@ def benchmark_matcher_backends(
                 profile=golden_set.profile,
             )
         )
-        persisted_report_path = str(
-            write_matcher_benchmark_spike_report(destination, benchmark)
-        )
+        persisted_report_path = str(write_matcher_benchmark_spike_report(destination, benchmark))
     return _matcher_benchmark_spike_response(
         benchmark,
         report_path=persisted_report_path,
@@ -2247,20 +2199,12 @@ def evaluate_extraction_release_thresholds(
             if max_label_recall_drop is None
             else max_label_recall_drop
         ),
-        min_recall_lift=(
-            defaults.min_recall_lift
-            if min_recall_lift is None
-            else min_recall_lift
-        ),
+        min_recall_lift=(defaults.min_recall_lift if min_recall_lift is None else min_recall_lift),
         max_precision_drop=(
-            defaults.max_precision_drop
-            if max_precision_drop is None
-            else max_precision_drop
+            defaults.max_precision_drop if max_precision_drop is None else max_precision_drop
         ),
         max_p95_latency_ms=(
-            defaults.max_p95_latency_ms
-            if max_p95_latency_ms is None
-            else max_p95_latency_ms
+            defaults.max_p95_latency_ms if max_p95_latency_ms is None else max_p95_latency_ms
         ),
         max_model_artifact_bytes=(
             defaults.max_model_artifact_bytes
@@ -2268,9 +2212,7 @@ def evaluate_extraction_release_thresholds(
             else max_model_artifact_bytes
         ),
         max_peak_memory_mb=(
-            defaults.max_peak_memory_mb
-            if max_peak_memory_mb is None
-            else max_peak_memory_mb
+            defaults.max_peak_memory_mb if max_peak_memory_mb is None else max_peak_memory_mb
         ),
     )
     decision = evaluate_release_thresholds(
@@ -2382,11 +2324,7 @@ def evaluate_vector_release_thresholds_from_report(
             if min_related_recall_at_k is None
             else min_related_recall_at_k
         ),
-        min_related_mrr=(
-            defaults.min_related_mrr
-            if min_related_mrr is None
-            else min_related_mrr
-        ),
+        min_related_mrr=(defaults.min_related_mrr if min_related_mrr is None else min_related_mrr),
         min_suppression_alignment_rate=(
             defaults.min_suppression_alignment_rate
             if min_suppression_alignment_rate is None
@@ -2403,14 +2341,10 @@ def evaluate_vector_release_thresholds_from_report(
             else min_easy_case_pass_rate
         ),
         max_fallback_rate=(
-            defaults.max_fallback_rate
-            if max_fallback_rate is None
-            else max_fallback_rate
+            defaults.max_fallback_rate if max_fallback_rate is None else max_fallback_rate
         ),
         max_p95_latency_ms=(
-            defaults.max_p95_latency_ms
-            if max_p95_latency_ms is None
-            else max_p95_latency_ms
+            defaults.max_p95_latency_ms if max_p95_latency_ms is None else max_p95_latency_ms
         ),
     )
     decision = evaluate_vector_release_thresholds(
@@ -2650,9 +2584,11 @@ def tag_file(
         if runtime is not None and runtime.pack_id == resolved_pack
         else load_pack_runtime(settings.storage_root, resolved_pack, registry=registry)
     )
-    resolved_path, text, resolved_content_type, input_size_bytes, source_fingerprint = load_tag_file(
-        path,
-        content_type=content_type,
+    resolved_path, text, resolved_content_type, input_size_bytes, source_fingerprint = (
+        load_tag_file(
+            path,
+            content_type=content_type,
+        )
     )
     response = tag_text(
         text=text,
@@ -2771,7 +2707,11 @@ def tag_files(
         raise ValueError("repair_missing_reused_outputs requires manifest_input_path.")
     if repair_missing_reused_outputs and not reuse_unchanged_outputs:
         raise ValueError("repair_missing_reused_outputs requires reuse_unchanged_outputs.")
-    resolved_pack = pack or (replay_plan.manifest.pack if replay_plan is not None else None) or settings.default_pack
+    resolved_pack = (
+        pack
+        or (replay_plan.manifest.pack if replay_plan is not None else None)
+        or settings.default_pack
+    )
     runtime = (
         runtime
         if runtime is not None and runtime.pack_id == resolved_pack
@@ -2802,20 +2742,23 @@ def tag_files(
     rerun_repaired: list[str] = []
     for path in discovery.paths:
         manifest_content_type = (
-            replay_plan.content_type_overrides.get(path)
-            if replay_plan is not None
-            else None
+            replay_plan.content_type_overrides.get(path) if replay_plan is not None else None
         )
-        resolved_path, text, resolved_content_type, input_size_bytes, source_fingerprint = load_tag_file(
-            path,
-            content_type=content_type or manifest_content_type,
+        resolved_path, text, resolved_content_type, input_size_bytes, source_fingerprint = (
+            load_tag_file(
+                path,
+                content_type=content_type or manifest_content_type,
+            )
         )
-        baseline_item = replay_plan.item_index.get(resolved_path) if replay_plan is not None else None
+        baseline_item = (
+            replay_plan.item_index.get(resolved_path) if replay_plan is not None else None
+        )
         if (
             skip_unchanged
             and baseline_item is not None
             and baseline_item.source_fingerprint is not None
-            and baseline_item.source_fingerprint.model_dump(mode="python") == source_fingerprint.to_dict()
+            and baseline_item.source_fingerprint.model_dump(mode="python")
+            == source_fingerprint.to_dict()
         ):
             unchanged_skipped_count += 1
             discovery.skipped.append(
@@ -2858,7 +2801,9 @@ def tag_files(
                                 "content_type": resolved_content_type,
                                 "source_path": str(resolved_path),
                                 "input_size_bytes": input_size_bytes,
-                                "source_fingerprint": SourceFingerprint(**source_fingerprint.to_dict()),
+                                "source_fingerprint": SourceFingerprint(
+                                    **source_fingerprint.to_dict()
+                                ),
                             }
                         )
                         repaired_response = enrich_tag_response_with_related_entities(
@@ -2882,7 +2827,9 @@ def tag_files(
                         repaired_response = persist_tag_response_json(
                             repaired_response,
                             pack_id=resolved_pack,
-                            output_path=reused_item.saved_output_path if has_saved_output_path else None,
+                            output_path=reused_item.saved_output_path
+                            if has_saved_output_path
+                            else None,
                             output_dir=output_dir if not has_saved_output_path else None,
                             pretty=pretty_output,
                         )
@@ -2962,23 +2909,23 @@ def tag_files(
         if manifest_input_path is not None
         else None
     )
-    summary_payload["manifest_replay_mode"] = manifest_replay_mode if replay_plan is not None else None
+    summary_payload["manifest_replay_mode"] = (
+        manifest_replay_mode if replay_plan is not None else None
+    )
     summary_payload["manifest_candidate_count"] = (
-        replay_plan.candidate_count
-        if replay_plan is not None and not has_discovery_sources
-        else 0
+        replay_plan.candidate_count if replay_plan is not None and not has_discovery_sources else 0
     )
     summary_payload["manifest_selected_count"] = (
-        replay_plan.selected_count
-        if replay_plan is not None and not has_discovery_sources
-        else 0
+        replay_plan.selected_count if replay_plan is not None and not has_discovery_sources else 0
     )
     summary = BatchSourceSummary(**summary_payload)
     warnings = aggregate_batch_warnings(items, reused_items=reused_items)
     if replay_plan is not None and not has_discovery_sources and replay_plan.selected_count == 0:
         warnings = sorted({*warnings, "manifest_replay_empty"})
     if replay_plan is not None and pack is not None and pack != replay_plan.manifest.pack:
-        warnings = sorted({*warnings, f"manifest_pack_override:{replay_plan.manifest.pack}->{pack}"})
+        warnings = sorted(
+            {*warnings, f"manifest_pack_override:{replay_plan.manifest.pack}->{pack}"}
+        )
     if not items and not reused_items:
         warnings = sorted({*warnings, "no_files_processed"})
     rerun_diff = None
@@ -3047,8 +2994,7 @@ def set_pack_active(
         if active_dependents:
             dependents = ", ".join(active_dependents)
             raise ValueError(
-                f"Cannot deactivate pack {pack_id} while active dependent packs exist: "
-                f"{dependents}"
+                f"Cannot deactivate pack {pack_id} while active dependent packs exist: {dependents}"
             )
         registry.set_pack_active(pack_id, False)
     manifest = registry.get_pack(pack_id, active_only=False)
@@ -3086,8 +3032,7 @@ def remove_pack(pack_id: str, *, storage_root: str | Path | None = None) -> Pack
     if installed_dependents:
         dependents = ", ".join(installed_dependents)
         raise ValueError(
-            f"Cannot remove pack {pack_id} while installed dependent packs exist: "
-            f"{dependents}"
+            f"Cannot remove pack {pack_id} while installed dependent packs exist: {dependents}"
         )
     removed = registry.remove_pack(pack_id)
     if not removed:

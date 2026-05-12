@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import sys
 
 from fastapi.testclient import TestClient
 
@@ -64,6 +65,40 @@ def test_refresh_generated_packs_endpoint_can_materialize_registry_release(
     assert response.status_code == 200
     payload = response.json()
     assert payload["registry"]["pack_count"] == 1
+
+
+def test_refresh_generated_packs_endpoint_blocks_release_on_gate_failure(
+    tmp_path: Path,
+) -> None:
+    snapshots = create_finance_raw_snapshots(tmp_path / "snapshots")
+    bundle = build_finance_source_bundle(
+        sec_companies_path=snapshots["sec_companies"],
+        symbol_directory_path=snapshots["symbol_directory"],
+        curated_entities_path=snapshots["curated_entities"],
+        output_dir=tmp_path / "bundles",
+    )
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/v0/registry/refresh-generated-packs",
+        json={
+            "bundle_dirs": [bundle.bundle_dir],
+            "output_dir": str(tmp_path / "refresh-output"),
+            "materialize_registry": True,
+            "release_gate_commands": [
+                f'{sys.executable} -c "import sys; sys.exit(9)"',
+            ],
+            "release_gate_working_dir": str(tmp_path),
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["passed"] is False
+    assert payload["release_gate_passed"] is False
+    assert payload["registry_materialized"] is False
+    assert payload["registry"] is None
+    assert "registry_build_skipped:release_gate_failed" in payload["warnings"]
 
 
 def test_refresh_generated_packs_endpoint_reports_source_governance_failure(

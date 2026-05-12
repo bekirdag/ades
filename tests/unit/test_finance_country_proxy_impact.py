@@ -93,6 +93,12 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
                 "metadata": {"country_code": "us", "category": "issuer", "ticker": "ABC"},
             },
             {
+                "entity_id": "finance-us-issuer:0002",
+                "entity_type": "organization",
+                "canonical_text": "Synthetic Ticker Issuer Inc.",
+                "metadata": {"country_code": "us", "category": "issuer", "ticker": "DEF"},
+            },
+            {
                 "entity_id": "finance-us-ticker:ABC",
                 "entity_type": "ticker",
                 "canonical_text": "ABC",
@@ -127,16 +133,21 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
     )
 
     edges = _read_tsv(result.edge_tsv_path)
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     edge_keys = {(row["source_ref"], row["relation"], row["target_ref"]) for row in edges}
+    edges_by_key = {
+        (row["source_ref"], row["relation"], row["target_ref"]): row for row in edges
+    }
     relation_counts = {}
     for row in edges:
         relation_counts[row["relation"]] = relation_counts.get(row["relation"], 0) + 1
     assert result.pack_count == 1
-    assert result.entity_count == 4
+    assert result.entity_count == 5
     assert result.uncovered_entity_count == 0
     assert manifest["relation_counts"] == relation_counts
     assert ("finance-us-issuer:0001", "issuer_has_listed_ticker", "finance-us-ticker:ABC") in edge_keys
+    assert ("finance-us-issuer:0002", "issuer_has_listed_ticker", "finance-us-ticker:DEF") in edge_keys
     assert (
         "finance-person:0001:chief-executive",
         "person_affects_employer_ticker",
@@ -149,7 +160,44 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
         "ades:impact:rates:us-policy-rate",
     ) in edge_keys
     assert ("finance-us:sec", "entity_affects_dxy_proxy", "ades:impact:indicator:dxy") in edge_keys
-    assert result.edge_count >= 33
+    policy_edge = edges_by_key[
+        (
+            "country:us",
+            "country_affects_policy_rate_proxy",
+            "ades:impact:rates:us-policy-rate",
+        )
+    ]
+    assert set(policy_edge["compatible_event_types"].split(",")) >= {
+        "policy_rate_cut",
+        "policy_rate_hike",
+        "inflation_shock",
+    }
+    assert (
+        policy_edge["direction_preconditions"]
+        == "rate_inflation_central_bank_or_fiscal_signal"
+    )
+    risk_edge = edges_by_key[
+        (
+            "country:us",
+            "country_affects_country_risk_proxy",
+            "ades:impact:risk:us-country-risk",
+        )
+    ]
+    assert set(risk_edge["compatible_event_types"].split(",")) >= {
+        "sanctions",
+        "war_escalation",
+        "fiscal_expansion",
+    }
+    assert result.edge_count >= 40
+    country_identifiers = json.loads(nodes["country:us"]["identifiers_json"])
+    assert country_identifiers["wikidata_qid"] == "Q30"
+    assert country_identifiers["geonames_id"] == "6252001"
+    assert set(country_identifiers["same_as_refs"]) >= {"country:us", "wikidata:Q30", "geonames:6252001"}
+    issuer_identifiers = json.loads(nodes["finance-us-issuer:0001"]["identifiers_json"])
+    assert issuer_identifiers["ticker_ref"] == "finance-us-ticker:ABC"
+    synthetic_ticker_identifiers = json.loads(nodes["finance-us-ticker:DEF"]["identifiers_json"])
+    assert synthetic_ticker_identifiers["issuer_ref"] == "finance-us-issuer:0002"
+    assert synthetic_ticker_identifiers["ticker_ref"] == "finance-us-ticker:DEF"
 
     assert result.artifact_path is not None
     assert result.artifact_edge_count is not None
@@ -176,6 +224,19 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
         candidate.entity_ref for candidate in starter_result.candidates
     } >= {"ades:impact:commodity:crude-oil"}
 
+    starter_wikidata_result = expand_impact_paths(
+        ["wikidata:Q79883"],
+        settings=Settings(
+            impact_expansion_enabled=True,
+            impact_expansion_artifact_path=result.artifact_path,
+        ),
+        max_depth=2,
+        max_candidates=5,
+    )
+    assert {
+        candidate.entity_ref for candidate in starter_wikidata_result.candidates
+    } >= {"ades:impact:commodity:crude-oil"}
+
     country_result = expand_impact_paths(
         ["country:us"],
         settings=Settings(
@@ -187,9 +248,76 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
     )
     assert {candidate.entity_ref for candidate in country_result.candidates} >= {
         "ades:impact:currency:usd",
-        "ades:impact:rates:us-policy-rate",
+    }
+    assert "ades:impact:rates:us-policy-rate" not in {
+        candidate.entity_ref for candidate in country_result.candidates
+    }
+    assert "ades:impact:risk:us-country-risk" not in {
+        candidate.entity_ref for candidate in country_result.candidates
+    }
+
+    wikidata_country_result = expand_impact_paths(
+        ["wikidata:Q30"],
+        settings=Settings(
+            impact_expansion_enabled=True,
+            impact_expansion_artifact_path=result.artifact_path,
+        ),
+        max_depth=1,
+        max_candidates=8,
+    )
+    assert {candidate.entity_ref for candidate in wikidata_country_result.candidates} >= {
+        "ades:impact:currency:usd",
+    }
+    assert "country:us" in wikidata_country_result.source_entities[0].same_as_refs
+    assert "ades:impact:rates:us-policy-rate" not in {
+        candidate.entity_ref for candidate in wikidata_country_result.candidates
+    }
+    assert "ades:impact:risk:us-country-risk" not in {
+        candidate.entity_ref for candidate in wikidata_country_result.candidates
+    }
+
+    policy_country_result = expand_impact_paths(
+        ["wikidata:Q30"],
+        settings=Settings(
+            impact_expansion_enabled=True,
+            impact_expansion_artifact_path=result.artifact_path,
+        ),
+        max_depth=1,
+        max_candidates=8,
+        compatible_event_types=["policy_rate_cut"],
+    )
+    assert "ades:impact:rates:us-policy-rate" in {
+        candidate.entity_ref for candidate in policy_country_result.candidates
+    }
+
+    sanctions_country_result = expand_impact_paths(
+        ["wikidata:Q30"],
+        settings=Settings(
+            impact_expansion_enabled=True,
+            impact_expansion_artifact_path=result.artifact_path,
+        ),
+        max_depth=1,
+        max_candidates=8,
+        compatible_event_types=["sanctions"],
+    )
+    assert {candidate.entity_ref for candidate in sanctions_country_result.candidates} >= {
+        "ades:impact:indicator:dxy",
         "ades:impact:risk:us-country-risk",
     }
+
+    issuer_bridge_result = expand_impact_paths(
+        ["finance-us-issuer:0002"],
+        settings=Settings(
+            impact_expansion_enabled=True,
+            impact_expansion_artifact_path=result.artifact_path,
+        ),
+        max_depth=1,
+        max_candidates=8,
+    )
+    assert "finance-us-ticker:DEF" in {
+        candidate.entity_ref for candidate in issuer_bridge_result.candidates
+    }
+    assert "finance-us-ticker:DEF" in issuer_bridge_result.source_entities[0].same_as_refs
 
 
 def test_finance_country_proxy_generator_can_fallback_to_aliases(tmp_path: Path) -> None:

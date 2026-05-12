@@ -33,7 +33,7 @@ def test_validate_general_pack_quality_reports_passing_fixture_metrics(tmp_path:
     assert report.precision == 1.0
     assert report.alias_count == 99
     assert report.unique_canonical_count == 49
-    assert report.rule_count == 2
+    assert report.rule_count == 4
     assert report.dropped_alias_count == 8
     assert report.ambiguous_alias_count == 6
     assert report.dropped_alias_ratio == 0.0748

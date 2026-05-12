@@ -69,6 +69,28 @@ COUNTRY_DISPLAY_NAME = {
     "za": "South Africa",
 }
 
+COUNTRY_IDENTITY_REFS = {
+    "ar": {"wikidata_qid": "Q414", "geonames_id": "3865483"},
+    "au": {"wikidata_qid": "Q408", "geonames_id": "2077456"},
+    "br": {"wikidata_qid": "Q155", "geonames_id": "3469034"},
+    "ca": {"wikidata_qid": "Q16", "geonames_id": "6251999"},
+    "cn": {"wikidata_qid": "Q148", "geonames_id": "1814991"},
+    "de": {"wikidata_qid": "Q183", "geonames_id": "2921044"},
+    "fr": {"wikidata_qid": "Q142", "geonames_id": "3017382"},
+    "id": {"wikidata_qid": "Q252", "geonames_id": "1643084"},
+    "in": {"wikidata_qid": "Q668", "geonames_id": "1269750"},
+    "it": {"wikidata_qid": "Q38", "geonames_id": "3175395"},
+    "jp": {"wikidata_qid": "Q17", "geonames_id": "1861060"},
+    "kr": {"wikidata_qid": "Q884", "geonames_id": "1835841"},
+    "mx": {"wikidata_qid": "Q96", "geonames_id": "3996063"},
+    "ru": {"wikidata_qid": "Q159", "geonames_id": "2017370"},
+    "sa": {"wikidata_qid": "Q851", "geonames_id": "102358"},
+    "tr": {"wikidata_qid": "Q43", "geonames_id": "298795"},
+    "uk": {"wikidata_qid": "Q145", "geonames_id": "2635167"},
+    "us": {"wikidata_qid": "Q30", "geonames_id": "6252001"},
+    "za": {"wikidata_qid": "Q258", "geonames_id": "953987"},
+}
+
 DEFAULT_EXTRA_PROXY_PACK_IDS = (
     "business-vector-en",
     "economics-vector-en",
@@ -101,6 +123,8 @@ EDGE_COLUMNS = [
     "refresh_policy",
     "pack_ids",
     "notes",
+    "compatible_event_types",
+    "direction_preconditions",
 ]
 
 TRADABLE_ENTITY_TYPES = {
@@ -124,6 +148,77 @@ POLITICAL_OR_PUBLIC_ENTITY_TYPES = {
     "central_bank",
     "government_body",
 }
+
+_DXY_EVENT_TYPES = (
+    "policy_rate_cut",
+    "policy_rate_hike",
+    "policy_rate_hold",
+    "inflation_shock",
+    "future_policy_expectation",
+    "fiscal_expansion",
+    "fiscal_austerity",
+    "sanctions",
+    "war_escalation",
+    "ceasefire_risk_relief",
+)
+_COUNTRY_RISK_EVENT_TYPES = (
+    "sanctions",
+    "tariff",
+    "export_control",
+    "fiscal_expansion",
+    "fiscal_austerity",
+    "default",
+    "war_escalation",
+    "ceasefire_risk_relief",
+)
+_GLOBAL_EQUITY_EVENT_TYPES = (
+    "policy_rate_cut",
+    "policy_rate_hike",
+    "policy_rate_hold",
+    "inflation_shock",
+    "future_policy_expectation",
+    "fiscal_expansion",
+    "fiscal_austerity",
+    "sanctions",
+    "tariff",
+    "export_control",
+    "earnings_beat",
+    "earnings_miss",
+    "guidance_raise",
+    "guidance_cut",
+    "acquisition",
+    "merger",
+    "divestiture",
+    "default",
+    "bankruptcy",
+    "strike_labor_disruption",
+    "war_escalation",
+    "ceasefire_risk_relief",
+)
+_POLICY_RATE_EVENT_TYPES = (
+    "policy_rate_cut",
+    "policy_rate_hike",
+    "policy_rate_hold",
+    "inflation_shock",
+    "future_policy_expectation",
+    "fiscal_expansion",
+    "fiscal_austerity",
+)
+_EQUITY_EVENT_TYPES = (
+    "tariff",
+    "export_control",
+    "sanctions",
+    "earnings_beat",
+    "earnings_miss",
+    "guidance_raise",
+    "guidance_cut",
+    "acquisition",
+    "merger",
+    "divestiture",
+    "default",
+    "bankruptcy",
+    "strike_labor_disruption",
+)
 
 
 @dataclass(frozen=True)
@@ -166,6 +261,8 @@ class _Edge:
     refresh_policy: str
     pack_ids: str
     notes: str
+    compatible_event_types: tuple[str, ...] = ()
+    direction_preconditions: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -378,6 +475,49 @@ def _node_row(
     }
 
 
+def _country_identifiers(country_code: str) -> dict[str, object]:
+    identifiers: dict[str, object] = {"country_code": country_code}
+    known_identity = COUNTRY_IDENTITY_REFS.get(country_code)
+    if known_identity is None:
+        return identifiers
+
+    identifiers.update(known_identity)
+    same_as_refs = [f"country:{country_code}"]
+    wikidata_qid = known_identity.get("wikidata_qid")
+    geonames_id = known_identity.get("geonames_id")
+    if wikidata_qid:
+        same_as_refs.append(f"wikidata:{wikidata_qid}")
+    if geonames_id:
+        same_as_refs.append(f"geonames:{geonames_id}")
+    identifiers["same_as_refs"] = same_as_refs
+    return identifiers
+
+
+def _entity_identifiers(entity: FinanceCountryEntity, *, pack_id: str) -> dict[str, object]:
+    identifiers = dict(entity.metadata)
+    ticker_ref = _ticker_ref(pack_id, identifiers.get("ticker"))
+    if entity.category == "issuer" and ticker_ref:
+        identifiers.setdefault("ticker_ref", ticker_ref)
+    return identifiers
+
+
+def _synthetic_ticker_identifiers(
+    *,
+    country_code: str,
+    edge: _Edge,
+    source_entity: FinanceCountryEntity,
+) -> dict[str, object]:
+    ticker_symbol = edge.target_ref.rsplit(":", 1)[-1]
+    identifiers: dict[str, object] = {
+        "country_code": country_code,
+        "ticker_ref": edge.target_ref,
+        "ticker_symbol": ticker_symbol,
+    }
+    if edge.relation == "issuer_has_listed_ticker":
+        identifiers["issuer_ref"] = source_entity.entity_ref
+    return identifiers
+
+
 def _country_proxy_nodes(pack_id: str, country_code: str, currency: str) -> list[dict[str, object]]:
     upper_country = country_code.upper()
     return [
@@ -388,7 +528,7 @@ def _country_proxy_nodes(pack_id: str, country_code: str, currency: str) -> list
             library_id=pack_id,
             is_tradable=False,
             is_seed_eligible=True,
-            identifiers={"country_code": country_code},
+            identifiers=_country_identifiers(country_code),
             pack_ids=pack_id,
         ),
         _node_row(
@@ -499,6 +639,36 @@ def _global_proxy_nodes(pack_id: str) -> list[dict[str, object]]:
     ]
 
 
+def _relation_event_types(relation: str) -> tuple[str, ...]:
+    if relation.endswith("_dxy_proxy"):
+        return _DXY_EVENT_TYPES
+    if relation.endswith("_country_risk_proxy") or relation.endswith("_global_policy_risk_proxy"):
+        return _COUNTRY_RISK_EVENT_TYPES
+    if relation.endswith("_global_equity_proxy"):
+        return _GLOBAL_EQUITY_EVENT_TYPES
+    if relation.endswith("_policy_rate_proxy"):
+        return _POLICY_RATE_EVENT_TYPES
+    if relation in {"issuer_has_listed_ticker", "person_affects_employer_ticker"}:
+        return _EQUITY_EVENT_TYPES
+    return ()
+
+
+def _relation_direction_preconditions(relation: str) -> tuple[str, ...]:
+    if relation.endswith("_dxy_proxy"):
+        return ("usd_or_rates_context", "risk_or_safe_haven_context")
+    if relation.endswith("_country_risk_proxy") or relation.endswith("_global_policy_risk_proxy"):
+        return ("explicit_risk_event", "fiscal_or_credit_signal")
+    if relation.endswith("_global_equity_proxy"):
+        return ("macro_policy_or_risk_signal", "equity_event_signal")
+    if relation.endswith("_policy_rate_proxy"):
+        return ("rate_inflation_central_bank_or_fiscal_signal",)
+    if relation == "issuer_has_listed_ticker":
+        return ("direct_issuer_or_security_mention",)
+    if relation == "person_affects_employer_ticker":
+        return ("strong_person_employer_event",)
+    return ()
+
+
 def _edge(
     *,
     source_ref: str,
@@ -513,9 +683,17 @@ def _edge(
     source_year: int,
     pack_id: str,
     notes: str,
+    compatible_event_types: tuple[str, ...] | None = None,
+    direction_preconditions: tuple[str, ...] | None = None,
 ) -> _Edge | None:
     if source_ref == target_ref:
         return None
+    resolved_event_types = compatible_event_types
+    if resolved_event_types is None:
+        resolved_event_types = _relation_event_types(relation)
+    resolved_preconditions = direction_preconditions
+    if resolved_preconditions is None:
+        resolved_preconditions = _relation_direction_preconditions(relation)
     return _Edge(
         source_ref=source_ref,
         target_ref=target_ref,
@@ -530,6 +708,8 @@ def _edge(
         refresh_policy="on_pack_refresh",
         pack_ids=pack_id,
         notes=notes,
+        compatible_event_types=tuple(dict.fromkeys(resolved_event_types)),
+        direction_preconditions=tuple(dict.fromkeys(resolved_preconditions)),
     )
 
 
@@ -826,6 +1006,8 @@ def _edge_row(edge: _Edge) -> dict[str, object]:
         "refresh_policy": edge.refresh_policy,
         "pack_ids": edge.pack_ids,
         "notes": edge.notes,
+        "compatible_event_types": ",".join(edge.compatible_event_types),
+        "direction_preconditions": ",".join(edge.direction_preconditions),
     }
 
 
@@ -916,7 +1098,7 @@ def build_finance_country_proxy_source_lane(
                 library_id=pack_id,
                 is_tradable=entity.is_tradable_terminal,
                 is_seed_eligible=True,
-                identifiers=entity.metadata,
+                identifiers=_entity_identifiers(entity, pack_id=pack_id),
                 pack_ids=pack_id,
             )
             nodes.setdefault(entity.entity_ref, node)
@@ -941,7 +1123,11 @@ def build_finance_country_proxy_source_lane(
                         library_id=pack_id,
                         is_tradable=True,
                         is_seed_eligible=True,
-                        identifiers={"country_code": country_code},
+                        identifiers=_synthetic_ticker_identifiers(
+                            country_code=country_code,
+                            edge=edge,
+                            source_entity=entity,
+                        ),
                         pack_ids=pack_id,
                     )
                     terminal_node_refs.add(edge.target_ref)
@@ -999,7 +1185,7 @@ def build_finance_country_proxy_source_lane(
                 library_id=pack_id,
                 is_tradable=entity.is_tradable_terminal,
                 is_seed_eligible=True,
-                identifiers=entity.metadata,
+                identifiers=_entity_identifiers(entity, pack_id=pack_id),
                 pack_ids=pack_id,
             )
             nodes.setdefault(entity.entity_ref, node)

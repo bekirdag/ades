@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 import shutil
+import subprocess
 
 from .finance_quality import (
     DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES,
@@ -50,6 +51,9 @@ class GeneratedPackRefreshResult:
     passed: bool
     materialize_registry: bool
     registry_materialized: bool
+    release_gate_commands: list[str] = field(default_factory=list)
+    release_gate_working_dir: str | None = None
+    release_gate_passed: bool = True
     registry: RegistryBuildResult | None = None
     warnings: list[str] = field(default_factory=list)
     packs: list[GeneratedPackRefreshItem] = field(default_factory=list)
@@ -66,6 +70,8 @@ def refresh_generated_pack_registry(
     max_unexpected_hits: int = 0,
     max_ambiguous_aliases: int | None = None,
     max_dropped_alias_ratio: float | None = None,
+    release_gate_commands: list[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> GeneratedPackRefreshResult:
     """Refresh one or more generated packs into candidate bundles and optional registry output."""
 
@@ -148,7 +154,25 @@ def refresh_generated_pack_registry(
     source_governance_passed = all(
         item.report.publishable_sources_only for item in pack_results
     )
-    passed = quality_passed and source_governance_passed
+    resolved_release_gate_commands = [
+        command.strip() for command in release_gate_commands or [] if command.strip()
+    ]
+    release_gate_passed = True
+    if (
+        quality_passed
+        and source_governance_passed
+        and materialize_registry
+        and resolved_release_gate_commands
+    ):
+        release_gate_passed = _run_release_gate_commands(
+            resolved_release_gate_commands,
+            working_dir=release_gate_working_dir,
+            warnings=warnings,
+        )
+    elif resolved_release_gate_commands and not materialize_registry:
+        warnings.append("release_gate_skipped:candidate_only")
+
+    passed = quality_passed and source_governance_passed and release_gate_passed
     registry_result: RegistryBuildResult | None = None
     if passed and materialize_registry:
         registry_result = build_static_registry(
@@ -162,6 +186,8 @@ def refresh_generated_pack_registry(
             warnings.append("registry_build_skipped:quality_failed")
         if not source_governance_passed:
             warnings.append("registry_build_skipped:source_governance_failed")
+        if not release_gate_passed:
+            warnings.append("registry_build_skipped:release_gate_failed")
 
     return GeneratedPackRefreshResult(
         output_dir=str(resolved_output_dir),
@@ -172,11 +198,54 @@ def refresh_generated_pack_registry(
         pack_count=len(pack_results),
         passed=passed,
         materialize_registry=materialize_registry,
+        release_gate_commands=resolved_release_gate_commands,
+        release_gate_working_dir=(
+            str(Path(release_gate_working_dir).expanduser().resolve())
+            if release_gate_working_dir is not None
+            else None
+        ),
+        release_gate_passed=release_gate_passed,
         registry_materialized=registry_result is not None,
         registry=registry_result,
         warnings=warnings,
         packs=pack_results,
     )
+
+
+def _run_release_gate_commands(
+    commands: list[str],
+    *,
+    working_dir: str | Path | None,
+    warnings: list[str],
+) -> bool:
+    cwd = (
+        str(Path(working_dir).expanduser().resolve())
+        if working_dir is not None
+        else None
+    )
+    passed = True
+    for command in commands:
+        result = subprocess.run(  # noqa: S602
+            command,
+            cwd=cwd,
+            shell=True,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            warnings.append(f"release_gate_passed:{command}")
+            continue
+        passed = False
+        warnings.append(f"release_gate_failed:{command}:exit_code={result.returncode}")
+        stdout = result.stdout.strip()
+        stderr = result.stderr.strip()
+        if stdout:
+            warnings.append(f"release_gate_stdout:{command}:{stdout[-1000:]}")
+        if stderr:
+            warnings.append(f"release_gate_stderr:{command}:{stderr[-1000:]}")
+        break
+    return passed
 
 
 def _resolve_bundle_dir(bundle_dir: str | Path) -> Path:

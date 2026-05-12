@@ -9,7 +9,6 @@ from pathlib import Path
 import re
 import shutil
 from typing import Any
-import unicodedata
 
 from ..runtime_matcher import build_matcher_artifact_from_aliases_json
 from ..text_processing import canonicalize_text, normalize_lookup_text
@@ -1514,7 +1513,17 @@ def _iter_entity_explicit_aliases(
 
 def _serialize_alias_payload(candidate: Any, *, source_domain: str) -> dict[str, Any]:
     rounded_score = round(float(candidate.score), 4)
-    return {
+    runtime_tier = (
+        str(getattr(candidate, "runtime_tier", "") or "").strip()
+        or "runtime_exact_high_precision"
+    )
+    alias_quality = str(getattr(candidate, "alias_quality", "") or "").strip()
+    quality_reasons = [
+        str(reason).strip()
+        for reason in getattr(candidate, "quality_reasons", ()) or ()
+        if str(reason).strip()
+    ]
+    payload = {
         "text": str(candidate.display_text),
         "label": str(candidate.label),
         "normalized_text": str(candidate.alias_key),
@@ -1527,8 +1536,17 @@ def _serialize_alias_payload(candidate: Any, *, source_domain: str) -> dict[str,
         "source_priority": round(float(candidate.features.source_priority), 4),
         "popularity_weight": round(float(candidate.features.popularity_weight), 4),
         "source_domain": str(source_domain),
-        "runtime_tier": "runtime_exact_high_precision",
+        "runtime_tier": runtime_tier,
     }
+    if alias_quality:
+        payload["alias_quality"] = alias_quality
+    if bool(getattr(candidate, "weak_alias", False)):
+        payload["weak_alias"] = True
+    if quality_reasons:
+        payload["quality_reasons"] = quality_reasons
+    if bool(getattr(candidate, "direct_mention_required", False)):
+        payload["direct_mention_required"] = True
+    return payload
 
 
 def _expand_alias_variants(

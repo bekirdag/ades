@@ -24,6 +24,7 @@ from ..packs.runtime import PackRuntime, RuleDefinition, load_pack_runtime
 from .hybrid import ProposalProvider, ProposalSpan, get_proposal_spans, hybrid_enabled
 from ..runtime_matcher import (
     MatcherEntryPayload,
+    RuntimeMatcher,
     build_lookup_text_view,
     find_exact_match_candidates,
     find_exact_match_candidates_in_view,
@@ -2632,6 +2633,9 @@ def _build_lookup_alias_entities_from_matcher_entries(
             normalized_end=normalized_end,
             matched_text=effective_matched_text,
         )
+        quality_reasons = tuple(entry.quality_reasons)
+        if entry.direct_mention_required and "direct_mention_required" not in quality_reasons:
+            quality_reasons = (*quality_reasons, "direct_mention_required")
         extracted.append(
             ExtractedCandidate(
                 entity=EntityMatch(
@@ -2647,6 +2651,9 @@ def _build_lookup_alias_entities_from_matcher_entries(
                         source_pack=pack_id,
                         source_domain=entry_domain,
                         lane="deterministic_alias",
+                        alias_quality=entry.alias_quality,
+                        weak_alias=entry.weak_alias,
+                        quality_reasons=quality_reasons,
                     ),
                     link=_build_entity_link(
                         provider="lookup.alias.exact",
@@ -7305,7 +7312,6 @@ def _is_runtime_possessive_alias_artifact(candidate: ExtractedCandidate) -> bool
 
 
 def _is_runtime_leading_apostrophe_fragment_alias(candidate: ExtractedCandidate) -> bool:
-    provenance = candidate.entity.provenance
     if not _candidate_uses_runtime_generic_alias_guards(candidate):
         return False
     if candidate.entity.label.casefold() not in {"organization", "person", "location"}:

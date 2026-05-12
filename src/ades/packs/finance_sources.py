@@ -18,6 +18,7 @@ import urllib.request
 from urllib.parse import urlparse
 import zipfile
 
+from .bdya_phase6 import BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES
 from .fetch import normalize_source_url
 
 
@@ -697,6 +698,11 @@ DEFAULT_CURATED_FINANCE_ENTITIES: tuple[dict[str, object], ...] = (
         aliases=(),
         metadata={"category": "bulk_commodity"},
     ),
+)
+
+DEFAULT_CURATED_FINANCE_ENTITIES = (
+    *DEFAULT_CURATED_FINANCE_ENTITIES,
+    *BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES,
 )
 
 

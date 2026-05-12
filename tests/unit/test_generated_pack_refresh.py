@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import sys
 
 from ades.packs.finance_bundle import build_finance_source_bundle
 from ades.packs.general_bundle import build_general_source_bundle
@@ -91,6 +92,64 @@ def test_refresh_generated_pack_registry_materializes_registry_when_requested(
     assert response.registry.packs[1].pack_id == "medical-en"
     index_payload = json.loads(Path(response.registry.index_path).read_text(encoding="utf-8"))
     assert sorted(index_payload["packs"]) == ["general-en", "medical-en"]
+
+
+def test_refresh_generated_pack_registry_runs_release_gate_before_materializing(
+    tmp_path: Path,
+) -> None:
+    finance_snapshots = create_finance_raw_snapshots(tmp_path / "finance-snapshots")
+    finance_bundle = build_finance_source_bundle(
+        sec_companies_path=finance_snapshots["sec_companies"],
+        symbol_directory_path=finance_snapshots["symbol_directory"],
+        curated_entities_path=finance_snapshots["curated_entities"],
+        output_dir=tmp_path / "finance-bundles",
+    )
+
+    response = refresh_generated_pack_registry(
+        [finance_bundle.bundle_dir],
+        output_dir=tmp_path / "refresh-output",
+        materialize_registry=True,
+        release_gate_commands=[f'{sys.executable} -c "print(\\\"gate ok\\\")"'],
+        release_gate_working_dir=tmp_path,
+    )
+
+    assert response.passed is True
+    assert response.release_gate_passed is True
+    assert response.release_gate_working_dir == str(tmp_path.resolve())
+    assert response.registry_materialized is True
+    assert response.registry is not None
+    assert any(warning.startswith("release_gate_passed:") for warning in response.warnings)
+
+
+def test_refresh_generated_pack_registry_blocks_registry_on_release_gate_failure(
+    tmp_path: Path,
+) -> None:
+    finance_snapshots = create_finance_raw_snapshots(tmp_path / "finance-snapshots")
+    finance_bundle = build_finance_source_bundle(
+        sec_companies_path=finance_snapshots["sec_companies"],
+        symbol_directory_path=finance_snapshots["symbol_directory"],
+        curated_entities_path=finance_snapshots["curated_entities"],
+        output_dir=tmp_path / "finance-bundles",
+    )
+
+    response = refresh_generated_pack_registry(
+        [finance_bundle.bundle_dir],
+        output_dir=tmp_path / "refresh-output",
+        materialize_registry=True,
+        release_gate_commands=[f'{sys.executable} -c "import sys; sys.exit(7)"'],
+        release_gate_working_dir=tmp_path,
+    )
+
+    assert response.passed is False
+    assert response.release_gate_passed is False
+    assert response.registry_materialized is False
+    assert response.registry is None
+    assert "registry_build_skipped:release_gate_failed" in response.warnings
+    assert any(
+        warning.startswith("release_gate_failed:")
+        and warning.endswith(":exit_code=7")
+        for warning in response.warnings
+    )
 
 
 def test_refresh_generated_pack_registry_skips_registry_on_quality_failure(

@@ -24,7 +24,7 @@ def test_fetch_general_source_snapshot_writes_immutable_snapshot_dir(tmp_path: P
     assert result.source_count == 3
     assert result.wikidata_entity_count == 12
     assert result.geonames_location_count == 2
-    assert result.curated_entity_count == 19
+    assert result.curated_entity_count == 118
     assert Path(result.snapshot_dir).exists()
     assert Path(result.wikidata_entities_path).exists()
     assert Path(result.geonames_places_path).exists()
@@ -48,7 +48,7 @@ def test_fetch_general_source_snapshot_writes_immutable_snapshot_dir(tmp_path: P
     )
     assert bundle.wikidata_entity_count == 12
     assert bundle.geonames_location_count == 2
-    assert bundle.curated_entity_count == 19
+    assert bundle.curated_entity_count == 118
 
 
 def test_fetch_general_source_snapshot_rejects_existing_snapshot_dir(

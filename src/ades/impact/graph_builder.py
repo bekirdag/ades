@@ -15,7 +15,7 @@ from ..service.models import MarketGraphStoreBuildResponse
 
 MARKET_GRAPH_STORE_FILENAME = "market_graph_store.sqlite"
 MARKET_GRAPH_MANIFEST_FILENAME = "market_graph_store_manifest.json"
-MARKET_GRAPH_BUILDER_VERSION = "market-graph-builder-v1"
+MARKET_GRAPH_BUILDER_VERSION = "market-graph-builder-v3"
 DEFAULT_MARKET_GRAPH_VERSION = "market-graph-v1"
 
 _REQUIRED_NODE_COLUMNS = {"entity_ref", "canonical_name", "entity_type"}
@@ -34,7 +34,48 @@ _REQUIRED_EDGE_COLUMNS = {
     "pack_ids",
     "notes",
 }
+_OPTIONAL_EDGE_LIST_COLUMNS = {
+    "compatible_event_types",
+    "direction_preconditions",
+}
 _ALLOWED_EVIDENCE_LEVELS = {"direct", "shallow", "inferred"}
+_IDENTITY_REF_KEYS = {
+    "aliasref",
+    "aliasrefs",
+    "alternateref",
+    "alternaterefs",
+    "alternativeref",
+    "alternativerefs",
+    "entityref",
+    "entityrefs",
+    "equivalentref",
+    "equivalentrefs",
+    "identityref",
+    "identityrefs",
+    "sameas",
+    "sameasref",
+    "sameasrefs",
+    "sourceref",
+    "sourcerefs",
+}
+_FINANCE_REF_KEYS = {
+    "assetref",
+    "assetrefs",
+    "financeassetref",
+    "financeassetrefs",
+    "financeissuerref",
+    "financeissuerrefs",
+    "financetickerref",
+    "financetickerrefs",
+    "issuerref",
+    "issuerrefs",
+    "tickerref",
+    "tickerrefs",
+}
+_WIKIDATA_KEYS = {"qid", "qids", "wikidata", "wikidataid", "wikidataids", "wikidataqid", "wikidataqids"}
+_GEONAMES_KEYS = {"geonameid", "geonameids", "geonames", "geonamesid", "geonamesids"}
+_COUNTRY_CODE_KEYS = {"countrycode", "countrycodes", "iso2", "iso31661alpha2", "iso3166alpha2"}
+_SEC_CIK_KEYS = {"cik", "ciks", "seccik", "secciks"}
 
 
 @dataclass(frozen=True)
@@ -66,6 +107,8 @@ class _EdgeRecord:
     version: str
     packs: tuple[str, ...]
     notes: str
+    compatible_event_types: tuple[str, ...] = ()
+    direction_preconditions: tuple[str, ...] = ()
 
     @property
     def dedupe_key(self) -> tuple[str, str, str, str]:
@@ -139,6 +182,111 @@ def _parse_string_list(value: object | None) -> tuple[str, ...]:
     else:
         values = [item.strip() for item in raw.replace(";", ",").split(",")]
     return tuple(sorted({item for item in values if item}))
+
+
+def _identifier_key(value: object) -> str:
+    return "".join(ch for ch in str(value).casefold() if ch.isalnum())
+
+
+def _iter_identifier_values(value: object) -> Iterable[object]:
+    if isinstance(value, dict):
+        for nested_value in value.values():
+            yield from _iter_identifier_values(nested_value)
+        return
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            yield from _iter_identifier_values(item)
+        return
+    yield value
+
+
+def _wikidata_ref(value: object) -> str | None:
+    raw = _normalize_text(value)
+    if not raw:
+        return None
+    if raw.casefold().startswith("wikidata:"):
+        raw = raw.split(":", 1)[1].strip()
+    if raw.isdigit():
+        raw = f"Q{raw}"
+    if len(raw) > 1 and raw[0].casefold() == "q" and raw[1:].isdigit():
+        return f"wikidata:Q{raw[1:]}"
+    return None
+
+
+def _geonames_ref(value: object) -> str | None:
+    raw = _normalize_text(value)
+    if not raw:
+        return None
+    if raw.casefold().startswith("geonames:"):
+        raw = raw.split(":", 1)[1].strip()
+    if raw.isdigit():
+        return f"geonames:{raw}"
+    return None
+
+
+def _country_ref(value: object) -> str | None:
+    raw = _normalize_text(value)
+    if not raw:
+        return None
+    if raw.casefold().startswith("country:"):
+        raw = raw.split(":", 1)[1].strip()
+    if len(raw) == 2 and raw.isalpha():
+        return f"country:{raw.casefold()}"
+    return None
+
+
+def _sec_cik_ref(value: object) -> str | None:
+    raw = _normalize_text(value)
+    if not raw:
+        return None
+    if raw.casefold().startswith("sec-cik:"):
+        raw = raw.split(":", 1)[1].strip()
+    if raw.isdigit():
+        return f"sec-cik:{raw.zfill(10)}"
+    return None
+
+
+def _identity_ref(value: object) -> str | None:
+    raw = _normalize_text(value)
+    if not raw:
+        return None
+    lower = raw.casefold()
+    if lower.startswith("wikidata:"):
+        return _wikidata_ref(raw)
+    if lower.startswith("geonames:"):
+        return _geonames_ref(raw)
+    if lower.startswith("country:"):
+        return _country_ref(raw)
+    if lower.startswith("sec-cik:"):
+        return _sec_cik_ref(raw)
+    return raw
+
+
+def _identity_refs_for_node(record: _NodeRecord) -> tuple[str, ...]:
+    refs = {record.entity_ref}
+    identifiers = json.loads(record.identifiers_json)
+    if not isinstance(identifiers, dict):
+        return tuple(sorted(refs))
+
+    entity_type = record.entity_type.casefold()
+    for raw_key, raw_value in identifiers.items():
+        key = _identifier_key(raw_key)
+        for value in _iter_identifier_values(raw_value):
+            if key in _IDENTITY_REF_KEYS or key in _FINANCE_REF_KEYS:
+                ref = _identity_ref(value)
+            elif key in _WIKIDATA_KEYS:
+                ref = _wikidata_ref(value)
+            elif key in _GEONAMES_KEYS:
+                ref = _geonames_ref(value)
+            elif key in _COUNTRY_CODE_KEYS and entity_type == "country":
+                ref = _country_ref(value)
+            elif key in _SEC_CIK_KEYS:
+                ref = _sec_cik_ref(value)
+            else:
+                ref = None
+            if ref:
+                refs.add(ref)
+    return tuple(sorted(refs))
 
 
 def _read_tsv_rows(path: Path) -> list[dict[str, str]]:
@@ -257,12 +405,20 @@ def _parse_edge_rows(
                 version=edge_version,
                 packs=packs,
                 notes=notes,
+                compatible_event_types=_parse_string_list(row.get("compatible_event_types")),
+                direction_preconditions=_parse_string_list(row.get("direction_preconditions")),
             )
             existing = edges.get(record.dedupe_key)
             if existing is None:
                 edges[record.dedupe_key] = record
                 continue
             merged_packs = tuple(sorted(set(existing.packs) | set(record.packs)))
+            merged_compatible_event_types = tuple(
+                sorted(set(existing.compatible_event_types) | set(record.compatible_event_types))
+            )
+            merged_direction_preconditions = tuple(
+                sorted(set(existing.direction_preconditions) | set(record.direction_preconditions))
+            )
             winner = record if record.confidence > existing.confidence else existing
             edges[record.dedupe_key] = _EdgeRecord(
                 edge_id=winner.edge_id,
@@ -280,6 +436,8 @@ def _parse_edge_rows(
                 version=winner.version,
                 packs=merged_packs,
                 notes=winner.notes,
+                compatible_event_types=merged_compatible_event_types,
+                direction_preconditions=merged_direction_preconditions,
             )
             warnings.append(f"duplicate_edge_merged:{source_ref}:{relation}:{target_ref}")
     return edges, warnings, processed_row_count
@@ -330,6 +488,8 @@ def _prepare_store(path: Path) -> sqlite3.Connection:
           source_year INTEGER,
           refresh_policy TEXT NOT NULL,
           version TEXT NOT NULL,
+          compatible_event_types_json TEXT NOT NULL DEFAULT '[]',
+          direction_preconditions_json TEXT NOT NULL DEFAULT '[]',
           UNIQUE (source_ref, target_ref, relation, source_snapshot)
         );
         CREATE TABLE impact_edge_packs (
@@ -337,10 +497,18 @@ def _prepare_store(path: Path) -> sqlite3.Connection:
           pack_id TEXT NOT NULL,
           PRIMARY KEY (edge_id, pack_id)
         );
+        CREATE TABLE impact_identity_refs (
+          identity_ref TEXT NOT NULL,
+          entity_ref TEXT NOT NULL,
+          bridge_kind TEXT NOT NULL,
+          PRIMARY KEY (identity_ref, entity_ref)
+        );
         CREATE INDEX idx_impact_edges_source ON impact_edges(source_ref);
         CREATE INDEX idx_impact_edges_target ON impact_edges(target_ref);
         CREATE INDEX idx_impact_edges_relation ON impact_edges(relation);
         CREATE INDEX idx_impact_edge_packs_pack ON impact_edge_packs(pack_id);
+        CREATE INDEX idx_impact_identity_refs_identity ON impact_identity_refs(identity_ref);
+        CREATE INDEX idx_impact_identity_refs_entity ON impact_identity_refs(entity_ref);
         CREATE INDEX idx_impact_nodes_seed_degree ON impact_nodes(seed_degree);
         """
     )
@@ -456,6 +624,25 @@ def build_market_graph_store(
                 for record in sorted(nodes.values(), key=lambda item: item.entity_ref)
             ],
         )
+        identity_rows = [
+            (
+                identity_ref,
+                record.entity_ref,
+                "self" if identity_ref == record.entity_ref else "identifier",
+            )
+            for record in sorted(nodes.values(), key=lambda item: item.entity_ref)
+            for identity_ref in _identity_refs_for_node(record)
+        ]
+        connection.executemany(
+            """
+            INSERT OR IGNORE INTO impact_identity_refs (
+                identity_ref,
+                entity_ref,
+                bridge_kind
+            ) VALUES (?, ?, ?)
+            """,
+            identity_rows,
+        )
         connection.executemany(
             """
             INSERT INTO impact_edges (
@@ -471,8 +658,10 @@ def build_market_graph_store(
                 source_snapshot,
                 source_year,
                 refresh_policy,
-                version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                version,
+                compatible_event_types_json,
+                direction_preconditions_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -489,6 +678,8 @@ def build_market_graph_store(
                     record.source_year,
                     record.refresh_policy,
                     record.version,
+                    json.dumps(list(record.compatible_event_types), sort_keys=True),
+                    json.dumps(list(record.direction_preconditions), sort_keys=True),
                 )
                 for record in sorted(edges.values(), key=lambda item: item.edge_id)
             ],

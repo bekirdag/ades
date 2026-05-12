@@ -26,11 +26,14 @@ _TOKEN_RE = re.compile(r"\b[\w][\w.+&/-]*\b")
 _TOKEN_TRIE_MAGIC = b"ADESTT01"
 _TOKEN_TRIE_VERSION = 1
 _TOKEN_TRIE_ENTRIES_MAGIC = b"ADESTE01"
-_TOKEN_TRIE_ENTRIES_VERSION = 1
+_TOKEN_TRIE_ENTRIES_VERSION = 2
+_TOKEN_TRIE_SUPPORTED_ENTRIES_VERSIONS = frozenset({1, _TOKEN_TRIE_ENTRIES_VERSION})
 _TOKEN_TRIE_INDEX_MAGIC = b"ADESTI01"
-_TOKEN_TRIE_INDEX_VERSION = 1
+_TOKEN_TRIE_INDEX_VERSION = 2
 _TOKEN_TRIE_STATE_INDEX_MAGIC = b"ADESTS01"
 _TOKEN_TRIE_STATE_INDEX_VERSION = 1
+_TOKEN_TRIE_ENTRY_BASE_STRING_COUNT = 6
+_TOKEN_TRIE_ENTRY_V2_STRING_COUNT = 11
 
 
 @dataclass(frozen=True)
@@ -86,6 +89,11 @@ class MatcherEntryPayload:
     source_priority: float
     popularity_weight: float
     source_domain: str
+    alias_quality: str | None = None
+    weak_alias: bool = False
+    quality_reasons: tuple[str, ...] = ()
+    runtime_tier: str = "runtime_exact_high_precision"
+    direct_mention_required: bool = False
 
 
 @dataclass(frozen=True)
@@ -104,6 +112,7 @@ class TokenTrieEntryPayloadStore:
     entries_path: str
     index_path: str
     entry_count: int
+    entries_version: int = _TOKEN_TRIE_ENTRIES_VERSION
 
     def __len__(self) -> int:
         return self.entry_count
@@ -125,6 +134,7 @@ class TokenTrieEntryPayloadStore:
             self.index_path,
             normalized_index,
             self.entry_count,
+            self.entries_version,
         )
 
     def __iter__(self) -> Iterator[MatcherEntryPayload]:
@@ -538,6 +548,20 @@ def _normalize_alias_payload(payload: dict[str, Any]) -> dict[str, Any]:
     label = str(payload["label"]).strip()
     if not label:
         raise ValueError(f"Alias `{alias_text}` is missing label.")
+    alias_quality = str(payload.get("alias_quality") or "").strip() or None
+    weak_alias = _coerce_bool(payload.get("weak_alias", False))
+    runtime_tier = str(payload.get("runtime_tier") or "").strip()
+    if not runtime_tier:
+        if weak_alias:
+            runtime_tier = "weak"
+        elif alias_quality and alias_quality.casefold() in {
+            "hidden",
+            "search_only",
+            "weak",
+        }:
+            runtime_tier = alias_quality.casefold()
+        else:
+            runtime_tier = "runtime_exact_high_precision"
     return {
         "text": alias_text,
         "label": label,
@@ -553,7 +577,50 @@ def _normalize_alias_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "source_priority": round(float(payload.get("source_priority", 0.6)), 4),
         "popularity_weight": round(float(payload.get("popularity_weight", 0.5)), 4),
         "source_domain": str(payload.get("source_domain", "")),
+        "alias_quality": alias_quality,
+        "weak_alias": weak_alias,
+        "quality_reasons": _normalize_quality_reasons(payload.get("quality_reasons")),
+        "runtime_tier": runtime_tier,
+        "direct_mention_required": _coerce_bool(
+            payload.get("direct_mention_required", False)
+        ),
     }
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().casefold() in {"1", "true", "yes", "y", "on"}
+
+
+def _normalize_quality_reasons(value: Any) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            parsed = [value]
+        value = parsed
+    if not isinstance(value, (list, tuple, set)):
+        return ()
+    reasons: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        reason = str(item).strip()
+        if not reason or reason in seen:
+            continue
+        seen.add(reason)
+        reasons.append(reason)
+    return tuple(reasons)
+
+
+def _serialize_quality_reasons(reasons: tuple[str, ...]) -> str:
+    return json.dumps(list(reasons), sort_keys=True, separators=(",", ":"))
 
 
 def _sha256_file(path: Path) -> str:
@@ -941,6 +1008,7 @@ def _load_json_aho_matcher(
 
 
 def _load_token_trie_matcher(artifact_path: Path, entries_path: Path) -> RuntimeMatcher:
+    entries_version, entries_entry_count = _read_token_trie_entries_header(entries_path)
     index_path = _ensure_token_trie_entry_index(entries_path)
     with artifact_path.open("rb") as handle:
         magic = handle.read(len(_TOKEN_TRIE_MAGIC))
@@ -956,6 +1024,11 @@ def _load_token_trie_matcher(artifact_path: Path, entries_path: Path) -> Runtime
         ) = struct.unpack(">IIIIII", handle.read(24))
         if version != _TOKEN_TRIE_VERSION:
             raise ValueError(f"Unsupported token-trie artifact version: {version}")
+        if entries_entry_count != entry_count:
+            raise ValueError(
+                f"Token-trie entry count mismatch between {artifact_path} "
+                f"and {entries_path}."
+            )
         id_to_token: list[str] = []
         for _ in range(token_vocab_count):
             (length,) = struct.unpack(">I", handle.read(4))
@@ -977,6 +1050,7 @@ def _load_token_trie_matcher(artifact_path: Path, entries_path: Path) -> Runtime
             entries_path=str(entries_path),
             index_path=str(index_path),
             entry_count=entry_count,
+            entries_version=entries_version,
         ),
         token_to_id=token_to_id,
         token_state_store=TokenTrieStateStore(
@@ -996,15 +1070,33 @@ def _token_trie_state_index_path(artifact_path: Path) -> Path:
 
 
 def _ensure_token_trie_entry_index(entries_path: Path) -> Path:
+    entries_version, entries_count = _read_token_trie_entries_header(entries_path)
     index_path = _token_trie_entry_index_path(entries_path)
     if _looks_like_token_trie_index(index_path):
         with index_path.open("rb") as handle:
             handle.read(len(_TOKEN_TRIE_INDEX_MAGIC))
             version, entry_count = struct.unpack(">II", handle.read(8))
-            if version == _TOKEN_TRIE_INDEX_VERSION and entry_count >= 0:
+            if (
+                version == _TOKEN_TRIE_INDEX_VERSION
+                and entry_count == entries_count
+                and entries_version in _TOKEN_TRIE_SUPPORTED_ENTRIES_VERSIONS
+            ):
                 return index_path
     _build_token_trie_entry_index(entries_path, index_path)
     return index_path
+
+
+def _read_token_trie_entries_header(entries_path: Path) -> tuple[int, int]:
+    with entries_path.open("rb") as handle:
+        magic = handle.read(len(_TOKEN_TRIE_ENTRIES_MAGIC))
+        if magic != _TOKEN_TRIE_ENTRIES_MAGIC:
+            raise ValueError(f"Unsupported token-trie entries artifact: {entries_path}")
+        version, entry_count = struct.unpack(">II", handle.read(8))
+    if version not in _TOKEN_TRIE_SUPPORTED_ENTRIES_VERSIONS:
+        raise ValueError(f"Unsupported token-trie entries version: {version}")
+    if entry_count < 0:
+        raise ValueError(f"Invalid token-trie entries count: {entry_count}")
+    return version, entry_count
 
 
 def _build_token_trie_entry_index(entries_path: Path, index_path: Path) -> None:
@@ -1014,14 +1106,17 @@ def _build_token_trie_entry_index(entries_path: Path, index_path: Path) -> None:
         if magic != _TOKEN_TRIE_ENTRIES_MAGIC:
             raise ValueError(f"Unsupported token-trie entries artifact: {entries_path}")
         version, entry_count = struct.unpack(">II", entries_handle.read(8))
-        if version != _TOKEN_TRIE_ENTRIES_VERSION:
+        if version not in _TOKEN_TRIE_SUPPORTED_ENTRIES_VERSIONS:
             raise ValueError(f"Unsupported token-trie entries version: {version}")
         with temporary_index_path.open("wb") as index_handle:
             index_handle.write(_TOKEN_TRIE_INDEX_MAGIC)
             index_handle.write(struct.pack(">II", _TOKEN_TRIE_INDEX_VERSION, entry_count))
             for _ in range(entry_count):
                 index_handle.write(struct.pack(">Q", entries_handle.tell()))
-                _skip_token_trie_entry_payload(entries_handle)
+                _skip_token_trie_entry_payload(
+                    entries_handle,
+                    entries_version=version,
+                )
     temporary_index_path.replace(index_path)
 
 
@@ -1089,10 +1184,13 @@ def _load_token_trie_entry_payloads(path: Path) -> tuple[MatcherEntryPayload, ..
         if magic != _TOKEN_TRIE_ENTRIES_MAGIC:
             raise ValueError(f"Unsupported token-trie entries artifact: {path}")
         version, entry_count = struct.unpack(">II", handle.read(8))
-        if version != _TOKEN_TRIE_ENTRIES_VERSION:
+        if version not in _TOKEN_TRIE_SUPPORTED_ENTRIES_VERSIONS:
             raise ValueError(f"Unsupported token-trie entries version: {version}")
         payloads = [
-            _read_token_trie_entry_payload(handle)
+            _read_token_trie_entry_payload(
+                handle,
+                entries_version=version,
+            )
             for _ in range(entry_count)
         ]
     return tuple(payloads)
@@ -1119,12 +1217,17 @@ def _load_token_trie_entry_payload_at(
     index_path: str,
     entry_index: int,
     entry_count: int,
+    entries_version: int,
 ) -> MatcherEntryPayload:
     if entry_index < 0 or entry_index >= entry_count:
         raise IndexError(entry_index)
     entry_offset = _load_token_trie_entry_offset(index_path, entry_index, entry_count)
     buffer = _open_mapped_binary_file(entries_path).mapping
-    return _read_token_trie_entry_payload_from_buffer(buffer, entry_offset)
+    return _read_token_trie_entry_payload_from_buffer(
+        buffer,
+        entry_offset,
+        entries_version=entries_version,
+    )
 
 
 def _load_token_trie_entry_offset(index_path: str, entry_index: int, entry_count: int) -> int:
@@ -1174,6 +1277,20 @@ def _load_matcher_entry_payloads_from_jsonl(path: Path) -> list[MatcherEntryPayl
 
 
 def _matcher_entry_payload_from_mapping(payload: dict[str, Any]) -> MatcherEntryPayload:
+    alias_quality = str(payload.get("alias_quality") or "").strip() or None
+    weak_alias = _coerce_bool(payload.get("weak_alias", False))
+    runtime_tier = str(payload.get("runtime_tier") or "").strip()
+    if not runtime_tier:
+        if weak_alias:
+            runtime_tier = "weak"
+        elif alias_quality and alias_quality.casefold() in {
+            "hidden",
+            "search_only",
+            "weak",
+        }:
+            runtime_tier = alias_quality.casefold()
+        else:
+            runtime_tier = "runtime_exact_high_precision"
     return MatcherEntryPayload(
         text=str(payload.get("text", "")).strip(),
         label=str(payload.get("label", "")).strip(),
@@ -1189,6 +1306,13 @@ def _matcher_entry_payload_from_mapping(payload: dict[str, Any]) -> MatcherEntry
         source_priority=round(float(payload.get("source_priority", 0.6)), 4),
         popularity_weight=round(float(payload.get("popularity_weight", 0.5)), 4),
         source_domain=str(payload.get("source_domain", "")).strip(),
+        alias_quality=alias_quality,
+        weak_alias=weak_alias,
+        quality_reasons=_normalize_quality_reasons(payload.get("quality_reasons")),
+        runtime_tier=runtime_tier,
+        direct_mention_required=_coerce_bool(
+            payload.get("direct_mention_required", False)
+        ),
     )
 
 
@@ -1209,6 +1333,13 @@ def _write_token_trie_entry_payload(handle: Any, payload: dict[str, Any]) -> Non
         str(payload["entity_id"]),
         str(payload["source_name"]),
         str(payload["source_domain"]),
+        str(payload.get("alias_quality") or ""),
+        "1" if _coerce_bool(payload.get("weak_alias", False)) else "0",
+        _serialize_quality_reasons(
+            _normalize_quality_reasons(payload.get("quality_reasons"))
+        ),
+        str(payload.get("runtime_tier") or "runtime_exact_high_precision"),
+        "1" if _coerce_bool(payload.get("direct_mention_required", False)) else "0",
     ):
         encoded = value.encode("utf-8")
         handle.write(struct.pack(">I", len(encoded)))
@@ -1239,19 +1370,41 @@ def _read_token_trie_state_from_buffer(
     return TokenTrieStateData(outputs=outputs, transitions=transitions)
 
 
-def _skip_token_trie_entry_payload(handle: Any) -> None:
+def _token_trie_entry_string_count(entries_version: int) -> int:
+    if entries_version == 1:
+        return _TOKEN_TRIE_ENTRY_BASE_STRING_COUNT
+    if entries_version == 2:
+        return _TOKEN_TRIE_ENTRY_V2_STRING_COUNT
+    raise ValueError(f"Unsupported token-trie entries version: {entries_version}")
+
+
+def _skip_token_trie_entry_payload(
+    handle: Any,
+    *,
+    entries_version: int = _TOKEN_TRIE_ENTRIES_VERSION,
+) -> None:
     handle.seek(25, 1)
-    for _ in range(6):
+    for _ in range(_token_trie_entry_string_count(entries_version)):
         (length,) = struct.unpack(">I", handle.read(4))
         handle.seek(length, 1)
 
 
-def _read_token_trie_entry_payload(handle: Any) -> MatcherEntryPayload:
+def _read_token_trie_entry_payload(
+    handle: Any,
+    *,
+    entries_version: int = _TOKEN_TRIE_ENTRIES_VERSION,
+) -> MatcherEntryPayload:
     generated_flag, score, source_priority, popularity_weight = struct.unpack(
         ">Bddd",
         handle.read(25),
     )
-    values = [_read_length_prefixed_text(handle) for _ in range(6)]
+    values = [
+        _read_length_prefixed_text(handle)
+        for _ in range(_token_trie_entry_string_count(entries_version))
+    ]
+    alias_quality, weak_alias, quality_reasons, runtime_tier, direct_mention_required = (
+        _decode_token_trie_optional_entry_fields(values[6:])
+    )
     return MatcherEntryPayload(
         text=values[0],
         label=values[1],
@@ -1264,12 +1417,19 @@ def _read_token_trie_entry_payload(handle: Any) -> MatcherEntryPayload:
         source_priority=round(float(source_priority), 4),
         popularity_weight=round(float(popularity_weight), 4),
         source_domain=values[5],
+        alias_quality=alias_quality,
+        weak_alias=weak_alias,
+        quality_reasons=quality_reasons,
+        runtime_tier=runtime_tier,
+        direct_mention_required=direct_mention_required,
     )
 
 
 def _read_token_trie_entry_payload_from_buffer(
     buffer: mmap.mmap,
     offset: int,
+    *,
+    entries_version: int = _TOKEN_TRIE_ENTRIES_VERSION,
 ) -> MatcherEntryPayload:
     generated_flag, score, source_priority, popularity_weight = struct.unpack_from(
         ">Bddd",
@@ -1278,11 +1438,14 @@ def _read_token_trie_entry_payload_from_buffer(
     )
     cursor = offset + 25
     values: list[str] = []
-    for _ in range(6):
+    for _ in range(_token_trie_entry_string_count(entries_version)):
         length = struct.unpack_from(">I", buffer, cursor)[0]
         cursor += 4
         values.append(buffer[cursor : cursor + length].decode("utf-8"))
         cursor += length
+    alias_quality, weak_alias, quality_reasons, runtime_tier, direct_mention_required = (
+        _decode_token_trie_optional_entry_fields(values[6:])
+    )
     return MatcherEntryPayload(
         text=values[0],
         label=values[1],
@@ -1295,6 +1458,30 @@ def _read_token_trie_entry_payload_from_buffer(
         source_priority=round(float(source_priority), 4),
         popularity_weight=round(float(popularity_weight), 4),
         source_domain=values[5],
+        alias_quality=alias_quality,
+        weak_alias=weak_alias,
+        quality_reasons=quality_reasons,
+        runtime_tier=runtime_tier,
+        direct_mention_required=direct_mention_required,
+    )
+
+
+def _decode_token_trie_optional_entry_fields(
+    values: list[str],
+) -> tuple[str | None, bool, tuple[str, ...], str, bool]:
+    if len(values) < 5:
+        return (None, False, (), "runtime_exact_high_precision", False)
+    alias_quality = values[0].strip() or None
+    weak_alias = _coerce_bool(values[1])
+    quality_reasons = _normalize_quality_reasons(values[2])
+    runtime_tier = values[3].strip() or "runtime_exact_high_precision"
+    direct_mention_required = _coerce_bool(values[4])
+    return (
+        alias_quality,
+        weak_alias,
+        quality_reasons,
+        runtime_tier,
+        direct_mention_required,
     )
 
 

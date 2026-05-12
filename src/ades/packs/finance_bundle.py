@@ -335,8 +335,12 @@ def build_finance_source_bundle(
                     "market_index": "market_index",
                     "commodity": "commodity",
                     "crypto": "asset",
+                    "currency": "currency",
                     "environmental_risk": "risk",
+                    "macro_indicator": "macro_indicator",
                     "policy": "policy",
+                    "rate": "rate",
+                    "risk": "risk",
                     "sector": "sector",
                     "shipping_risk": "risk",
                 },
@@ -838,6 +842,7 @@ def _load_curated_finance_entities(path: Path) -> list[dict[str, Any]]:
             normalized_record["build_only"] = True
         if metadata:
             normalized_record["metadata"] = metadata
+        _copy_alias_quality_fields(item, normalized_record)
         normalized.append(
             normalized_record
         )
@@ -945,6 +950,7 @@ def _load_finance_people_entities(path: Path) -> list[dict[str, Any]]:
             normalized_record["build_only"] = True
         if metadata:
             normalized_record["metadata"] = metadata
+        _copy_alias_quality_fields(item, normalized_record)
         normalized.append(normalized_record)
     return normalized
 
@@ -1033,6 +1039,30 @@ def _build_finance_rule_records() -> list[dict[str, str]]:
             "pattern": r"\$[A-Z]{1,5}",
         },
         {
+            "name": "exchange_prefixed_ticker",
+            "label": "ticker",
+            "kind": "regex",
+            "pattern": r"\b(?:NYSE|NASDAQ|Nasdaq|AMEX|CBOE|TSX|LSE|BIST|XETRA|FWB|JPX|TSE|HKEX|ASX|KRX|B3|BMV|Tadawul)\s?:\s?[A-Z0-9.]{1,8}\b",
+        },
+        {
+            "name": "central_bank_policy_phrase",
+            "label": "policy",
+            "kind": "regex",
+            "pattern": r"\b(?:central bank|Federal Reserve|ECB|Bank of England|Bank of Japan|PBOC|CBRT|RBI)\b.{0,100}\b(?:rate|rates|policy|inflation|tighten|eas(?:e|ing)|cut|hike|hold)\b",
+        },
+        {
+            "name": "commodity_contract_name",
+            "label": "commodity",
+            "kind": "regex",
+            "pattern": r"\b(?:Brent|WTI|Henry Hub|COMEX gold|COMEX silver|LME copper|LME aluminum|CBOT wheat|CBOT corn|CBOT soybeans)\b(?:\s+(?:crude|natural gas|futures|contract))?\b",
+        },
+        {
+            "name": "sanctions_export_control_phrase",
+            "label": "policy",
+            "kind": "regex",
+            "pattern": r"\b(?:sanctions?|asset freeze|blacklist|export controls?|export ban|technology restrictions?|trade restrictions?)\b",
+        },
+        {
             "name": "percentage",
             "label": "percentage",
             "kind": "regex",
@@ -1044,7 +1074,29 @@ def _build_finance_rule_records() -> list[dict[str, str]]:
             "kind": "regex",
             "pattern": r"[-+]?[0-9]+(?:\.[0-9]+)?\s?(?:bp|bps|basis points?)",
         },
+        {
+            "name": "numeric_range",
+            "label": "numeric_artifact",
+            "kind": "regex",
+            "pattern": r"\b[0-9]+(?:\.[0-9]+)?\s?(?:-|to)\s?[0-9]+(?:\.[0-9]+)?\s?(?:%|bp|bps|basis points?)?\b",
+        },
     ]
+
+
+def _copy_alias_quality_fields(source: dict[str, Any], target: dict[str, Any]) -> None:
+    metadata = source.get("metadata")
+    for key in (
+        "alias_quality",
+        "runtime_tier",
+        "weak_alias",
+        "direct_mention_required",
+        "quality_reasons",
+    ):
+        value = source.get(key)
+        if value is None and isinstance(metadata, dict):
+            value = metadata.get(key)
+        if value is not None:
+            target[key] = value
 
 
 def _resolve_input_file(path: str | Path, *, label: str) -> Path:

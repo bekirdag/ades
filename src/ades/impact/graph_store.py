@@ -15,6 +15,11 @@ _REQUIRED_TABLES = {
     "impact_edges",
     "impact_edge_packs",
 }
+_IDENTITY_REFS_TABLE = "impact_identity_refs"
+_EDGE_METADATA_COLUMNS = {
+    "compatible_event_types_json",
+    "direction_preconditions_json",
+}
 
 
 @dataclass(frozen=True)
@@ -50,10 +55,36 @@ class MarketGraphEdge:
     refresh_policy: str
     version: str
     packs: tuple[str, ...] = ()
+    compatible_event_types: tuple[str, ...] = ()
+    direction_preconditions: tuple[str, ...] = ()
 
 
 def _normalize_refs(entity_refs: Iterable[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(str(ref).strip() for ref in entity_refs if str(ref).strip()))
+
+
+def _normalize_identity_lookup_ref(entity_ref: str) -> str:
+    raw = str(entity_ref or "").strip()
+    lower = raw.casefold()
+    if lower.startswith("wikidata:"):
+        suffix = raw.split(":", 1)[1].strip()
+        if suffix.isdigit():
+            suffix = f"Q{suffix}"
+        if len(suffix) > 1 and suffix[0].casefold() == "q" and suffix[1:].isdigit():
+            return f"wikidata:Q{suffix[1:]}"
+    if lower.startswith("geonames:"):
+        suffix = raw.split(":", 1)[1].strip()
+        if suffix.isdigit():
+            return f"geonames:{suffix}"
+    if lower.startswith("country:"):
+        suffix = raw.split(":", 1)[1].strip()
+        if len(suffix) == 2 and suffix.isalpha():
+            return f"country:{suffix.casefold()}"
+    if lower.startswith("sec-cik:"):
+        suffix = raw.split(":", 1)[1].strip()
+        if suffix.isdigit():
+            return f"sec-cik:{suffix.zfill(10)}"
+    return raw
 
 
 def _chunked_values(
@@ -100,6 +131,8 @@ class MarketGraphStore:
             uri=True,
         )
         self._connection.row_factory = sqlite3.Row
+        self._has_identity_refs_table = False
+        self._edge_metadata_columns: set[str] = set()
         self._node_cache: dict[str, MarketGraphNode] = {}
         self._metadata_cache: dict[str, object] | None = None
         self._validate_schema()
@@ -116,6 +149,12 @@ class MarketGraphStore:
         missing = sorted(_REQUIRED_TABLES - table_names)
         if missing:
             raise ValueError(f"Market graph store is missing required tables: {missing}")
+        self._has_identity_refs_table = _IDENTITY_REFS_TABLE in table_names
+        edge_columns = {
+            str(row["name"])
+            for row in self._connection.execute("PRAGMA table_info(impact_edges)").fetchall()
+        }
+        self._edge_metadata_columns = edge_columns & _EDGE_METADATA_COLUMNS
         metadata = self.metadata()
         required_metadata = {
             "graph_version",
@@ -233,6 +272,68 @@ class MarketGraphStore:
 
         return self.node_batch([entity_ref]).get(str(entity_ref).strip())
 
+    def bridge_refs_batch(self, entity_refs: Iterable[str]) -> dict[str, tuple[str, ...]]:
+        """Return graph node refs that share an identity with the requested refs."""
+
+        normalized_refs = _normalize_refs(entity_refs)
+        results: dict[str, tuple[str, ...]] = {ref: () for ref in normalized_refs}
+        if not normalized_refs or not self._has_identity_refs_table:
+            return results
+
+        lookup_by_requested = {
+            ref: _normalize_identity_lookup_ref(ref)
+            for ref in normalized_refs
+        }
+        grouped: dict[str, list[str]] = {}
+        lookup_refs = _normalize_refs(lookup_by_requested.values())
+        for ref_chunk in _chunked_values(lookup_refs):
+            placeholders = ", ".join("?" for _ in ref_chunk)
+            rows = self._connection.execute(
+                f"""
+                SELECT identity_ref, entity_ref
+                FROM impact_identity_refs
+                WHERE identity_ref IN ({placeholders})
+                ORDER BY identity_ref ASC, entity_ref ASC
+                """,
+                ref_chunk,
+            ).fetchall()
+            for row in rows:
+                grouped.setdefault(str(row["identity_ref"]), []).append(str(row["entity_ref"]))
+
+        for requested_ref, lookup_ref in lookup_by_requested.items():
+            results[requested_ref] = tuple(dict.fromkeys(grouped.get(lookup_ref, [])))
+        return results
+
+    def identity_refs_for_entity_batch(
+        self,
+        entity_refs: Iterable[str],
+    ) -> dict[str, tuple[str, ...]]:
+        """Return identity refs associated with graph node refs."""
+
+        normalized_refs = _normalize_refs(entity_refs)
+        results: dict[str, tuple[str, ...]] = {ref: () for ref in normalized_refs}
+        if not normalized_refs or not self._has_identity_refs_table:
+            return results
+
+        grouped: dict[str, list[str]] = {}
+        for ref_chunk in _chunked_values(normalized_refs):
+            placeholders = ", ".join("?" for _ in ref_chunk)
+            rows = self._connection.execute(
+                f"""
+                SELECT entity_ref, identity_ref
+                FROM impact_identity_refs
+                WHERE entity_ref IN ({placeholders})
+                ORDER BY entity_ref ASC, identity_ref ASC
+                """,
+                ref_chunk,
+            ).fetchall()
+            for row in rows:
+                grouped.setdefault(str(row["entity_ref"]), []).append(str(row["identity_ref"]))
+
+        for entity_ref in normalized_refs:
+            results[entity_ref] = tuple(dict.fromkeys(grouped.get(entity_ref, [])))
+        return results
+
     def outbound_edges_batch(
         self,
         source_refs: Iterable[str],
@@ -251,6 +352,7 @@ class MarketGraphStore:
             return results
 
         for source_ref in normalized_sources:
+            metadata_select_sql = self._edge_metadata_select_sql()
             if normalized_packs:
                 pack_placeholders = ", ".join("?" for _ in normalized_packs)
                 rows = self._connection.execute(
@@ -268,7 +370,8 @@ class MarketGraphStore:
                         e.source_snapshot,
                         e.source_year,
                         e.refresh_policy,
-                        e.version
+                        e.version,
+                        {metadata_select_sql}
                     FROM impact_edges AS e
                     JOIN impact_edge_packs AS p ON p.edge_id = e.edge_id
                     WHERE e.source_ref = ?
@@ -280,24 +383,25 @@ class MarketGraphStore:
                 ).fetchall()
             else:
                 rows = self._connection.execute(
-                    """
+                    f"""
                     SELECT
-                        edge_id,
-                        source_ref,
-                        target_ref,
-                        relation,
-                        evidence_level,
-                        confidence,
-                        direction_hint,
-                        source_name,
-                        source_url,
-                        source_snapshot,
-                        source_year,
-                        refresh_policy,
-                        version
-                    FROM impact_edges
-                    WHERE source_ref = ?
-                    ORDER BY target_ref ASC, relation ASC, edge_id ASC
+                        e.edge_id,
+                        e.source_ref,
+                        e.target_ref,
+                        e.relation,
+                        e.evidence_level,
+                        e.confidence,
+                        e.direction_hint,
+                        e.source_name,
+                        e.source_url,
+                        e.source_snapshot,
+                        e.source_year,
+                        e.refresh_policy,
+                        e.version,
+                        {metadata_select_sql}
+                    FROM impact_edges AS e
+                    WHERE e.source_ref = ?
+                    ORDER BY e.target_ref ASC, e.relation ASC, e.edge_id ASC
                     LIMIT ?
                     """,
                     (source_ref, limit_per_source),
@@ -305,6 +409,19 @@ class MarketGraphStore:
             edges = [self._edge_from_row(row) for row in rows]
             results[source_ref] = self._attach_pack_memberships(edges)
         return results
+
+    def _edge_metadata_select_sql(self) -> str:
+        compatible_events = (
+            "e.compatible_event_types_json AS compatible_event_types_json"
+            if "compatible_event_types_json" in self._edge_metadata_columns
+            else "'[]' AS compatible_event_types_json"
+        )
+        direction_preconditions = (
+            "e.direction_preconditions_json AS direction_preconditions_json"
+            if "direction_preconditions_json" in self._edge_metadata_columns
+            else "'[]' AS direction_preconditions_json"
+        )
+        return f"{compatible_events}, {direction_preconditions}"
 
     def _edge_from_row(self, row: sqlite3.Row) -> MarketGraphEdge:
         return MarketGraphEdge(
@@ -321,6 +438,8 @@ class MarketGraphStore:
             source_year=int(row["source_year"]) if row["source_year"] is not None else None,
             refresh_policy=str(row["refresh_policy"]),
             version=str(row["version"]),
+            compatible_event_types=_parse_json_string_tuple(row["compatible_event_types_json"]),
+            direction_preconditions=_parse_json_string_tuple(row["direction_preconditions_json"]),
         )
 
     def _attach_pack_memberships(
@@ -363,6 +482,8 @@ class MarketGraphStore:
                 refresh_policy=edge.refresh_policy,
                 version=edge.version,
                 packs=tuple(packs_by_edge_id.get(edge.edge_id, [])),
+                compatible_event_types=edge.compatible_event_types,
+                direction_preconditions=edge.direction_preconditions,
             )
             for edge in edges
         ]

@@ -24,8 +24,8 @@ def test_starter_market_graph_covers_inner_ring_families(tmp_path):
 
     response = build_starter_market_graph_store(output_dir=tmp_path)
 
-    assert response.node_count >= 29
-    assert response.edge_count >= 30
+    assert response.node_count >= 57
+    assert response.edge_count >= 52
     assert response.warnings == []
 
     with sqlite3.connect(response.artifact_path) as connection:
@@ -37,18 +37,42 @@ def test_starter_market_graph_covers_inner_ring_families(tmp_path):
         "country_exports_commodity",
         "country_produces_commodity",
         "chokepoint_affects_commodity",
+        "chokepoint_affects_sector",
         "commodity_traded_in_currency",
+        "commodity_region_affects_commodity",
         "central_bank_affects_currency",
         "central_bank_affects_rates",
+        "country_affects_country_risk_proxy",
+        "country_affects_currency_index",
+        "country_affects_global_equity_proxy",
         "energy_policy_affects_commodity",
+        "energy_input_affects_sector",
         "digital_asset_policy_affects_crypto",
+        "food_commodity_affects_inflation",
+        "industrial_metal_affects_sector",
+        "issuer_has_listed_ticker",
         "pollution_affects_agriculture_commodity",
         "pollution_affects_livestock_commodity",
         "producer_group_affects_commodity",
         "sanction_affects_country",
         "sanction_affects_commodity",
+        "sanctions_body_affects_risk_proxy",
+        "strategic_metal_affects_sector",
         "tanker_sanctions_affects_commodity",
     }.issubset(families)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        row = connection.execute(
+            """
+            SELECT compatible_event_types_json, direction_preconditions_json
+            FROM impact_edges
+            WHERE relation = 'chokepoint_affects_sector'
+              AND source_ref = 'ades:market-location:red-sea'
+            """
+        ).fetchone()
+    assert row is not None
+    assert "shipping_chokepoint_disruption" in json.loads(row[0])
+    assert "transit_disruption" in json.loads(row[1])
 
 
 def test_starter_golden_set_evaluates_without_warnings(tmp_path):
@@ -61,8 +85,8 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
         )
 
     assert report.warnings == []
-    assert report.case_count == 12
-    assert report.empty_path_rate == 0.0833
+    assert report.case_count == 15
+    assert report.empty_path_rate == 0.0667
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -72,6 +96,9 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert report.per_relation_family_recall["pollution_affects_livestock_commodity"] == 1.0
     assert report.per_relation_family_recall["sanction_affects_commodity"] == 1.0
     assert report.per_relation_family_recall["tanker_sanctions_affects_commodity"] == 1.0
+    assert report.per_relation_family_recall["chokepoint_affects_sector"] == 1.0
+    assert report.per_relation_family_recall["industrial_metal_affects_sector"] == 1.0
+    assert report.per_relation_family_recall["issuer_has_listed_ticker"] == 1.0
 
 
 def test_starter_source_manifest_has_required_fields():
@@ -109,16 +136,18 @@ def test_article_golden_set_evaluates_extraction_then_impact(tmp_path: Path):
                             "ades:heuristic_structural_location:general-en:location:strait-of-hormuz",
                             "wikidata:Q794",
                         ],
-                        "expected_candidate_refs": [
-                            "ades:impact:commodity:crude-oil",
-                            "ades:impact:currency:usd",
-                        ],
+                            "expected_candidate_refs": [
+                                "ades:impact:commodity:crude-oil",
+                                "ades:impact:currency:usd",
+                                "ades:impact:sector:airlines",
+                            ],
                         "expected_passive_refs": ["wikidata:Q121826282"],
                         "expected_relation_families": [
-                            "chokepoint_affects_commodity",
-                            "commodity_traded_in_currency",
-                            "country_member_of_bloc",
-                        ],
+                                "chokepoint_affects_commodity",
+                                "commodity_traded_in_currency",
+                                "country_member_of_bloc",
+                                "energy_input_affects_sector",
+                            ],
                     }
                 ],
             }
