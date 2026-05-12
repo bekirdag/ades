@@ -78,6 +78,7 @@ from .models import (
     BatchTagResponse,
     EntityMatch,
     FileTagRequest,
+    ImpactSourceEntity,
     ImpactExpansionRequest,
     ImpactExpansionResult,
     LookupResponse,
@@ -632,11 +633,30 @@ def _country_code_from_text(value: str | None) -> str | None:
     return _COUNTRY_ALIAS_TO_CODE.get(normalized)
 
 
+def _country_name_from_impact_sources(
+    country_code: str,
+    impact_source_entities: list[ImpactSourceEntity] | None,
+) -> str | None:
+    target_ref = f"country:{country_code.casefold()}"
+    for source_entity in impact_source_entities or []:
+        refs = [source_entity.entity_ref, *source_entity.same_as_refs]
+        if not any(ref.casefold() == target_ref for ref in refs):
+            continue
+        name = source_entity.name.strip()
+        if not name or name.casefold() == target_ref or re.fullmatch(r"[A-Za-z]{2}", name):
+            continue
+        if ":" in name:
+            continue
+        return name
+    return None
+
+
 def _build_country_scope(
     *,
     country_hint: str | None,
     hint_source: str | None = None,
     entities: list[EntityMatch],
+    impact_source_entities: list[ImpactSourceEntity] | None = None,
     text: str | None = None,
 ) -> NewsAnalyzeCountryScope | None:
     hinted_code = _country_code_from_text(country_hint)
@@ -649,6 +669,10 @@ def _build_country_scope(
             if entity_code == hinted_code:
                 hinted_name = entity_name
                 break
+        hinted_name = hinted_name or _country_name_from_impact_sources(
+            hinted_code,
+            impact_source_entities,
+        )
         return NewsAnalyzeCountryScope(
             country_code=hinted_code,
             entity_ref=f"country:{hinted_code}",
@@ -2151,6 +2175,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             country_hint=country_hint,
             hint_source=country_hint_source,
             entities=entities,
+            impact_source_entities=impact_paths.source_entities if impact_paths else [],
             text=analysis_text,
         )
         passive_entities = (

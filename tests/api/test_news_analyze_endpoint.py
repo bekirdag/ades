@@ -236,6 +236,98 @@ def test_news_analyze_endpoint_returns_normalized_contract(
     assert payload["tag_responses"] == []
 
 
+def test_news_analyze_country_hint_uses_impact_source_display_name(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_news_pack(tmp_path)
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Iran",
+                    label="location",
+                    start=text.index("Iran"),
+                    end=text.index("Iran") + len("Iran"),
+                    confidence=0.91,
+                    relevance=0.93,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="general",
+                    ),
+                    link=EntityLink(
+                        entity_id="wikidata:Q794",
+                        canonical_text="Iran",
+                        provider="ades",
+                    ),
+                )
+            ],
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert "wikidata:Q794" in list(entity_refs)
+        return ImpactExpansionResult(
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="wikidata:Q794",
+                    name="Iran",
+                    same_as_refs=["country:ir"],
+                    entity_type="country",
+                    is_graph_seed=True,
+                    seed_degree=1,
+                    is_tradable=False,
+                )
+            ],
+            candidates=[],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Iran shipping risk rises",
+            "text": "Iran warned oil shipping routes could be disrupted.",
+            "country_hint": "IR",
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["country_scope"]["entity_ref"] == "country:ir"
+    assert payload["country_scope"]["name"] == "Iran"
+    passive_by_ref = {entity["entity_ref"]: entity for entity in payload["passive_entities"]}
+    assert passive_by_ref["country:ir"]["name"] == "Iran"
+
+
 def test_news_analyze_passive_classifier_hides_artifacts_and_forces_text_country(
     tmp_path: Path,
     monkeypatch,
