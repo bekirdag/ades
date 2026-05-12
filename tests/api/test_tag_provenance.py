@@ -33,6 +33,9 @@ def test_tag_endpoint_returns_provenance_and_link_metadata(tmp_path: Path) -> No
         "model_version": None,
         "source_pack": "general-en",
         "source_domain": "general",
+        "alias_quality": None,
+        "weak_alias": None,
+        "quality_reasons": [],
     }
     assert organization_entity["link"] == {
         "entity_id": "ades:lookup_alias_exact:general-en:organization:org-beta",
@@ -50,6 +53,9 @@ def test_tag_endpoint_returns_provenance_and_link_metadata(tmp_path: Path) -> No
         "model_version": None,
         "source_pack": "finance-en",
         "source_domain": "finance",
+        "alias_quality": None,
+        "weak_alias": None,
+        "quality_reasons": [],
     }
     assert currency["link"] == {
         "entity_id": "ades:rule_regex:finance-en:currency_amount:usd-12-5",

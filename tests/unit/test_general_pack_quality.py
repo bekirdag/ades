@@ -31,16 +31,16 @@ def test_validate_general_pack_quality_reports_passing_fixture_metrics(tmp_path:
     assert report.unexpected_entity_count == 0
     assert report.expected_recall == 1.0
     assert report.precision == 1.0
-    assert report.alias_count == 51
-    assert report.unique_canonical_count == 32
+    assert report.alias_count == 99
+    assert report.unique_canonical_count == 49
     assert report.rule_count == 2
-    assert report.dropped_alias_count == 7
+    assert report.dropped_alias_count == 8
     assert report.ambiguous_alias_count == 6
-    assert report.dropped_alias_ratio == 0.1207
+    assert report.dropped_alias_ratio == 0.0748
     assert report.passed is True
     assert report.failures == []
     assert report.warnings == [
-        "general-en structural summary: person=8, organization=11, location=14, total=33"
+        "general-en structural summary: person=8, organization=11, location=33, total=52"
     ]
 
 

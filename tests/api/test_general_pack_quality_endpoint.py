@@ -32,7 +32,7 @@ def test_general_quality_endpoint_validates_generated_pack(tmp_path) -> None:
     assert payload["fixture_profile"] == "benchmark"
     assert payload["passed"] is True
     assert payload["expected_entity_count"] == 32
-    assert payload["alias_count"] == 51
+    assert payload["alias_count"] == 99
 
 
 def test_general_quality_endpoint_uses_general_pack_default_ambiguity_budget(

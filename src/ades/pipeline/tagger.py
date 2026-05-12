@@ -6614,6 +6614,53 @@ def _suppress_nested_heuristic_structured_org_suffix_candidates(
     return kept, discarded
 
 
+def _candidate_covers_runtime_country_alias(
+    candidate: ExtractedCandidate,
+    country: ExtractedCandidate,
+) -> bool:
+    if candidate is country:
+        return False
+    if country.lane != "runtime_g20_country_alias":
+        return False
+    if country.entity.label.casefold() != "location":
+        return False
+    if candidate.entity.start > country.entity.start or candidate.entity.end < country.entity.end:
+        return False
+    if candidate.entity.start == country.entity.start and candidate.entity.end == country.entity.end:
+        return False
+    if candidate.entity.end - candidate.entity.start <= country.entity.end - country.entity.start:
+        return False
+
+    label = candidate.entity.label.casefold()
+    if label == "organization":
+        return _span_token_count(candidate.entity.text) >= 2
+    if label != "location":
+        return False
+
+    tokens = _runtime_alias_tokens(candidate.entity.text)
+    if len(tokens) < 2:
+        return False
+    if candidate.lane in {"heuristic_structured_location_backfill", "deterministic_alias"}:
+        return True
+    return bool(tokens and tokens[0] in _STRUCTURAL_LOCATION_HEAD_TOKENS)
+
+
+def _suppress_nested_runtime_country_alias_candidates(
+    extracted: list[ExtractedCandidate],
+) -> tuple[list[ExtractedCandidate], list[ExtractedCandidate]]:
+    kept: list[ExtractedCandidate] = []
+    discarded: list[ExtractedCandidate] = []
+    for candidate in extracted:
+        if any(
+            _candidate_covers_runtime_country_alias(other, candidate)
+            for other in extracted
+        ):
+            discarded.append(candidate)
+            continue
+        kept.append(candidate)
+    return kept, discarded
+
+
 def _is_safe_generated_location_tokens(
     tokens: list[str],
     normalized_tokens: list[str],
@@ -8133,6 +8180,9 @@ def tag_text(
     coherent, nested_structured_org_suffix_discards = (
         _suppress_nested_heuristic_structured_org_suffix_candidates(coherent)
     )
+    coherent, nested_runtime_country_alias_discards = (
+        _suppress_nested_runtime_country_alias_candidates(coherent)
+    )
     scored = _apply_entity_relevance(runtime, text=normalized_input.text, extracted=coherent)
     resolved, debug_payload, overlap_drop_count = _resolve_overlaps(
         scored,
@@ -8240,6 +8290,26 @@ def tag_text(
             + len(nested_structured_org_suffix_discards),
             span_decisions=span_decisions,
         )
+    if debug_payload is not None and nested_runtime_country_alias_discards:
+        span_decisions = list(debug_payload.span_decisions)
+        for item in nested_runtime_country_alias_discards:
+            span_decisions.append(
+                TagSpanDecision(
+                    text=item.entity.text,
+                    label=item.entity.label,
+                    start=item.entity.start,
+                    end=item.entity.end,
+                    lane=item.lane,
+                    kept=False,
+                    reason="nested_runtime_country_alias_replaced",
+                )
+            )
+        debug_payload = TagDebug(
+            kept_span_count=debug_payload.kept_span_count,
+            discarded_span_count=debug_payload.discarded_span_count
+            + len(nested_runtime_country_alias_discards),
+            span_decisions=span_decisions,
+        )
 
     runtime_generic_discards: list[tuple[ExtractedCandidate, str]] = []
     if runtime.pack_id == "general-en" or runtime.domain.casefold() in _RUNTIME_GENERIC_ALIAS_GUARD_DOMAINS:
@@ -8278,7 +8348,9 @@ def tag_text(
         normalized_input=normalized_input,
         extracted=resolved,
         segment_count=len(segments),
-        overlap_drop_count=overlap_drop_count + len(total_duplicate_discards),
+        overlap_drop_count=overlap_drop_count
+        + len(total_duplicate_discards)
+        + len(nested_runtime_country_alias_discards),
     )
     _apply_density_warning(runtime=runtime, metrics=metrics, warnings=warnings)
 
