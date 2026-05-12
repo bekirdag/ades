@@ -243,11 +243,28 @@ def _request_string_option(
     return normalized or None
 
 
-_COUNTRY_BY_CODE = {
+def _load_iso_country_names() -> dict[str, str]:
+    names: dict[str, str] = {}
+    for path in (Path("/usr/share/zoneinfo/iso3166.tab"),):
+        if not path.exists():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line or line.startswith("#") or "\t" not in line:
+                continue
+            code, name = line.split("\t", 1)
+            normalized_code = code.strip().casefold()
+            normalized_name = name.strip()
+            if re.fullmatch(r"[a-z]{2}", normalized_code) and normalized_name:
+                names[normalized_code] = normalized_name
+    return names
+
+
+_CURATED_COUNTRY_BY_CODE = {
     str(entity["entity_id"]).split(":", 1)[1].casefold(): str(entity["canonical_text"])
     for entity in DEFAULT_CURATED_G20_COUNTRY_ENTITIES
     if isinstance(entity.get("entity_id"), str) and str(entity["entity_id"]).startswith("country:")
 }
+_COUNTRY_BY_CODE = {**_load_iso_country_names(), **_CURATED_COUNTRY_BY_CODE}
 _NEWS_ANALYZE_BASE_PACKS = (
     "general-en",
     "business-vector-en",
