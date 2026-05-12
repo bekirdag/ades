@@ -69,6 +69,7 @@ from ..news_events import (
     extract_news_event_signals,
     gate_terminal_candidates_by_event_signals,
 )
+from ..impact.graph_store import MarketGraphStore
 from ..runtime_matcher import clear_runtime_matcher_cache, load_runtime_matcher
 from ..storage import UnsupportedRuntimeConfigurationError
 from ..version import __version__
@@ -651,12 +652,33 @@ def _country_name_from_impact_sources(
     return None
 
 
+def _country_name_from_impact_graph(
+    country_code: str,
+    settings: Settings | None,
+) -> str | None:
+    artifact_path = settings.impact_expansion_artifact_path if settings else None
+    if artifact_path is None:
+        return None
+    try:
+        with MarketGraphStore(artifact_path) as store:
+            node = store.node(f"country:{country_code.casefold()}")
+    except (FileNotFoundError, OSError, ValueError):
+        return None
+    if node is None:
+        return None
+    name = node.canonical_name.strip()
+    if not name or re.fullmatch(r"[A-Za-z]{2}", name) or ":" in name:
+        return None
+    return name
+
+
 def _build_country_scope(
     *,
     country_hint: str | None,
     hint_source: str | None = None,
     entities: list[EntityMatch],
     impact_source_entities: list[ImpactSourceEntity] | None = None,
+    settings: Settings | None = None,
     text: str | None = None,
 ) -> NewsAnalyzeCountryScope | None:
     hinted_code = _country_code_from_text(country_hint)
@@ -673,6 +695,7 @@ def _build_country_scope(
             hinted_code,
             impact_source_entities,
         )
+        hinted_name = hinted_name or _country_name_from_impact_graph(hinted_code, settings)
         return NewsAnalyzeCountryScope(
             country_code=hinted_code,
             entity_ref=f"country:{hinted_code}",
@@ -2176,6 +2199,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             hint_source=country_hint_source,
             entities=entities,
             impact_source_entities=impact_paths.source_entities if impact_paths else [],
+            settings=settings,
             text=analysis_text,
         )
         passive_entities = (
