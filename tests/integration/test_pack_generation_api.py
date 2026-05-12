@@ -44,7 +44,7 @@ def _create_country_finance_generation_bundle(root: Path) -> Path:
                 "license_class": "ship-now",
                 "license": "ship-now",
                 "retrieved_at": "2026-05-07T09:00:00Z",
-                "record_count": 3,
+                "record_count": 5,
             }
         ],
     }
@@ -72,6 +72,20 @@ def _create_country_finance_generation_bundle(root: Path) -> Path:
             "entity_type": "shareholder",
             "canonical_text": "Yildiz Holding Anonim Sirketi",
             "aliases": ["Yildiz Holding Anonim Sirketi"],
+            "source_name": "borsa-istanbul-symbols",
+        },
+        {
+            "entity_id": "finance-tr-issuer:homeland-uranium",
+            "entity_type": "issuer",
+            "canonical_text": "Western Uranium & Vanadium Corp.",
+            "aliases": ["HOMELAND URANIUM INC."],
+            "source_name": "borsa-istanbul-symbols",
+        },
+        {
+            "entity_id": "finance-tr-issuer:on-the-move-systems",
+            "entity_type": "issuer",
+            "canonical_text": "Artificial Intelligence Technology Solutions Inc.",
+            "aliases": ["ON THE MOVE SYSTEMS CORP."],
             "source_name": "borsa-istanbul-symbols",
         },
     ]
@@ -160,6 +174,30 @@ def test_country_finance_pack_derives_runtime_short_company_aliases(tmp_path: Pa
         "organization",
         "finance-tr-shareholder:BESLR:yildiz-holding-anonim-sirketi",
     ) in entities
+    akcansa = next(
+        entity
+        for entity in response.entities
+        if entity.link and entity.link.entity_id == "finance-tr-ticker:AKCNS"
+    )
+    assert akcansa.provenance is not None
+    assert akcansa.provenance.alias_quality in {"strong", "direct_multi_token"}
+    assert akcansa.provenance.weak_alias is False
+
+    weak_alias_response = tag(
+        (
+            "The Department of Homeland Security said officials were on the scene "
+            "during the briefing."
+        ),
+        pack="finance-tr-en",
+        storage_root=install_root,
+    )
+    weak_alias_entities = {
+        entity.link.entity_id
+        for entity in weak_alias_response.entities
+        if entity.link is not None
+    }
+    assert "finance-tr-issuer:homeland-uranium" not in weak_alias_entities
+    assert "finance-tr-issuer:on-the-move-systems" not in weak_alias_entities
 
 
 def test_public_api_can_generate_and_tag_general_pack_variants(tmp_path: Path) -> None:

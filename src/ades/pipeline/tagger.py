@@ -1554,7 +1554,10 @@ class RuntimeFinanceCountryShortAlias:
     canonical_text: str
     label: str
     alias: str
+    alias_quality: str
     source_pack: str
+    weak_alias: bool = False
+    quality_reasons: tuple[str, ...] = ()
 
 
 @dataclass
@@ -1687,6 +1690,9 @@ def _build_provenance(
     source_pack: str,
     source_domain: str,
     lane: str,
+    alias_quality: str | None = None,
+    weak_alias: bool | None = None,
+    quality_reasons: tuple[str, ...] | None = None,
     model_name: str | None = None,
     model_version: str | None = None,
 ) -> EntityProvenance:
@@ -1697,6 +1703,9 @@ def _build_provenance(
         source_pack=source_pack,
         source_domain=source_domain,
         lane=lane,
+        alias_quality=alias_quality,
+        weak_alias=weak_alias,
+        quality_reasons=list(quality_reasons or ()),
         model_name=model_name,
         model_version=model_version,
     )
@@ -1896,6 +1905,70 @@ def _is_finance_country_short_alias_candidate(value: str) -> bool:
     return True
 
 
+def _finance_country_short_alias_tokens(value: str) -> list[str]:
+    return [
+        _normalize_finance_country_alias_token(token)
+        for token in TOKEN_RE.findall(value)
+        if any(ch.isalpha() for ch in token)
+    ]
+
+
+def _classify_finance_country_short_alias_quality(
+    *,
+    alias: str,
+    generated: bool,
+    label: str,
+    runtime_tier: str,
+    source_text: str,
+) -> tuple[str, bool, tuple[str, ...]]:
+    alias_tokens = [
+        token
+        for token in _finance_country_short_alias_tokens(alias)
+        if token
+    ]
+    source_tokens = [
+        token
+        for token in _finance_country_short_alias_tokens(source_text)
+        if token
+    ]
+    reasons: list[str] = []
+
+    if not alias_tokens:
+        return ("weak", True, ("empty_alias",))
+    if any(
+        token in _TRAILING_FUNCTION_WORDS or token in _AUXILIARY_LOOKUP_TOKENS
+        for token in alias_tokens
+    ):
+        reasons.append("contains_function_word")
+    if alias_tokens[0] in _GENERIC_PHRASE_LEADS:
+        reasons.append("generic_leading_token")
+    if alias_tokens[-1] in _TRAILING_FUNCTION_WORDS:
+        reasons.append("function_trailing_token")
+    if all(
+        token in _FINANCE_COUNTRY_SHORT_ALIAS_STOPLIST
+        or token in _FINANCE_COUNTRY_SHORT_ALIAS_DESCRIPTOR_TOKENS
+        for token in alias_tokens
+    ):
+        reasons.append("all_tokens_generic_or_descriptor")
+
+    runtime_tier_normalized = runtime_tier.strip().casefold()
+    if (
+        len(alias_tokens) == 1
+        and label != "ticker"
+        and len(source_tokens) > 1
+        and (generated or runtime_tier_normalized != "runtime_exact_high_precision")
+    ):
+        reasons.append("single_token_low_precision_non_ticker")
+
+    if reasons:
+        return ("weak", True, tuple(dict.fromkeys(reasons)))
+    if runtime_tier_normalized == "runtime_exact_high_precision":
+        return ("strong", False, ())
+    if len(alias_tokens) >= 2:
+        return ("direct_multi_token", False, ())
+    return ("review", False, ())
+
+
 def _strip_finance_country_legal_suffix(tokens: list[str]) -> list[str]:
     stripped = list(tokens)
     while stripped and _normalize_finance_country_alias_token(stripped[-1]) in (
@@ -1973,6 +2046,8 @@ def _load_runtime_finance_country_short_aliases(
         entity_id = str(item.get("entity_id") or "").strip()
         canonical_text = str(item.get("canonical_text") or "").strip()
         source_text = str(item.get("text") or "").strip()
+        generated = bool(item.get("generated"))
+        runtime_tier = str(item.get("runtime_tier") or "").strip()
         if not entity_id or not canonical_text or not source_text:
             continue
         if not (
@@ -1985,12 +2060,26 @@ def _load_runtime_finance_country_short_aliases(
             normalized = normalize_lookup_text(alias)
             if not normalized:
                 continue
+            alias_quality, weak_alias, quality_reasons = (
+                _classify_finance_country_short_alias_quality(
+                    alias=alias,
+                    generated=generated,
+                    label=label,
+                    runtime_tier=runtime_tier,
+                    source_text=source_text,
+                )
+            )
+            if weak_alias:
+                continue
             records_by_alias.setdefault(normalized, {})[entity_id] = RuntimeFinanceCountryShortAlias(
                 entity_id=entity_id,
                 canonical_text=canonical_text,
                 label=label,
                 alias=alias,
+                alias_quality=alias_quality,
                 source_pack=runtime.pack_id,
+                weak_alias=weak_alias,
+                quality_reasons=quality_reasons,
             )
 
     resolved: dict[str, tuple[RuntimeFinanceCountryShortAlias, ...]] = {}
@@ -2012,7 +2101,24 @@ def _load_runtime_finance_country_short_aliases(
 
 def _runtime_finance_country_short_alias_surface_allowed(surface: str) -> bool:
     tokens = [token for token in TOKEN_RE.findall(surface) if any(ch.isalpha() for ch in token)]
+    normalized_tokens = [
+        _normalize_finance_country_alias_token(token)
+        for token in tokens
+        if _normalize_finance_country_alias_token(token)
+    ]
+    if not normalized_tokens:
+        return False
     if len(tokens) != 1:
+        if normalized_tokens[0] in _GENERIC_PHRASE_LEADS:
+            return False
+        if normalized_tokens[-1] in _TRAILING_FUNCTION_WORDS:
+            return False
+        if all(
+            token in _FINANCE_COUNTRY_SHORT_ALIAS_STOPLIST
+            or token in _FINANCE_COUNTRY_SHORT_ALIAS_DESCRIPTOR_TOKENS
+            for token in normalized_tokens
+        ):
+            return False
         return True
     token = tokens[0]
     if token.isupper():
@@ -2069,6 +2175,9 @@ def _extract_runtime_finance_country_short_alias_entities(
                             source_pack=record.source_pack,
                             source_domain=runtime.domain,
                             lane="runtime_finance_country_short_alias",
+                            alias_quality=record.alias_quality,
+                            weak_alias=record.weak_alias,
+                            quality_reasons=record.quality_reasons,
                         ),
                         link=_build_entity_link(
                             provider="runtime.finance_country_short_alias",

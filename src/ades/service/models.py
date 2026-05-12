@@ -1566,6 +1566,9 @@ class EntityProvenance(BaseModel):
     source_pack: str
     source_domain: str
     lane: str | None = None
+    alias_quality: str | None = None
+    weak_alias: bool | None = None
+    quality_reasons: list[str] = Field(default_factory=list)
     model_name: str | None = None
     model_version: str | None = None
 
