@@ -18,6 +18,11 @@ def test_local_runtime_status_reports_local_sqlite_mode(tmp_path: Path) -> None:
     assert runtime_status.exact_extraction_backend == "compiled_matcher"
     assert runtime_status.operator_lookup_backend == "sqlite_search_index"
     assert "finance-en" in runtime_status.installed_packs
+    assert runtime_status.metadata_readiness is not None
+    assert runtime_status.metadata_readiness.lookup_authoritative is True
+    assert runtime_status.impact_artifact is not None
+    assert runtime_status.vector_readiness is not None
+    assert runtime_status.bdya_impact_readiness is not None
 
 
 def test_local_runtime_status_rejects_missing_explicit_config(
@@ -95,3 +100,5 @@ def test_status_reports_production_postgresql_mode_with_database_url(
     assert runtime_status.exact_extraction_backend == "compiled_matcher"
     assert runtime_status.operator_lookup_backend == "postgresql_search"
     assert runtime_status.installed_packs == ["general-en"]
+    assert runtime_status.metadata_readiness is not None
+    assert "metadata_store_unavailable" in " ".join(runtime_status.metadata_readiness.warnings)

@@ -87,6 +87,9 @@ def test_recent_news_support_builder_can_exclude_report_sources(tmp_path: Path) 
     assert summary["excluded_report_sources"] == ["evening_standard"]
     assert summary["success_record_count"] == 1
     assert summary["article_count"] == 1
+    assert summary["window_article_counts"] == {"24h": 1, "7d": 1, "30d": 1}
+    assert artifact["schema_version"] == 2
+    assert artifact["windows"]["30d"]["cooccurrence"] == artifact["cooccurrence"]
     assert sorted(artifact["qid_metadata"]) == ["wikidata:Q1", "wikidata:Q3"]
     assert artifact["cooccurrence"] == {"wikidata:Q1": {"wikidata:Q3": 1}, "wikidata:Q3": {"wikidata:Q1": 1}}
 
@@ -247,6 +250,8 @@ def test_recent_news_support_builder_reads_articles_records(tmp_path: Path) -> N
 
     artifact = json.loads(output_path.read_text(encoding="utf-8"))
 
+    assert artifact["schema_version"] == 2
+    assert artifact["windows"]["30d"]["cooccurrence"] == artifact["cooccurrence"]
     assert sorted(artifact["qid_metadata"]) == ["wikidata:Q10", "wikidata:Q11"]
     assert artifact["cooccurrence"] == {
         "wikidata:Q10": {"wikidata:Q11": 1},

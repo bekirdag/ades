@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
@@ -184,13 +186,17 @@ from .service.models import (
     RegistryGeneratePackResponse,
     RegistryReportPackResponse,
     SourceFingerprint,
+    ArtifactReadinessResponse,
+    BdyaImpactReadinessResponse,
+    MetadataReadinessResponse,
     StatusResponse,
     TagResponse,
     VectorCaseResultResponse,
     VectorIndexBuildResponse,
+    VectorReadinessResponse,
     VectorQualityReportResponse,  # noqa: F401
 )
-from .storage.paths import build_storage_layout, ensure_storage_layout
+from .storage.paths import build_storage_layout, ensure_storage_layout, iter_pack_manifest_paths
 from .storage.results import (
     aggregate_batch_warnings,
     build_batch_manifest_item_from_tag_response,
@@ -220,6 +226,7 @@ from .vector.evaluation import (
     VectorReleaseThresholds,
 )
 from .vector.service import enrich_tag_response_with_related_entities
+from .vector.qdrant import QdrantVectorSearchClient
 from .impact.expansion import (
     enrich_tag_response_with_impact_paths,
     expand_impact_paths as run_expand_impact_paths,
@@ -295,6 +302,352 @@ def _resolve_settings(
     )
 
 
+_STATUS_JSON_PARSE_MAX_BYTES = 16 * 1024 * 1024
+_STATUS_PAYLOAD_INDEX_FIELDS = ("packs", "entity_type", "source_name")
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _safe_json_payload(path: Path) -> dict[str, object] | None:
+    if not path.exists() or not path.is_file():
+        return None
+    if path.stat().st_size > _STATUS_JSON_PARSE_MAX_BYTES:
+        return None
+    if path.suffix.casefold() not in {".json", ".manifest"} and not path.name.endswith(
+        ".manifest.json"
+    ):
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _artifact_manifest_candidates(path: Path) -> list[Path]:
+    parent = path.parent
+    return [
+        path,
+        path.with_suffix(path.suffix + ".manifest.json"),
+        parent / "manifest.json",
+        parent / "market_graph_store_manifest.json",
+        parent / "qid_graph_store_manifest.json",
+        parent / "qid_graph_index_manifest.json",
+        parent / "recent_news_support_manifest.json",
+    ]
+
+
+def _artifact_item_count(payload: dict[str, object]) -> int | None:
+    for key in (
+        "point_count",
+        "target_entity_count",
+        "node_count",
+        "edge_count",
+        "article_count",
+        "entity_count",
+        "candidate_count",
+    ):
+        value = payload.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+    cooccurrence = payload.get("cooccurrence")
+    if isinstance(cooccurrence, dict):
+        return len(cooccurrence)
+    windows = payload.get("windows")
+    if isinstance(windows, dict):
+        return len(windows)
+    return None
+
+
+def _artifact_metadata(payload: dict[str, object] | None) -> dict[str, object]:
+    if payload is None:
+        return {}
+    keys = (
+        "artifact_version",
+        "artifact_hash",
+        "build_id",
+        "collection_name",
+        "alias_name",
+        "dimensions",
+        "point_count",
+        "target_entity_count",
+        "node_count",
+        "edge_count",
+        "article_count",
+        "window_count",
+        "pack_count",
+        "packs",
+    )
+    metadata: dict[str, object] = {}
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, (str, int, float, bool, list, dict)) or value is None:
+            if value is not None:
+                metadata[key] = value
+    return metadata
+
+
+def _artifact_readiness(
+    path: Path | None,
+    *,
+    enabled: bool,
+    label: str,
+) -> ArtifactReadinessResponse:
+    warnings: list[str] = []
+    if path is None:
+        if enabled:
+            warnings.append(f"{label}:configured_path_missing")
+        return ArtifactReadinessResponse(enabled=enabled, warnings=warnings)
+    resolved_path = path.expanduser().resolve(strict=False)
+    if not resolved_path.exists():
+        warnings.append(f"{label}:artifact_missing")
+        return ArtifactReadinessResponse(
+            enabled=enabled,
+            configured_path=str(resolved_path),
+            exists=False,
+            warnings=warnings,
+        )
+    try:
+        stat = resolved_path.stat()
+    except OSError as exc:
+        warnings.append(f"{label}:stat_failed:{exc}")
+        return ArtifactReadinessResponse(
+            enabled=enabled,
+            configured_path=str(resolved_path),
+            exists=True,
+            warnings=warnings,
+        )
+    payload: dict[str, object] | None = None
+    for candidate in _artifact_manifest_candidates(resolved_path):
+        payload = _safe_json_payload(candidate)
+        if payload is not None:
+            break
+    modified_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+    generated_at = None
+    schema_version = None
+    if payload is not None:
+        raw_generated_at = payload.get("generated_at") or payload.get("built_at")
+        if raw_generated_at is not None:
+            generated_at = str(raw_generated_at)
+        raw_schema_version = payload.get("schema_version")
+        if isinstance(raw_schema_version, bool):
+            raw_schema_version = None
+        if isinstance(raw_schema_version, (int, float)):
+            schema_version = int(raw_schema_version)
+    return ArtifactReadinessResponse(
+        enabled=enabled,
+        configured_path=str(resolved_path),
+        exists=True,
+        readable=True,
+        size_bytes=stat.st_size,
+        modified_at=modified_at,
+        age_seconds=max((_utc_now() - modified_at).total_seconds(), 0.0),
+        generated_at=generated_at,
+        schema_version=schema_version,
+        item_count=_artifact_item_count(payload or {}),
+        metadata=_artifact_metadata(payload),
+        warnings=warnings,
+    )
+
+
+def _filesystem_pack_ids(layout_root: Path) -> list[str]:
+    packs_dir = layout_root / "packs"
+    if not packs_dir.exists():
+        return []
+    pack_ids: set[str] = set()
+    for manifest_path in iter_pack_manifest_paths(packs_dir):
+        payload = _safe_json_payload(manifest_path) or {}
+        pack_id = payload.get("pack_id")
+        if isinstance(pack_id, str) and pack_id.strip():
+            pack_ids.add(pack_id.strip())
+        else:
+            pack_ids.add(manifest_path.parent.name)
+    return sorted(pack_ids)
+
+
+def _metadata_readiness(
+    registry: PackRegistry,
+    *,
+    layout_root: Path,
+    visible_pack_ids: list[str],
+) -> MetadataReadinessResponse:
+    warnings: list[str] = []
+    filesystem_pack_ids = _filesystem_pack_ids(layout_root)
+    stored_pack_ids: list[str] = []
+    active_pack_ids: list[str] = []
+    alias_counts_by_pack: dict[str, int] = {}
+    rule_counts_by_pack: dict[str, int] = {}
+    try:
+        store = registry.store
+        stored_pack_ids = sorted(
+            pack.pack_id for pack in store.list_installed_packs(active_only=False)
+        )
+        active_pack_ids = sorted(
+            pack.pack_id for pack in store.list_installed_packs(active_only=True)
+        )
+    except Exception as exc:  # pragma: no cover - defensive status visibility
+        warnings.append(f"metadata_store_unavailable:{type(exc).__name__}")
+        stored_pack_ids = sorted(visible_pack_ids)
+        active_pack_ids = sorted(visible_pack_ids)
+    for pack_id in active_pack_ids:
+        try:
+            alias_counts_by_pack[pack_id] = int(registry.store.count_pack_aliases(pack_id))
+        except Exception as exc:  # pragma: no cover - defensive status visibility
+            warnings.append(f"alias_count_failed:{pack_id}:{type(exc).__name__}")
+        try:
+            rule_counts_by_pack[pack_id] = len(registry.store.list_pack_rules(pack_id))
+        except Exception as exc:  # pragma: no cover - defensive status visibility
+            warnings.append(f"rule_count_failed:{pack_id}:{type(exc).__name__}")
+    compiled_matcher_pack_ids: list[str] = []
+    missing_matcher_artifacts: list[str] = []
+    try:
+        for pack in registry.list_installed_packs(active_only=True):
+            summary = pack.to_summary()
+            if bool(summary.get("matcher_ready")):
+                compiled_matcher_pack_ids.append(pack.pack_id)
+            else:
+                missing_matcher_artifacts.append(pack.pack_id)
+    except Exception as exc:  # pragma: no cover - defensive status visibility
+        warnings.append(f"matcher_status_failed:{type(exc).__name__}")
+    missing_in_metadata = sorted(set(filesystem_pack_ids) - set(stored_pack_ids))
+    missing_on_filesystem = sorted(set(stored_pack_ids) - set(filesystem_pack_ids))
+    lookup_authoritative = (
+        bool(stored_pack_ids)
+        and not missing_in_metadata
+        and not missing_on_filesystem
+        and not missing_matcher_artifacts
+    )
+    if missing_in_metadata:
+        warnings.append("metadata_missing_filesystem_packs")
+    if missing_on_filesystem:
+        warnings.append("metadata_references_missing_filesystem_packs")
+    if missing_matcher_artifacts:
+        warnings.append("compiled_matcher_missing_for_active_packs")
+    return MetadataReadinessResponse(
+        filesystem_pack_count=len(filesystem_pack_ids),
+        installed_pack_count=len(stored_pack_ids),
+        active_installed_pack_count=len(active_pack_ids),
+        compiled_matcher_pack_count=len(compiled_matcher_pack_ids),
+        filesystem_pack_ids=filesystem_pack_ids,
+        installed_pack_ids=stored_pack_ids,
+        active_pack_ids=active_pack_ids,
+        compiled_matcher_pack_ids=sorted(compiled_matcher_pack_ids),
+        missing_in_metadata=missing_in_metadata,
+        missing_on_filesystem=missing_on_filesystem,
+        missing_matcher_artifacts=sorted(missing_matcher_artifacts),
+        alias_counts_by_pack=alias_counts_by_pack,
+        rule_counts_by_pack=rule_counts_by_pack,
+        lookup_authoritative=lookup_authoritative,
+        warnings=warnings,
+    )
+
+
+def _vector_readiness(settings: Settings) -> VectorReadinessResponse:
+    warnings: list[str] = []
+    if not settings.vector_search_enabled:
+        return VectorReadinessResponse(enabled=False)
+    if not settings.vector_search_url:
+        return VectorReadinessResponse(
+            enabled=True,
+            qdrant_url_configured=False,
+            alias_name=settings.vector_search_collection_alias,
+            warnings=["qdrant_url_missing"],
+        )
+    alias_name = settings.vector_search_collection_alias
+    resolved_collection_name = alias_name
+    point_count: int | None = None
+    collection_status: str | None = None
+    payload_indexes: dict[str, bool] = {}
+    try:
+        with QdrantVectorSearchClient(
+            settings.vector_search_url,
+            api_key=settings.vector_search_api_key,
+        ) as client:
+            resolved_collection_name = client.list_aliases().get(alias_name, alias_name)
+            info = client.get_collection_info(resolved_collection_name)
+            raw_status = info.get("status")
+            if isinstance(raw_status, str):
+                collection_status = raw_status
+            point_count = client.get_collection_point_count(resolved_collection_name)
+            raw_payload_schema = info.get("payload_schema")
+            schema = raw_payload_schema if isinstance(raw_payload_schema, dict) else {}
+            payload_indexes = {
+                field_name: field_name in schema
+                for field_name in _STATUS_PAYLOAD_INDEX_FIELDS
+            }
+            missing_indexes = [
+                field_name
+                for field_name, present in payload_indexes.items()
+                if not present
+            ]
+            if missing_indexes:
+                warnings.append("qdrant_payload_indexes_missing:" + ",".join(missing_indexes))
+    except Exception as exc:  # pragma: no cover - Qdrant availability is environment-bound
+        warnings.append(f"qdrant_status_failed:{type(exc).__name__}")
+    return VectorReadinessResponse(
+        enabled=True,
+        qdrant_url_configured=True,
+        alias_name=alias_name,
+        resolved_collection_name=resolved_collection_name,
+        point_count=point_count,
+        collection_status=collection_status,
+        payload_indexes=payload_indexes,
+        warnings=warnings,
+    )
+
+
+def _bdya_impact_readiness(
+    *,
+    metadata: MetadataReadinessResponse,
+    impact_artifact: ArtifactReadinessResponse,
+    qid_graph_artifact: ArtifactReadinessResponse,
+    recent_news_artifact: ArtifactReadinessResponse,
+    vector: VectorReadinessResponse,
+) -> BdyaImpactReadinessResponse:
+    warnings: list[str] = []
+    metadata_ready = metadata.lookup_authoritative
+    if not metadata_ready:
+        warnings.append("metadata_not_authoritative")
+    required_artifacts = [impact_artifact]
+    if qid_graph_artifact.enabled or qid_graph_artifact.configured_path:
+        required_artifacts.append(qid_graph_artifact)
+    if recent_news_artifact.enabled or recent_news_artifact.configured_path:
+        required_artifacts.append(recent_news_artifact)
+    required_artifacts_ready = all(
+        artifact.exists and artifact.readable and not artifact.warnings
+        for artifact in required_artifacts
+        if artifact.enabled or artifact.configured_path
+    )
+    for artifact_name, artifact in (
+        ("impact", impact_artifact),
+        ("qid_graph", qid_graph_artifact),
+        ("recent_news", recent_news_artifact),
+    ):
+        for warning in artifact.warnings:
+            warnings.append(f"{artifact_name}:{warning}")
+    vector_ready = not vector.enabled or (
+        vector.qdrant_url_configured
+        and vector.resolved_collection_name is not None
+        and not vector.warnings
+    )
+    if not vector_ready:
+        warnings.extend(f"vector:{warning}" for warning in vector.warnings)
+    ready = metadata_ready and required_artifacts_ready and vector_ready
+    return BdyaImpactReadinessResponse(
+        ready=ready,
+        required_artifacts_ready=required_artifacts_ready,
+        vector_ready=vector_ready,
+        metadata_ready=metadata_ready,
+        warnings=warnings,
+    )
+
+
 def status(
     *,
     storage_root: str | Path | None = None,
@@ -311,6 +664,29 @@ def status(
         metadata_backend=settings.metadata_backend,
         database_url=settings.database_url,
     )
+    visible_packs = registry.list_installed_packs()
+    visible_pack_ids = [pack.pack_id for pack in visible_packs]
+    metadata_readiness = _metadata_readiness(
+        registry,
+        layout_root=layout.storage_root,
+        visible_pack_ids=visible_pack_ids,
+    )
+    impact_artifact = _artifact_readiness(
+        settings.impact_expansion_artifact_path,
+        enabled=settings.impact_expansion_enabled,
+        label="impact_expansion",
+    )
+    qid_graph_artifact = _artifact_readiness(
+        settings.graph_context_artifact_path,
+        enabled=settings.graph_context_enabled,
+        label="qid_graph_context",
+    )
+    recent_news_artifact = _artifact_readiness(
+        settings.news_context_artifact_path,
+        enabled=settings.news_context_artifact_path is not None,
+        label="recent_news_context",
+    )
+    vector_readiness = _vector_readiness(settings)
     return StatusResponse(
         service="ades",
         version=settings_version(),
@@ -323,7 +699,19 @@ def status(
         host=settings.host,
         port=settings.port,
         registry_url=settings.registry_url,
-        installed_packs=[pack.pack_id for pack in registry.list_installed_packs()],
+        installed_packs=visible_pack_ids,
+        metadata_readiness=metadata_readiness,
+        impact_artifact=impact_artifact,
+        qid_graph_artifact=qid_graph_artifact,
+        recent_news_artifact=recent_news_artifact,
+        vector_readiness=vector_readiness,
+        bdya_impact_readiness=_bdya_impact_readiness(
+            metadata=metadata_readiness,
+            impact_artifact=impact_artifact,
+            qid_graph_artifact=qid_graph_artifact,
+            recent_news_artifact=recent_news_artifact,
+            vector=vector_readiness,
+        ),
     )
 
 

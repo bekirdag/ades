@@ -69,6 +69,66 @@ class AvailablePackSummary(BaseModel):
     manifest_url: str
 
 
+class ArtifactReadinessResponse(BaseModel):
+    """Runtime visibility for one optional support artifact."""
+
+    enabled: bool = False
+    configured_path: str | None = None
+    exists: bool = False
+    readable: bool = False
+    size_bytes: int | None = None
+    modified_at: datetime | None = None
+    age_seconds: float | None = None
+    generated_at: str | None = None
+    schema_version: int | None = None
+    item_count: int | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class MetadataReadinessResponse(BaseModel):
+    """Pack metadata and matcher alignment summary for runtime status."""
+
+    filesystem_pack_count: int | None = None
+    installed_pack_count: int | None = None
+    active_installed_pack_count: int | None = None
+    compiled_matcher_pack_count: int | None = None
+    filesystem_pack_ids: list[str] = Field(default_factory=list)
+    installed_pack_ids: list[str] = Field(default_factory=list)
+    active_pack_ids: list[str] = Field(default_factory=list)
+    compiled_matcher_pack_ids: list[str] = Field(default_factory=list)
+    missing_in_metadata: list[str] = Field(default_factory=list)
+    missing_on_filesystem: list[str] = Field(default_factory=list)
+    missing_matcher_artifacts: list[str] = Field(default_factory=list)
+    alias_counts_by_pack: dict[str, int] = Field(default_factory=dict)
+    rule_counts_by_pack: dict[str, int] = Field(default_factory=dict)
+    lookup_authoritative: bool = False
+    warnings: list[str] = Field(default_factory=list)
+
+
+class VectorReadinessResponse(BaseModel):
+    """Qdrant collection and payload-index visibility."""
+
+    enabled: bool = False
+    qdrant_url_configured: bool = False
+    alias_name: str | None = None
+    resolved_collection_name: str | None = None
+    point_count: int | None = None
+    collection_status: str | None = None
+    payload_indexes: dict[str, bool] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class BdyaImpactReadinessResponse(BaseModel):
+    """High-level readiness for BDYA news impact graph support lanes."""
+
+    ready: bool = False
+    required_artifacts_ready: bool = False
+    vector_ready: bool = False
+    metadata_ready: bool = False
+    warnings: list[str] = Field(default_factory=list)
+
+
 class StatusResponse(BaseModel):
     """Basic runtime status."""
 
@@ -85,6 +145,12 @@ class StatusResponse(BaseModel):
     registry_url: str | None = None
     installed_packs: list[str] = Field(default_factory=list)
     prewarmed_packs: list[str] = Field(default_factory=list)
+    metadata_readiness: MetadataReadinessResponse | None = None
+    impact_artifact: ArtifactReadinessResponse | None = None
+    qid_graph_artifact: ArtifactReadinessResponse | None = None
+    recent_news_artifact: ArtifactReadinessResponse | None = None
+    vector_readiness: VectorReadinessResponse | None = None
+    bdya_impact_readiness: BdyaImpactReadinessResponse | None = None
 
 
 class RegistryBuildPackSummary(BaseModel):

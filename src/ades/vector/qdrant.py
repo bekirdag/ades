@@ -10,6 +10,11 @@ from uuid import UUID, uuid5
 import httpx
 
 _QDRANT_POINT_NAMESPACE = UUID("f18d3d89-1572-4b8f-8b66-a89ce7330705")
+_DEFAULT_PAYLOAD_INDEX_FIELDS = {
+    "packs": "keyword",
+    "entity_type": "keyword",
+    "source_name": "keyword",
+}
 
 
 class QdrantVectorSearchError(RuntimeError):
@@ -207,6 +212,51 @@ class QdrantVectorSearchClient:
                 "on_disk_payload": True,
             },
         )
+
+    def ensure_payload_index(
+        self,
+        collection_name: str,
+        field_name: str,
+        *,
+        field_schema: str = "keyword",
+    ) -> None:
+        """Create one Qdrant payload index if it is missing."""
+
+        normalized_field_name = str(field_name or "").strip()
+        if not normalized_field_name:
+            raise ValueError("Qdrant payload index field names must not be empty.")
+        try:
+            self._request(
+                "PUT",
+                f"/collections/{collection_name}/index",
+                json_body={
+                    "field_name": normalized_field_name,
+                    "field_schema": field_schema,
+                },
+            )
+        except QdrantVectorSearchError as exc:
+            message = str(exc).casefold()
+            if exc.status_code == 409 or (
+                exc.status_code == 400 and "already" in message and "exist" in message
+            ):
+                return
+            raise
+
+    def ensure_payload_indexes(
+        self,
+        collection_name: str,
+        index_fields: dict[str, str] | None = None,
+    ) -> None:
+        """Ensure the payload indexes required by filtered vector searches."""
+
+        for field_name, field_schema in (
+            index_fields if index_fields is not None else _DEFAULT_PAYLOAD_INDEX_FIELDS
+        ).items():
+            self.ensure_payload_index(
+                collection_name,
+                field_name,
+                field_schema=field_schema,
+            )
 
     def upsert_points(
         self,

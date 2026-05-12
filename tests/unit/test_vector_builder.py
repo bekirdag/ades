@@ -117,6 +117,9 @@ def test_build_qid_graph_index_can_publish_to_qdrant(tmp_path: Path, monkeypatch
             captured["collection_name"] = collection_name
             captured["dimensions"] = dimensions
 
+        def ensure_payload_indexes(self, collection_name: str) -> None:
+            captured["payload_index_collection_name"] = collection_name
+
         def upsert_points(self, collection_name: str, points, *, batch_size: int = 256) -> None:
             captured["upsert_collection_name"] = collection_name
             captured["points"] = list(points)
@@ -146,6 +149,7 @@ def test_build_qid_graph_index_can_publish_to_qdrant(tmp_path: Path, monkeypatch
     assert captured["base_url"] == "http://qdrant.local:6333"
     assert captured["api_key"] == "secret"
     assert captured["collection_name"] == "ades-qids-20260419"
+    assert captured["payload_index_collection_name"] == "ades-qids-20260419"
     assert captured["alias_name"] == "ades-qids-current"
     assert len(captured["points"]) == 2
 

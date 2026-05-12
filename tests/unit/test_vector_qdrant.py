@@ -1,6 +1,10 @@
 import httpx
 
-from ades.vector.qdrant import QdrantVectorSearchClient, _qdrant_point_id
+from ades.vector.qdrant import (
+    QdrantVectorSearchClient,
+    QdrantVectorSearchError,
+    _qdrant_point_id,
+)
 
 
 def test_query_similar_by_id_includes_payload_filter() -> None:
@@ -119,6 +123,48 @@ def test_upsert_points_normalizes_string_point_ids() -> None:
             }
         ]
     }
+
+
+def test_ensure_payload_indexes_creates_default_filter_indexes() -> None:
+    captured: list[dict[str, object]] = []
+    client = object.__new__(QdrantVectorSearchClient)
+
+    def _fake_request(method: str, path: str, *, json_body=None, params=None):
+        captured.append({"method": method, "path": path, "json_body": json_body})
+        return {"result": True}
+
+    client._request = _fake_request  # type: ignore[method-assign]
+
+    client.ensure_payload_indexes("ades-qids-current")
+
+    assert captured == [
+        {
+            "method": "PUT",
+            "path": "/collections/ades-qids-current/index",
+            "json_body": {"field_name": "packs", "field_schema": "keyword"},
+        },
+        {
+            "method": "PUT",
+            "path": "/collections/ades-qids-current/index",
+            "json_body": {"field_name": "entity_type", "field_schema": "keyword"},
+        },
+        {
+            "method": "PUT",
+            "path": "/collections/ades-qids-current/index",
+            "json_body": {"field_name": "source_name", "field_schema": "keyword"},
+        },
+    ]
+
+
+def test_ensure_payload_index_ignores_existing_index_errors() -> None:
+    client = object.__new__(QdrantVectorSearchClient)
+
+    def _fake_request(method: str, path: str, *, json_body=None, params=None):
+        raise QdrantVectorSearchError("payload index already exists", status_code=400)
+
+    client._request = _fake_request  # type: ignore[method-assign]
+
+    client.ensure_payload_index("ades-qids-current", "packs")
 
 
 def test_get_collection_info_returns_result_payload() -> None:

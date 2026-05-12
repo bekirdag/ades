@@ -461,6 +461,7 @@ def _publish_artifact_to_qdrant(
             resolved_collection_name,
             dimensions=dimensions,
         )
+        client.ensure_payload_indexes(resolved_collection_name)
         client.upsert_points(
             resolved_collection_name,
             _iter_dense_points_from_artifact(
