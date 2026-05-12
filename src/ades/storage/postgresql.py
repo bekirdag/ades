@@ -81,6 +81,11 @@ _REQUIRED_EXACT_INDEX_NAMES = frozenset(
         "idx_pack_rules_lookup",
     }
 )
+_REQUIRED_EXACT_INDEX_DEFINITION_SUBSTRINGS = {
+    "idx_installed_packs_active": ("installed_packs", "(active, pack_id)"),
+    "idx_pack_aliases_lookup": ("pack_aliases", "(normalized_alias_text, label)"),
+    "idx_pack_rules_lookup": ("pack_rules", "(rule_name, label)"),
+}
 
 
 def _close_shared_pools() -> None:
@@ -326,6 +331,7 @@ class PostgreSQLMetadataStore:
             try:
                 schema_current, pg_trgm_enabled = self._schema_state(connection)
                 if not schema_current:
+                    self._drop_incorrect_exact_indexes(connection)
                     for statement in statements:
                         connection.execute(statement)
                     pg_trgm_enabled = self._enable_optional_pg_trgm(connection)
@@ -363,7 +369,7 @@ class PostgreSQLMetadataStore:
 
         index_rows = connection.execute(
             """
-            SELECT indexname
+            SELECT indexname, indexdef
             FROM pg_indexes
             WHERE schemaname = current_schema()
               AND indexname = ANY(%s)
@@ -373,8 +379,52 @@ class PostgreSQLMetadataStore:
         index_names = {str(row["indexname"]) for row in index_rows}
         if index_names != _REQUIRED_EXACT_INDEX_NAMES:
             return False, False
+        index_definitions = {
+            str(row["indexname"]): str(row.get("indexdef", ""))
+            for row in index_rows
+        }
+        if not all(
+            self._index_definition_matches(index_name, index_definitions[index_name])
+            for index_name in _REQUIRED_EXACT_INDEX_NAMES
+        ):
+            return False, False
 
         return True, self._is_pg_trgm_enabled(connection)
+
+    def _drop_incorrect_exact_indexes(self, connection) -> None:
+        rows = connection.execute(
+            """
+            SELECT indexname, indexdef
+            FROM pg_indexes
+            WHERE schemaname = current_schema()
+              AND indexname = ANY(%s)
+            """,
+            (list(_REQUIRED_EXACT_INDEX_NAMES),),
+        ).fetchall()
+        for row in rows:
+            index_name = str(row["indexname"])
+            index_definition = str(row.get("indexdef", ""))
+            if self._index_definition_matches(index_name, index_definition):
+                continue
+            connection.execute(
+                f"DROP INDEX IF EXISTS {self._quote_identifier(index_name)}"
+            )
+
+    @staticmethod
+    def _index_definition_matches(index_name: str, index_definition: str) -> bool:
+        required_fragments = _REQUIRED_EXACT_INDEX_DEFINITION_SUBSTRINGS.get(
+            index_name
+        )
+        if required_fragments is None:
+            return True
+        normalized_definition = " ".join(
+            index_definition.casefold().replace('"', "").split()
+        )
+        return all(fragment in normalized_definition for fragment in required_fragments)
+
+    @staticmethod
+    def _quote_identifier(identifier: str) -> str:
+        return '"' + identifier.replace('"', '""') + '"'
 
     def count_installed_packs(self) -> int:
         with self._connect() as connection:

@@ -22,6 +22,9 @@ class _RecordingConnection:
         self.statements.append(statement)
         return self
 
+    def fetchall(self) -> list[dict[str, object]]:
+        return []
+
 
 class _RecordingCopy:
     def __init__(self, sql: str, sink: list[tuple[str, object]]) -> None:
@@ -112,6 +115,60 @@ class _ParameterizedRecordingConnection:
         return self
 
 
+class _ResultRows:
+    def __init__(self, rows: list[dict[str, object]]) -> None:
+        self.rows = rows
+
+    def fetchall(self) -> list[dict[str, object]]:
+        return list(self.rows)
+
+    def fetchone(self) -> dict[str, object] | None:
+        return self.rows[0] if self.rows else None
+
+
+class _SchemaStateConnection:
+    def __init__(self, *, alias_lookup_index_definition: str) -> None:
+        self.alias_lookup_index_definition = alias_lookup_index_definition
+        self.calls: list[tuple[str, tuple[object, ...] | list[object]]] = []
+
+    def execute(self, statement: str, params: tuple[object, ...] | list[object] = ()):
+        self.calls.append((statement, params))
+        if "FROM pg_tables" in statement:
+            return _ResultRows(
+                [
+                    {"tablename": table_name}
+                    for table_name in postgresql_module._REQUIRED_TABLE_NAMES
+                ]
+            )
+        if "FROM information_schema.columns" in statement:
+            return _ResultRows(
+                [
+                    {"column_name": column_name}
+                    for column_name in postgresql_module._REQUIRED_PACK_ALIASES_COLUMNS
+                ]
+            )
+        if "FROM pg_indexes" in statement:
+            return _ResultRows(
+                [
+                    {
+                        "indexname": "idx_installed_packs_active",
+                        "indexdef": "CREATE INDEX idx_installed_packs_active ON public.installed_packs USING btree (active, pack_id)",
+                    },
+                    {
+                        "indexname": "idx_pack_aliases_lookup",
+                        "indexdef": self.alias_lookup_index_definition,
+                    },
+                    {
+                        "indexname": "idx_pack_rules_lookup",
+                        "indexdef": "CREATE INDEX idx_pack_rules_lookup ON public.pack_rules USING btree (rule_name, label)",
+                    },
+                ]
+            )
+        if "FROM pg_extension" in statement:
+            return _ResultRows([{"enabled": True}])
+        return _ResultRows([])
+
+
 def test_postgresql_ensure_schema_includes_alias_column_migrations(tmp_path: Path) -> None:
     layout = ensure_storage_layout(build_storage_layout(tmp_path))
     recorder = _RecordingConnection()
@@ -187,6 +244,62 @@ def test_postgresql_ensure_schema_skips_runtime_ddl_when_schema_current(
 
     assert recorder.statements == []
     assert store._pg_trgm_enabled is True
+
+
+def test_postgresql_schema_state_rejects_legacy_alias_lookup_index() -> None:
+    connection = _SchemaStateConnection(
+        alias_lookup_index_definition=(
+            "CREATE INDEX idx_pack_aliases_lookup "
+            "ON public.pack_aliases USING btree (alias_text, label)"
+        )
+    )
+    store = object.__new__(PostgreSQLMetadataStore)
+
+    schema_current, pg_trgm_enabled = PostgreSQLMetadataStore._schema_state(
+        store, connection
+    )
+
+    assert schema_current is False
+    assert pg_trgm_enabled is False
+
+
+def test_postgresql_schema_state_accepts_normalized_alias_lookup_index() -> None:
+    connection = _SchemaStateConnection(
+        alias_lookup_index_definition=(
+            "CREATE INDEX idx_pack_aliases_lookup "
+            "ON public.pack_aliases USING btree (normalized_alias_text, label)"
+        )
+    )
+    store = object.__new__(PostgreSQLMetadataStore)
+
+    schema_current, pg_trgm_enabled = PostgreSQLMetadataStore._schema_state(
+        store, connection
+    )
+
+    assert schema_current is True
+    assert pg_trgm_enabled is True
+
+
+def test_postgresql_schema_repair_drops_legacy_alias_lookup_index() -> None:
+    connection = _SchemaStateConnection(
+        alias_lookup_index_definition=(
+            "CREATE INDEX idx_pack_aliases_lookup "
+            "ON public.pack_aliases USING btree (alias_text, label)"
+        )
+    )
+    store = object.__new__(PostgreSQLMetadataStore)
+
+    PostgreSQLMetadataStore._drop_incorrect_exact_indexes(store, connection)
+
+    assert any(
+        'DROP INDEX IF EXISTS "idx_pack_aliases_lookup"' in statement
+        for statement, _params in connection.calls
+    )
+    assert not any(
+        'DROP INDEX IF EXISTS "idx_installed_packs_active"' in statement
+        or 'DROP INDEX IF EXISTS "idx_pack_rules_lookup"' in statement
+        for statement, _params in connection.calls
+    )
 
 
 def test_postgresql_fuzzy_alias_lookup_uses_pg_trgm_when_enabled() -> None:
