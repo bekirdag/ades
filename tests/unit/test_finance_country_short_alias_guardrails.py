@@ -8,6 +8,10 @@ def test_runtime_finance_country_short_alias_blocks_news_artifact_terms() -> Non
 
 def test_runtime_finance_country_short_alias_blocks_geographic_surfaces() -> None:
     assert not tagger._runtime_finance_country_short_alias_surface_allowed(
+        "United States"
+    )
+    assert not tagger._runtime_finance_country_short_alias_surface_allowed("Turkey")
+    assert not tagger._runtime_finance_country_short_alias_surface_allowed(
         "Silicon Valley"
     )
     assert not tagger._runtime_finance_country_short_alias_surface_allowed(

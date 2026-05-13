@@ -1929,6 +1929,8 @@ def _is_finance_country_short_alias_candidate(value: str) -> bool:
     normalized = normalize_lookup_text(value)
     if len(normalized) < 4:
         return False
+    if normalized in _RUNTIME_G20_COUNTRY_ALIAS_TEXTS:
+        return False
     if normalized in _FINANCE_COUNTRY_SHORT_ALIAS_STOPLIST:
         return False
     if not any(character.isalpha() for character in value):
@@ -2125,6 +2127,8 @@ def _runtime_finance_country_short_alias_surface_allowed(surface: str) -> bool:
         if _normalize_finance_country_alias_token(token)
     ]
     if not normalized_tokens:
+        return False
+    if normalize_lookup_text(surface) in _RUNTIME_G20_COUNTRY_ALIAS_TEXTS:
         return False
     if len(tokens) != 1:
         if (
