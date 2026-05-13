@@ -152,6 +152,10 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
     assert result.entity_count == 5
     assert result.uncovered_entity_count == 0
     assert manifest["relation_counts"] == relation_counts
+    assert result.edge_family_counts == manifest["edge_family_counts"]
+    assert manifest["edge_family_counts"]["identity_listing"] >= 2
+    assert manifest["edge_family_counts"]["person_to_issuer"] >= 2
+    assert manifest["edge_family_counts"]["country_macro_policy"] >= 5
     assert (
         "finance-us-issuer:0001",
         "issuer_has_listed_ticker",
@@ -606,6 +610,10 @@ def test_finance_country_proxy_generator_builds_supply_chain_and_sector_edges(
         "index_affects_country_index_proxy",
         "ades:impact:index:us-market",
     ) in edge_keys
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["edge_family_counts"]["sector_exposure"] >= 2
+    assert manifest["edge_family_counts"]["index_membership"] >= 2
+    assert manifest["edge_family_counts"]["supply_chain_counterparty"] >= 2
 
     assert result.artifact_path is not None
     supplier_result = expand_impact_paths(

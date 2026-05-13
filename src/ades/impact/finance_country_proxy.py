@@ -396,6 +396,7 @@ class FinanceCountryProxyBuildResult:
     terminal_node_count: int
     uncovered_entity_count: int
     relation_counts: dict[str, int]
+    edge_family_counts: dict[str, int]
 
     def to_json_dict(self) -> dict[str, object]:
         return {
@@ -416,6 +417,7 @@ class FinanceCountryProxyBuildResult:
             "terminal_node_count": self.terminal_node_count,
             "uncovered_entity_count": self.uncovered_entity_count,
             "relation_counts": self.relation_counts,
+            "edge_family_counts": self.edge_family_counts,
         }
 
 
@@ -791,6 +793,49 @@ def _relation_event_types(relation: str) -> tuple[str, ...]:
     if relation in {"issuer_has_listed_ticker", "person_affects_employer_ticker"} | _ROLE_RELATIONS:
         return _EQUITY_EVENT_TYPES
     return ()
+
+
+def _edge_family_for_relation(relation: str) -> str:
+    if relation in {
+        "issuer_has_listed_ticker",
+        "ticker_represents_issuer",
+        "issuer_has_exchange_listing",
+        "ticker_listed_on_exchange",
+    }:
+        return "identity_listing"
+    if relation in _PERSON_TO_ISSUER_RELATIONS or relation == "person_affects_employer_ticker":
+        return "person_to_issuer"
+    if relation in {
+        "issuer_supplier_to_issuer",
+        "issuer_customer_of_issuer",
+        "issuer_partner_of_issuer",
+    }:
+        return "supply_chain_counterparty"
+    if relation in _ORGANIZATION_TO_ISSUER_RELATIONS:
+        return "organization_control"
+    if relation in {"issuer_in_sector", "sector_affects_index"}:
+        return "sector_exposure"
+    if relation in {"issuer_in_index", "index_affects_country_index_proxy"}:
+        return "index_membership"
+    if relation.startswith("country_affects_") or relation.endswith("_policy_rate_proxy"):
+        return "country_macro_policy"
+    if relation.endswith("_currency_proxy") or relation.endswith("_usd_proxy"):
+        return "currency_proxy"
+    if relation.endswith("_dxy_proxy"):
+        return "dxy_proxy"
+    if relation.endswith("_country_risk_proxy") or relation.endswith("_global_policy_risk_proxy"):
+        return "risk_proxy"
+    if relation.endswith("_global_equity_proxy"):
+        return "global_equity_proxy"
+    return "other"
+
+
+def _edge_family_counts_from_relations(relation_counts: dict[str, int]) -> dict[str, int]:
+    family_counts: dict[str, int] = {}
+    for relation, count in relation_counts.items():
+        family = _edge_family_for_relation(relation)
+        family_counts[family] = family_counts.get(family, 0) + count
+    return dict(sorted(family_counts.items()))
 
 
 def _relation_direction_preconditions(relation: str) -> tuple[str, ...]:
@@ -2249,6 +2294,7 @@ def build_finance_country_proxy_source_lane(
         rows=(nodes[key] for key in sorted(nodes)),
     )
     edge_count, relation_counts = _write_edge_tsv(edge_tsv_path, all_edges)
+    edge_family_counts = _edge_family_counts_from_relations(relation_counts)
     if edge_count < minimum_edge_count:
         raise ValueError(
             f"Generated {edge_count} impact edges, below minimum_edge_count={minimum_edge_count}"
@@ -2302,6 +2348,7 @@ def build_finance_country_proxy_source_lane(
         "extra_proxy_entity_count": len(extra_proxy_entity_refs),
         "node_count": node_count,
         "edge_count": edge_count,
+        "edge_family_counts": edge_family_counts,
         "terminal_node_count": len(terminal_node_refs),
         "uncovered_entity_count": len(uncovered),
         "uncovered_entity_refs_sample": uncovered[:25],
@@ -2332,6 +2379,7 @@ def build_finance_country_proxy_source_lane(
         terminal_node_count=len(terminal_node_refs),
         uncovered_entity_count=len(uncovered),
         relation_counts=dict(sorted(relation_counts.items())),
+        edge_family_counts=edge_family_counts,
     )
 
 
