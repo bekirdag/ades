@@ -42,7 +42,9 @@ def _write_pack(root: Path, pack_id: str, rows: list[dict[str, object]]) -> Path
         + "\n",
         encoding="utf-8",
     )
-    (pack_dir / "build.json").write_text('{"generated_at":"2026-05-05T12:00:00Z"}\n', encoding="utf-8")
+    (pack_dir / "build.json").write_text(
+        '{"generated_at":"2026-05-05T12:00:00Z"}\n', encoding="utf-8"
+    )
     return pack_dir
 
 
@@ -102,7 +104,12 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
                 "entity_id": "finance-us-ticker:ABC",
                 "entity_type": "ticker",
                 "canonical_text": "ABC",
-                "metadata": {"country_code": "us", "category": "ticker", "ticker": "ABC", "exchanges": ["NYSE"]},
+                "metadata": {
+                    "country_code": "us",
+                    "category": "ticker",
+                    "ticker": "ABC",
+                    "exchanges": ["NYSE"],
+                },
             },
             {
                 "entity_id": "finance-person:0001:chief-executive",
@@ -137,9 +144,7 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
     nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     edge_keys = {(row["source_ref"], row["relation"], row["target_ref"]) for row in edges}
-    edges_by_key = {
-        (row["source_ref"], row["relation"], row["target_ref"]): row for row in edges
-    }
+    edges_by_key = {(row["source_ref"], row["relation"], row["target_ref"]): row for row in edges}
     relation_counts = {}
     for row in edges:
         relation_counts[row["relation"]] = relation_counts.get(row["relation"], 0) + 1
@@ -147,8 +152,16 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
     assert result.entity_count == 5
     assert result.uncovered_entity_count == 0
     assert manifest["relation_counts"] == relation_counts
-    assert ("finance-us-issuer:0001", "issuer_has_listed_ticker", "finance-us-ticker:ABC") in edge_keys
-    assert ("finance-us-issuer:0002", "issuer_has_listed_ticker", "finance-us-ticker:DEF") in edge_keys
+    assert (
+        "finance-us-issuer:0001",
+        "issuer_has_listed_ticker",
+        "finance-us-ticker:ABC",
+    ) in edge_keys
+    assert (
+        "finance-us-issuer:0002",
+        "issuer_has_listed_ticker",
+        "finance-us-ticker:DEF",
+    ) in edge_keys
     assert (
         "finance-person:0001:chief-executive",
         "person_affects_employer_ticker",
@@ -178,10 +191,7 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
         "policy_rate_hike",
         "inflation_shock",
     }
-    assert (
-        policy_edge["direction_preconditions"]
-        == "rate_inflation_central_bank_or_fiscal_signal"
-    )
+    assert policy_edge["direction_preconditions"] == "rate_inflation_central_bank_or_fiscal_signal"
     risk_edge = edges_by_key[
         (
             "country:us",
@@ -198,7 +208,11 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
     country_identifiers = json.loads(nodes["country:us"]["identifiers_json"])
     assert country_identifiers["wikidata_qid"] == "Q30"
     assert country_identifiers["geonames_id"] == "6252001"
-    assert set(country_identifiers["same_as_refs"]) >= {"country:us", "wikidata:Q30", "geonames:6252001"}
+    assert set(country_identifiers["same_as_refs"]) >= {
+        "country:us",
+        "wikidata:Q30",
+        "geonames:6252001",
+    }
     issuer_identifiers = json.loads(nodes["finance-us-issuer:0001"]["identifiers_json"])
     assert issuer_identifiers["ticker_ref"] == "finance-us-ticker:ABC"
     synthetic_ticker_identifiers = json.loads(nodes["finance-us-ticker:DEF"]["identifiers_json"])
@@ -226,9 +240,9 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
         max_depth=2,
         max_candidates=5,
     )
-    assert {
-        candidate.entity_ref for candidate in starter_result.candidates
-    } >= {"ades:impact:commodity:crude-oil"}
+    assert {candidate.entity_ref for candidate in starter_result.candidates} >= {
+        "ades:impact:commodity:crude-oil"
+    }
 
     starter_wikidata_result = expand_impact_paths(
         ["wikidata:Q79883"],
@@ -239,9 +253,9 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
         max_depth=2,
         max_candidates=5,
     )
-    assert {
-        candidate.entity_ref for candidate in starter_wikidata_result.candidates
-    } >= {"ades:impact:commodity:crude-oil"}
+    assert {candidate.entity_ref for candidate in starter_wikidata_result.candidates} >= {
+        "ades:impact:commodity:crude-oil"
+    }
 
     country_result = expand_impact_paths(
         ["country:us"],
@@ -477,6 +491,152 @@ def test_finance_country_proxy_generator_builds_generic_role_relationships(
     }
 
 
+def test_finance_country_proxy_generator_builds_supply_chain_and_sector_edges(
+    tmp_path: Path,
+) -> None:
+    packs_root = tmp_path / "packs"
+    packs_root.mkdir()
+    _write_pack(
+        packs_root,
+        "finance-us-en",
+        [
+            {
+                "entity_id": "finance-us-issuer:aide",
+                "entity_type": "organization",
+                "canonical_text": "AI Device Maker Inc.",
+                "metadata": {
+                    "country_code": "us",
+                    "category": "issuer",
+                    "ticker": "AIDE",
+                    "sector": "Technology",
+                    "indices": ["S&P 500"],
+                    "supplier_ticker": "CHIP",
+                    "source_url": "https://example.com/aide/profile",
+                },
+            },
+            {
+                "entity_id": "finance-us-ticker:AIDE",
+                "entity_type": "ticker",
+                "canonical_text": "AIDE",
+                "metadata": {
+                    "country_code": "us",
+                    "category": "ticker",
+                    "ticker": "AIDE",
+                    "issuer_name": "AI Device Maker Inc.",
+                },
+            },
+            {
+                "entity_id": "finance-us-issuer:chipco",
+                "entity_type": "organization",
+                "canonical_text": "ChipCo Inc.",
+                "metadata": {
+                    "country_code": "us",
+                    "category": "issuer",
+                    "ticker": "CHIP",
+                    "sector": "Semiconductors",
+                },
+            },
+            {
+                "entity_id": "finance-us-ticker:CHIP",
+                "entity_type": "ticker",
+                "canonical_text": "CHIP",
+                "metadata": {
+                    "country_code": "us",
+                    "category": "ticker",
+                    "ticker": "CHIP",
+                    "issuer_name": "ChipCo Inc.",
+                },
+            },
+            {
+                "entity_id": "finance-us-supplier:aide:chipco",
+                "entity_type": "organization",
+                "canonical_text": "ChipCo Supply Division",
+                "metadata": {
+                    "country_code": "us",
+                    "category": "supplier",
+                    "related_ticker": "AIDE",
+                    "relationship": "supplier",
+                    "source_url": "https://example.com/aide/suppliers",
+                },
+            },
+        ],
+    )
+
+    result = build_finance_country_proxy_source_lane(
+        packs_root=packs_root,
+        output_root=tmp_path / "impact_relationships",
+        run_id="supply-chain-and-sector-relationships",
+        build_artifact=True,
+        artifact_output_root=tmp_path / "artifacts",
+        extra_proxy_pack_ids=(),
+    )
+
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    edges = _read_tsv(result.edge_tsv_path)
+    edge_keys = {(row["source_ref"], row["relation"], row["target_ref"]) for row in edges}
+    assert "finance-us-sector:technology" in nodes
+    assert "finance-us-index:s-p-500" in nodes
+    assert (
+        "finance-us-issuer:chipco",
+        "issuer_supplier_to_issuer",
+        "finance-us-issuer:aide",
+    ) in edge_keys
+    assert (
+        "finance-us-supplier:aide:chipco",
+        "issuer_supplier_to_issuer",
+        "finance-us-issuer:aide",
+    ) in edge_keys
+    assert (
+        "finance-us-issuer:aide",
+        "issuer_in_sector",
+        "finance-us-sector:technology",
+    ) in edge_keys
+    assert (
+        "finance-us-sector:technology",
+        "sector_affects_index",
+        "ades:impact:index:us-market",
+    ) in edge_keys
+    assert (
+        "finance-us-issuer:aide",
+        "issuer_in_index",
+        "finance-us-index:s-p-500",
+    ) in edge_keys
+    assert (
+        "finance-us-index:s-p-500",
+        "index_affects_country_index_proxy",
+        "ades:impact:index:us-market",
+    ) in edge_keys
+
+    assert result.artifact_path is not None
+    supplier_result = expand_impact_paths(
+        ["finance-us-issuer:chipco"],
+        settings=Settings(
+            impact_expansion_enabled=True,
+            impact_expansion_artifact_path=result.artifact_path,
+        ),
+        max_depth=2,
+        max_candidates=8,
+        compatible_event_types=["supply_disruption"],
+    )
+    assert "finance-us-ticker:AIDE" in {
+        candidate.entity_ref for candidate in supplier_result.candidates
+    }
+
+    sector_result = expand_impact_paths(
+        ["finance-us-sector:technology"],
+        settings=Settings(
+            impact_expansion_enabled=True,
+            impact_expansion_artifact_path=result.artifact_path,
+        ),
+        max_depth=1,
+        max_candidates=8,
+        compatible_event_types=["tariff"],
+    )
+    assert "ades:impact:index:us-market" in {
+        candidate.entity_ref for candidate in sector_result.candidates
+    }
+
+
 def test_finance_country_proxy_generator_does_not_synthesize_role_target_issuer(
     tmp_path: Path,
 ) -> None:
@@ -562,7 +722,10 @@ def test_finance_country_proxy_generator_can_fallback_to_aliases(tmp_path: Path)
 
     assert discover_finance_country_pack_dirs(packs_root) == [pack_dir.resolve()]
     entities = load_finance_country_pack_entities(pack_dir)
-    assert {entity.entity_ref for entity in entities} == {"finance-uk:ftse-100", "finance-uk:regulator"}
+    assert {entity.entity_ref for entity in entities} == {
+        "finance-uk:ftse-100",
+        "finance-uk:regulator",
+    }
 
     result = build_finance_country_proxy_source_lane(
         packs_root=packs_root,

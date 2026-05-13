@@ -718,7 +718,9 @@ def _build_country_scope(
             country_code=hinted_code,
             entity_ref=f"country:{hinted_code}",
             name=hinted_name or hinted_code.upper(),
-            source=hint_source if hint_source in {"country_hint", "source_hint"} else "country_hint",
+            source=hint_source
+            if hint_source in {"country_hint", "source_hint"}
+            else "country_hint",
         )
     for entity in entities:
         code = _entity_ref_country_code(entity.link.entity_id if entity.link else None)
@@ -754,13 +756,9 @@ def _text_contains_entity_phrase(text: str | None, name: str) -> bool:
     return bool(pattern.search(text))
 
 
-def _source_outlet_is_story_subject(
-    *, request: NewsAnalyzeRequest, name: str
-) -> bool:
+def _source_outlet_is_story_subject(*, request: NewsAnalyzeRequest, name: str) -> bool:
     subject_text = "\n".join(
-        part.strip()
-        for part in (request.title, request.description)
-        if part and part.strip()
+        part.strip() for part in (request.title, request.description) if part and part.strip()
     )
     return _text_contains_entity_phrase(subject_text, name)
 
@@ -1009,6 +1007,7 @@ def _build_unresolved_entities(
                 event_types=event_types,
                 has_terminal_candidate=False,
                 missing_reason=missing_reason,
+                reason=missing_reason,
                 candidate_proposals=candidate_proposals,
             )
         )
@@ -1065,9 +1064,7 @@ def _build_topic_scope(
 
     def _has_any(*needles: str) -> bool:
         return any(
-            needle in label or label in needle
-            for label in normalized_labels
-            for needle in needles
+            needle in label or label in needle for label in normalized_labels for needle in needles
         )
 
     return NewsAnalyzeTopicScope(
@@ -2268,9 +2265,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                     ),
                     include_passive_paths=True,
                     vector_proposals_enabled=False,
-                    compatible_event_types=[
-                        signal.event_type for signal in event_signals
-                    ],
+                    compatible_event_types=[signal.event_type for signal in event_signals],
                     storage_root=storage_root,
                 )
             except ValueError as exc:

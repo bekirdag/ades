@@ -233,15 +233,12 @@ def test_news_analyze_endpoint_returns_normalized_contract(
         entity["quality"] == "hidden_artifact" and entity["display_eligible"] is False
         for entity in payload["passive_entities"]
     )
-    unresolved_by_ref = {
-        entity["entity_ref"]: entity for entity in payload["unresolved_entities"]
-    }
+    unresolved_by_ref = {entity["entity_ref"]: entity for entity in payload["unresolved_entities"]}
     assert unresolved_by_ref["country:ir"]["missing_reason"] == (
         "country_scope_without_terminal_candidate"
     )
-    assert unresolved_by_ref["country:ir"]["event_types"] == [
-        "shipping_chokepoint_disruption"
-    ]
+    assert unresolved_by_ref["country:ir"]["reason"] == ("country_scope_without_terminal_candidate")
+    assert unresolved_by_ref["country:ir"]["event_types"] == ["shipping_chokepoint_disruption"]
     assert unresolved_by_ref["country:ir"]["has_terminal_candidate"] is False
     assert "entity_hormuz" not in unresolved_by_ref
     assert payload["tag_responses"] == []
@@ -515,9 +512,7 @@ def test_news_analyze_source_outlet_subject_remains_display_eligible(
     )
 
     assert response.status_code == 200
-    passive_by_name = {
-        entity["name"]: entity for entity in response.json()["passive_entities"]
-    }
+    passive_by_name = {entity["name"]: entity for entity in response.json()["passive_entities"]}
     assert passive_by_name["Reuters"]["role"] == "source_outlet"
     assert passive_by_name["Reuters"]["quality"] == "strong"
     assert passive_by_name["Reuters"]["display_eligible"] is True
@@ -667,8 +662,7 @@ def test_news_analyze_uses_text_country_mentions_for_country_pack(
     payload = response.json()
     assert "finance-br-en" in payload["packs_used"]
     assert any(
-        decision["pack_id"] == "finance-br-en"
-        and decision["reason"] == "text_country_mention"
+        decision["pack_id"] == "finance-br-en" and decision["reason"] == "text_country_mention"
         for decision in payload["pack_decisions"]
     )
 

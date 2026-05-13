@@ -1922,6 +1922,7 @@ class NewsAnalyzeUnresolvedEntity(BaseModel):
     event_types: list[str] = Field(default_factory=list)
     has_terminal_candidate: bool = False
     missing_reason: str
+    reason: str | None = None
     candidate_proposals: int = Field(default=0, ge=0)
 
 
