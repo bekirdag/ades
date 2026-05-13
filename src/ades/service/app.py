@@ -990,19 +990,21 @@ def _build_unresolved_entities(
         if passive.role == "source_outlet":
             continue
 
-        candidate_proposals = (relationship_proposal_counts or {}).get(entity_ref_key)
-        if candidate_proposals is None:
-            candidate_proposals = passive_path_counts.get(entity_ref_key, 0)
         if not event_types:
+            candidate_proposals = 0
             missing_reason = "no_market_event_signal"
-        elif impact_paths is None:
-            missing_reason = "impact_expansion_unavailable"
-        elif passive.role == "country_scope" and candidate_proposals == 0:
-            missing_reason = "country_scope_without_terminal_candidate"
-        elif candidate_proposals > 0:
-            missing_reason = "passive_relationship_without_terminal_candidate"
         else:
-            missing_reason = "no_source_backed_market_relationship"
+            candidate_proposals = (relationship_proposal_counts or {}).get(entity_ref_key)
+            if candidate_proposals is None:
+                candidate_proposals = passive_path_counts.get(entity_ref_key, 0)
+            if impact_paths is None:
+                missing_reason = "impact_expansion_unavailable"
+            elif passive.role == "country_scope" and candidate_proposals == 0:
+                missing_reason = "country_scope_without_terminal_candidate"
+            elif candidate_proposals > 0:
+                missing_reason = "passive_relationship_without_terminal_candidate"
+            else:
+                missing_reason = "no_source_backed_market_relationship"
 
         unresolved.append(
             NewsAnalyzeUnresolvedEntity(
@@ -1033,10 +1035,17 @@ def _build_unresolved_entities(
 def _build_relationship_proposals(
     *,
     tag_responses: list[TagResponse],
+    event_signals: list[object],
     impact_paths: ImpactExpansionResult | None = None,
     terminal_candidates: list[object],
     max_proposals: int = 64,
 ) -> list[NewsAnalyzeRelationshipProposal]:
+    event_types = _dedupe_string_values(
+        [getattr(signal, "event_type", None) for signal in event_signals]
+    )
+    if not event_types:
+        return []
+
     terminal_refs = {
         str(getattr(candidate, "entity_ref", "")).casefold()
         for candidate in terminal_candidates
@@ -2433,6 +2442,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         relationship_proposals = (
             _build_relationship_proposals(
                 tag_responses=tag_responses,
+                event_signals=event_signals,
                 impact_paths=impact_paths,
                 terminal_candidates=expanded_terminal_candidates,
             )

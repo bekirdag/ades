@@ -585,6 +585,140 @@ def test_news_analyze_returns_passive_path_relationship_proposals(
     assert unresolved_by_ref["wikidata:Qminister"]["candidate_proposals"] == 1
 
 
+def test_news_analyze_suppresses_relationship_proposals_without_market_event(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(
+        tmp_path,
+        "news-passive-path-no-event-proposal-en",
+        domain="politics",
+    )
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        include_related_entities: bool = False,
+        include_graph_support: bool = False,
+        **_: object,
+    ) -> TagResponse:
+        assert include_related_entities is True
+        assert include_graph_support is True
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Example Minister",
+                    label="person",
+                    start=text.index("Example Minister"),
+                    end=text.index("Example Minister") + len("Example Minister"),
+                    confidence=0.91,
+                    relevance=0.93,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="politics",
+                    ),
+                    link=EntityLink(
+                        entity_id="wikidata:Qminister",
+                        canonical_text="Example Minister",
+                        provider="wikidata",
+                    ),
+                )
+            ],
+            related_entities=[
+                RelatedEntityMatch(
+                    entity_id="finance-us-issuer:0000000001",
+                    canonical_text="Example Listed Issuer",
+                    score=0.84,
+                    provider="qdrant.qid_graph",
+                    entity_type="organization",
+                    seed_entity_ids=["wikidata:Qminister"],
+                    shared_seed_count=1,
+                )
+            ],
+            topics=[TopicMatch(label="politics", score=0.88, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert "wikidata:Qminister" in list(entity_refs)
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-05-14",
+            artifact_hash="sha256:test",
+            source_entities=[],
+            candidates=[],
+            passive_paths=[
+                ImpactPassivePath(
+                    entity_ref="finance-us-issuer:0000000001",
+                    name="Example Listed Issuer",
+                    entity_type="organization",
+                    source_entity_refs=["wikidata:Qminister"],
+                    relationship_paths=[
+                        ImpactRelationshipPath(
+                            path_depth=1,
+                            edges=[
+                                ImpactPathEdge(
+                                    source_ref="wikidata:Qminister",
+                                    target_ref="finance-us-issuer:0000000001",
+                                    relation="person_is_board_member_of_issuer",
+                                    evidence_level="direct",
+                                    confidence=0.82,
+                                    direction_hint="contextual",
+                                    source_name="test",
+                                    source_url="https://example.com",
+                                    source_snapshot="test",
+                                )
+                            ],
+                        )
+                    ],
+                )
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Minister wins party leadership vote",
+            "text": "Example Minister won the party leadership vote after parliament met.",
+            "hints": {"country": "us", "topics": ["politics"]},
+            "packs": [pack_id],
+            "options": {
+                "include_relationship_proposals": True,
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["event_signals"] == []
+    assert payload["relationship_proposals"] == []
+    unresolved_by_ref = {entity["entity_ref"]: entity for entity in payload["unresolved_entities"]}
+    assert unresolved_by_ref["wikidata:Qminister"]["candidate_proposals"] == 0
+    assert unresolved_by_ref["wikidata:Qminister"]["missing_reason"] == (
+        "no_market_event_signal"
+    )
+
+
 def test_news_analyze_dedupes_pack_scoped_heuristic_entities(
     tmp_path: Path,
     monkeypatch,
