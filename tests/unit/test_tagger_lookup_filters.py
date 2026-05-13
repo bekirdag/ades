@@ -147,6 +147,29 @@ def test_keep_finance_multi_token_person_in_single_token_filter() -> None:
     )
 
 
+def test_skip_finance_entities_that_match_country_alias_text() -> None:
+    assert (
+        _should_skip_multi_token_lookup_candidate(
+            matched_text="United States",
+            candidate_value="United States Lime & Minerals Inc",
+            canonical_text="United States Lime & Minerals Inc",
+            candidate_label="organization",
+            candidate_domain="finance",
+        )
+        is True
+    )
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="Turkey",
+            candidate_value="Turkey Holdings",
+            canonical_text="Turkey Holdings",
+            candidate_label="organization",
+            candidate_domain="finance",
+        )
+        is True
+    )
+
+
 def test_skip_article_led_generic_person_phrase() -> None:
     assert (
         _should_skip_multi_token_lookup_candidate(

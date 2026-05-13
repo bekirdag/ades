@@ -40,7 +40,13 @@ from ..service.models import (
     TagSpanDecision,
     TopicMatch,
 )
-from ..text_processing import NormalizedText, normalize_lookup_text, normalize_text, segment_text, token_count
+from ..text_processing import (
+    NormalizedText,
+    normalize_lookup_text,
+    normalize_text,
+    segment_text,
+    token_count,
+)
 from ..version import __version__
 
 TOKEN_RE = re.compile(r"\b[\w][\w.+&/-]*\b")
@@ -713,19 +719,16 @@ _PROPOSAL_GENERATED_PERSON_NON_PERSON_TAIL_TOKENS = {
     "valley",
     "verification",
 }
-_PROPOSAL_GENERATED_PERSON_STACKED_TITLE_TOKENS = (
-    _PROPOSAL_GENERATED_PERSON_TITLE_TOKENS
-    | {
-        "crown",
-        "duchess",
-        "duke",
-        "emir",
-        "king",
-        "prince",
-        "princess",
-        "queen",
-    }
-)
+_PROPOSAL_GENERATED_PERSON_STACKED_TITLE_TOKENS = _PROPOSAL_GENERATED_PERSON_TITLE_TOKENS | {
+    "crown",
+    "duchess",
+    "duke",
+    "emir",
+    "king",
+    "prince",
+    "princess",
+    "queen",
+}
 _PROPOSAL_GENERATED_ORG_FRAGMENT_TOKENS = {
     "analysis",
     "billionaire",
@@ -914,9 +917,7 @@ _ACRONYM_AFTER_ENTITY_RE = re.compile(r"^\s*\((?P<acronym>[A-Z][A-Z0-9.&/-]{1,9}
 _ACRONYM_BEFORE_ENTITY_RE = re.compile(r"(?P<acronym>[A-Z][A-Z0-9.&/-]{1,9})\s*\(\s*$")
 _MAX_ACRONYM_DEFINITION_WINDOW = 16
 _EXPLICIT_ACRONYM_PAREN_RE = re.compile(r"\(\s*(?P<acronym>[A-Z][A-Z0-9.&/-]{2,9})\s*\)")
-_EXPLICIT_ACRONYM_COMMA_RE = re.compile(
-    r",\s*(?:or\s+)?(?P<acronym>[A-Z][A-Z0-9.&/-]{2,9})(?=,)"
-)
+_EXPLICIT_ACRONYM_COMMA_RE = re.compile(r",\s*(?:or\s+)?(?P<acronym>[A-Z][A-Z0-9.&/-]{2,9})(?=,)")
 _GENERIC_DURATION_ALIAS_RE = re.compile(
     r"^\d+\s+(?:sec|secs|second|seconds|min|mins|minute|minutes|hr|hrs|hour|hours)$"
 )
@@ -1269,9 +1270,7 @@ _ARTICLE_LED_GENERIC_LOCATION_HEAD_TOKENS = {
     "house",
     "mall",
 }
-_LOWERCASE_GENERIC_LOCATION_HEAD_TOKENS = (
-    _ARTICLE_LED_GENERIC_LOCATION_HEAD_TOKENS | {"place"}
-)
+_LOWERCASE_GENERIC_LOCATION_HEAD_TOKENS = _ARTICLE_LED_GENERIC_LOCATION_HEAD_TOKENS | {"place"}
 _SINGLETON_PLURAL_PERSON_NOISE_FOLLOWING_TOKENS = {
     "are",
     "have",
@@ -1279,12 +1278,11 @@ _SINGLETON_PLURAL_PERSON_NOISE_FOLLOWING_TOKENS = {
     "were",
 }
 _STRUCTURAL_LOCATION_CONNECTOR_TOKENS = {"of"}
-_RUNTIME_STRUCTURAL_GEO_FEATURE_SUFFIX_TOKENS = (
-    (_STRUCTURAL_LOCATION_HEAD_TOKENS | {"ocean"}) - {"island", "mainland"}
-)
-_RUNTIME_STRUCTURAL_GEO_FEATURE_ORG_LEAD_TOKENS = (
-    _STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS | {"org"}
-)
+_RUNTIME_STRUCTURAL_GEO_FEATURE_SUFFIX_TOKENS = (_STRUCTURAL_LOCATION_HEAD_TOKENS | {"ocean"}) - {
+    "island",
+    "mainland",
+}
+_RUNTIME_STRUCTURAL_GEO_FEATURE_ORG_LEAD_TOKENS = _STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS | {"org"}
 _GENERIC_OFFICE_TITLE_TOKENS = {
     "attorney",
     "ceo",
@@ -1412,9 +1410,15 @@ _PERSON_SURNAME_COREFERENCE_OBJECT_REPORTING_CUES = {
     "warned",
     "warns",
 }
-_PERSON_SURNAME_COREFERENCE_PRECEDING_TITLE_TOKENS = (
-    _GENERIC_OFFICE_TITLE_TOKENS | {"dr", "gov", "mr", "mrs", "ms", "rep", "sen"}
-)
+_PERSON_SURNAME_COREFERENCE_PRECEDING_TITLE_TOKENS = _GENERIC_OFFICE_TITLE_TOKENS | {
+    "dr",
+    "gov",
+    "mr",
+    "mrs",
+    "ms",
+    "rep",
+    "sen",
+}
 _PERSON_SURNAME_COREFERENCE_PREPOSITION_CUES = {
     "about",
     "against",
@@ -1451,40 +1455,38 @@ _PERSON_SURNAME_COREFERENCE_TRAILING_NOUN_CUES = {
 _PERSON_SURNAME_COREFERENCE_FRAGMENT_LEADS = (
     _GENERIC_PHRASE_LEADS | _PERSON_SURNAME_COREFERENCE_PREPOSITION_CUES
 )
-_RUNTIME_POSSESSIVE_TITLEISH_ALIAS_HEAD_TOKENS = (
-    _PROPOSAL_GENERATED_PERSON_STACKED_TITLE_TOKENS | {"lady", "lord"}
-)
+_RUNTIME_POSSESSIVE_TITLEISH_ALIAS_HEAD_TOKENS = _PROPOSAL_GENERATED_PERSON_STACKED_TITLE_TOKENS | {
+    "lady",
+    "lord",
+}
 _HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS: set[str] = set()
 for _suffix in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS:
     _HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS.add(re.escape(_suffix))
     _HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS.add(re.escape(_suffix.title()))
     _HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS.add(re.escape(_suffix.upper()))
-_TRUNCATED_ALIAS_CONTINUATION_TOKENS = (
-    _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS
-    | {
-        "bell",
-        "capital",
-        "co",
-        "company",
-        "corp",
-        "corporation",
-        "etf",
-        "financial",
-        "fund",
-        "funds",
-        "group",
-        "holdings",
-        "images",
-        "inc",
-        "incorporated",
-        "journal",
-        "ltd",
-        "limited",
-        "llc",
-        "plc",
-        "trust",
-    }
-)
+_TRUNCATED_ALIAS_CONTINUATION_TOKENS = _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS | {
+    "bell",
+    "capital",
+    "co",
+    "company",
+    "corp",
+    "corporation",
+    "etf",
+    "financial",
+    "fund",
+    "funds",
+    "group",
+    "holdings",
+    "images",
+    "inc",
+    "incorporated",
+    "journal",
+    "ltd",
+    "limited",
+    "llc",
+    "plc",
+    "trust",
+}
 _LEADING_CONJUNCTION_ALIAS_TOKENS = {"and", "or", "but"}
 _STRUCTURAL_ORG_CONNECTOR_HEAD_VARIANTS: set[str] = set()
 for _head in _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS:
@@ -1727,9 +1729,7 @@ def _build_runtime_g20_country_aliases() -> tuple[RuntimeG20CountryAlias, ...]:
             continue
         aliases = [canonical_text]
         aliases.extend(
-            alias
-            for alias in entity.get("aliases", [])
-            if isinstance(alias, str) and alias.strip()
+            alias for alias in entity.get("aliases", []) if isinstance(alias, str) and alias.strip()
         )
         for alias in aliases:
             alias = alias.strip()
@@ -1752,6 +1752,11 @@ def _build_runtime_g20_country_aliases() -> tuple[RuntimeG20CountryAlias, ...]:
 
 
 _RUNTIME_G20_COUNTRY_ALIASES = _build_runtime_g20_country_aliases()
+_RUNTIME_G20_COUNTRY_ALIAS_TEXTS = frozenset(
+    normalize_lookup_text(alias.alias)
+    for alias in _RUNTIME_G20_COUNTRY_ALIASES
+    if normalize_lookup_text(alias.alias)
+)
 _FINANCE_COUNTRY_PACK_ID_RE = re.compile(r"^finance-[a-z]{2}-en$")
 _FINANCE_COUNTRY_SHORT_ALIAS_CACHE: dict[
     tuple[str, int, int],
@@ -1947,16 +1952,8 @@ def _classify_finance_country_short_alias_quality(
     runtime_tier: str,
     source_text: str,
 ) -> tuple[str, bool, tuple[str, ...]]:
-    alias_tokens = [
-        token
-        for token in _finance_country_short_alias_tokens(alias)
-        if token
-    ]
-    source_tokens = [
-        token
-        for token in _finance_country_short_alias_tokens(source_text)
-        if token
-    ]
+    alias_tokens = [token for token in _finance_country_short_alias_tokens(alias) if token]
+    source_tokens = [token for token in _finance_country_short_alias_tokens(source_text) if token]
     reasons: list[str] = []
 
     if not alias_tokens:
@@ -2026,11 +2023,7 @@ def _derive_finance_country_short_alias_values(value: str) -> set[str]:
         ):
             aliases.add(" ".join(stripped[:2]))
 
-    return {
-        alias
-        for alias in aliases
-        if _is_finance_country_short_alias_candidate(alias)
-    }
+    return {alias for alias in aliases if _is_finance_country_short_alias_candidate(alias)}
 
 
 def _load_runtime_finance_country_short_aliases(
@@ -2041,10 +2034,7 @@ def _load_runtime_finance_country_short_aliases(
     if not _FINANCE_COUNTRY_PACK_ID_RE.fullmatch(runtime.pack_id):
         return {}
     aliases_path = (
-        Path(storage_root).expanduser().resolve()
-        / "packs"
-        / runtime.pack_id
-        / "aliases.json"
+        Path(storage_root).expanduser().resolve() / "packs" / runtime.pack_id / "aliases.json"
     )
     try:
         stat = aliases_path.stat()
@@ -2097,15 +2087,17 @@ def _load_runtime_finance_country_short_aliases(
             )
             if weak_alias:
                 continue
-            records_by_alias.setdefault(normalized, {})[entity_id] = RuntimeFinanceCountryShortAlias(
-                entity_id=entity_id,
-                canonical_text=canonical_text,
-                label=label,
-                alias=alias,
-                alias_quality=alias_quality,
-                source_pack=runtime.pack_id,
-                weak_alias=weak_alias,
-                quality_reasons=quality_reasons,
+            records_by_alias.setdefault(normalized, {})[entity_id] = (
+                RuntimeFinanceCountryShortAlias(
+                    entity_id=entity_id,
+                    canonical_text=canonical_text,
+                    label=label,
+                    alias=alias,
+                    alias_quality=alias_quality,
+                    source_pack=runtime.pack_id,
+                    weak_alias=weak_alias,
+                    quality_reasons=quality_reasons,
+                )
             )
 
     resolved: dict[str, tuple[RuntimeFinanceCountryShortAlias, ...]] = {}
@@ -2252,7 +2244,7 @@ def _extract_rule_entities(
             normalized_start = segment_start + match.start()
             normalized_end = segment_start + match.end()
             raw_start, raw_end = normalized_input.raw_span(normalized_start, normalized_end)
-            matched_text = segment_text_value[match.start():match.end()]
+            matched_text = segment_text_value[match.start() : match.end()]
             extracted.append(
                 ExtractedCandidate(
                     entity=EntityMatch(
@@ -2402,7 +2394,7 @@ def _extract_hyphenated_lookup_alias_entities(
                 segment_start=segment_start,
                 normalized_input=normalized_input,
             )
-    )
+        )
     return extracted
 
 
@@ -2422,9 +2414,10 @@ def _extract_registry_short_alias_entities_for_matcher_packs(
     for start, end in _iter_token_spans(segment_text_value):
         candidate_text = segment_text_value[start:end]
         normalized_acronym = _normalize_acronym_text(candidate_text)
-        if (
-            len(normalized_acronym) not in _MATCHER_REGISTRY_SHORT_ALIAS_LENGTH_RANGE
-            or not _is_single_token_all_caps(candidate_text)
+        if len(
+            normalized_acronym
+        ) not in _MATCHER_REGISTRY_SHORT_ALIAS_LENGTH_RANGE or not _is_single_token_all_caps(
+            candidate_text
         ):
             continue
         if len(pack_id_list) == 1:
@@ -2537,7 +2530,9 @@ def _extract_lookup_alias_entities_with_matchers(
         for candidate in exact_match_candidates:
             start = candidate.start
             end = candidate.end
-            if not _is_token_window_span(start, end, token_starts=token_starts, token_ends=token_ends):
+            if not _is_token_window_span(
+                start, end, token_starts=token_starts, token_ends=token_ends
+            ):
                 continue
             candidate_text = segment_text_value[start:end]
             if compiled_matcher.entry_payloads and candidate.entry_indices:
@@ -2826,9 +2821,8 @@ def _iter_hyphenated_location_backfill_windows(
                 break
             if previous_normalized in _GENERIC_PHRASE_LEADS:
                 break
-            if (
-                not _is_titleish_token(previous_inline[2])
-                or _looks_like_adjectival_location_tail(previous_inline[2])
+            if not _is_titleish_token(previous_inline[2]) or _looks_like_adjectival_location_tail(
+                previous_inline[2]
             ):
                 break
             window_start = previous_inline[0]
@@ -3137,8 +3131,7 @@ def _next_structural_org_continuation_token_span(
         return match.start(), match.end(), match.group(0)
     stripped_gap = "".join(character for character in gap if not character.isspace())
     if stripped_gap and all(
-        character in _STRUCTURAL_ORG_HYPHEN_CONTINUATION_CHARS
-        for character in stripped_gap
+        character in _STRUCTURAL_ORG_HYPHEN_CONTINUATION_CHARS for character in stripped_gap
     ):
         return match.start(), match.end(), match.group(0)
     return None
@@ -3336,7 +3329,8 @@ def _build_exact_contextual_acronym_lookup_entities(
             and _is_single_token_all_caps(matched_text)
             and (
                 normalized_matched_text in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS
-                or normalize_lookup_text(candidate_value) in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS
+                or normalize_lookup_text(candidate_value)
+                in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS
                 or normalize_lookup_text(canonical_text) in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS
             )
         ):
@@ -3391,6 +3385,11 @@ def _should_skip_single_token_lookup_candidate(
     normalized_candidate_value = normalize_lookup_text(candidate_value)
     normalized_canonical_text = normalize_lookup_text(canonical_text)
     if candidate_domain == "finance":
+        if (
+            label_key in {"organization", "person", "ticker"}
+            and normalized_matched_text in _RUNTIME_G20_COUNTRY_ALIAS_TEXTS
+        ):
+            return True
         if not _is_single_token_alpha(matched_text):
             return False
         if label_key == "person":
@@ -3575,6 +3574,11 @@ def _should_skip_multi_token_lookup_candidate(
     label_key = candidate_label.casefold()
     if candidate_domain == "finance":
         canonical_text = canonical_text or candidate_value
+        if (
+            label_key in {"organization", "person", "ticker"}
+            and normalize_lookup_text(matched_text) in _RUNTIME_G20_COUNTRY_ALIAS_TEXTS
+        ):
+            return True
         if label_key == "person":
             raw_tokens = [
                 token
@@ -3585,8 +3589,7 @@ def _should_skip_multi_token_lookup_candidate(
                 return True
             normalized_tokens = [normalize_lookup_text(token) for token in raw_tokens]
             if any(
-                not _is_titleish_token(token)
-                and normalized not in _PERSON_NAME_PARTICLES
+                not _is_titleish_token(token) and normalized not in _PERSON_NAME_PARTICLES
                 for token, normalized in zip(raw_tokens, normalized_tokens)
             ):
                 return True
@@ -3598,12 +3601,9 @@ def _should_skip_multi_token_lookup_candidate(
         if label_key == "ticker":
             tokens = TOKEN_RE.findall(matched_text)
             return len(tokens) >= 2
-        if (
-            label_key == "organization"
-            and _looks_like_lowercase_article_led_finance_org_fragment(
-                matched_text,
-                canonical_text=canonical_text,
-            )
+        if label_key == "organization" and _looks_like_lowercase_article_led_finance_org_fragment(
+            matched_text,
+            canonical_text=canonical_text,
         ):
             return True
         return False
@@ -3656,13 +3656,10 @@ def _should_skip_multi_token_lookup_candidate(
         )
     ):
         return True
-    if (
-        label_key == "location"
-        and _looks_like_lowercase_article_dropped_long_location_fragment(
-            matched_text,
-            candidate_value=candidate_value,
-            canonical_text=canonical_text,
-        )
+    if label_key == "location" and _looks_like_lowercase_article_dropped_long_location_fragment(
+        matched_text,
+        candidate_value=candidate_value,
+        canonical_text=canonical_text,
     ):
         return True
     if (
@@ -3676,9 +3673,8 @@ def _should_skip_multi_token_lookup_candidate(
         )
     ):
         return True
-    if (
-        label_key == "organization"
-        and _looks_like_generic_office_title_candidate(tokens, lowered_tokens)
+    if label_key == "organization" and _looks_like_generic_office_title_candidate(
+        tokens, lowered_tokens
     ):
         return True
     if label_key == "person":
@@ -3744,10 +3740,7 @@ def _looks_like_lowercase_article_led_finance_org_fragment(
     canonical_tokens = [normalize_lookup_text(token) for token in TOKEN_RE.findall(canonical_text)]
     if len(canonical_tokens) < 4:
         return False
-    return any(
-        token in _STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS
-        for token in canonical_tokens[2:]
-    )
+    return any(token in _STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS for token in canonical_tokens[2:])
 
 
 def _looks_like_lowercase_article_dropped_long_location_fragment(
@@ -3803,7 +3796,9 @@ def _looks_like_generated_article_led_alias_canonical_mismatch(
     if not canonical_tokens:
         return False
     matched_core = matched_tokens[1:]
-    canonical_core = canonical_tokens[1:] if canonical_tokens[0] in _GENERIC_PHRASE_LEADS else canonical_tokens
+    canonical_core = (
+        canonical_tokens[1:] if canonical_tokens[0] in _GENERIC_PHRASE_LEADS else canonical_tokens
+    )
     if not matched_core or not canonical_core:
         return False
     shared_prefix_length = min(len(matched_core), len(canonical_core))
@@ -3818,10 +3813,7 @@ def _looks_like_generic_office_title_candidate(
         return False
     if any(token in _STRUCTURAL_ORG_TRAILING_SUFFIX_TOKENS for token in lowered_tokens):
         return False
-    return all(
-        raw_token.isupper() or raw_token[:1].isupper()
-        for raw_token in tokens
-    )
+    return all(raw_token.isupper() or raw_token[:1].isupper() for raw_token in tokens)
 
 
 def _looks_like_locationish_singleton_context(text: str, *, start: int, end: int) -> bool:
@@ -3892,14 +3884,16 @@ def _looks_like_member_list_location_alias_context(
     next_lower = normalize_lookup_text(_next_token(text, end))
     if next_lower not in {"and", "or"}:
         return False
-    trailing_window = text[end:min(len(text), end + 192)].casefold()
-    return any(
-        phrase in trailing_window for phrase in _MEMBER_LIST_LOCATION_ALIAS_TAIL_PHRASES
-    )
+    trailing_window = text[end : min(len(text), end + 192)].casefold()
+    return any(phrase in trailing_window for phrase in _MEMBER_LIST_LOCATION_ALIAS_TAIL_PHRASES)
 
 
 def _person_surname_key(value: str) -> str | None:
-    tokens = [token for token in TOKEN_RE.findall(value) if any(character.isalpha() for character in token)]
+    tokens = [
+        token
+        for token in TOKEN_RE.findall(value)
+        if any(character.isalpha() for character in token)
+    ]
     if len(tokens) < 2:
         return None
     if len(tokens) == 2:
@@ -3909,12 +3903,9 @@ def _person_surname_key(value: str) -> str | None:
             or leading_token in _PERSON_SURNAME_COREFERENCE_PRECEDING_TITLE_TOKENS
         ):
             return None
-        if (
-            len(leading_token) == 1
-            and re.search(
-                rf"{re.escape(tokens[0])}\s*[’']\s*{re.escape(tokens[1])}",
-                value,
-            )
+        if len(leading_token) == 1 and re.search(
+            rf"{re.escape(tokens[0])}\s*[’']\s*{re.escape(tokens[1])}",
+            value,
         ):
             return None
     for index in range(len(tokens) - 1, -1, -1):
@@ -3930,12 +3921,9 @@ def _person_surname_key(value: str) -> str | None:
         if index > 0:
             previous_token = tokens[index - 1]
             previous_normalized = normalize_lookup_text(previous_token)
-            if (
-                len(previous_normalized) == 1
-                and re.search(
-                    rf"{re.escape(previous_token)}\s*[’']\s*{re.escape(token)}",
-                    value,
-                )
+            if len(previous_normalized) == 1 and re.search(
+                rf"{re.escape(previous_token)}\s*[’']\s*{re.escape(token)}",
+                value,
             ):
                 return f"{previous_normalized}'{normalized}"
         return normalized
@@ -3986,14 +3974,10 @@ def _person_surname_coreference_mention_types(
         mention_types.add("following_cue")
     if next_lower == "went":
         next_next_span = (
-            _next_contiguous_token_span(text, next_span[1])
-            if next_span is not None
-            else None
+            _next_contiguous_token_span(text, next_span[1]) if next_span is not None else None
         )
         next_next_lower = (
-            normalize_lookup_text(next_next_span[2])
-            if next_next_span is not None
-            else ""
+            normalize_lookup_text(next_next_span[2]) if next_next_span is not None else ""
         )
         if next_next_lower == "public":
             mention_types.add("went_public")
@@ -4009,10 +3993,7 @@ def _person_surname_coreference_mention_types(
         mention_types.add("preposition_lead")
         if previous_lower == "about" and next_lower in _PERSON_SURNAME_COREFERENCE_FOLLOWING_CUES:
             mention_types.add("about_discourse")
-    if (
-        previous_lower in _PERSON_SURNAME_COREFERENCE_OBJECT_REPORTING_CUES
-        and next_lower == "to"
-    ):
+    if previous_lower in _PERSON_SURNAME_COREFERENCE_OBJECT_REPORTING_CUES and next_lower == "to":
         mention_types.add("reported_object")
     if previous_lower != "to":
         return mention_types
@@ -4152,11 +4133,11 @@ def _is_exact_expansion_acronym_alias(
 
 
 def _has_whitespace_adjacent_titleish_token(text: str, *, start: int, end: int) -> bool:
-    has_left = start > 0 and text[start - 1].isspace() and _is_titleish_token(
-        _previous_token(text, start)
+    has_left = (
+        start > 0 and text[start - 1].isspace() and _is_titleish_token(_previous_token(text, start))
     )
-    has_right = end < len(text) and text[end].isspace() and _is_titleish_token(
-        _next_token(text, end)
+    has_right = (
+        end < len(text) and text[end].isspace() and _is_titleish_token(_next_token(text, end))
     )
     return has_left or has_right
 
@@ -4168,20 +4149,22 @@ def _has_adjacent_titleish_token(text: str, *, start: int, end: int) -> bool:
 
 
 def _looks_like_all_caps_section_heading_noise(text: str, *, start: int, end: int) -> bool:
-    trailing = text[end:end + 40]
+    trailing = text[end : end + 40]
     if re.match(r"\s*:\s*", trailing) is not None:
         return True
-    if re.match(
-        r"\s+[A-Z]{2,8}\b(?:\s+[A-Z][A-Za-z'’-]+){0,3}\s*:\s*",
-        trailing,
-    ) is not None:
+    if (
+        re.match(
+            r"\s+[A-Z]{2,8}\b(?:\s+[A-Z][A-Za-z'’-]+){0,3}\s*:\s*",
+            trailing,
+        )
+        is not None
+    ):
         return True
-    leading = text[max(0, start - 16):start]
+    leading = text[max(0, start - 16) : start]
     if re.search(r"\b[A-Z]{2,8}\s*$", leading) is None:
         return False
     return (
-        re.match(r"\s+[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){0,3}\s*:\s*", trailing)
-        is not None
+        re.match(r"\s+[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){0,3}\s*:\s*", trailing) is not None
     )
 
 
@@ -4305,8 +4288,12 @@ def _collect_document_acronym_definitions(
         if current is None:
             kept[key] = definition
             continue
-        current_anchor = current.anchor.entity.link.entity_id if current.anchor.entity.link else None
-        new_anchor = definition.anchor.entity.link.entity_id if definition.anchor.entity.link else None
+        current_anchor = (
+            current.anchor.entity.link.entity_id if current.anchor.entity.link else None
+        )
+        new_anchor = (
+            definition.anchor.entity.link.entity_id if definition.anchor.entity.link else None
+        )
         if current_anchor == new_anchor:
             if _candidate_rank_key(definition.anchor) > _candidate_rank_key(current.anchor):
                 kept[key] = definition
@@ -4414,11 +4401,7 @@ def _backfill_heuristic_definition_acronym_entities(
         for label_key in ("organization", "location"):
             matching_definitions = definitions_by_key.get((normalized_acronym, label_key), [])
             definition = next(
-                (
-                    item
-                    for item in reversed(matching_definitions)
-                    if start >= item.acronym_start
-                ),
+                (item for item in reversed(matching_definitions) if start >= item.acronym_start),
                 None,
             )
             if definition is None:
@@ -4435,21 +4418,21 @@ def _backfill_heuristic_definition_acronym_entities(
                         start=raw_start,
                         end=raw_end,
                         confidence=0.67,
-                    provenance=_build_provenance(
-                        match_kind="alias",
-                        match_path="heuristic.explicit_definition_acronym",
-                        match_source=f"{definition.long_form} ({token_text})",
-                        source_pack=runtime.pack_id,
-                        source_domain=runtime.domain,
-                        lane="heuristic_definition_acronym_backfill",
+                        provenance=_build_provenance(
+                            match_kind="alias",
+                            match_path="heuristic.explicit_definition_acronym",
+                            match_source=f"{definition.long_form} ({token_text})",
+                            source_pack=runtime.pack_id,
+                            source_domain=runtime.domain,
+                            lane="heuristic_definition_acronym_backfill",
+                        ),
+                        link=_build_runtime_generated_entity_link(
+                            provider="heuristic.explicit_definition_acronym",
+                            runtime=runtime,
+                            label=definition.label,
+                            canonical_text=definition.long_form,
+                        ),
                     ),
-                    link=_build_runtime_generated_entity_link(
-                        provider="heuristic.explicit_definition_acronym",
-                        runtime=runtime,
-                        label=definition.label,
-                        canonical_text=definition.long_form,
-                    ),
-                ),
                     domain=runtime.domain,
                     lane="heuristic_definition_acronym_backfill",
                     normalized_start=start,
@@ -4486,7 +4469,7 @@ def _backfill_heuristic_structured_organization_entities(
             start=candidate.start,
             end=candidate.end,
         )
-        raw_candidate_text = normalized_input.text[candidate.start:normalized_end]
+        raw_candidate_text = normalized_input.text[candidate.start : normalized_end]
         trimmed_tail = _trim_trailing_structural_org_phrase_tail(raw_candidate_text)
         if trimmed_tail is not None:
             raw_candidate_text = raw_candidate_text[: trimmed_tail[1]]
@@ -4708,8 +4691,10 @@ def _collect_heuristic_structured_organizations(
             )
             key = normalize_lookup_text(candidate_text)
             current = kept.get(key)
-            if current is None or candidate.start < current.start or (
-                candidate.start == current.start and candidate.end > current.end
+            if (
+                current is None
+                or candidate.start < current.start
+                or (candidate.start == current.start and candidate.end > current.end)
             ):
                 kept[key] = candidate
     return sorted(kept.values(), key=lambda item: (item.start, item.end))
@@ -4747,13 +4732,8 @@ def _is_plausible_heuristic_structured_organization_candidate(candidate: str) ->
             return False
         if not tail_tokens:
             return False
-        if (
-            head_tokens[-1] in _LOW_SIGNAL_STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS
-            and not any(
-                _is_proper_titlecase_token(token)
-                for token in tokens[connector_index + 1 :]
-                if token
-            )
+        if head_tokens[-1] in _LOW_SIGNAL_STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS and not any(
+            _is_proper_titlecase_token(token) for token in tokens[connector_index + 1 :] if token
         ):
             return False
         if head_tokens[-1] == "house" and tail_tokens[-1] not in _PARLIAMENTARY_HOUSE_TAIL_TOKENS:
@@ -4778,9 +4758,7 @@ def _trim_leading_structural_org_phrase_lead(candidate: str) -> tuple[str, int] 
     if len(token_matches) < 2:
         return None
     normalized_tokens = [normalize_lookup_text(match.group(0)) for match in token_matches]
-    if normalized_tokens[0] not in (
-        _GENERIC_PHRASE_LEADS | _STRUCTURED_ORG_LEADING_STOP_TOKENS
-    ):
+    if normalized_tokens[0] not in (_GENERIC_PHRASE_LEADS | _STRUCTURED_ORG_LEADING_STOP_TOKENS):
         return None
     if normalized_tokens[1] not in (
         _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS | _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS
@@ -4858,7 +4836,11 @@ def _trim_leading_structural_org_role_phrase(candidate: str) -> tuple[str, int] 
     if normalized_tokens[0] not in _GENERIC_OFFICE_TITLE_TOKENS:
         return None
     connector_index = next(
-        (index for index, token in enumerate(normalized_tokens[1:], start=1) if token in _STRUCTURAL_ORG_CONNECTOR_TOKENS),
+        (
+            index
+            for index, token in enumerate(normalized_tokens[1:], start=1)
+            if token in _STRUCTURAL_ORG_CONNECTOR_TOKENS
+        ),
         None,
     )
     if connector_index is None or connector_index + 1 >= len(token_matches):
@@ -4883,8 +4865,10 @@ def _collect_heuristic_structured_locations(
         )
         key = normalize_lookup_text(candidate_text)
         current = kept.get(key)
-        if current is None or candidate.start < current.start or (
-            candidate.start == current.start and candidate.end > current.end
+        if (
+            current is None
+            or candidate.start < current.start
+            or (candidate.start == current.start and candidate.end > current.end)
         ):
             kept[key] = candidate
     return sorted(kept.values(), key=lambda item: (item.start, item.end))
@@ -4974,8 +4958,7 @@ def _matches_explicit_acronym_initialism(
     tokens = TOKEN_RE.findall(long_form)
     while (
         len(tokens) >= 3
-        and normalize_lookup_text(tokens[-1])
-        in _OPTIONAL_EXPLICIT_ACRONYM_TRAILING_SUFFIX_TOKENS
+        and normalize_lookup_text(tokens[-1]) in _OPTIONAL_EXPLICIT_ACRONYM_TRAILING_SUFFIX_TOKENS
     ):
         tokens = tokens[:-1]
         if _derive_initialism(" ".join(tokens)) == normalized_acronym:
@@ -5014,10 +4997,9 @@ def _backfill_contextual_org_acronym_entities(
     for start, end in _iter_contextual_acronym_spans(normalized_input.text):
         token_text = normalized_input.text[start:end]
         normalized_acronym = _normalize_acronym_text(token_text)
-        if (
-            len(normalized_acronym) not in _CONTEXTUAL_ORG_ACRONYM_LENGTH_RANGE
-            or not _is_single_token_all_caps(token_text)
-        ):
+        if len(
+            normalized_acronym
+        ) not in _CONTEXTUAL_ORG_ACRONYM_LENGTH_RANGE or not _is_single_token_all_caps(token_text):
             continue
         if normalized_acronym.casefold() in _RUNTIME_GENERIC_ORG_ACRONYM_ALIAS_TEXTS:
             continue
@@ -5136,7 +5118,9 @@ def _supports_contextual_org_acronym_backfill(
     suffix = text[end : end + 2]
     if suffix in {"'s", "’s"}:
         return True
-    if _supports_source_attribution_acronym(text, start=start, end=end, previous_tokens=previous_tokens):
+    if _supports_source_attribution_acronym(
+        text, start=start, end=end, previous_tokens=previous_tokens
+    ):
         return True
     if _supports_preceding_context_noun_contextual_org_acronym(
         text,
@@ -5249,8 +5233,7 @@ def _supports_slash_paired_contextual_org_acronym(text: str, *, start: int, end:
         return False
     next_token = normalize_lookup_text(_next_token(text, end).rstrip(".,;:!?)]}”’\"'"))
     return next_token in (
-        _CONTEXTUAL_ORG_ACRONYM_CONTEXT_NOUN_CUES
-        | _CONTEXTUAL_ORG_ACRONYM_FOLLOWING_CUES
+        _CONTEXTUAL_ORG_ACRONYM_CONTEXT_NOUN_CUES | _CONTEXTUAL_ORG_ACRONYM_FOLLOWING_CUES
     )
 
 
@@ -5280,8 +5263,7 @@ def _supports_following_contextual_org_acronym(
             return False
     next_token = _next_token(text, end).rstrip(".,;:!?)]}”’\"'")
     return normalize_lookup_text(next_token) in (
-        _CONTEXTUAL_ORG_ACRONYM_CONTEXT_NOUN_CUES
-        | _CONTEXTUAL_ORG_ACRONYM_FOLLOWING_CUES
+        _CONTEXTUAL_ORG_ACRONYM_CONTEXT_NOUN_CUES | _CONTEXTUAL_ORG_ACRONYM_FOLLOWING_CUES
     )
 
 
@@ -5366,12 +5348,18 @@ def _structural_location_label_penalty(candidate: ExtractedCandidate) -> float:
 
 def _looks_like_trailing_structural_org_fragment(text: str, *, start: int, end: int) -> bool:
     connector = _previous_contiguous_token_span(text, start)
-    if connector is not None and normalize_lookup_text(connector[2]) in _STRUCTURAL_ORG_CONNECTOR_TOKENS:
+    if (
+        connector is not None
+        and normalize_lookup_text(connector[2]) in _STRUCTURAL_ORG_CONNECTOR_TOKENS
+    ):
         previous = _previous_contiguous_token_span(text, connector[0])
         if previous is not None and _is_titleish_token(previous[2]):
             return True
     connector = _next_contiguous_token_span(text, end)
-    if connector is None or normalize_lookup_text(connector[2]) not in _STRUCTURAL_ORG_CONNECTOR_TOKENS:
+    if (
+        connector is None
+        or normalize_lookup_text(connector[2]) not in _STRUCTURAL_ORG_CONNECTOR_TOKENS
+    ):
         return False
     following = _next_contiguous_token_span(text, connector[1])
     if following is None:
@@ -5394,7 +5382,10 @@ def _looks_like_leading_structural_org_fragment(text: str, *, start: int, end: i
     ):
         return True
     next_token = _next_contiguous_token_span(text, end)
-    if next_token is not None and normalize_lookup_text(next_token[2]) in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS:
+    if (
+        next_token is not None
+        and normalize_lookup_text(next_token[2]) in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS
+    ):
         return True
     if next_token is not None and (
         _is_titleish_token(next_token[2]) or _is_lowercase_structural_org_tail_token(next_token[2])
@@ -5404,7 +5395,10 @@ def _looks_like_leading_structural_org_fragment(text: str, *, start: int, end: i
             _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS | _STRUCTURAL_ORG_CONNECTOR_HEAD_TOKENS
         ):
             return True
-    if len(normalized_tokens) == 1 and normalized_tokens[0] in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS:
+    if (
+        len(normalized_tokens) == 1
+        and normalized_tokens[0] in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS
+    ):
         return previous is not None and _is_titleish_token(previous[2])
     return False
 
@@ -5453,7 +5447,8 @@ def _looks_like_article_led_structural_org_fragment(
                 return False
             continue
         if not (
-            _is_titleish_token(following[2]) or _is_lowercase_structural_org_tail_token(following[2])
+            _is_titleish_token(following[2])
+            or _is_lowercase_structural_org_tail_token(following[2])
         ):
             return False
         current = following
@@ -5531,7 +5526,9 @@ def _score_hybrid_candidate(
     popularity_weight = float(candidate.get("popularity_weight") or 0.0)
     surface_score = max(
         _surface_similarity(proposal.text, str(candidate["value"])),
-        _surface_similarity(proposal.text, str(candidate.get("canonical_text") or candidate["value"])),
+        _surface_similarity(
+            proposal.text, str(candidate.get("canonical_text") or candidate["value"])
+        ),
     )
     anchor_key = _candidate_anchor_key(
         str(candidate.get("entity_id") or "") or None,
@@ -5653,10 +5650,7 @@ def _normalize_hybrid_proposal(
         return None
     start_index = 0
     end_index = len(token_matches) - 1
-    normalized_tokens = [
-        _proposal_generated_token_key(match.group(0))
-        for match in token_matches
-    ]
+    normalized_tokens = [_proposal_generated_token_key(match.group(0)) for match in token_matches]
     label = proposal.label.casefold()
     if label == "person":
         while start_index <= end_index and (
@@ -5698,18 +5692,16 @@ def _normalize_hybrid_proposal(
         return None
     normalized_start = proposal_start + token_matches[start_index].start()
     normalized_end = proposal_start + token_matches[end_index].end()
-    while normalized_end > normalized_start and segment_text_value[normalized_end - 2 : normalized_end] in {"'s", "’s"}:
+    while normalized_end > normalized_start and segment_text_value[
+        normalized_end - 2 : normalized_end
+    ] in {"'s", "’s"}:
         normalized_end -= 2
     normalized_text = segment_text_value[normalized_start:normalized_end]
     if not normalized_text.strip():
         return None
-    normalized_token_texts = [
-        match.group(0)
-        for match in TOKEN_RE.finditer(normalized_text)
-    ]
+    normalized_token_texts = [match.group(0) for match in TOKEN_RE.finditer(normalized_text)]
     normalized_token_keys = [
-        _proposal_generated_token_key(token)
-        for token in normalized_token_texts
+        _proposal_generated_token_key(token) for token in normalized_token_texts
     ]
     normalized_label = proposal.label
     if (
@@ -5728,15 +5720,12 @@ def _normalize_hybrid_proposal(
         )
     ):
         normalized_label = "organization"
-    elif (
-        label == "location"
-        and _generated_location_has_single_token_org_context(
-            normalized_token_texts,
-            normalized_token_keys,
-            segment_text_value=segment_text_value,
-            start=normalized_start,
-            end=normalized_end,
-        )
+    elif label == "location" and _generated_location_has_single_token_org_context(
+        normalized_token_texts,
+        normalized_token_keys,
+        segment_text_value=segment_text_value,
+        start=normalized_start,
+        end=normalized_end,
     ):
         normalized_label = "organization"
     if (
@@ -5876,15 +5865,11 @@ def _generated_person_has_following_org_continuation(
         return False
     _start, end = bounds
     following_tokens = [
-        match.group(0)
-        for match in TOKEN_RE.finditer(segment_text_value[end : end + 64])
+        match.group(0) for match in TOKEN_RE.finditer(segment_text_value[end : end + 64])
     ][:3]
     if not following_tokens:
         return False
-    following_normalized = [
-        normalize_lookup_text(token)
-        for token in following_tokens
-    ]
+    following_normalized = [normalize_lookup_text(token) for token in following_tokens]
     first_token = following_tokens[0]
     first_normalized = following_normalized[0]
     if first_normalized in _PROPOSAL_GENERATED_CONNECTOR_TOKENS:
@@ -5893,12 +5878,9 @@ def _generated_person_has_following_org_continuation(
         return False
     if first_normalized in _PROPOSAL_GENERATED_PERSON_ORG_CONTINUATION_TOKENS:
         return True
-    return (
-        _is_titleish_token(first_token)
-        and any(
-            normalized in _PROPOSAL_GENERATED_PERSON_ORG_CONTINUATION_TOKENS
-            for normalized in following_normalized[1:]
-        )
+    return _is_titleish_token(first_token) and any(
+        normalized in _PROPOSAL_GENERATED_PERSON_ORG_CONTINUATION_TOKENS
+        for normalized in following_normalized[1:]
     )
 
 
@@ -5978,9 +5960,7 @@ def _generated_person_has_acronym_led_business_context(
         return False
     leading_compact = "".join(character for character in tokens[0] if character.isalpha())
     if not (
-        tokens[0].isupper()
-        and 2 <= len(leading_compact) <= 4
-        and _is_titleish_token(tokens[1])
+        tokens[0].isupper() and 2 <= len(leading_compact) <= 4 and _is_titleish_token(tokens[1])
     ):
         return False
     bounds = _proposal_segment_bounds(proposal, segment_text_value=segment_text_value)
@@ -5989,12 +5969,13 @@ def _generated_person_has_acronym_led_business_context(
     start, end = bounds
     context_tokens = [
         normalize_lookup_text(token)
-        for token in TOKEN_RE.findall(segment_text_value[max(0, start - 96) : min(len(segment_text_value), end + 96)])
+        for token in TOKEN_RE.findall(
+            segment_text_value[max(0, start - 96) : min(len(segment_text_value), end + 96)]
+        )
         if any(character.isalpha() for character in token)
     ]
     return any(
-        token in _PROPOSAL_GENERATED_PERSON_BUSINESS_CONTEXT_TOKENS
-        for token in context_tokens
+        token in _PROPOSAL_GENERATED_PERSON_BUSINESS_CONTEXT_TOKENS for token in context_tokens
     )
 
 
@@ -6067,8 +6048,7 @@ def _generated_person_leading_modifier_pair_can_trim(
         return False
     second_normalized = normalized_tokens[start_index + 1]
     if second_normalized not in (
-        _PROPOSAL_GENERATED_PERSON_ROLE_MODIFIERS
-        | _PROPOSAL_GENERATED_PERSON_TITLE_TOKENS
+        _PROPOSAL_GENERATED_PERSON_ROLE_MODIFIERS | _PROPOSAL_GENERATED_PERSON_TITLE_TOKENS
     ):
         return False
     return _generated_person_core_starts_with_titleish_name(
@@ -6110,7 +6090,9 @@ def _should_skip_hybrid_link_candidate(
     surface = str(candidate.get("canonical_text") or candidate.get("value") or "")
     normalized_tokens = [normalize_lookup_text(token) for token in TOKEN_RE.findall(surface)]
     normalized_tokens = [
-        token for token in normalized_tokens if token and token not in _PROPOSAL_GENERATED_CONNECTOR_TOKENS
+        token
+        for token in normalized_tokens
+        if token and token not in _PROPOSAL_GENERATED_CONNECTOR_TOKENS
     ]
     if len(normalized_tokens) < 2:
         return False
@@ -6232,7 +6214,10 @@ def _can_emit_generated_hybrid_proposal(
     runtime: PackRuntime,
 ) -> bool:
     runtime_domain = runtime.domain.casefold()
-    if runtime.pack_id != "general-en" and runtime_domain not in _PROPOSAL_GENERATED_FALLBACK_DOMAINS:
+    if (
+        runtime.pack_id != "general-en"
+        and runtime_domain not in _PROPOSAL_GENERATED_FALLBACK_DOMAINS
+    ):
         return False
     label = proposal.label.casefold()
     tokens = _proposal_generated_tokens(proposal.text)
@@ -6303,11 +6288,15 @@ def _should_skip_hybrid_lookup_proposal(
     if label == "location":
         return not _is_safe_generated_location_tokens(tokens, normalized_tokens)
     if label == "organization":
-        return any(token in _PROPOSAL_GENERATED_ORG_FRAGMENT_TOKENS for token in normalized_tokens) or (
-            len(normalized_tokens) == 2
-            and normalized_tokens[0] in _PROPOSAL_GENERATED_WEAK_ORG_HEAD_TOKENS
-            and normalized_tokens[1] in _PROPOSAL_GENERATED_WEAK_ORG_TAIL_TOKENS
-        ) or _generated_org_has_role_name_tail(tokens, normalized_tokens)
+        return (
+            any(token in _PROPOSAL_GENERATED_ORG_FRAGMENT_TOKENS for token in normalized_tokens)
+            or (
+                len(normalized_tokens) == 2
+                and normalized_tokens[0] in _PROPOSAL_GENERATED_WEAK_ORG_HEAD_TOKENS
+                and normalized_tokens[1] in _PROPOSAL_GENERATED_WEAK_ORG_TAIL_TOKENS
+            )
+            or _generated_org_has_role_name_tail(tokens, normalized_tokens)
+        )
     return False
 
 
@@ -6373,12 +6362,9 @@ def _is_safe_generated_person_tokens(
         segment_text_value=segment_text_value,
     ):
         return False
-    if (
-        not names_look_like_names
-        and _generated_person_has_org_expansion_elsewhere_in_text(
-            proposal,
-            segment_text_value=segment_text_value,
-        )
+    if not names_look_like_names and _generated_person_has_org_expansion_elsewhere_in_text(
+        proposal,
+        segment_text_value=segment_text_value,
     ):
         return False
     trailing_compact = "".join(character for character in tokens[-1] if character.isalpha())
@@ -6485,9 +6471,7 @@ def _is_safe_generated_organization_tokens(
         return False
     has_org_cue = _generated_org_has_explicit_cue(normalized_tokens)
     has_acronym_tail = any(
-        token.isupper()
-        and 2 <= len(token) <= 8
-        and normalize_lookup_text(token) != "ai"
+        token.isupper() and 2 <= len(token) <= 8 and normalize_lookup_text(token) != "ai"
         for token in tokens
     )
     if not has_org_cue and not has_acronym_tail:
@@ -6517,11 +6501,15 @@ def _generated_org_role_name_tail_index(
     normalized_tokens: list[str],
 ) -> int | None:
     for index, normalized in enumerate(normalized_tokens[1:-1], start=1):
-        if normalized not in (_GENERIC_OFFICE_TITLE_TOKENS | _PROPOSAL_GENERATED_PERSON_TITLE_TOKENS):
+        if normalized not in (
+            _GENERIC_OFFICE_TITLE_TOKENS | _PROPOSAL_GENERATED_PERSON_TITLE_TOKENS
+        ):
             continue
         trailing = [
             (token, trailing_normalized)
-            for token, trailing_normalized in zip(tokens[index + 1 :], normalized_tokens[index + 1 :], strict=False)
+            for token, trailing_normalized in zip(
+                tokens[index + 1 :], normalized_tokens[index + 1 :], strict=False
+            )
             if trailing_normalized not in _PROPOSAL_GENERATED_CONNECTOR_TOKENS
         ]
         if len(trailing) < 2:
@@ -6563,8 +6551,11 @@ def _generated_org_has_role_name_tail(
 
 
 def _generated_org_has_explicit_cue(normalized_tokens: list[str]) -> bool:
-    return any(token in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS for token in normalized_tokens) or any(
-        token in {
+    return any(
+        token in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_VARIANTS for token in normalized_tokens
+    ) or any(
+        token
+        in {
             "action",
             "agency",
             "assembly",
@@ -6671,7 +6662,10 @@ def _candidate_covers_runtime_country_alias(
         return False
     if candidate.entity.start > country.entity.start or candidate.entity.end < country.entity.end:
         return False
-    if candidate.entity.start == country.entity.start and candidate.entity.end == country.entity.end:
+    if (
+        candidate.entity.start == country.entity.start
+        and candidate.entity.end == country.entity.end
+    ):
         return False
     if candidate.entity.end - candidate.entity.start <= country.entity.end - country.entity.start:
         return False
@@ -6696,10 +6690,7 @@ def _suppress_nested_runtime_country_alias_candidates(
     kept: list[ExtractedCandidate] = []
     discarded: list[ExtractedCandidate] = []
     for candidate in extracted:
-        if any(
-            _candidate_covers_runtime_country_alias(other, candidate)
-            for other in extracted
-        ):
+        if any(_candidate_covers_runtime_country_alias(other, candidate) for other in extracted):
             discarded.append(candidate)
             continue
         kept.append(candidate)
@@ -6794,7 +6785,7 @@ def _build_generated_hybrid_candidate(
     canonical_text = _collapse_whitespace(segment_text_value[proposal.start : proposal.end])
     return ExtractedCandidate(
         entity=EntityMatch(
-            text=segment_text_value[proposal.start:proposal.end],
+            text=segment_text_value[proposal.start : proposal.end],
             label=proposal.label,
             start=raw_start,
             end=raw_end,
@@ -7025,7 +7016,7 @@ def _extract_hybrid_entities(
         raw_start, raw_end = normalized_input.raw_span(normalized_start, normalized_end)
         canonical_text = str(best_candidate.get("canonical_text") or best_candidate["value"])
         entity = EntityMatch(
-            text=segment_text_value[proposal.start:proposal.end],
+            text=segment_text_value[proposal.start : proposal.end],
             label=str(best_candidate["label"]),
             start=raw_start,
             end=raw_end,
@@ -7090,13 +7081,10 @@ def _relevance_occurrence_text(candidate: ExtractedCandidate) -> str:
         if candidate.entity.link is not None
         else candidate.entity.text
     )
-    if (
-        candidate.lane == "deterministic_alias"
-        and _is_exact_expansion_acronym_alias(
-            matched_text=candidate.entity.text,
-            candidate_value=candidate.entity.text,
-            canonical_text=canonical_text,
-        )
+    if candidate.lane == "deterministic_alias" and _is_exact_expansion_acronym_alias(
+        matched_text=candidate.entity.text,
+        candidate_value=candidate.entity.text,
+        canonical_text=canonical_text,
     ):
         return candidate.entity.text
     return canonical_text
@@ -7160,7 +7148,9 @@ def _apply_entity_relevance(
         scored.append(
             ExtractedCandidate(
                 entity=candidate.entity.model_copy(
-                    update={"relevance": _score_entity_relevance(candidate, runtime=runtime, text=text)}
+                    update={
+                        "relevance": _score_entity_relevance(candidate, runtime=runtime, text=text)
+                    }
                 ),
                 domain=candidate.domain,
                 lane=candidate.lane,
@@ -7318,9 +7308,7 @@ def _contains_apostropheish_suffix(value: str) -> bool:
 
 
 def _normalize_apostropheish_alias_text(value: str) -> str:
-    return " ".join(
-        re.sub(r"[\'’ʻ`]+", " ", value.casefold()).split()
-    )
+    return " ".join(re.sub(r"[\'’ʻ`]+", " ", value.casefold()).split())
 
 
 def _is_runtime_possessive_alias_artifact(candidate: ExtractedCandidate) -> bool:
@@ -7399,7 +7387,9 @@ def _looks_like_reporting_attribution_contextual_org_acronym(
     )
     if not reporting_context:
         return False
-    next_token = normalize_lookup_text(_next_token(text, candidate.entity.end).rstrip(".,;:!?)]}”’\\\"'"))
+    next_token = normalize_lookup_text(
+        _next_token(text, candidate.entity.end).rstrip(".,;:!?)]}”’\\\"'")
+    )
     return next_token in _RUNTIME_ATTRIBUTION_CONTEXTUAL_ORG_ACRONYM_FOLLOWING_TOKENS
 
 
@@ -7494,8 +7484,7 @@ def _is_runtime_structural_geo_feature_label_mismatch(
     if surface_tokens[-1] not in _RUNTIME_STRUCTURAL_GEO_FEATURE_SUFFIX_TOKENS:
         return False
     if any(
-        token in _RUNTIME_STRUCTURAL_GEO_FEATURE_ORG_LEAD_TOKENS
-        for token in surface_tokens[:-1]
+        token in _RUNTIME_STRUCTURAL_GEO_FEATURE_ORG_LEAD_TOKENS for token in surface_tokens[:-1]
     ):
         return False
     if any(token in _HEURISTIC_STRUCTURAL_ORG_SUFFIX_TOKENS for token in surface_tokens):
@@ -7581,11 +7570,9 @@ def _is_runtime_truncated_prefix_alias_artifact(candidate: ExtractedCandidate) -
         return False
     normalized_match_source = " ".join(str(provenance.match_source or "").casefold().split())
     normalized_canonical = " ".join(
-        str(
-            candidate.entity.link.canonical_text
-            if candidate.entity.link is not None
-            else ""
-        ).casefold().split()
+        str(candidate.entity.link.canonical_text if candidate.entity.link is not None else "")
+        .casefold()
+        .split()
     )
     if (
         candidate.lane == "proposal_linked"
@@ -7604,7 +7591,9 @@ def _is_runtime_truncated_prefix_alias_artifact(candidate: ExtractedCandidate) -
         if source_tokens[: len(surface_tokens)] != surface_tokens:
             continue
         continuation_tokens = source_tokens[len(surface_tokens) :]
-        if continuation_tokens and all(token in _TRUNCATED_ALIAS_CONTINUATION_TOKENS for token in continuation_tokens):
+        if continuation_tokens and all(
+            token in _TRUNCATED_ALIAS_CONTINUATION_TOKENS for token in continuation_tokens
+        ):
             return True
     return False
 
@@ -7612,7 +7601,10 @@ def _is_runtime_truncated_prefix_alias_artifact(candidate: ExtractedCandidate) -
 def _is_runtime_date_like_alias(candidate: ExtractedCandidate) -> bool:
     if not _candidate_uses_runtime_generic_alias_guards(candidate):
         return False
-    return any(_DATE_LIKE_ALIAS_RE.fullmatch(value) for value in _runtime_normalized_alias_values(candidate))
+    return any(
+        _DATE_LIKE_ALIAS_RE.fullmatch(value)
+        for value in _runtime_normalized_alias_values(candidate)
+    )
 
 
 def _is_runtime_quoted_fragment_alias(candidate: ExtractedCandidate) -> bool:
@@ -7684,9 +7676,9 @@ def _is_runtime_single_token_titleish_fragment_alias(
         return False
     previous_span = _previous_contiguous_token_span(text, candidate.entity.start)
     next_span = _next_contiguous_token_span(text, candidate.entity.end)
-    return _is_titleish_token(previous_span[2] if previous_span is not None else "") or _is_titleish_token(
-        next_span[2] if next_span is not None else ""
-    )
+    return _is_titleish_token(
+        previous_span[2] if previous_span is not None else ""
+    ) or _is_titleish_token(next_span[2] if next_span is not None else "")
 
 
 def _is_runtime_partial_person_fragment_alias(candidate: ExtractedCandidate) -> bool:
@@ -7789,7 +7781,11 @@ def _resolve_overlaps(
             item.entity.end,
             item.entity.start,
             -_LANE_PRIORITY.get(item.lane, 0),
-            -(item.entity.relevance if item.entity.relevance is not None else (item.entity.confidence or 0.0)),
+            -(
+                item.entity.relevance
+                if item.entity.relevance is not None
+                else (item.entity.confidence or 0.0)
+            ),
         ),
     )
     ends = [item.entity.end for item in ordered]
@@ -7823,7 +7819,9 @@ def _resolve_overlaps(
 
     kept = [ordered[index] for index in sorted(kept_indexes)]
     discarded = [ordered[index] for index in range(len(ordered)) if index not in kept_indexes]
-    kept = sorted(kept, key=lambda item: (item.entity.start, item.entity.end, item.entity.label.casefold()))
+    kept = sorted(
+        kept, key=lambda item: (item.entity.start, item.entity.end, item.entity.label.casefold())
+    )
 
     if not debug_enabled:
         return kept, None, len(discarded)
@@ -7890,7 +7888,11 @@ def _merge_linked_entity_candidates(
             key=lambda item: (
                 item.entity.start,
                 item.entity.end,
-                -(item.entity.relevance if item.entity.relevance is not None else (item.entity.confidence or 0.0)),
+                -(
+                    item.entity.relevance
+                    if item.entity.relevance is not None
+                    else (item.entity.confidence or 0.0)
+                ),
                 item.entity.label.casefold(),
                 item.entity.text.casefold(),
             ),
@@ -7942,7 +7944,9 @@ def _build_topic_match(
         evidence_count=len(entities),
         entity_labels=[
             entity_label
-            for entity_label, _ in sorted(label_counts.items(), key=lambda item: (-item[1], item[0]))
+            for entity_label, _ in sorted(
+                label_counts.items(), key=lambda item: (-item[1], item[0])
+            )
         ],
     )
 
@@ -7962,7 +7966,9 @@ def _build_topics(runtime: PackRuntime, extracted: list[ExtractedCandidate]) -> 
             _build_topic_match(label=domain, entities=entities)
             for domain, entities in sorted(by_domain.items())
         ]
-        return sorted(topics, key=lambda topic: (-(topic.score or 0.0), -topic.evidence_count, topic.label))
+        return sorted(
+            topics, key=lambda topic: (-(topic.score or 0.0), -topic.evidence_count, topic.label)
+        )
 
     fallback_entities = [candidate.entity for candidate in extracted]
     multiplier = 1.0 if runtime.domain == "general" else 0.7
@@ -8190,8 +8196,8 @@ def tag_text(
         normalized_input=normalized_input,
         runtime=runtime,
     )
-    heuristic_definition_deduped, heuristic_definition_duplicate_discards = _dedupe_exact_candidates(
-        heuristic_definition_backfilled
+    heuristic_definition_deduped, heuristic_definition_duplicate_discards = (
+        _dedupe_exact_candidates(heuristic_definition_backfilled)
     )
     coherent = _apply_repeated_surface_consistency(heuristic_definition_deduped)
     runtime_g20_country_backfilled = coherent + _extract_runtime_g20_country_alias_entities(
@@ -8356,7 +8362,10 @@ def tag_text(
         )
 
     runtime_generic_discards: list[tuple[ExtractedCandidate, str]] = []
-    if runtime.pack_id == "general-en" or runtime.domain.casefold() in _RUNTIME_GENERIC_ALIAS_GUARD_DOMAINS:
+    if (
+        runtime.pack_id == "general-en"
+        or runtime.domain.casefold() in _RUNTIME_GENERIC_ALIAS_GUARD_DOMAINS
+    ):
         filtered_resolved: list[ExtractedCandidate] = []
         for candidate in resolved:
             discard_reason = _runtime_general_en_discard_reason(candidate, text=bounded_text)
