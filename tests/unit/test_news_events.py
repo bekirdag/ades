@@ -31,9 +31,12 @@ def test_extract_news_event_signals_returns_evidence_spans_and_asset_families() 
     assert "commodity" in by_type["supply_disruption"].compatible_asset_families
     assert by_type["policy_rate_cut"].evidence_start is not None
     assert by_type["policy_rate_cut"].evidence_end is not None
-    assert text[
-        by_type["policy_rate_cut"].evidence_start : by_type["policy_rate_cut"].evidence_end
-    ].lower().find("cut interest rates") >= 0
+    assert (
+        text[by_type["policy_rate_cut"].evidence_start : by_type["policy_rate_cut"].evidence_end]
+        .lower()
+        .find("cut interest rates")
+        >= 0
+    )
 
 
 def test_extract_news_event_signals_covers_trade_ma_default_and_conflict() -> None:
@@ -73,12 +76,8 @@ def test_extract_news_event_signals_covers_key_person_ownership_governance() -> 
     by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
 
     assert "key_person_ownership_governance" in by_type
-    assert "equity" in by_type[
-        "key_person_ownership_governance"
-    ].compatible_asset_families
-    assert "ticker" in by_type[
-        "key_person_ownership_governance"
-    ].compatible_asset_families
+    assert "equity" in by_type["key_person_ownership_governance"].compatible_asset_families
+    assert "ticker" in by_type["key_person_ownership_governance"].compatible_asset_families
 
 
 def test_extract_news_event_signals_covers_key_person_leadership_events() -> None:
@@ -90,9 +89,18 @@ def test_extract_news_event_signals_covers_key_person_leadership_events() -> Non
     by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
 
     assert "key_person_ownership_governance" in by_type
-    assert "ticker" in by_type[
-        "key_person_ownership_governance"
-    ].compatible_asset_families
+    assert "ticker" in by_type["key_person_ownership_governance"].compatible_asset_families
+
+
+def test_extract_news_event_signals_covers_chokepoint_flow_decline() -> None:
+    text = "Oil flows through Strait of Hormuz fall nearly 30% in first quarter."
+
+    by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
+
+    assert "shipping_chokepoint_disruption" in by_type
+    assert "supply_disruption" in by_type
+    assert "commodity" in by_type["shipping_chokepoint_disruption"].compatible_asset_families
+    assert "energy" in by_type["supply_disruption"].compatible_asset_families
 
 
 def test_gate_terminal_candidates_requires_event_signal_for_policy_rate_proxy() -> None:
@@ -186,9 +194,7 @@ def test_gate_terminal_candidates_honors_relationship_edge_event_metadata() -> N
     )
 
     assert without_signal == []
-    assert warnings == [
-        "event_signal_gate_filtered:missing_relationship_event_compatibility:1"
-    ]
+    assert warnings == ["event_signal_gate_filtered:missing_relationship_event_compatibility:1"]
 
     with_signal, warnings = gate_terminal_candidates_by_event_signals(
         [country_risk_proxy],
@@ -231,9 +237,7 @@ def test_gate_terminal_candidates_rejects_unexplained_indirect_ticker() -> None:
     gated, warnings = gate_terminal_candidates_by_event_signals([indirect_ticker], signals)
 
     assert gated == []
-    assert warnings == [
-        "event_signal_gate_filtered:missing_equity_direct_or_strong_event_path:1"
-    ]
+    assert warnings == ["event_signal_gate_filtered:missing_equity_direct_or_strong_event_path:1"]
 
 
 def test_gate_terminal_candidates_keeps_key_person_ticker_with_governance_signal() -> None:
@@ -258,12 +262,8 @@ def test_gate_terminal_candidates_keeps_key_person_ticker_with_governance_signal
                         source_name="Tesla Investor Relations",
                         source_url="https://ir.tesla.com/corporate/elon-musk",
                         source_snapshot="2026-05-13",
-                        compatible_event_types=[
-                            "key_person_ownership_governance"
-                        ],
-                        direction_preconditions=[
-                            "strong_person_employer_event"
-                        ],
+                        compatible_event_types=["key_person_ownership_governance"],
+                        direction_preconditions=["strong_person_employer_event"],
                     )
                 ],
             )
