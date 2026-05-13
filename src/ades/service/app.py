@@ -401,7 +401,10 @@ def _entity_name(entity: EntityMatch) -> str:
 
 def _entity_merge_key(entity: EntityMatch) -> str:
     if entity.link and entity.link.entity_id.strip():
-        return f"ref:{entity.link.entity_id.strip().casefold()}"
+        entity_ref = entity.link.entity_id.strip().casefold()
+        if entity_ref.startswith("ades:heuristic_structural_"):
+            return f"heuristic:{entity.label.casefold()}:{_entity_name(entity).casefold()}"
+        return f"ref:{entity_ref}"
     return f"{entity.label.casefold()}:{_entity_name(entity).casefold()}"
 
 

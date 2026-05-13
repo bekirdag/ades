@@ -453,6 +453,101 @@ def test_news_analyze_returns_review_only_relationship_proposals(
     )
 
 
+def test_news_analyze_dedupes_pack_scoped_heuristic_entities(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_one = _install_named_pack(tmp_path, "news-heuristic-one-en", domain="business")
+    pack_two = _install_named_pack(tmp_path, "news-heuristic-two-en", domain="politics")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        assert pack is not None
+        return TagResponse(
+            version="0.1.0",
+            pack=pack,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="US Muslim group",
+                    label="organization",
+                    start=text.index("US Muslim group"),
+                    end=text.index("US Muslim group") + len("US Muslim group"),
+                    confidence=0.81,
+                    relevance=0.82,
+                    provenance=EntityProvenance(
+                        match_kind="proposal",
+                        match_path="heuristic",
+                        match_source="structural",
+                        source_pack=pack,
+                        source_domain="politics",
+                    ),
+                    link=EntityLink(
+                        entity_id=(
+                            "ades:heuristic_structural_organization:"
+                            f"{pack}:organization:us-muslim-group"
+                        ),
+                        canonical_text="US Muslim group",
+                        provider="ades",
+                    ),
+                )
+            ],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert len(list(entity_refs)) == 1
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-05-13",
+            artifact_hash="sha256:test",
+            source_entities=[],
+            candidates=[],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "US Muslim group denounces Sharia hoax hearing",
+            "text": "US Muslim group denounces Sharia hoax congressional hearing.",
+            "hints": {"country": "us", "topics": ["politics"]},
+            "packs": [pack_one, pack_two],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    passive_group_entities = [
+        entity for entity in payload["passive_entities"] if entity["name"] == "US Muslim group"
+    ]
+    unresolved_group_entities = [
+        entity for entity in payload["unresolved_entities"] if entity["name"] == "US Muslim group"
+    ]
+    assert len(passive_group_entities) == 1
+    assert len(unresolved_group_entities) == 1
+    assert passive_group_entities[0]["mention_count"] == 2
+    assert unresolved_group_entities[0]["mention_count"] == 2
+
+
 def test_news_analyze_passive_classifier_hides_artifacts_and_forces_text_country(
     tmp_path: Path,
     monkeypatch,
