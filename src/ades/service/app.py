@@ -82,6 +82,7 @@ from .models import (
     ImpactSourceEntity,
     ImpactExpansionRequest,
     ImpactExpansionResult,
+    ImpactRelationshipPath,
     LookupResponse,
     MarketGraphStoreBuildRequest,
     MarketGraphStoreBuildResponse,
@@ -989,9 +990,9 @@ def _build_unresolved_entities(
         if passive.role == "source_outlet":
             continue
 
-        candidate_proposals = passive_path_counts.get(entity_ref_key, 0) + (
-            relationship_proposal_counts or {}
-        ).get(entity_ref_key, 0)
+        candidate_proposals = (relationship_proposal_counts or {}).get(entity_ref_key)
+        if candidate_proposals is None:
+            candidate_proposals = passive_path_counts.get(entity_ref_key, 0)
         if not event_types:
             missing_reason = "no_market_event_signal"
         elif impact_paths is None:
@@ -1032,6 +1033,7 @@ def _build_unresolved_entities(
 def _build_relationship_proposals(
     *,
     tag_responses: list[TagResponse],
+    impact_paths: ImpactExpansionResult | None = None,
     terminal_candidates: list[object],
     max_proposals: int = 64,
 ) -> list[NewsAnalyzeRelationshipProposal]:
@@ -1063,6 +1065,29 @@ def _build_relationship_proposals(
             if existing is None or (proposal.score or 0.0) > (existing.score or 0.0):
                 proposals_by_ref[key] = proposal
 
+    if impact_paths is not None:
+        for passive_path in impact_paths.passive_paths:
+            entity_ref = passive_path.entity_ref.strip()
+            name = passive_path.name.strip()
+            if not entity_ref or not name or entity_ref.casefold() in terminal_refs:
+                continue
+            seed_entity_refs = _dedupe_string_values(passive_path.source_entity_refs)[:12]
+            proposal = NewsAnalyzeRelationshipProposal(
+                entity_ref=entity_ref,
+                name=name,
+                entity_type=passive_path.entity_type,
+                score=_relationship_path_proposal_score(passive_path.relationship_paths),
+                provider="ades.impact.passive_path",
+                source="impact_passive_path",
+                seed_entity_refs=seed_entity_refs,
+                shared_seed_count=len(seed_entity_refs),
+                publication_allowed=False,
+            )
+            key = entity_ref.casefold()
+            existing = proposals_by_ref.get(key)
+            if existing is None or (proposal.score or 0.0) > (existing.score or 0.0):
+                proposals_by_ref[key] = proposal
+
     proposals = list(proposals_by_ref.values())
     proposals.sort(
         key=lambda proposal: (
@@ -1072,6 +1097,19 @@ def _build_relationship_proposals(
         )
     )
     return proposals[:max_proposals]
+
+
+def _relationship_path_proposal_score(paths: list[ImpactRelationshipPath]) -> float | None:
+    path_scores: list[float] = []
+    for path in paths:
+        if not path.edges:
+            continue
+        edge_score = min(edge.confidence for edge in path.edges)
+        depth_penalty = max(0.0, 1.0 - (max(path.path_depth - 1, 0) * 0.06))
+        path_scores.append(max(0.0, min(1.0, edge_score * depth_penalty)))
+    if not path_scores:
+        return None
+    return max(path_scores)
 
 
 def _relationship_proposal_counts_by_seed(
@@ -2395,6 +2433,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         relationship_proposals = (
             _build_relationship_proposals(
                 tag_responses=tag_responses,
+                impact_paths=impact_paths,
                 terminal_candidates=expanded_terminal_candidates,
             )
             if include_relationship_proposals

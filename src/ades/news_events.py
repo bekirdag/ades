@@ -93,6 +93,12 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
             _rx(
                 r"\b(?:rate\s+cut|rate\s+hike|rate\s+increase|rate\s+reduction|policy\s+easing|policy\s+tightening|monetary\s+easing|monetary\s+tightening)\b.{0,100}\b(?:expect|expects|expected|forecast|forecasts|projected|priced\s+in|bets?|odds)\b"
             ),
+            _rx(
+                r"\b(?:confirm(?:s|ed|ation)?|appoint(?:s|ed|ment)?|nominate(?:s|d|ion)?|name(?:s|d)?|select(?:s|ed)?|pick(?:s|ed)?)\b.{0,120}\b(?:fed(?:eral\s+reserve)?|central\s+bank|ecb|boe|bank\s+of\s+japan|boj|pboc|cbrt|monetary\s+policy)\b.{0,80}\b(?:chair|chairman|chairwoman|governor|president|chief|member|board|committee|leader|leadership)\b"
+            ),
+            _rx(
+                r"\b(?:fed(?:eral\s+reserve)?|central\s+bank|ecb|boe|bank\s+of\s+japan|boj|pboc|cbrt|monetary\s+policy)\b.{0,100}\b(?:chair|chairman|chairwoman|governor|president|chief|member|board|committee|leader|leadership)\b.{0,120}\b(?:confirm(?:s|ed|ation)?|appoint(?:s|ed|ment)?|nominate(?:s|d|ion)?|name(?:s|d)?|select(?:s|ed)?|pick(?:s|ed)?)\b"
+            ),
         ),
         compatible_asset_families=("rates", "currency", "bonds", "equity_index", "banking"),
         confidence=0.84,

@@ -103,6 +103,19 @@ def test_extract_news_event_signals_covers_chokepoint_flow_decline() -> None:
     assert "energy" in by_type["supply_disruption"].compatible_asset_families
 
 
+def test_extract_news_event_signals_covers_central_bank_leadership_change() -> None:
+    text = (
+        "The Senate confirmed Kevin Warsh as Federal Reserve chair after "
+        "President Trump backed the former Fed governor."
+    )
+
+    by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
+
+    assert "future_policy_expectation" in by_type
+    assert "rates" in by_type["future_policy_expectation"].compatible_asset_families
+    assert "currency" in by_type["future_policy_expectation"].compatible_asset_families
+
+
 def test_gate_terminal_candidates_requires_event_signal_for_policy_rate_proxy() -> None:
     policy_proxy = ImpactCandidate(
         entity_ref="ades:impact:rate:tr-policy-rate",
