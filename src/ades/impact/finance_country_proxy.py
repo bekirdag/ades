@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import re
 from typing import Iterable, Iterator
 
 from .graph_builder import build_market_graph_store
@@ -221,6 +222,44 @@ _EQUITY_EVENT_TYPES = (
     "strike_labor_disruption",
 )
 
+_PERSON_TO_ISSUER_RELATIONS = {
+    "person_is_ceo_of_issuer",
+    "person_is_founder_of_issuer",
+    "person_is_chair_of_issuer",
+    "person_is_board_member_of_issuer",
+    "person_is_major_shareholder_of_issuer",
+    "person_controls_issuer",
+    "person_affects_employer_issuer",
+}
+
+_ORGANIZATION_TO_ISSUER_RELATIONS = {
+    "private_company_controls_public_issuer",
+    "holding_company_controls_public_issuer",
+}
+
+_ROLE_RELATIONS = _PERSON_TO_ISSUER_RELATIONS | _ORGANIZATION_TO_ISSUER_RELATIONS
+
+_LOOKUP_NON_WORD_RE = re.compile(r"[^0-9A-Za-zÀ-ÖØ-öø-ÿ]+")
+_LOOKUP_NON_ALNUM_RE = re.compile(r"[^0-9A-Za-z]+")
+_URLISH_RE = re.compile(r"(https?://|www\.|\.com\b|\.org\b|\.net\b|@)", re.IGNORECASE)
+_ARTIFACT_NAME_RE = re.compile(
+    r"\b("
+    r"about\s+us|investor\s+relations|press\s+release|forward[-\s]+looking|"
+    r"article\s+[ivxlcdm0-9]+|read\s+more|cookie|privacy|terms\s+of\s+use|"
+    r"board\s+committees?|continuing\s+directors?|corporate\s+governance|"
+    r"executive\s+officers?|non[-\s]+employee\s+directors?|beneficial\s+owners?"
+    r")\b",
+    re.IGNORECASE,
+)
+_LEGAL_ENTITY_RE = re.compile(
+    r"\b("
+    r"inc|incorporated|corp|corporation|company|co|ltd|limited|llc|llp|plc|"
+    r"holdings?|group|sa|s\.a|ag|nv|bv|pty|gmbh|sirketi|şirketi|anonim|a\.s|a\.ş"
+    r")\b",
+    re.IGNORECASE,
+)
+_PERSON_ALPHA_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ]+")
+
 
 @dataclass(frozen=True)
 class FinanceCountryEntity:
@@ -245,6 +284,21 @@ class FinanceCountryEntity:
     @property
     def is_tradable_terminal(self) -> bool:
         return self.entity_type.casefold() in TRADABLE_ENTITY_TYPES or self.category in TRADABLE_ENTITY_TYPES
+
+
+@dataclass
+class _RelationshipLookup:
+    issuers_by_ticker: dict[str, list[FinanceCountryEntity]]
+    issuers_by_isin: dict[str, list[FinanceCountryEntity]]
+    issuers_by_cik: dict[str, list[FinanceCountryEntity]]
+    issuers_by_company_number: dict[str, list[FinanceCountryEntity]]
+    issuers_by_company_code: dict[str, list[FinanceCountryEntity]]
+    issuers_by_name: dict[str, list[FinanceCountryEntity]]
+    tickers_by_symbol: dict[str, list[FinanceCountryEntity]]
+    tickers_by_isin: dict[str, list[FinanceCountryEntity]]
+    tickers_by_company_number: dict[str, list[FinanceCountryEntity]]
+    tickers_by_company_code: dict[str, list[FinanceCountryEntity]]
+    tickers_by_issuer_name: dict[str, list[FinanceCountryEntity]]
 
 
 @dataclass(frozen=True)
@@ -494,9 +548,19 @@ def _country_identifiers(country_code: str) -> dict[str, object]:
     return identifiers
 
 
-def _entity_identifiers(entity: FinanceCountryEntity, *, pack_id: str) -> dict[str, object]:
+def _entity_identifiers(
+    entity: FinanceCountryEntity,
+    *,
+    pack_id: str,
+    relationship_lookup: _RelationshipLookup | None = None,
+) -> dict[str, object]:
     identifiers = dict(entity.metadata)
-    ticker_ref = _ticker_ref(pack_id, identifiers.get("ticker"))
+    ticker_ref = None
+    if entity.category == "issuer" and relationship_lookup is not None:
+        ticker_refs = _ticker_refs_for_issuer(entity, pack_id=pack_id, lookup=relationship_lookup)
+        ticker_ref = ticker_refs[0] if ticker_refs else None
+    if ticker_ref is None:
+        ticker_ref = _ticker_ref(pack_id, identifiers.get("ticker"))
     if entity.category == "issuer" and ticker_ref:
         identifiers.setdefault("ticker_ref", ticker_ref)
     return identifiers
@@ -649,7 +713,7 @@ def _relation_event_types(relation: str) -> tuple[str, ...]:
         return _GLOBAL_EQUITY_EVENT_TYPES
     if relation.endswith("_policy_rate_proxy"):
         return _POLICY_RATE_EVENT_TYPES
-    if relation in {"issuer_has_listed_ticker", "person_affects_employer_ticker"}:
+    if relation in {"issuer_has_listed_ticker", "person_affects_employer_ticker"} | _ROLE_RELATIONS:
         return _EQUITY_EVENT_TYPES
     return ()
 
@@ -667,6 +731,10 @@ def _relation_direction_preconditions(relation: str) -> tuple[str, ...]:
         return ("direct_issuer_or_security_mention",)
     if relation == "person_affects_employer_ticker":
         return ("strong_person_employer_event",)
+    if relation in _PERSON_TO_ISSUER_RELATIONS:
+        return ("strong_key_person_or_ownership_event",)
+    if relation in _ORGANIZATION_TO_ISSUER_RELATIONS:
+        return ("strong_ownership_or_control_event",)
     return ()
 
 
@@ -719,6 +787,561 @@ def _ticker_ref(pack_id: str, ticker: object) -> str | None:
     if not raw:
         return None
     return f"{pack_id.removesuffix('-en')}-ticker:{raw}"
+
+
+def _is_pack_ticker_ref(pack_id: str, entity_ref: str) -> bool:
+    return entity_ref.startswith(f"{pack_id.removesuffix('-en')}-ticker:")
+
+
+def _clean_metadata_string(value: object) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    if raw.casefold() in {"none", "null", "nan", "n/a", "na", "-"}:
+        return None
+    return raw
+
+
+def _iter_metadata_values(metadata: dict[str, object], *keys: str) -> Iterator[str]:
+    for key in keys:
+        raw = metadata.get(key)
+        if isinstance(raw, (list, tuple, set)):
+            for item in raw:
+                cleaned = _clean_metadata_string(item)
+                if cleaned:
+                    yield cleaned
+            continue
+        cleaned = _clean_metadata_string(raw)
+        if cleaned is None:
+            continue
+        if any(separator in cleaned for separator in ("|", ";")):
+            for item in re.split(r"[|;]", cleaned):
+                part = _clean_metadata_string(item)
+                if part:
+                    yield part
+            continue
+        yield cleaned
+
+
+def _lookup_name_key(value: object) -> str | None:
+    cleaned = _clean_metadata_string(value)
+    if cleaned is None:
+        return None
+    parts = [part for part in _LOOKUP_NON_WORD_RE.split(cleaned.casefold()) if part]
+    if not parts:
+        return None
+    return " ".join(parts)
+
+
+def _lookup_identifier_key(value: object) -> str | None:
+    cleaned = _clean_metadata_string(value)
+    if cleaned is None:
+        return None
+    key = _LOOKUP_NON_ALNUM_RE.sub("", cleaned.casefold())
+    return key or None
+
+
+def _cik_key(value: object) -> str | None:
+    key = _lookup_identifier_key(value)
+    if key is None:
+        return None
+    stripped = key.lstrip("0")
+    return stripped or key
+
+
+def _ticker_symbol_key(value: object) -> str | None:
+    cleaned = _clean_metadata_string(value)
+    if cleaned is None:
+        return None
+    if ":" in cleaned:
+        cleaned = cleaned.rsplit(":", 1)[-1]
+    key = _LOOKUP_NON_ALNUM_RE.sub("", cleaned.casefold())
+    return key or None
+
+
+def _exchange_key(value: object) -> str | None:
+    return _lookup_identifier_key(value)
+
+
+def _ticker_lookup_keys(ticker: object, exchange_values: Iterable[object] = ()) -> list[str]:
+    symbol_key = _ticker_symbol_key(ticker)
+    if symbol_key is None:
+        return []
+    keys: list[str] = []
+    for exchange in exchange_values:
+        exchange_key = _exchange_key(exchange)
+        if exchange_key:
+            keys.append(f"{exchange_key}:{symbol_key}")
+    keys.append(symbol_key)
+    return list(dict.fromkeys(keys))
+
+
+def _entity_exchange_values(entity: FinanceCountryEntity, *, include_employer: bool = False) -> list[str]:
+    keys = [
+        "exchange",
+        "exchange_code",
+        "exchanges",
+        "instrument_exchange",
+        "primary_exchange",
+        "trading_venue",
+        "venue",
+        "market",
+    ]
+    if include_employer:
+        keys.extend(["employer_exchange", "employer_exchange_code", "employer_market"])
+    return list(dict.fromkeys(_iter_metadata_values(entity.metadata, *keys)))
+
+
+def _add_index_value(
+    index: dict[str, list[FinanceCountryEntity]],
+    key: str | None,
+    entity: FinanceCountryEntity,
+) -> None:
+    if key is None:
+        return
+    bucket = index.setdefault(key, [])
+    if all(existing.entity_ref != entity.entity_ref for existing in bucket):
+        bucket.append(entity)
+
+
+def _lookup_unique(
+    index: dict[str, list[FinanceCountryEntity]],
+    key: str | None,
+) -> FinanceCountryEntity | None:
+    if key is None:
+        return None
+    candidates = index.get(key, [])
+    by_ref = {candidate.entity_ref: candidate for candidate in candidates}
+    if len(by_ref) != 1:
+        return None
+    return next(iter(by_ref.values()))
+
+
+def _append_unique_entity(
+    target: list[FinanceCountryEntity],
+    entity: FinanceCountryEntity | None,
+) -> None:
+    if entity is None:
+        return
+    if all(existing.entity_ref != entity.entity_ref for existing in target):
+        target.append(entity)
+
+
+def _append_unique_ref(target: list[str], ref: str | None) -> None:
+    if ref and ref not in target:
+        target.append(ref)
+
+
+def _build_relationship_lookup(entities: Iterable[FinanceCountryEntity]) -> _RelationshipLookup:
+    lookup = _RelationshipLookup(
+        issuers_by_ticker={},
+        issuers_by_isin={},
+        issuers_by_cik={},
+        issuers_by_company_number={},
+        issuers_by_company_code={},
+        issuers_by_name={},
+        tickers_by_symbol={},
+        tickers_by_isin={},
+        tickers_by_company_number={},
+        tickers_by_company_code={},
+        tickers_by_issuer_name={},
+    )
+
+    for entity in entities:
+        metadata = entity.metadata
+        if entity.category == "issuer":
+            exchange_values = _entity_exchange_values(entity)
+            for ticker in _iter_metadata_values(metadata, "ticker", "tickers", "symbol", "symbols"):
+                for key in _ticker_lookup_keys(ticker, exchange_values):
+                    _add_index_value(lookup.issuers_by_ticker, key, entity)
+            for isin in _iter_metadata_values(metadata, "isin", "isins", "instrument_isin"):
+                _add_index_value(lookup.issuers_by_isin, _lookup_identifier_key(isin), entity)
+            for cik in _iter_metadata_values(metadata, "cik", "sec_cik", "issuer_cik"):
+                _add_index_value(lookup.issuers_by_cik, _cik_key(cik), entity)
+            for company_number in _iter_metadata_values(
+                metadata,
+                "company_number",
+                "company_no",
+                "registration_number",
+                "employer_company_number",
+            ):
+                _add_index_value(
+                    lookup.issuers_by_company_number,
+                    _lookup_identifier_key(company_number),
+                    entity,
+                )
+            for company_code in _iter_metadata_values(
+                metadata,
+                "company_code",
+                "employer_company_code",
+                "member_oid",
+                "mkk_member_oid",
+            ):
+                _add_index_value(
+                    lookup.issuers_by_company_code,
+                    _lookup_identifier_key(company_code),
+                    entity,
+                )
+            for name in (
+                entity.canonical_name,
+                *_iter_metadata_values(metadata, "issuer_name", "company_name", "legal_name", "name"),
+            ):
+                _add_index_value(lookup.issuers_by_name, _lookup_name_key(name), entity)
+
+        if entity.entity_type.casefold() == "ticker" or entity.category == "ticker":
+            exchange_values = _entity_exchange_values(entity)
+            ticker_values = list(
+                _iter_metadata_values(metadata, "ticker", "tickers", "symbol", "symbols")
+            )
+            ticker_values.append(entity.canonical_name)
+            if ":" in entity.entity_ref:
+                ticker_values.append(entity.entity_ref.rsplit(":", 1)[-1])
+            for ticker in ticker_values:
+                for key in _ticker_lookup_keys(ticker, exchange_values):
+                    _add_index_value(lookup.tickers_by_symbol, key, entity)
+            for isin in _iter_metadata_values(metadata, "isin", "isins", "instrument_isin"):
+                _add_index_value(lookup.tickers_by_isin, _lookup_identifier_key(isin), entity)
+            for company_number in _iter_metadata_values(
+                metadata,
+                "company_number",
+                "company_no",
+                "registration_number",
+                "issuer_company_number",
+            ):
+                _add_index_value(
+                    lookup.tickers_by_company_number,
+                    _lookup_identifier_key(company_number),
+                    entity,
+                )
+            for company_code in _iter_metadata_values(
+                metadata,
+                "company_code",
+                "issuer_company_code",
+                "member_oid",
+                "mkk_member_oid",
+            ):
+                _add_index_value(
+                    lookup.tickers_by_company_code,
+                    _lookup_identifier_key(company_code),
+                    entity,
+                )
+            for issuer_name in _iter_metadata_values(
+                metadata,
+                "issuer_name",
+                "company_name",
+                "legal_name",
+                "name",
+            ):
+                _add_index_value(
+                    lookup.tickers_by_issuer_name,
+                    _lookup_name_key(issuer_name),
+                    entity,
+                )
+
+    return lookup
+
+
+def _lookup_issuers_for_entity(
+    entity: FinanceCountryEntity,
+    *,
+    lookup: _RelationshipLookup,
+) -> tuple[FinanceCountryEntity, ...]:
+    issuers: list[FinanceCountryEntity] = []
+    metadata = entity.metadata
+    exchange_values = _entity_exchange_values(entity, include_employer=True)
+    for ticker in _iter_metadata_values(
+        metadata,
+        "employer_ticker",
+        "employer_tickers",
+        "related_ticker",
+        "related_tickers",
+    ):
+        for key in _ticker_lookup_keys(ticker, exchange_values):
+            _append_unique_entity(issuers, _lookup_unique(lookup.issuers_by_ticker, key))
+    for isin in _iter_metadata_values(metadata, "employer_isin", "employer_isins", "related_isin"):
+        _append_unique_entity(issuers, _lookup_unique(lookup.issuers_by_isin, _lookup_identifier_key(isin)))
+    for cik in _iter_metadata_values(metadata, "employer_cik", "employer_ciks", "related_cik"):
+        _append_unique_entity(issuers, _lookup_unique(lookup.issuers_by_cik, _cik_key(cik)))
+    for company_number in _iter_metadata_values(
+        metadata,
+        "employer_company_number",
+        "employer_company_numbers",
+        "related_company_number",
+        "company_number",
+    ):
+        _append_unique_entity(
+            issuers,
+            _lookup_unique(lookup.issuers_by_company_number, _lookup_identifier_key(company_number)),
+        )
+    for company_code in _iter_metadata_values(
+        metadata,
+        "employer_company_code",
+        "employer_company_codes",
+        "related_company_code",
+        "company_code",
+    ):
+        _append_unique_entity(
+            issuers,
+            _lookup_unique(lookup.issuers_by_company_code, _lookup_identifier_key(company_code)),
+        )
+    for name in _iter_metadata_values(metadata, "employer_name", "related_issuer_name", "issuer_name"):
+        _append_unique_entity(issuers, _lookup_unique(lookup.issuers_by_name, _lookup_name_key(name)))
+    return tuple(issuers)
+
+
+def _ticker_refs_for_issuer(
+    issuer: FinanceCountryEntity,
+    *,
+    pack_id: str,
+    lookup: _RelationshipLookup,
+) -> tuple[str, ...]:
+    refs: list[str] = []
+    metadata = issuer.metadata
+    exchange_values = _entity_exchange_values(issuer)
+    for ticker in _iter_metadata_values(metadata, "ticker", "tickers", "symbol", "symbols"):
+        for key in _ticker_lookup_keys(ticker, exchange_values):
+            ticker_entity = _lookup_unique(lookup.tickers_by_symbol, key)
+            _append_unique_ref(refs, ticker_entity.entity_ref if ticker_entity else None)
+        if not refs:
+            _append_unique_ref(refs, _ticker_ref(pack_id, ticker))
+    for isin in _iter_metadata_values(metadata, "isin", "isins", "instrument_isin"):
+        ticker_entity = _lookup_unique(lookup.tickers_by_isin, _lookup_identifier_key(isin))
+        _append_unique_ref(refs, ticker_entity.entity_ref if ticker_entity else None)
+    for company_number in _iter_metadata_values(
+        metadata,
+        "company_number",
+        "company_no",
+        "registration_number",
+    ):
+        ticker_entity = _lookup_unique(
+            lookup.tickers_by_company_number,
+            _lookup_identifier_key(company_number),
+        )
+        _append_unique_ref(refs, ticker_entity.entity_ref if ticker_entity else None)
+    for company_code in _iter_metadata_values(
+        metadata,
+        "company_code",
+        "member_oid",
+        "mkk_member_oid",
+    ):
+        ticker_entity = _lookup_unique(
+            lookup.tickers_by_company_code,
+            _lookup_identifier_key(company_code),
+        )
+        _append_unique_ref(refs, ticker_entity.entity_ref if ticker_entity else None)
+    for name in (
+        issuer.canonical_name,
+        *_iter_metadata_values(metadata, "issuer_name", "company_name", "legal_name", "name"),
+    ):
+        ticker_entity = _lookup_unique(lookup.tickers_by_issuer_name, _lookup_name_key(name))
+        _append_unique_ref(refs, ticker_entity.entity_ref if ticker_entity else None)
+    return tuple(refs)
+
+
+def _ticker_refs_for_related_entity(
+    entity: FinanceCountryEntity,
+    *,
+    pack_id: str,
+    lookup: _RelationshipLookup,
+    issuers: Iterable[FinanceCountryEntity],
+) -> tuple[str, ...]:
+    refs: list[str] = []
+    exchange_values = _entity_exchange_values(entity, include_employer=True)
+    for ticker in _iter_metadata_values(entity.metadata, "employer_ticker", "employer_tickers"):
+        for key in _ticker_lookup_keys(ticker, exchange_values):
+            ticker_entity = _lookup_unique(lookup.tickers_by_symbol, key)
+            _append_unique_ref(refs, ticker_entity.entity_ref if ticker_entity else None)
+        if not refs:
+            _append_unique_ref(refs, _ticker_ref(pack_id, ticker))
+    for issuer in issuers:
+        for ticker_ref in _ticker_refs_for_issuer(issuer, pack_id=pack_id, lookup=lookup):
+            _append_unique_ref(refs, ticker_ref)
+    return tuple(refs)
+
+
+def _looks_like_legal_entity_name(name: str) -> bool:
+    return bool(_LEGAL_ENTITY_RE.search(name))
+
+
+def _looks_like_person_name(name: str) -> bool:
+    cleaned = _clean_metadata_string(name)
+    if cleaned is None:
+        return False
+    if len(cleaned) > 96 or _URLISH_RE.search(cleaned) or _ARTIFACT_NAME_RE.search(cleaned):
+        return False
+    if _looks_like_legal_entity_name(cleaned):
+        return False
+    alpha_tokens = _PERSON_ALPHA_RE.findall(cleaned)
+    if len(alpha_tokens) < 2 or len(alpha_tokens) > 7:
+        return False
+    if sum(len(token) > 1 for token in alpha_tokens) < 2:
+        return False
+    return True
+
+
+def _relationship_actor_kind(entity: FinanceCountryEntity) -> str | None:
+    entity_type = entity.entity_type.casefold()
+    category = entity.category
+    name = entity.canonical_name
+    if _URLISH_RE.search(name) or _ARTIFACT_NAME_RE.search(name):
+        return None
+    if entity_type == "person":
+        if _looks_like_person_name(name):
+            return "person"
+        if category in {"shareholder", "beneficial_owner", "owner", "controller"} and _looks_like_legal_entity_name(name):
+            return "organization"
+        return None
+    if entity_type == "organization" and category not in {"issuer", "ticker"}:
+        return "organization"
+    return None
+
+
+def _role_text(entity: FinanceCountryEntity) -> str:
+    pieces = [
+        entity.category,
+        entity.entity_type,
+        *_iter_metadata_values(
+            entity.metadata,
+            "role_class",
+            "role_title",
+            "title",
+            "position",
+            "relationship",
+            "relation",
+            "nature_of_control",
+            "source_form",
+        ),
+    ]
+    return " ".join(piece.casefold() for piece in pieces if piece)
+
+
+def _person_role_relation(entity: FinanceCountryEntity) -> str:
+    text = _role_text(entity)
+    if "founder" in text or "co founder" in text or "co-founder" in text:
+        return "person_is_founder_of_issuer"
+    if "chief executive" in text or re.search(r"\bceo\b", text):
+        return "person_is_ceo_of_issuer"
+    if "chair" in text or "chairman" in text or "chairwoman" in text:
+        return "person_is_chair_of_issuer"
+    if "shareholder" in text or "beneficial owner" in text or "ownership" in text:
+        return "person_is_major_shareholder_of_issuer"
+    if "controller" in text or "control" in text or "owner" in text:
+        return "person_controls_issuer"
+    if "director" in text or "board" in text:
+        return "person_is_board_member_of_issuer"
+    return "person_affects_employer_issuer"
+
+
+def _organization_role_relation(entity: FinanceCountryEntity) -> str | None:
+    text = _role_text(entity)
+    if (
+        "shareholder" in text
+        or "beneficial owner" in text
+        or "ownership" in text
+        or "controller" in text
+        or "control" in text
+        or "owner" in text
+        or entity.entity_ref.casefold().startswith("finance-")
+        and ":shareholder:" in entity.entity_ref.casefold()
+    ):
+        return "holding_company_controls_public_issuer"
+    return None
+
+
+def _role_confidence(relation: str, *, source_url: str) -> float:
+    base = {
+        "person_is_ceo_of_issuer": 0.89,
+        "person_is_founder_of_issuer": 0.87,
+        "person_is_chair_of_issuer": 0.86,
+        "person_controls_issuer": 0.86,
+        "person_is_major_shareholder_of_issuer": 0.84,
+        "person_is_board_member_of_issuer": 0.82,
+        "person_affects_employer_issuer": 0.78,
+        "holding_company_controls_public_issuer": 0.84,
+        "private_company_controls_public_issuer": 0.82,
+    }.get(relation, 0.76)
+    if source_url:
+        return base
+    return max(0.70, base - 0.04)
+
+
+def _metadata_source_url(metadata: dict[str, object], fallback: str) -> str:
+    return str(
+        metadata.get("source_url")
+        or metadata.get("url")
+        or metadata.get("source")
+        or fallback
+    )
+
+
+def _role_edges(
+    entity: FinanceCountryEntity,
+    *,
+    pack_id: str,
+    source_url: str,
+    source_snapshot: str,
+    source_year: int,
+    lookup: _RelationshipLookup,
+) -> Iterator[_Edge]:
+    if entity.category in {"issuer", "ticker"}:
+        return
+    actor_kind = _relationship_actor_kind(entity)
+    if actor_kind is None:
+        return
+    issuers = _lookup_issuers_for_entity(entity, lookup=lookup)
+    if not issuers:
+        return
+    metadata_source_url = _metadata_source_url(entity.metadata, source_url)
+    evidence_level = "direct" if metadata_source_url != source_url else "shallow"
+    if actor_kind == "person":
+        relation = _person_role_relation(entity)
+    else:
+        relation = _organization_role_relation(entity)
+    if relation:
+        for issuer in issuers:
+            maybe_edge = _edge(
+                source_ref=entity.entity_ref,
+                target_ref=issuer.entity_ref,
+                relation=relation,
+                evidence_level=evidence_level,
+                confidence=_role_confidence(relation, source_url=metadata_source_url),
+                direction_hint="issuer_relationship",
+                source_name="ades-finance-country-pack-relationship-metadata",
+                source_url=metadata_source_url,
+                source_snapshot=source_snapshot,
+                source_year=source_year,
+                pack_id=pack_id,
+                notes=(
+                    "Source-backed finance-country role relation to issuer "
+                    f"({entity.category}; {issuer.canonical_name})."
+                ),
+            )
+            if maybe_edge is not None:
+                yield maybe_edge
+
+    if actor_kind == "person":
+        for ticker_ref in _ticker_refs_for_related_entity(
+            entity,
+            pack_id=pack_id,
+            lookup=lookup,
+            issuers=issuers,
+        ):
+            maybe_edge = _edge(
+                source_ref=entity.entity_ref,
+                target_ref=ticker_ref,
+                relation="person_affects_employer_ticker",
+                evidence_level=evidence_level,
+                confidence=0.82 if metadata_source_url else 0.78,
+                direction_hint="employer_equity_proxy",
+                source_name="ades-finance-country-pack-relationship-metadata",
+                source_url=metadata_source_url,
+                source_snapshot=source_snapshot,
+                source_year=source_year,
+                pack_id=pack_id,
+                notes="Compatibility shortcut from source-backed person-role relationship to employer ticker.",
+            )
+            if maybe_edge is not None:
+                yield maybe_edge
 
 
 def _default_proxy_edges(
@@ -916,45 +1539,40 @@ def _metadata_edges(
     source_url: str,
     source_snapshot: str,
     source_year: int,
+    relationship_lookup: _RelationshipLookup,
 ) -> Iterator[_Edge]:
     metadata = entity.metadata
-    ticker_target = _ticker_ref(pack_id, metadata.get("ticker"))
-    if entity.category == "issuer" and ticker_target:
-        maybe_edge = _edge(
-            source_ref=entity.entity_ref,
-            target_ref=ticker_target,
-            relation="issuer_has_listed_ticker",
-            evidence_level="direct",
-            confidence=0.90,
-            direction_hint="issuer_equity_security",
-            source_name="ades-finance-country-pack-metadata",
-            source_url=source_url,
-            source_snapshot=source_snapshot,
-            source_year=source_year,
+    if entity.category == "issuer":
+        for ticker_target in _ticker_refs_for_issuer(
+            entity,
             pack_id=pack_id,
-            notes="Issuer ticker relation from finance-country entity metadata.",
-        )
-        if maybe_edge is not None:
-            yield maybe_edge
+            lookup=relationship_lookup,
+        ):
+            maybe_edge = _edge(
+                source_ref=entity.entity_ref,
+                target_ref=ticker_target,
+                relation="issuer_has_listed_ticker",
+                evidence_level="direct",
+                confidence=0.90,
+                direction_hint="issuer_equity_security",
+                source_name="ades-finance-country-pack-metadata",
+                source_url=source_url,
+                source_snapshot=source_snapshot,
+                source_year=source_year,
+                pack_id=pack_id,
+                notes="Issuer ticker relation from finance-country entity metadata and identifier lookup.",
+            )
+            if maybe_edge is not None:
+                yield maybe_edge
 
-    employer_ticker_target = _ticker_ref(pack_id, metadata.get("employer_ticker"))
-    if entity.entity_type.casefold() == "person" and employer_ticker_target:
-        maybe_edge = _edge(
-            source_ref=entity.entity_ref,
-            target_ref=employer_ticker_target,
-            relation="person_affects_employer_ticker",
-            evidence_level="shallow",
-            confidence=0.84,
-            direction_hint="employer_equity_proxy",
-            source_name="ades-finance-country-pack-metadata",
-            source_url=str(metadata.get("source_url") or source_url),
-            source_snapshot=source_snapshot,
-            source_year=source_year,
-            pack_id=pack_id,
-            notes="Person employer ticker relation from finance-country public-person metadata.",
-        )
-        if maybe_edge is not None:
-            yield maybe_edge
+    yield from _role_edges(
+        entity,
+        pack_id=pack_id,
+        source_url=source_url,
+        source_snapshot=source_snapshot,
+        source_year=source_year,
+        lookup=relationship_lookup,
+    )
 
     exchanges = metadata.get("exchanges")
     if entity.entity_type.casefold() == "ticker" and isinstance(exchanges, list):
@@ -1069,6 +1687,7 @@ def build_finance_country_proxy_source_lane(
         source_url = _source_url_for_pack(pack_dir)
         source_snapshot = _source_snapshot_for_pack(pack_dir)
         entities = load_finance_country_pack_entities(pack_dir)
+        relationship_lookup = _build_relationship_lookup(entities)
         pack_edge_start = len(all_edges)
 
         for proxy_node in _country_proxy_nodes(pack_id, country_code, currency):
@@ -1099,7 +1718,11 @@ def build_finance_country_proxy_source_lane(
                 library_id=pack_id,
                 is_tradable=entity.is_tradable_terminal,
                 is_seed_eligible=True,
-                identifiers=_entity_identifiers(entity, pack_id=pack_id),
+                identifiers=_entity_identifiers(
+                    entity,
+                    pack_id=pack_id,
+                    relationship_lookup=relationship_lookup,
+                ),
                 pack_ids=pack_id,
             )
             nodes.setdefault(entity.entity_ref, node)
@@ -1112,11 +1735,12 @@ def build_finance_country_proxy_source_lane(
                 source_url=source_url,
                 source_snapshot=source_snapshot,
                 source_year=source_year,
+                relationship_lookup=relationship_lookup,
             ):
                 all_edges.append(edge)
                 outgoing_sources.add(edge.source_ref)
                 generated_relation_counts[edge.relation] = generated_relation_counts.get(edge.relation, 0) + 1
-                if edge.target_ref not in nodes and edge.target_ref.startswith(pack_id.removesuffix("-en")):
+                if edge.target_ref not in nodes and _is_pack_ticker_ref(pack_id, edge.target_ref):
                     nodes[edge.target_ref] = _node_row(
                         entity_ref=edge.target_ref,
                         canonical_name=edge.target_ref.rsplit(":", 1)[-1],

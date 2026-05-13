@@ -225,6 +225,8 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
             _rx(r"\b(?:stake|shares?|ownership|control|board|leadership|founder|ceo|chair|executive)\b.{0,140}\b(?:trial|lawsuit|court|legal\s+dispute|testif(?:y|ies|ied|ying))\b"),
             _rx(r"\b(?:sought|wanted|asked|demanded|proposed|offered|bid|bids?|pursued)\b.{0,120}\b(?:stake|shares?|ownership|control|board|leadership)\b"),
             _rx(r"\b(?:stake|shares?|ownership|control|board|leadership)\b.{0,120}\b(?:sought|wanted|asked|demanded|proposed|offered|bid|bids?|pursued)\b"),
+            _rx(r"\b(?:resign(?:s|ed|ation)?|step(?:s|ped)?\s+down|depart(?:s|ed|ure)?|leave|leaves|left|oust(?:ed|s)?|fired|dismiss(?:ed|es)?|appoint(?:ed|s)?|named|replace(?:d|s)?|succession|successor|died|dies|death|illness|hospitali[sz]ed|arrest(?:ed|s)?|investigat(?:e|ed|es|ion)|probe|fraud)\b.{0,160}\b(?:ceo|chief\s+executive|cfo|chief\s+financial\s+officer|founder|chair|chairman|chairwoman|board|director|executive|owner|shareholder|leadership)\b"),
+            _rx(r"\b(?:ceo|chief\s+executive|cfo|chief\s+financial\s+officer|founder|chair|chairman|chairwoman|board|director|executive|owner|shareholder|leadership)\b.{0,160}\b(?:resign(?:s|ed|ation)?|step(?:s|ped)?\s+down|depart(?:s|ed|ure)?|leave|leaves|left|oust(?:ed|s)?|fired|dismiss(?:ed|es)?|appoint(?:ed|s)?|named|replace(?:d|s)?|succession|successor|died|dies|death|illness|hospitali[sz]ed|arrest(?:ed|s)?|investigat(?:e|ed|es|ion)|probe|fraud)\b"),
         ),
         compatible_asset_families=("equity", "ticker", "sector"),
         confidence=0.8,
@@ -424,6 +426,11 @@ def _candidate_has_strong_path(candidate: ImpactCandidate) -> bool:
         return True
     for path in candidate.relationship_paths:
         if path.path_depth <= 1 and any(edge.evidence_level == "direct" for edge in path.edges):
+            return True
+        if path.edges and all(
+            edge.evidence_level in {"direct", "shallow"} and edge.confidence >= 0.80
+            for edge in path.edges
+        ):
             return True
     return False
 

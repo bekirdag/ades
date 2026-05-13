@@ -111,6 +111,7 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
                 "metadata": {
                     "country_code": "us",
                     "employer_ticker": "ABC",
+                    "role_title": "Chief Executive Officer",
                     "source_url": "https://www.sec.gov/example",
                 },
             },
@@ -152,6 +153,11 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
         "finance-person:0001:chief-executive",
         "person_affects_employer_ticker",
         "finance-us-ticker:ABC",
+    ) in edge_keys
+    assert (
+        "finance-person:0001:chief-executive",
+        "person_is_ceo_of_issuer",
+        "finance-us-issuer:0001",
     ) in edge_keys
     assert ("country:us", "country_affects_currency_proxy", "ades:impact:currency:usd") in edge_keys
     assert (
@@ -318,6 +324,212 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
         candidate.entity_ref for candidate in issuer_bridge_result.candidates
     }
     assert "finance-us-ticker:DEF" in issuer_bridge_result.source_entities[0].same_as_refs
+
+
+def test_finance_country_proxy_generator_builds_generic_role_relationships(
+    tmp_path: Path,
+) -> None:
+    packs_root = tmp_path / "packs"
+    packs_root.mkdir()
+    _write_pack(
+        packs_root,
+        "finance-ca-en",
+        [
+            {
+                "entity_id": "finance-ca-issuer:keyera",
+                "entity_type": "organization",
+                "canonical_text": "Keyera Corp.",
+                "metadata": {
+                    "country_code": "ca",
+                    "category": "issuer",
+                    "ticker": "KEY.R",
+                    "exchange_code": "TSX",
+                    "isin": "CA4932711001",
+                    "company_number": "123456",
+                },
+            },
+            {
+                "entity_id": "finance-ca-ticker:tsx:key.r",
+                "entity_type": "ticker",
+                "canonical_text": "KEY.R",
+                "metadata": {
+                    "country_code": "ca",
+                    "category": "ticker",
+                    "ticker": "KEY.R",
+                    "exchange_code": "TSX",
+                    "isin": "CA4932711001",
+                    "issuer_name": "Keyera Corp.",
+                    "company_number": "123456",
+                },
+            },
+            {
+                "entity_id": "finance-ca-person:keyera:ceo",
+                "entity_type": "person",
+                "canonical_text": "Jane Market",
+                "metadata": {
+                    "country_code": "ca",
+                    "employer_isin": "CA4932711001",
+                    "role_title": "Chief Executive Officer",
+                    "source_url": "https://example.com/keyera/management",
+                },
+            },
+            {
+                "entity_id": "finance-ca-person:keyera:director",
+                "entity_type": "person",
+                "canonical_text": "Alex Board",
+                "metadata": {
+                    "country_code": "ca",
+                    "employer_company_number": "123456",
+                    "role_class": "director",
+                    "source_url": "https://example.com/keyera/board",
+                },
+            },
+            {
+                "entity_id": "finance-ca-shareholder:keyera:keyera-holdings",
+                "entity_type": "organization",
+                "canonical_text": "Keyera Holdings Ltd.",
+                "metadata": {
+                    "country_code": "ca",
+                    "category": "shareholder",
+                    "employer_ticker": "KEY.R",
+                    "exchange_code": "TSX",
+                    "source_url": "https://example.com/keyera/shareholders",
+                },
+            },
+            {
+                "entity_id": "finance-ca-person:keyera:article-ix",
+                "entity_type": "person",
+                "canonical_text": "Article IX",
+                "metadata": {
+                    "country_code": "ca",
+                    "employer_ticker": "KEY.R",
+                    "exchange_code": "TSX",
+                    "role_title": "Executive Officers",
+                    "source_url": "https://example.com/keyera/filing",
+                },
+            },
+        ],
+    )
+
+    result = build_finance_country_proxy_source_lane(
+        packs_root=packs_root,
+        output_root=tmp_path / "impact_relationships",
+        run_id="generic-role-relationships",
+        build_artifact=True,
+        artifact_output_root=tmp_path / "artifacts",
+        extra_proxy_pack_ids=(),
+    )
+
+    edges = _read_tsv(result.edge_tsv_path)
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    edge_keys = {(row["source_ref"], row["relation"], row["target_ref"]) for row in edges}
+    assert (
+        "finance-ca-issuer:keyera",
+        "issuer_has_listed_ticker",
+        "finance-ca-ticker:tsx:key.r",
+    ) in edge_keys
+    assert (
+        "finance-ca-person:keyera:ceo",
+        "person_is_ceo_of_issuer",
+        "finance-ca-issuer:keyera",
+    ) in edge_keys
+    assert (
+        "finance-ca-person:keyera:ceo",
+        "person_affects_employer_ticker",
+        "finance-ca-ticker:tsx:key.r",
+    ) in edge_keys
+    assert (
+        "finance-ca-person:keyera:director",
+        "person_is_board_member_of_issuer",
+        "finance-ca-issuer:keyera",
+    ) in edge_keys
+    assert (
+        "finance-ca-shareholder:keyera:keyera-holdings",
+        "holding_company_controls_public_issuer",
+        "finance-ca-issuer:keyera",
+    ) in edge_keys
+    assert not any(
+        row["source_ref"] == "finance-ca-person:keyera:article-ix"
+        and row["relation"]
+        in {
+            "person_affects_employer_ticker",
+            "person_affects_employer_issuer",
+            "person_is_ceo_of_issuer",
+        }
+        for row in edges
+    )
+    issuer_identifiers = json.loads(nodes["finance-ca-issuer:keyera"]["identifiers_json"])
+    assert issuer_identifiers["ticker_ref"] == "finance-ca-ticker:tsx:key.r"
+
+    assert result.artifact_path is not None
+    ceo_result = expand_impact_paths(
+        ["finance-ca-person:keyera:ceo"],
+        settings=Settings(
+            impact_expansion_enabled=True,
+            impact_expansion_artifact_path=result.artifact_path,
+        ),
+        max_depth=2,
+        max_candidates=8,
+        compatible_event_types=["key_person_ownership_governance"],
+    )
+    assert "finance-ca-ticker:tsx:key.r" in {
+        candidate.entity_ref for candidate in ceo_result.candidates
+    }
+
+
+def test_finance_country_proxy_generator_does_not_synthesize_role_target_issuer(
+    tmp_path: Path,
+) -> None:
+    packs_root = tmp_path / "packs"
+    packs_root.mkdir()
+    _write_pack(
+        packs_root,
+        "finance-cn-en",
+        [
+            {
+                "entity_id": "finance-cn-shareholder-org:visionox:controller",
+                "entity_type": "organization",
+                "canonical_text": "Visionox Holding Ltd.",
+                "metadata": {
+                    "country_code": "cn",
+                    "category": "shareholder",
+                    "employer_ticker": "002387",
+                    "exchange_code": "SZSE",
+                    "source_url": "https://example.com/visionox/shareholders",
+                },
+            },
+            {
+                "entity_id": "finance-cn-issuer:002387",
+                "entity_type": "organization",
+                "canonical_text": "Visionox Technology Inc.",
+                "metadata": {
+                    "country_code": "cn",
+                    "category": "issuer",
+                    "ticker": "002387",
+                    "exchange_code": "SZSE",
+                },
+            },
+        ],
+    )
+
+    result = build_finance_country_proxy_source_lane(
+        packs_root=packs_root,
+        output_root=tmp_path / "impact_relationships",
+        run_id="role-target-issuer-ordering",
+        extra_proxy_pack_ids=(),
+    )
+
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    edges = _read_tsv(result.edge_tsv_path)
+    assert nodes["finance-cn-issuer:002387"]["entity_type"] == "organization"
+    assert nodes["finance-cn-issuer:002387"]["is_tradable"] == "false"
+    assert nodes["finance-cn-ticker:002387"]["entity_type"] == "ticker"
+    assert any(
+        row["source_ref"] == "finance-cn-shareholder-org:visionox:controller"
+        and row["relation"] == "holding_company_controls_public_issuer"
+        and row["target_ref"] == "finance-cn-issuer:002387"
+        for row in edges
+    )
 
 
 def test_finance_country_proxy_generator_can_fallback_to_aliases(tmp_path: Path) -> None:

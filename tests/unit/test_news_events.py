@@ -81,6 +81,20 @@ def test_extract_news_event_signals_covers_key_person_ownership_governance() -> 
     ].compatible_asset_families
 
 
+def test_extract_news_event_signals_covers_key_person_leadership_events() -> None:
+    text = (
+        "Australia-listed BTG confirmed the resignation of chief executive "
+        "Boqing Zhang after a board governance dispute."
+    )
+
+    by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
+
+    assert "key_person_ownership_governance" in by_type
+    assert "ticker" in by_type[
+        "key_person_ownership_governance"
+    ].compatible_asset_families
+
+
 def test_gate_terminal_candidates_requires_event_signal_for_policy_rate_proxy() -> None:
     policy_proxy = ImpactCandidate(
         entity_ref="ades:impact:rate:tr-policy-rate",
@@ -264,4 +278,56 @@ def test_gate_terminal_candidates_keeps_key_person_ticker_with_governance_signal
 
     assert warnings == []
     assert gated[0].entity_ref == "finance-us-ticker:TSLA"
+    assert gated[0].compatible_event_types == ["key_person_ownership_governance"]
+
+
+def test_gate_terminal_candidates_keeps_source_backed_key_person_path() -> None:
+    candidate = ImpactCandidate(
+        entity_ref="finance-au-ticker:nsx:BTG",
+        name="BTG",
+        entity_type="ticker",
+        evidence_level="shallow",
+        confidence=0.638222,
+        source_entity_refs=["finance-au-person:nsx:BTG:boqing-zhang:director"],
+        relationship_paths=[
+            ImpactRelationshipPath(
+                path_depth=2,
+                edges=[
+                    ImpactPathEdge(
+                        source_ref="finance-au-person:nsx:BTG:boqing-zhang:director",
+                        target_ref="finance-au-issuer:nsx:BTG",
+                        relation="person_is_chair_of_issuer",
+                        evidence_level="shallow",
+                        confidence=0.86,
+                        direction_hint="issuer_relationship",
+                        source_name="ades-finance-country-pack-relationship-metadata",
+                        source_url="file:///packs/finance-au-en/sources.json",
+                        source_snapshot="2026-04-22",
+                        compatible_event_types=["key_person_ownership_governance"],
+                    ),
+                    ImpactPathEdge(
+                        source_ref="finance-au-issuer:nsx:BTG",
+                        target_ref="finance-au-ticker:nsx:BTG",
+                        relation="issuer_has_listed_ticker",
+                        evidence_level="direct",
+                        confidence=0.90,
+                        direction_hint="issuer_equity_security",
+                        source_name="ades-finance-country-pack-metadata",
+                        source_url="file:///packs/finance-au-en/sources.json",
+                        source_snapshot="2026-04-22",
+                        compatible_event_types=["key_person_ownership_governance"],
+                    ),
+                ],
+            )
+        ],
+    )
+
+    signals = extract_news_event_signals(
+        "Australia-listed BTG confirmed the resignation of chief executive "
+        "Boqing Zhang after a board governance dispute."
+    )
+    gated, warnings = gate_terminal_candidates_by_event_signals([candidate], signals)
+
+    assert warnings == []
+    assert gated[0].entity_ref == "finance-au-ticker:nsx:BTG"
     assert gated[0].compatible_event_types == ["key_person_ownership_governance"]
