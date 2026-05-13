@@ -73,7 +73,15 @@ _FINANCE_REF_KEYS = {
     "tickerref",
     "tickerrefs",
 }
-_WIKIDATA_KEYS = {"qid", "qids", "wikidata", "wikidataid", "wikidataids", "wikidataqid", "wikidataqids"}
+_WIKIDATA_KEYS = {
+    "qid",
+    "qids",
+    "wikidata",
+    "wikidataid",
+    "wikidataids",
+    "wikidataqid",
+    "wikidataqids",
+}
 _GEONAMES_KEYS = {"geonameid", "geonameids", "geonames", "geonamesid", "geonamesids"}
 _COUNTRY_CODE_KEYS = {"countrycode", "countrycodes", "iso2", "iso31661alpha2", "iso3166alpha2"}
 _SEC_CIK_KEYS = {"cik", "ciks", "seccik", "secciks"}
@@ -89,9 +97,7 @@ def _run_artifact_release_gate(
         command.strip() for command in commands or [] if command and command.strip()
     ]
     resolved_working_dir = (
-        str(Path(working_dir).expanduser().resolve())
-        if working_dir is not None
-        else None
+        str(Path(working_dir).expanduser().resolve()) if working_dir is not None else None
     )
     if not resolved_commands:
         return resolved_commands, resolved_working_dir, True
@@ -177,6 +183,58 @@ def _parse_int_or_none(value: object | None, *, name: str) -> int | None:
         return int(raw)
     except ValueError as exc:
         raise ValueError(f"Invalid {name}: {value!r}") from exc
+
+
+def _edge_family_for_relation(relation: str) -> str:
+    if relation in {
+        "issuer_has_listed_ticker",
+        "ticker_represents_issuer",
+        "issuer_has_exchange_listing",
+        "ticker_listed_on_exchange",
+    }:
+        return "identity_listing"
+    if relation.startswith("person_"):
+        return "person_to_issuer"
+    if relation in {
+        "private_company_controls_public_issuer",
+        "holding_company_controls_public_issuer",
+    }:
+        return "organization_control"
+    if relation in {
+        "issuer_supplier_to_issuer",
+        "issuer_customer_of_issuer",
+        "issuer_partner_of_issuer",
+    }:
+        return "supply_chain_counterparty"
+    if relation in {"issuer_in_sector", "sector_affects_index"}:
+        return "sector_exposure"
+    if relation in {"issuer_in_index", "index_affects_country_index_proxy"}:
+        return "index_membership"
+    if relation.startswith("country_affects_") or relation.endswith("_policy_rate_proxy"):
+        return "country_macro_policy"
+    if "commodity" in relation or "chokepoint" in relation or "production_region" in relation:
+        return "geography_commodity"
+    if relation.endswith("_currency_proxy") or relation.endswith("_usd_proxy"):
+        return "currency_proxy"
+    if relation.endswith("_dxy_proxy"):
+        return "dxy_proxy"
+    if relation.endswith("_country_risk_proxy") or relation.endswith("_global_policy_risk_proxy"):
+        return "risk_proxy"
+    if relation.endswith("_global_equity_proxy"):
+        return "global_equity_proxy"
+    return "other"
+
+
+def _relation_and_family_counts(
+    edges: Iterable[_EdgeRecord],
+) -> tuple[dict[str, int], dict[str, int]]:
+    relation_counts: dict[str, int] = {}
+    edge_family_counts: dict[str, int] = {}
+    for edge in edges:
+        relation_counts[edge.relation] = relation_counts.get(edge.relation, 0) + 1
+        family = _edge_family_for_relation(edge.relation)
+        edge_family_counts[family] = edge_family_counts.get(family, 0) + 1
+    return dict(sorted(relation_counts.items())), dict(sorted(edge_family_counts.items()))
 
 
 def _parse_json_dict_text(value: object | None) -> str:
@@ -573,7 +631,9 @@ def _source_manifest_hash(
     payload = {
         "graph_version": graph_version,
         "artifact_version": artifact_version,
-        "nodes": [record.__dict__ for record in sorted(nodes.values(), key=lambda item: item.entity_ref)],
+        "nodes": [
+            record.__dict__ for record in sorted(nodes.values(), key=lambda item: item.entity_ref)
+        ],
         "edges": [
             record.__dict__ for record in sorted(edges.values(), key=lambda item: item.edge_id)
         ],
@@ -777,6 +837,7 @@ def build_market_graph_store(
         connection.close()
 
     warnings = node_warnings + edge_warnings + implicit_node_warnings
+    relation_counts, edge_family_counts = _relation_and_family_counts(edges.values())
     (
         resolved_release_gate_commands,
         resolved_release_gate_working_dir,
@@ -801,6 +862,8 @@ def build_market_graph_store(
         node_tsv_paths=[str(path) for path in resolved_node_paths],
         edge_tsv_paths=[str(path) for path in resolved_edge_paths],
         pack_ids=pack_ids,
+        relation_counts=relation_counts,
+        edge_family_counts=edge_family_counts,
         processed_edge_row_count=processed_edge_row_count,
         release_gate_commands=resolved_release_gate_commands,
         release_gate_working_dir=resolved_release_gate_working_dir,

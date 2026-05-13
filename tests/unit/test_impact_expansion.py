@@ -98,18 +98,26 @@ def test_market_graph_builder_merges_edges_and_computes_seed_degree(tmp_path: Pa
     assert response.node_count == 6
     assert response.edge_count == 3
     assert response.pack_ids == ["finance-en", "politics-vector-en"]
+    assert response.relation_counts == {
+        "chokepoint_affects_commodity": 1,
+        "country_exports_commodity": 1,
+        "country_member_of_bloc": 1,
+    }
+    assert response.edge_family_counts == {
+        "geography_commodity": 2,
+        "other": 1,
+    }
     assert any(warning.startswith("duplicate_edge_merged") for warning in response.warnings)
 
     with MarketGraphStore(response.artifact_path) as store:
         nodes = store.node_batch(["entity_hormuz", "entity_zero"])
         assert nodes["entity_hormuz"].seed_degree == 1
         assert nodes["entity_zero"].seed_degree == 0
-        assert store.bridge_refs_batch(["wikidata:Q63132"])["wikidata:Q63132"] == (
-            "entity_hormuz",
+        assert store.bridge_refs_batch(["wikidata:Q63132"])["wikidata:Q63132"] == ("entity_hormuz",)
+        assert (
+            "wikidata:Q63132"
+            in store.identity_refs_for_entity_batch(["entity_hormuz"])["entity_hormuz"]
         )
-        assert "wikidata:Q63132" in store.identity_refs_for_entity_batch(
-            ["entity_hormuz"]
-        )["entity_hormuz"]
         edges = store.outbound_edges_batch(["entity_hormuz"])["entity_hormuz"]
         assert len(edges) == 1
         assert edges[0].confidence == 0.92
@@ -343,9 +351,12 @@ def test_expand_impact_paths_bridges_identity_refs_before_traversal(tmp_path: Pa
     assert "finance-us-ticker:TSLA" in source_entities["wikidata:Q478214"].same_as_refs
     assert "country:us" in source_entities["wikidata:Q30"].same_as_refs
     assert source_entities["wikidata:Q30"].is_graph_seed is True
-    assert "entity_hormuz" in source_entities[
-        "ades:heuristic_structural_location:finance-en:location:strait-of-hormuz"
-    ].same_as_refs
+    assert (
+        "entity_hormuz"
+        in source_entities[
+            "ades:heuristic_structural_location:finance-en:location:strait-of-hormuz"
+        ].same_as_refs
+    )
 
 
 def test_expand_impact_paths_bridges_public_person_to_employer_ticker(
@@ -407,8 +418,7 @@ def test_expand_impact_paths_bridges_public_person_to_employer_ticker(
         if candidate.entity_ref == "finance-us-ticker:TSLA"
     )
     assert (
-        tsla_candidate.relationship_paths[0].edges[0].relation
-        == "person_affects_employer_ticker"
+        tsla_candidate.relationship_paths[0].edges[0].relation == "person_affects_employer_ticker"
     )
     assert "wikidata:Q317521" in tsla_candidate.source_entity_refs
 
@@ -454,9 +464,9 @@ def test_tag_impact_enrichment_does_not_filter_to_response_pack_by_default(
     )
 
     assert enriched.impact_paths is not None
-    assert {
-        candidate.entity_ref for candidate in enriched.impact_paths.candidates
-    } == {"entity_crude_oil"}
+    assert {candidate.entity_ref for candidate in enriched.impact_paths.candidates} == {
+        "entity_crude_oil"
+    }
 
 
 def test_expand_impact_paths_resolves_cross_pack_structural_refs(tmp_path: Path) -> None:
@@ -493,9 +503,7 @@ def test_expand_impact_paths_resolves_cross_pack_structural_refs(tmp_path: Path)
         max_candidates=5,
     )
 
-    assert {
-        candidate.entity_ref for candidate in result.candidates
-    } == {"entity_crude_oil"}
+    assert {candidate.entity_ref for candidate in result.candidates} == {"entity_crude_oil"}
     assert result.source_entities[0].entity_ref == (
         "ades:heuristic_structural_location:economics-vector-en:location:strait-of-hormuz"
     )
