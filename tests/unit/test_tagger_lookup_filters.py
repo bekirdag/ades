@@ -170,6 +170,35 @@ def test_skip_finance_entities_that_match_country_alias_text() -> None:
     )
 
 
+def test_skip_country_acronym_generic_ticker_without_security_context() -> None:
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="UAE",
+            candidate_value="UAE",
+            canonical_text="UAE",
+            candidate_label="ticker",
+            candidate_domain="finance",
+            segment_text="Trade routes through the UAE shifted away from Hormuz.",
+            start=25,
+            end=28,
+        )
+        is True
+    )
+    assert (
+        _should_skip_single_token_lookup_candidate(
+            matched_text="UAE",
+            candidate_value="UAE",
+            canonical_text="iShares MSCI UAE ETF",
+            candidate_label="ticker",
+            candidate_domain="finance",
+            segment_text="The UAE ETF traded higher.",
+            start=4,
+            end=7,
+        )
+        is False
+    )
+
+
 def test_skip_article_led_generic_person_phrase() -> None:
     assert (
         _should_skip_multi_token_lookup_candidate(

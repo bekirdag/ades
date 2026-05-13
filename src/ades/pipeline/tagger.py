@@ -895,6 +895,24 @@ _PROPOSAL_GENERATED_WEAK_ORG_TAIL_TOKENS = {
     "quote",
     "quotes",
 }
+_EXPLICIT_TICKER_CONTEXT_TOKENS = {
+    "adr",
+    "etf",
+    "fund",
+    "isin",
+    "listed",
+    "listing",
+    "nasdaq",
+    "nyse",
+    "quote",
+    "security",
+    "shares",
+    "stock",
+    "symbol",
+    "ticker",
+    "trades",
+    "traded",
+}
 _RUNTIME_FUNCTION_YEAR_ALIAS_RE = re.compile(
     r"^(?:and|by|for|from|in|of|on|or|the|to|with)\s+(?:19|20)\d{2}$"
 )
@@ -1752,11 +1770,26 @@ def _build_runtime_g20_country_aliases() -> tuple[RuntimeG20CountryAlias, ...]:
 
 
 _RUNTIME_G20_COUNTRY_ALIASES = _build_runtime_g20_country_aliases()
+_COMMON_GEOPOLITICAL_ACRONYM_ALIAS_TEXTS = frozenset(
+    {
+        "car",
+        "drc",
+        "eu",
+        "nz",
+        "png",
+        "prc",
+        "roc",
+        "uae",
+        "uk",
+        "us",
+        "usa",
+    }
+)
 _RUNTIME_G20_COUNTRY_ALIAS_TEXTS = frozenset(
     normalize_lookup_text(alias.alias)
     for alias in _RUNTIME_G20_COUNTRY_ALIASES
     if normalize_lookup_text(alias.alias)
-)
+) | _COMMON_GEOPOLITICAL_ACRONYM_ALIAS_TEXTS
 _FINANCE_COUNTRY_PACK_ID_RE = re.compile(r"^finance-[a-z]{2}-en$")
 _FINANCE_COUNTRY_SHORT_ALIAS_CACHE: dict[
     tuple[str, int, int],
@@ -1936,6 +1969,21 @@ def _is_finance_country_short_alias_candidate(value: str) -> bool:
     if not any(character.isalpha() for character in value):
         return False
     return True
+
+
+def _has_explicit_ticker_context(
+    segment_text: str,
+    *,
+    start: int,
+    end: int,
+    window_tokens: int = 4,
+) -> bool:
+    before = TOKEN_RE.findall(segment_text[:start])[-window_tokens:]
+    after = TOKEN_RE.findall(segment_text[end:])[:window_tokens]
+    return any(
+        normalize_lookup_text(token) in _EXPLICIT_TICKER_CONTEXT_TOKENS
+        for token in (*before, *after)
+    )
 
 
 def _finance_country_short_alias_tokens(value: str) -> list[str]:
@@ -3390,7 +3438,7 @@ def _should_skip_single_token_lookup_candidate(
     normalized_canonical_text = normalize_lookup_text(canonical_text)
     if candidate_domain == "finance":
         if (
-            label_key in {"organization", "person", "ticker"}
+            label_key in {"organization", "person"}
             and normalized_matched_text in _RUNTIME_G20_COUNTRY_ALIAS_TEXTS
         ):
             return True
@@ -3401,6 +3449,11 @@ def _should_skip_single_token_lookup_candidate(
         if label_key == "ticker":
             if not _is_single_token_alpha(matched_text):
                 return True
+            if normalized_matched_text in _RUNTIME_G20_COUNTRY_ALIAS_TEXTS:
+                if segment_text is None or start is None or end is None:
+                    return True
+                if not _has_explicit_ticker_context(segment_text, start=start, end=end):
+                    return True
             if matched_text.islower():
                 return True
             if _is_single_token_all_caps(matched_text):
@@ -3579,7 +3632,7 @@ def _should_skip_multi_token_lookup_candidate(
     if candidate_domain == "finance":
         canonical_text = canonical_text or candidate_value
         if (
-            label_key in {"organization", "person", "ticker"}
+            label_key in {"organization", "person"}
             and normalize_lookup_text(matched_text) in _RUNTIME_G20_COUNTRY_ALIAS_TEXTS
         ):
             return True
