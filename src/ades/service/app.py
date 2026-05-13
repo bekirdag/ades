@@ -156,6 +156,7 @@ from .models import (
     NewsAnalyzeCountryScope,
     NewsAnalyzePackDecision,
     NewsAnalyzePassiveEntity,
+    NewsAnalyzeRelationshipProposal,
     NewsAnalyzeRequest,
     NewsAnalyzeResponse,
     NewsAnalyzeTopicScope,
@@ -936,6 +937,7 @@ def _build_unresolved_entities(
     passive_entities: list[NewsAnalyzePassiveEntity],
     terminal_candidates: list[object],
     impact_paths: ImpactExpansionResult | None,
+    relationship_proposal_counts: dict[str, int] | None = None,
     country_scope: NewsAnalyzeCountryScope | None,
     topic_scope: NewsAnalyzeTopicScope | None,
     event_signals: list[object],
@@ -984,7 +986,9 @@ def _build_unresolved_entities(
         if passive.role == "source_outlet":
             continue
 
-        candidate_proposals = passive_path_counts.get(entity_ref_key, 0)
+        candidate_proposals = passive_path_counts.get(entity_ref_key, 0) + (
+            relationship_proposal_counts or {}
+        ).get(entity_ref_key, 0)
         if not event_types:
             missing_reason = "no_market_event_signal"
         elif impact_paths is None:
@@ -1020,6 +1024,62 @@ def _build_unresolved_entities(
         )
     )
     return unresolved[:max_entities]
+
+
+def _build_relationship_proposals(
+    *,
+    tag_responses: list[TagResponse],
+    terminal_candidates: list[object],
+    max_proposals: int = 64,
+) -> list[NewsAnalyzeRelationshipProposal]:
+    terminal_refs = {
+        str(getattr(candidate, "entity_ref", "")).casefold()
+        for candidate in terminal_candidates
+        if getattr(candidate, "entity_ref", "")
+    }
+    proposals_by_ref: dict[str, NewsAnalyzeRelationshipProposal] = {}
+    for response in tag_responses:
+        for related in response.related_entities:
+            entity_ref = related.entity_id.strip()
+            name = related.canonical_text.strip()
+            if not entity_ref or not name or entity_ref.casefold() in terminal_refs:
+                continue
+            seed_entity_refs = _dedupe_string_values(related.seed_entity_ids)[:12]
+            proposal = NewsAnalyzeRelationshipProposal(
+                entity_ref=entity_ref,
+                name=name,
+                entity_type=related.entity_type,
+                score=related.score,
+                provider=related.provider,
+                seed_entity_refs=seed_entity_refs,
+                shared_seed_count=related.shared_seed_count,
+                publication_allowed=False,
+            )
+            key = entity_ref.casefold()
+            existing = proposals_by_ref.get(key)
+            if existing is None or (proposal.score or 0.0) > (existing.score or 0.0):
+                proposals_by_ref[key] = proposal
+
+    proposals = list(proposals_by_ref.values())
+    proposals.sort(
+        key=lambda proposal: (
+            -(proposal.score or 0.0),
+            -proposal.shared_seed_count,
+            proposal.entity_ref.casefold(),
+        )
+    )
+    return proposals[:max_proposals]
+
+
+def _relationship_proposal_counts_by_seed(
+    proposals: list[NewsAnalyzeRelationshipProposal],
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for proposal in proposals:
+        for seed_ref in proposal.seed_entity_refs:
+            key = seed_ref.casefold()
+            counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def _merge_topic_matches(responses: list[TagResponse]) -> list[object]:
@@ -2183,6 +2243,13 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         tag_responses: list[TagResponse] = []
         warnings: list[str] = []
         registry = runtime_state.ensure_registry()
+        include_relationship_proposals = request.options.include_relationship_proposals
+        include_related_entities = (
+            request.options.include_related_entities or include_relationship_proposals
+        )
+        include_graph_support = (
+            request.options.include_graph_support or include_relationship_proposals
+        )
         packs, pack_decisions = _build_initial_news_pack_plan(
             request=request,
             settings=settings,
@@ -2202,8 +2269,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                         storage_root=storage_root,
                         debug=request.options.debug,
                         hybrid=request.options.hybrid,
-                        include_related_entities=request.options.include_related_entities,
-                        include_graph_support=request.options.include_graph_support,
+                        include_related_entities=include_related_entities,
+                        include_graph_support=include_graph_support,
                         refine_links=request.options.refine_links,
                         refinement_depth=request.options.refinement_depth,
                         include_impact_paths=False,
@@ -2322,10 +2389,21 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         )
         topics = _merge_topic_matches(tag_responses)
         topic_scope = _build_topic_scope(topics=topics, request=request)
+        relationship_proposals = (
+            _build_relationship_proposals(
+                tag_responses=tag_responses,
+                terminal_candidates=expanded_terminal_candidates,
+            )
+            if include_relationship_proposals
+            else []
+        )
         unresolved_entities = _build_unresolved_entities(
             passive_entities=passive_entities,
             terminal_candidates=expanded_terminal_candidates,
             impact_paths=impact_paths,
+            relationship_proposal_counts=_relationship_proposal_counts_by_seed(
+                relationship_proposals
+            ),
             country_scope=country_scope,
             topic_scope=topic_scope,
             event_signals=event_signals,
@@ -2361,6 +2439,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             topic_scope=topic_scope,
             passive_entities=passive_entities,
             unresolved_entities=unresolved_entities,
+            relationship_proposals=relationship_proposals,
             event_signals=event_signals,
             source_entities=impact_paths.source_entities if impact_paths else [],
             terminal_impact_candidates=terminal_candidates,

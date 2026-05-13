@@ -11,6 +11,7 @@ from ades.service.models import (
     ImpactCandidate,
     ImpactExpansionResult,
     ImpactSourceEntity,
+    RelatedEntityMatch,
     TagResponse,
     TopicMatch,
 )
@@ -334,6 +335,122 @@ def test_news_analyze_country_hint_uses_impact_source_display_name(
     assert payload["country_scope"]["name"] == "Iran"
     passive_by_ref = {entity["entity_ref"]: entity for entity in payload["passive_entities"]}
     assert passive_by_ref["country:ir"]["name"] == "Iran"
+
+
+def test_news_analyze_returns_review_only_relationship_proposals(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-proposal-en", domain="business")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        include_related_entities: bool = False,
+        include_graph_support: bool = False,
+        **_: object,
+    ) -> TagResponse:
+        assert include_related_entities is True
+        assert include_graph_support is True
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Example Minister",
+                    label="person",
+                    start=text.index("Example Minister"),
+                    end=text.index("Example Minister") + len("Example Minister"),
+                    confidence=0.91,
+                    relevance=0.93,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="politics",
+                    ),
+                    link=EntityLink(
+                        entity_id="wikidata:Qminister",
+                        canonical_text="Example Minister",
+                        provider="wikidata",
+                    ),
+                )
+            ],
+            related_entities=[
+                RelatedEntityMatch(
+                    entity_id="wikidata:Qissuer",
+                    canonical_text="Example Listed Issuer",
+                    score=0.84,
+                    provider="qdrant.qid_graph",
+                    entity_type="organization",
+                    seed_entity_ids=["wikidata:Qminister"],
+                    shared_seed_count=1,
+                )
+            ],
+            topics=[TopicMatch(label="politics", score=0.88, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert "wikidata:Qminister" in list(entity_refs)
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-05-13",
+            artifact_hash="sha256:test",
+            source_entities=[],
+            candidates=[],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Minister signals possible rate cuts",
+            "text": "Example Minister said the central bank may cut interest rates next quarter.",
+            "hints": {"country": "us", "topics": ["politics"]},
+            "packs": [pack_id],
+            "options": {
+                "include_relationship_proposals": True,
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["relationship_proposals"] == [
+        {
+            "entity_ref": "wikidata:Qissuer",
+            "name": "Example Listed Issuer",
+            "entity_type": "organization",
+            "score": 0.84,
+            "provider": "qdrant.qid_graph",
+            "source": "related_entity",
+            "seed_entity_refs": ["wikidata:Qminister"],
+            "shared_seed_count": 1,
+            "publication_allowed": False,
+            "promotion_required": "source_backed_edge_or_strict_identity_bridge",
+        }
+    ]
+    unresolved_by_ref = {entity["entity_ref"]: entity for entity in payload["unresolved_entities"]}
+    assert unresolved_by_ref["wikidata:Qminister"]["candidate_proposals"] == 1
+    assert unresolved_by_ref["wikidata:Qminister"]["missing_reason"] == (
+        "passive_relationship_without_terminal_candidate"
+    )
 
 
 def test_news_analyze_passive_classifier_hides_artifacts_and_forces_text_country(

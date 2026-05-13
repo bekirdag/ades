@@ -1794,6 +1794,7 @@ class NewsAnalyzeOptions(BaseModel):
     debug: bool = False
     hybrid: bool | None = None
     include_related_entities: bool = False
+    include_relationship_proposals: bool = False
     include_graph_support: bool = False
     refine_links: bool = True
     refinement_depth: Literal["light", "deep"] = "light"
@@ -1926,6 +1927,23 @@ class NewsAnalyzeUnresolvedEntity(BaseModel):
     candidate_proposals: int = Field(default=0, ge=0)
 
 
+class NewsAnalyzeRelationshipProposal(BaseModel):
+    """Review-only relationship candidate from ADES proposal lanes."""
+
+    entity_ref: str
+    name: str
+    entity_type: str | None = None
+    score: float | None = Field(default=None, ge=0.0, le=1.0)
+    provider: str | None = None
+    source: Literal["related_entity"] = "related_entity"
+    seed_entity_refs: list[str] = Field(default_factory=list)
+    shared_seed_count: int = Field(default=0, ge=0)
+    publication_allowed: bool = False
+    promotion_required: Literal["source_backed_edge_or_strict_identity_bridge"] = (
+        "source_backed_edge_or_strict_identity_bridge"
+    )
+
+
 class NewsAnalyzeArtifactVersions(BaseModel):
     """Artifact version metadata returned with the news-analysis contract."""
 
@@ -1950,6 +1968,7 @@ class NewsAnalyzeResponse(BaseModel):
     topic_scope: NewsAnalyzeTopicScope | None = None
     passive_entities: list[NewsAnalyzePassiveEntity] = Field(default_factory=list)
     unresolved_entities: list[NewsAnalyzeUnresolvedEntity] = Field(default_factory=list)
+    relationship_proposals: list[NewsAnalyzeRelationshipProposal] = Field(default_factory=list)
     event_signals: list[NewsEventSignal] = Field(default_factory=list)
     source_entities: list[ImpactSourceEntity] = Field(default_factory=list)
     terminal_impact_candidates: list[ImpactCandidate] = Field(default_factory=list)
