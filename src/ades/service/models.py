@@ -1910,6 +1910,21 @@ class NewsAnalyzePassiveEntity(BaseModel):
     quality_reasons: list[str] = Field(default_factory=list)
 
 
+class NewsAnalyzeUnresolvedEntity(BaseModel):
+    """Extracted entity that did not resolve into a terminal market candidate."""
+
+    entity_ref: str
+    name: str
+    mention_count: int = Field(default=1, ge=1)
+    story_count: int = Field(default=1, ge=1)
+    country_scope: str | None = None
+    topic_scope: str | None = None
+    event_types: list[str] = Field(default_factory=list)
+    has_terminal_candidate: bool = False
+    missing_reason: str
+    candidate_proposals: int = Field(default=0, ge=0)
+
+
 class NewsAnalyzeArtifactVersions(BaseModel):
     """Artifact version metadata returned with the news-analysis contract."""
 
@@ -1933,6 +1948,7 @@ class NewsAnalyzeResponse(BaseModel):
     country_scope: NewsAnalyzeCountryScope | None = None
     topic_scope: NewsAnalyzeTopicScope | None = None
     passive_entities: list[NewsAnalyzePassiveEntity] = Field(default_factory=list)
+    unresolved_entities: list[NewsAnalyzeUnresolvedEntity] = Field(default_factory=list)
     event_signals: list[NewsEventSignal] = Field(default_factory=list)
     source_entities: list[ImpactSourceEntity] = Field(default_factory=list)
     terminal_impact_candidates: list[ImpactCandidate] = Field(default_factory=list)

@@ -233,6 +233,17 @@ def test_news_analyze_endpoint_returns_normalized_contract(
         entity["quality"] == "hidden_artifact" and entity["display_eligible"] is False
         for entity in payload["passive_entities"]
     )
+    unresolved_by_ref = {
+        entity["entity_ref"]: entity for entity in payload["unresolved_entities"]
+    }
+    assert unresolved_by_ref["country:ir"]["missing_reason"] == (
+        "country_scope_without_terminal_candidate"
+    )
+    assert unresolved_by_ref["country:ir"]["event_types"] == [
+        "shipping_chokepoint_disruption"
+    ]
+    assert unresolved_by_ref["country:ir"]["has_terminal_candidate"] is False
+    assert "entity_hormuz" not in unresolved_by_ref
     assert payload["tag_responses"] == []
 
 

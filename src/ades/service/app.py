@@ -159,6 +159,7 @@ from .models import (
     NewsAnalyzeRequest,
     NewsAnalyzeResponse,
     NewsAnalyzeTopicScope,
+    NewsAnalyzeUnresolvedEntity,
     StatusResponse,
     TagRequest,
     TagResponse,
@@ -930,6 +931,96 @@ def _build_passive_entities(
             ),
         )
     return passive_entities[:max_entities]
+
+
+def _build_unresolved_entities(
+    *,
+    passive_entities: list[NewsAnalyzePassiveEntity],
+    terminal_candidates: list[object],
+    impact_paths: ImpactExpansionResult | None,
+    country_scope: NewsAnalyzeCountryScope | None,
+    topic_scope: NewsAnalyzeTopicScope | None,
+    event_signals: list[object],
+    max_entities: int = 64,
+) -> list[NewsAnalyzeUnresolvedEntity]:
+    terminal_source_refs: set[str] = set()
+    terminal_entity_refs: set[str] = set()
+    for candidate in terminal_candidates:
+        candidate_ref = getattr(candidate, "entity_ref", "")
+        if candidate_ref:
+            terminal_entity_refs.add(candidate_ref.casefold())
+        for source_ref in getattr(candidate, "source_entity_refs", []) or []:
+            if source_ref:
+                terminal_source_refs.add(str(source_ref).casefold())
+        for relationship_path in getattr(candidate, "relationship_paths", []) or []:
+            for edge in getattr(relationship_path, "edges", []) or []:
+                source_ref = getattr(edge, "source_ref", "")
+                if source_ref:
+                    terminal_source_refs.add(str(source_ref).casefold())
+
+    passive_path_counts: dict[str, int] = {}
+    if impact_paths is not None:
+        for passive_path in impact_paths.passive_paths:
+            refs = [passive_path.entity_ref, *passive_path.source_entity_refs]
+            for relationship_path in passive_path.relationship_paths:
+                for edge in relationship_path.edges:
+                    refs.extend([edge.source_ref, edge.target_ref])
+            for ref in refs:
+                if ref:
+                    key = ref.casefold()
+                    passive_path_counts[key] = passive_path_counts.get(key, 0) + 1
+
+    event_types = _dedupe_string_values(
+        [getattr(signal, "event_type", None) for signal in event_signals]
+    )
+    unresolved: list[NewsAnalyzeUnresolvedEntity] = []
+    for passive in passive_entities:
+        entity_ref_key = passive.entity_ref.casefold()
+        has_terminal_candidate = (
+            entity_ref_key in terminal_entity_refs or entity_ref_key in terminal_source_refs
+        )
+        if has_terminal_candidate:
+            continue
+        if not passive.display_eligible or passive.quality == "hidden_artifact":
+            continue
+        if passive.role == "source_outlet":
+            continue
+
+        candidate_proposals = passive_path_counts.get(entity_ref_key, 0)
+        if not event_types:
+            missing_reason = "no_market_event_signal"
+        elif impact_paths is None:
+            missing_reason = "impact_expansion_unavailable"
+        elif passive.role == "country_scope" and candidate_proposals == 0:
+            missing_reason = "country_scope_without_terminal_candidate"
+        elif candidate_proposals > 0:
+            missing_reason = "passive_relationship_without_terminal_candidate"
+        else:
+            missing_reason = "no_source_backed_market_relationship"
+
+        unresolved.append(
+            NewsAnalyzeUnresolvedEntity(
+                entity_ref=passive.entity_ref,
+                name=passive.name,
+                mention_count=passive.mention_count,
+                story_count=1,
+                country_scope=country_scope.country_code if country_scope else None,
+                topic_scope=topic_scope.primary if topic_scope else None,
+                event_types=event_types,
+                has_terminal_candidate=False,
+                missing_reason=missing_reason,
+                candidate_proposals=candidate_proposals,
+            )
+        )
+
+    unresolved.sort(
+        key=lambda entity: (
+            -entity.mention_count,
+            entity.missing_reason,
+            entity.entity_ref.casefold(),
+        )
+    )
+    return unresolved[:max_entities]
 
 
 def _merge_topic_matches(responses: list[TagResponse]) -> list[object]:
@@ -2234,6 +2325,16 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             if request.options.include_passive_entities
             else []
         )
+        topics = _merge_topic_matches(tag_responses)
+        topic_scope = _build_topic_scope(topics=topics, request=request)
+        unresolved_entities = _build_unresolved_entities(
+            passive_entities=passive_entities,
+            terminal_candidates=expanded_terminal_candidates,
+            impact_paths=impact_paths,
+            country_scope=country_scope,
+            topic_scope=topic_scope,
+            event_signals=event_signals,
+        )
         artifact_versions = NewsAnalyzeArtifactVersions(
             ades_version=__version__,
             packs={
@@ -2250,9 +2351,9 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             quality_flags.append("PASSIVE_HIDDEN_ARTIFACTS_PRESENT")
         if not terminal_candidates:
             quality_flags.append("NO_TERMINAL_IMPACT_CANDIDATES")
+        if unresolved_entities:
+            quality_flags.append("UNRESOLVED_MARKET_RELATIONSHIPS_PRESENT")
 
-        topics = _merge_topic_matches(tag_responses)
-        topic_scope = _build_topic_scope(topics=topics, request=request)
         timing_ms = int((time.perf_counter() - started_at) * 1000)
         return NewsAnalyzeResponse(
             version=__version__,
@@ -2264,6 +2365,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             country_scope=country_scope,
             topic_scope=topic_scope,
             passive_entities=passive_entities,
+            unresolved_entities=unresolved_entities,
             event_signals=event_signals,
             source_entities=impact_paths.source_entities if impact_paths else [],
             terminal_impact_candidates=terminal_candidates,
