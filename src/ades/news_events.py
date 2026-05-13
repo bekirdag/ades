@@ -176,7 +176,14 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
                 r"\b(?:cut|cuts|curtail(?:ed|s)?|reduc(?:e|ed|es|ing)|lower(?:ed|s)?|drop(?:ped|s)?|declin(?:e|ed|es|ing))\b.{0,90}\b(?:production|output|supply|capacity)\b"
             ),
         ),
-        compatible_asset_families=("commodity", "energy", "agriculture", "sector"),
+        compatible_asset_families=(
+            "commodity",
+            "energy",
+            "agriculture",
+            "sector",
+            "equity",
+            "ticker",
+        ),
         confidence=0.84,
     ),
     _EventRule(
@@ -189,7 +196,14 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
                 r"\b(?:increase|boost|expand|ramp\s+up|raise|raised)\b.{0,90}\b(?:production|output|supply|capacity)\b"
             ),
         ),
-        compatible_asset_families=("commodity", "energy", "agriculture", "sector"),
+        compatible_asset_families=(
+            "commodity",
+            "energy",
+            "agriculture",
+            "sector",
+            "equity",
+            "ticker",
+        ),
         confidence=0.84,
     ),
     _EventRule(
@@ -421,6 +435,9 @@ _EQUITY_EVENT_SIGNAL_TYPES = {
     "tariff",
     "export_control",
     "sanctions",
+    "supply_disruption",
+    "production_decrease",
+    "production_increase",
     "earnings_beat",
     "earnings_miss",
     "guidance_raise",
@@ -432,6 +449,18 @@ _EQUITY_EVENT_SIGNAL_TYPES = {
     "default",
     "bankruptcy",
     "strike_labor_disruption",
+}
+
+_DIRECT_LISTING_OPERATING_SIGNAL_TYPES = {
+    "supply_disruption",
+    "production_decrease",
+    "production_increase",
+}
+
+_DIRECT_LISTING_RELATIONS = {
+    "issuer_has_exchange_listing",
+    "issuer_has_listed_ticker",
+    "ticker_represents_issuer",
 }
 
 
@@ -566,6 +595,18 @@ def _candidate_has_direct_evidence(candidate: ImpactCandidate) -> bool:
     return candidate.evidence_level == "direct"
 
 
+def _candidate_has_direct_listing_path(candidate: ImpactCandidate) -> bool:
+    for path in candidate.relationship_paths:
+        for edge in path.edges:
+            if (
+                edge.relation in _DIRECT_LISTING_RELATIONS
+                and edge.evidence_level == "direct"
+                and edge.confidence >= 0.80
+            ):
+                return True
+    return False
+
+
 def _candidate_edge_event_types(candidate: ImpactCandidate) -> set[str]:
     event_types = {event.casefold() for event in candidate.compatible_event_types}
     for path in candidate.relationship_paths:
@@ -617,8 +658,16 @@ def gate_terminal_candidates_by_event_signals(
         reason: str | None = None
 
         if edge_event_types and not (signal_types & edge_event_types):
-            keep = False
-            reason = "missing_relationship_event_compatibility"
+            operating_signal_types = signal_types & _DIRECT_LISTING_OPERATING_SIGNAL_TYPES
+            if (
+                families & {"equity", "ticker"}
+                and operating_signal_types
+                and _candidate_has_direct_listing_path(candidate)
+            ):
+                compatible_events = sorted(operating_signal_types)
+            else:
+                keep = False
+                reason = "missing_relationship_event_compatibility"
         elif "rates" in families and not (signal_types & _POLICY_SIGNAL_TYPES):
             keep = False
             reason = "missing_policy_event_signal"

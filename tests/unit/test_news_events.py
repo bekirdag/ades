@@ -222,6 +222,45 @@ def test_gate_terminal_candidates_keeps_direct_ticker_without_event_signal() -> 
     assert gated[0].entity_ref == "finance-us-ticker:TSLA"
 
 
+def test_gate_terminal_candidates_keeps_direct_listing_with_operating_signal() -> None:
+    candidate = ImpactCandidate(
+        entity_ref="finance-us-ticker:TSLA",
+        name="TSLA",
+        entity_type="ticker",
+        evidence_level="shallow",
+        confidence=0.89,
+        source_entity_refs=["wikidata:Q478214"],
+        relationship_paths=[
+            ImpactRelationshipPath(
+                path_depth=1,
+                edges=[
+                    ImpactPathEdge(
+                        source_ref="finance-us-issuer:0001318605",
+                        target_ref="finance-us-ticker:TSLA",
+                        relation="issuer_has_listed_ticker",
+                        evidence_level="direct",
+                        confidence=0.90,
+                        direction_hint="issuer_equity_security",
+                        source_name="ades-finance-country-pack-metadata",
+                        source_url="file:///packs/finance-us-en/sources.json",
+                        source_snapshot="2026-04-21",
+                        compatible_event_types=["earnings_beat", "acquisition"],
+                        direction_preconditions=["direct_issuer_or_security_mention"],
+                    )
+                ],
+            )
+        ],
+        compatible_event_types=["earnings_beat", "acquisition"],
+    )
+
+    signals = extract_news_event_signals("Tesla said it will expand production in Texas.")
+    gated, warnings = gate_terminal_candidates_by_event_signals([candidate], signals)
+
+    assert warnings == []
+    assert gated[0].entity_ref == "finance-us-ticker:TSLA"
+    assert gated[0].compatible_event_types == ["production_increase"]
+
+
 def test_gate_terminal_candidates_rejects_unexplained_indirect_ticker() -> None:
     indirect_ticker = ImpactCandidate(
         entity_ref="finance-us-ticker:OTC",
