@@ -14,6 +14,7 @@ import shutil
 import subprocess
 from typing import Any, Iterable, Iterator
 
+from ..artifact_release import append_release_gate_warnings, run_release_gate_commands
 from ..service.models import VectorIndexBuildResponse
 from .qdrant import QdrantVectorSearchClient
 
@@ -474,6 +475,34 @@ def _publish_artifact_to_qdrant(
     return resolved_collection_name, True
 
 
+def _run_publication_release_gate(
+    *,
+    commands: Iterable[str] | None,
+    working_dir: str | Path | None,
+    warnings: list[str],
+    publishing_requested: bool,
+) -> tuple[list[str], str | None, bool]:
+    resolved_commands = [
+        command.strip() for command in commands or [] if command and command.strip()
+    ]
+    resolved_working_dir = (
+        str(Path(working_dir).expanduser().resolve())
+        if working_dir is not None
+        else None
+    )
+    if not resolved_commands:
+        return resolved_commands, resolved_working_dir, True
+    if not publishing_requested:
+        warnings.append("release_gate_skipped:artifact_only")
+        return resolved_commands, resolved_working_dir, True
+    passed, gate_results = run_release_gate_commands(
+        resolved_commands,
+        working_dir=working_dir,
+    )
+    append_release_gate_warnings(gate_results, warnings=warnings)
+    return resolved_commands, resolved_working_dir, passed
+
+
 def build_qid_graph_index(
     bundle_dirs: Iterable[str | Path],
     *,
@@ -485,6 +514,8 @@ def build_qid_graph_index(
     qdrant_api_key: str | None = None,
     collection_name: str | None = None,
     publish_alias: str | None = None,
+    release_gate_commands: Iterable[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> VectorIndexBuildResponse:
     """Build one hosted QID graph artifact and optionally publish it to Qdrant."""
 
@@ -526,6 +557,18 @@ def build_qid_graph_index(
     point_count = _write_sparse_artifact(targets, artifact_path=artifact_path)
     manifest_path = resolved_output_dir / "qid_graph_index_manifest.json"
 
+    publishing_requested = qdrant_url is not None
+    (
+        resolved_release_gate_commands,
+        resolved_release_gate_working_dir,
+        release_gate_passed,
+    ) = _run_publication_release_gate(
+        commands=release_gate_commands,
+        working_dir=release_gate_working_dir,
+        warnings=warnings,
+        publishing_requested=publishing_requested,
+    )
+
     response = VectorIndexBuildResponse(
         output_dir=str(resolved_output_dir),
         manifest_path=str(manifest_path),
@@ -544,18 +587,26 @@ def build_qid_graph_index(
         processed_line_count=processed_line_count,
         matched_statement_count=matched_statement_count,
         allowed_predicates=sorted(predicate_values),
+        release_gate_commands=resolved_release_gate_commands,
+        release_gate_working_dir=resolved_release_gate_working_dir,
+        release_gate_passed=release_gate_passed,
         warnings=warnings,
     )
 
-    resolved_collection_name, published = _publish_artifact_to_qdrant(
-        artifact_path,
-        dimensions=dimensions,
-        qdrant_url=qdrant_url,
-        qdrant_api_key=qdrant_api_key,
-        collection_name=collection_name,
-        publish_alias=publish_alias,
-        pack_ids=pack_ids,
-    )
+    resolved_collection_name: str | None = collection_name
+    published = False
+    if release_gate_passed:
+        resolved_collection_name, published = _publish_artifact_to_qdrant(
+            artifact_path,
+            dimensions=dimensions,
+            qdrant_url=qdrant_url,
+            qdrant_api_key=qdrant_api_key,
+            collection_name=collection_name,
+            publish_alias=publish_alias,
+            pack_ids=pack_ids,
+        )
+    elif qdrant_url:
+        warnings.append("qdrant_publish_skipped:release_gate_failed")
     if published:
         response = response.model_copy(
             update={
@@ -593,6 +644,8 @@ def build_qid_graph_index_from_store(
     qdrant_api_key: str | None = None,
     collection_name: str | None = None,
     publish_alias: str | None = None,
+    release_gate_commands: Iterable[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> VectorIndexBuildResponse:
     """Build one hosted QID graph artifact from an existing explicit graph store."""
 
@@ -647,6 +700,18 @@ def build_qid_graph_index_from_store(
     artifact_path = resolved_output_dir / "qid_graph_points.jsonl.gz"
     point_count = _write_sparse_artifact(targets, artifact_path=artifact_path)
     manifest_path = resolved_output_dir / "qid_graph_index_manifest.json"
+    publishing_requested = qdrant_url is not None
+    (
+        resolved_release_gate_commands,
+        resolved_release_gate_working_dir,
+        release_gate_passed,
+    ) = _run_publication_release_gate(
+        commands=release_gate_commands,
+        working_dir=release_gate_working_dir,
+        warnings=warnings,
+        publishing_requested=publishing_requested,
+    )
+
     response = VectorIndexBuildResponse(
         output_dir=str(resolved_output_dir),
         manifest_path=str(manifest_path),
@@ -667,18 +732,26 @@ def build_qid_graph_index_from_store(
         processed_line_count=len(targets),
         matched_statement_count=populated_target_count,
         allowed_predicates=sorted(predicate_values),
+        release_gate_commands=resolved_release_gate_commands,
+        release_gate_working_dir=resolved_release_gate_working_dir,
+        release_gate_passed=release_gate_passed,
         warnings=warnings,
     )
 
-    resolved_collection_name, published = _publish_artifact_to_qdrant(
-        artifact_path,
-        dimensions=dimensions,
-        qdrant_url=qdrant_url,
-        qdrant_api_key=qdrant_api_key,
-        collection_name=collection_name,
-        publish_alias=publish_alias,
-        pack_ids=pack_ids,
-    )
+    resolved_collection_name: str | None = collection_name
+    published = False
+    if release_gate_passed:
+        resolved_collection_name, published = _publish_artifact_to_qdrant(
+            artifact_path,
+            dimensions=dimensions,
+            qdrant_url=qdrant_url,
+            qdrant_api_key=qdrant_api_key,
+            collection_name=collection_name,
+            publish_alias=publish_alias,
+            pack_ids=pack_ids,
+        )
+    elif qdrant_url:
+        warnings.append("qdrant_publish_skipped:release_gate_failed")
     if published:
         response = response.model_copy(
             update={

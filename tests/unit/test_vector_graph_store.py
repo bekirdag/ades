@@ -1,6 +1,7 @@
 import json
-from pathlib import Path
 import sqlite3
+import sys
+from pathlib import Path
 
 from ades.vector import graph_builder as graph_builder_module
 from ades.vector.graph_store import QidGraphStore
@@ -91,6 +92,32 @@ def test_build_qid_graph_store_writes_sqlite_artifact(tmp_path: Path) -> None:
     assert "skipped_non_wikidata:general-en:1" in response.warnings
     assert Path(response.artifact_path).exists()
     assert Path(response.manifest_path).exists()
+
+
+def test_build_qid_graph_store_records_release_gate_failure(tmp_path: Path) -> None:
+    bundle_dir = _bundle_dir(tmp_path)
+    truthy_path = tmp_path / "truthy.nt"
+    truthy_path.write_text(
+        "<http://www.wikidata.org/entity/Q1> "
+        "<http://www.wikidata.org/prop/direct/P31> "
+        "<http://www.wikidata.org/entity/Q100> .\n",
+        encoding="utf-8",
+    )
+
+    response = graph_builder_module.build_qid_graph_store(
+        [bundle_dir],
+        truthy_path=truthy_path,
+        output_dir=tmp_path / "artifact",
+        allowed_predicates=["P31"],
+        release_gate_commands=[f'{sys.executable} -c "import sys; sys.exit(7)"'],
+        release_gate_working_dir=tmp_path,
+    )
+
+    assert response.release_gate_passed is False
+    assert response.release_gate_working_dir == str(tmp_path.resolve())
+    assert any(warning.startswith("release_gate_failed:") for warning in response.warnings)
+    manifest = json.loads(Path(response.manifest_path).read_text(encoding="utf-8"))
+    assert manifest["release_gate_passed"] is False
 
 
 def test_qid_graph_store_supports_neighbors_paths_and_shared_ancestors(tmp_path: Path) -> None:

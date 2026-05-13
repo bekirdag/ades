@@ -3533,6 +3533,8 @@ def build_qid_graph_index(
     qdrant_api_key: str | None = None,
     collection_name: str | None = None,
     publish_alias: str | None = None,
+    release_gate_commands: Iterable[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> VectorIndexBuildResponse:
     """Build one hosted QID graph artifact and optionally publish it to Qdrant."""
 
@@ -3564,6 +3566,8 @@ def build_qid_graph_index(
         qdrant_api_key=resolved_qdrant_api_key,
         collection_name=collection_name,
         publish_alias=resolved_publish_alias,
+        release_gate_commands=release_gate_commands,
+        release_gate_working_dir=release_gate_working_dir,
     )
     _record_vector_build_state_if_supported(settings, response)
     return response
@@ -3582,6 +3586,8 @@ def build_qid_graph_index_from_store(
     qdrant_api_key: str | None = None,
     collection_name: str | None = None,
     publish_alias: str | None = None,
+    release_gate_commands: Iterable[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> VectorIndexBuildResponse:
     """Build one hosted QID graph artifact from an existing explicit graph store."""
 
@@ -3614,6 +3620,8 @@ def build_qid_graph_index_from_store(
         qdrant_api_key=resolved_qdrant_api_key,
         collection_name=collection_name,
         publish_alias=resolved_publish_alias,
+        release_gate_commands=release_gate_commands,
+        release_gate_working_dir=release_gate_working_dir,
     )
     _record_vector_build_state_if_supported(settings, response)
     return response
@@ -3625,6 +3633,8 @@ def build_qid_graph_store(
     truthy_path: str | Path,
     output_dir: str | Path,
     allowed_predicates: Iterable[str] | None = None,
+    release_gate_commands: Iterable[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> QidGraphStoreBuildResponse:
     """Build one explicit QID graph store artifact for exact graph queries."""
 
@@ -3633,6 +3643,8 @@ def build_qid_graph_store(
         truthy_path=truthy_path,
         output_dir=output_dir,
         allowed_predicates=allowed_predicates,
+        release_gate_commands=release_gate_commands,
+        release_gate_working_dir=release_gate_working_dir,
     )
 
 
@@ -3643,6 +3655,8 @@ def build_market_graph_store(
     node_tsv_paths: Iterable[str | Path] = (),
     graph_version: str = "market-graph-v1",
     artifact_version: str | None = None,
+    release_gate_commands: Iterable[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> MarketGraphStoreBuildResponse:
     """Build one market impact graph store artifact from normalized TSV lanes."""
 
@@ -3652,6 +3666,8 @@ def build_market_graph_store(
         node_tsv_paths=node_tsv_paths,
         graph_version=graph_version,
         artifact_version=artifact_version,
+        release_gate_commands=release_gate_commands,
+        release_gate_working_dir=release_gate_working_dir,
     )
 
 
@@ -3659,12 +3675,16 @@ def build_starter_market_graph_store(
     *,
     output_dir: str | Path,
     artifact_version: str = "2026-05-05T00:00:00Z",
+    release_gate_commands: Iterable[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> MarketGraphStoreBuildResponse:
     """Build the packaged starter market impact graph artifact."""
 
     return run_build_starter_market_graph_store(
         output_dir=output_dir,
         artifact_version=artifact_version,
+        release_gate_commands=release_gate_commands,
+        release_gate_working_dir=release_gate_working_dir,
     )
 
 

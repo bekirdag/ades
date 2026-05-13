@@ -11,6 +11,7 @@ from pathlib import Path
 import sqlite3
 from typing import Iterable
 
+from ..artifact_release import append_release_gate_warnings, run_release_gate_commands
 from ..service.models import MarketGraphStoreBuildResponse
 
 MARKET_GRAPH_STORE_FILENAME = "market_graph_store.sqlite"
@@ -76,6 +77,30 @@ _WIKIDATA_KEYS = {"qid", "qids", "wikidata", "wikidataid", "wikidataids", "wikid
 _GEONAMES_KEYS = {"geonameid", "geonameids", "geonames", "geonamesid", "geonamesids"}
 _COUNTRY_CODE_KEYS = {"countrycode", "countrycodes", "iso2", "iso31661alpha2", "iso3166alpha2"}
 _SEC_CIK_KEYS = {"cik", "ciks", "seccik", "secciks"}
+
+
+def _run_artifact_release_gate(
+    *,
+    commands: Iterable[str] | None,
+    working_dir: str | Path | None,
+    warnings: list[str],
+) -> tuple[list[str], str | None, bool]:
+    resolved_commands = [
+        command.strip() for command in commands or [] if command and command.strip()
+    ]
+    resolved_working_dir = (
+        str(Path(working_dir).expanduser().resolve())
+        if working_dir is not None
+        else None
+    )
+    if not resolved_commands:
+        return resolved_commands, resolved_working_dir, True
+    passed, gate_results = run_release_gate_commands(
+        resolved_commands,
+        working_dir=working_dir,
+    )
+    append_release_gate_warnings(gate_results, warnings=warnings)
+    return resolved_commands, resolved_working_dir, passed
 
 
 @dataclass(frozen=True)
@@ -563,6 +588,8 @@ def build_market_graph_store(
     node_tsv_paths: Iterable[str | Path] = (),
     graph_version: str = DEFAULT_MARKET_GRAPH_VERSION,
     artifact_version: str | None = None,
+    release_gate_commands: Iterable[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> MarketGraphStoreBuildResponse:
     """Build one market impact graph store from normalized TSV source lanes."""
 
@@ -749,6 +776,17 @@ def build_market_graph_store(
     finally:
         connection.close()
 
+    warnings = node_warnings + edge_warnings + implicit_node_warnings
+    (
+        resolved_release_gate_commands,
+        resolved_release_gate_working_dir,
+        release_gate_passed,
+    ) = _run_artifact_release_gate(
+        commands=release_gate_commands,
+        working_dir=release_gate_working_dir,
+        warnings=warnings,
+    )
+
     response = MarketGraphStoreBuildResponse(
         output_dir=str(resolved_output_dir),
         manifest_path=str(manifest_path),
@@ -764,7 +802,10 @@ def build_market_graph_store(
         edge_tsv_paths=[str(path) for path in resolved_edge_paths],
         pack_ids=pack_ids,
         processed_edge_row_count=processed_edge_row_count,
-        warnings=node_warnings + edge_warnings + implicit_node_warnings,
+        release_gate_commands=resolved_release_gate_commands,
+        release_gate_working_dir=resolved_release_gate_working_dir,
+        release_gate_passed=release_gate_passed,
+        warnings=warnings,
     )
     manifest_path.write_text(
         json.dumps(response.model_dump(mode="json"), indent=2, sort_keys=True),

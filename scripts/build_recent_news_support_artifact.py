@@ -7,8 +7,10 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import shutil
 from typing import Any
 
+from ades.artifact_release import run_release_gate_commands, release_gate_results_payload
 from ades.vector.news_context import write_recent_news_support_artifact
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +44,15 @@ def _parse_args() -> argparse.Namespace:
         help="Path to one saved manifest.jsonl with report items.",
     )
     parser.add_argument(
+        "--record-jsonl",
+        action="append",
+        default=[],
+        help=(
+            "Path to one JSONL file of accepted BDYA production news records. "
+            "Records must be shaped like recent-news support inputs."
+        ),
+    )
+    parser.add_argument(
         "--entity-source",
         default="plain",
         choices=("plain", "flagged"),
@@ -62,6 +73,26 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         help="Optional output artifact path. Defaults under /mnt/.../vector_builds/.",
+    )
+    parser.add_argument(
+        "--promote-to",
+        help=(
+            "Optional final artifact path. The built artifact is copied here only "
+            "after release gates pass."
+        ),
+    )
+    parser.add_argument(
+        "--release-gate-command",
+        action="append",
+        default=[],
+        help=(
+            "Shell command to run after artifact build and before --promote-to. "
+            "Can be supplied multiple times."
+        ),
+    )
+    parser.add_argument(
+        "--release-gate-working-dir",
+        help="Working directory for release gate commands.",
     )
     parser.add_argument(
         "--exclude-report-source",
@@ -112,6 +143,20 @@ def _iter_manifest_records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def _iter_jsonl_records(path: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line_no, line in enumerate(handle, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            payload = json.loads(line)
+            if not isinstance(payload, dict):
+                raise ValueError(f"Expected JSON object in {path}:{line_no}.")
+            records.append(payload)
+    return records
+
+
 def _default_output_path() -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output_dir = DEFAULT_OUTPUT_ROOT / f"recent-news-support-{timestamp}"
@@ -122,15 +167,18 @@ def main() -> int:
     args = _parse_args()
     summary_paths = [Path(value).expanduser().resolve() for value in args.summary]
     manifest_paths = [Path(value).expanduser().resolve() for value in args.manifest]
+    record_jsonl_paths = [
+        Path(value).expanduser().resolve() for value in args.record_jsonl
+    ]
     excluded_report_sources = {
         value.strip().casefold()
         for value in args.exclude_report_source
         if value and value.strip()
     }
-    if not summary_paths and not manifest_paths:
+    if not summary_paths and not manifest_paths and not record_jsonl_paths:
         summary_paths = [DEFAULT_SUMMARY_PATH.resolve()]
 
-    for path in [*summary_paths, *manifest_paths]:
+    for path in [*summary_paths, *manifest_paths, *record_jsonl_paths]:
         if not path.exists():
             raise FileNotFoundError(f"Input file not found: {path}")
 
@@ -151,6 +199,8 @@ def main() -> int:
         records.extend(_iter_summary_records(path))
     for path in manifest_paths:
         records.extend(_iter_manifest_records(path))
+    for path in record_jsonl_paths:
+        records.extend(_iter_jsonl_records(path))
 
     _artifact_payload, build_summary = write_recent_news_support_artifact(
         records,
@@ -161,10 +211,60 @@ def main() -> int:
         excluded_report_sources=excluded_report_sources,
         keep_probable_source_outlets=bool(args.keep_probable_source_outlets),
         source_summaries=[str(path) for path in summary_paths],
-        source_manifests=[str(path) for path in manifest_paths],
+        source_manifests=[
+            *[str(path) for path in manifest_paths],
+            *[str(path) for path in record_jsonl_paths],
+        ],
     )
+    gate_commands = [
+        command.strip() for command in args.release_gate_command if command.strip()
+    ]
+    release_gate_passed, gate_results = run_release_gate_commands(
+        gate_commands,
+        working_dir=args.release_gate_working_dir,
+    )
+    build_summary["release_gate_commands"] = gate_commands
+    build_summary["release_gate_working_dir"] = (
+        str(Path(args.release_gate_working_dir).expanduser().resolve())
+        if args.release_gate_working_dir
+        else None
+    )
+    build_summary["release_gate_passed"] = release_gate_passed
+    build_summary["release_gate_results"] = release_gate_results_payload(gate_results)
+    build_summary["promoted"] = False
+    summary_path = output_path.with_name("build_summary.json")
+    summary_payload = json.dumps(
+        build_summary,
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
+    summary_path.write_text(summary_payload, encoding="utf-8")
+
+    if args.promote_to and release_gate_passed:
+        promotion_path = Path(args.promote_to).expanduser().resolve()
+        promotion_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(output_path, promotion_path)
+        promotion_summary_path = promotion_path.with_name("build_summary.json")
+        build_summary["promoted"] = True
+        build_summary["promotion_path"] = str(promotion_path)
+        summary_payload = json.dumps(
+            build_summary,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ) + "\n"
+        summary_path.write_text(summary_payload, encoding="utf-8")
+        promotion_summary_path.write_text(summary_payload, encoding="utf-8")
+    elif args.promote_to:
+        build_summary["promotion_skipped"] = "release_gate_failed"
+        summary_path.write_text(
+            json.dumps(build_summary, ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
     print(json.dumps(build_summary, ensure_ascii=False, indent=2, sort_keys=True))
-    return 0
+    return 0 if release_gate_passed else 1
 
 
 if __name__ == "__main__":

@@ -855,6 +855,508 @@ BDYA_GENERAL_OVERLAY_ENTITIES: tuple[dict[str, object], ...] = (
 )
 
 
+BDYA_G20_COUNTRY_CODES: tuple[str, ...] = (
+    "ar",
+    "au",
+    "br",
+    "ca",
+    "cn",
+    "de",
+    "fr",
+    "id",
+    "in",
+    "it",
+    "jp",
+    "kr",
+    "mx",
+    "ru",
+    "sa",
+    "tr",
+    "uk",
+    "us",
+    "za",
+)
+
+
+BDYA_G20_REQUIRED_GENERAL_CATEGORIES: tuple[str, ...] = (
+    "central_bank",
+    "finance_ministry",
+    "securities_regulator",
+    "exchange",
+)
+
+
+BDYA_G20_TRADE_OR_CUSTOMS_CATEGORIES: tuple[str, ...] = (
+    "customs_body",
+    "trade_body",
+    "trade_policy_body",
+)
+
+
+BDYA_G20_OFFICIAL_ROLE_NAMES: tuple[str, ...] = (
+    "head_of_government",
+    "finance_minister",
+    "central_bank_governor",
+    "trade_official",
+)
+
+
+BDYA_PHASE6_G20_INSTITUTION_EXTENSIONS: tuple[dict[str, object], ...] = (
+    _entity(
+        "organization",
+        "New York Stock Exchange",
+        aliases=("NYSE",),
+        entity_id="ades:exchange:us:nyse",
+        metadata={"category": "exchange", "country_code": "us"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Nasdaq Stock Market",
+        aliases=("Nasdaq",),
+        entity_id="ades:exchange:us:nasdaq",
+        metadata={"category": "exchange", "country_code": "us"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "European Securities and Markets Authority",
+        aliases=("ESMA",),
+        entity_id="ades:regulator:eu:esma",
+        metadata={"category": "securities_regulator", "country_code": "eu"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "European Union Customs Union",
+        aliases=("EU Customs Union",),
+        entity_id="ades:policy-body:eu:customs-union",
+        metadata={"category": "customs_body", "country_code": "eu"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Ministry of Finance China",
+        aliases=("China Ministry of Finance", "MOF China"),
+        entity_id="ades:policy-body:cn:finance-ministry",
+        metadata={"category": "finance_ministry", "country_code": "cn"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Ministry of Commerce China",
+        aliases=("MOFCOM", "China commerce ministry"),
+        entity_id="ades:policy-body:cn:mofcom",
+        metadata={"category": "trade_body", "country_code": "cn"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Deutsche Bundesbank",
+        aliases=("Bundesbank",),
+        entity_id="ades:policy-body:de:bundesbank",
+        metadata={"category": "central_bank", "country_code": "de"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Federal Ministry for Economic Affairs and Climate Action",
+        aliases=("BMWK", "German economy ministry"),
+        entity_id="ades:policy-body:de:economy-ministry",
+        metadata={"category": "trade_policy_body", "country_code": "de"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "German Customs Administration",
+        aliases=("Zoll",),
+        entity_id="ades:policy-body:de:customs-administration",
+        metadata={"category": "customs_body", "country_code": "de"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Banque de France",
+        aliases=("Bank of France",),
+        entity_id="ades:policy-body:fr:banque-de-france",
+        metadata={"category": "central_bank", "country_code": "fr"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Directorate General of Customs and Indirect Taxes",
+        aliases=("French Customs", "DGDDI"),
+        entity_id="ades:policy-body:fr:customs",
+        metadata={"category": "customs_body", "country_code": "fr"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Bank of Italy",
+        aliases=("Banca d'Italia",),
+        entity_id="ades:policy-body:it:bank-of-italy",
+        metadata={"category": "central_bank", "country_code": "it"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Italian Customs and Monopolies Agency",
+        aliases=("Agenzia delle Dogane e dei Monopoli",),
+        entity_id="ades:policy-body:it:customs-monopolies-agency",
+        metadata={"category": "customs_body", "country_code": "it"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Ministry of Finance Indonesia",
+        aliases=("Indonesia finance ministry",),
+        entity_id="ades:policy-body:id:finance-ministry",
+        metadata={"category": "finance_ministry", "country_code": "id"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Ministry of Trade Indonesia",
+        aliases=("Indonesia trade ministry",),
+        entity_id="ades:policy-body:id:trade-ministry",
+        metadata={"category": "trade_body", "country_code": "id"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Directorate General of Customs and Excise Indonesia",
+        aliases=("Indonesia Customs",),
+        entity_id="ades:policy-body:id:customs-excise",
+        metadata={"category": "customs_body", "country_code": "id"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Ministry of Economy and Finance Korea",
+        aliases=("MOEF Korea", "Korea finance ministry"),
+        entity_id="ades:policy-body:kr:moef",
+        metadata={"category": "finance_ministry", "country_code": "kr"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Ministry of Trade Industry and Energy Korea",
+        aliases=("MOTIE", "Korea trade ministry"),
+        entity_id="ades:policy-body:kr:motie",
+        metadata={"category": "trade_body", "country_code": "kr"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Korea Customs Service",
+        aliases=("KCS Korea",),
+        entity_id="ades:policy-body:kr:customs-service",
+        metadata={"category": "customs_body", "country_code": "kr"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Bank of Russia Financial Markets Service",
+        aliases=("Russian financial markets regulator",),
+        entity_id="ades:regulator:ru:bank-of-russia-financial-markets",
+        metadata={"category": "securities_regulator", "country_code": "ru"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Federal Customs Service of Russia",
+        aliases=("Russian Customs",),
+        entity_id="ades:policy-body:ru:customs-service",
+        metadata={"category": "customs_body", "country_code": "ru"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Ministry of Economic Development Russia",
+        aliases=("Russian economy ministry",),
+        entity_id="ades:policy-body:ru:economic-development-ministry",
+        metadata={"category": "trade_policy_body", "country_code": "ru"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Australian Border Force",
+        aliases=("ABF Australia",),
+        entity_id="ades:policy-body:au:border-force",
+        metadata={"category": "customs_body", "country_code": "au"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Department of Foreign Affairs and Trade Australia",
+        aliases=("DFAT Australia",),
+        entity_id="ades:policy-body:au:dfat",
+        metadata={"category": "trade_body", "country_code": "au"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Receita Federal",
+        aliases=("Brazil Federal Revenue",),
+        entity_id="ades:policy-body:br:receita-federal",
+        metadata={"category": "customs_body", "country_code": "br"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Ministry of Development Industry Trade and Services Brazil",
+        aliases=("MDIC Brazil", "Brazil trade ministry"),
+        entity_id="ades:policy-body:br:mdic",
+        metadata={"category": "trade_body", "country_code": "br"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Canada Border Services Agency",
+        aliases=("CBSA",),
+        entity_id="ades:policy-body:ca:cbsa",
+        metadata={"category": "customs_body", "country_code": "ca"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Global Affairs Canada",
+        aliases=("GAC Canada",),
+        entity_id="ades:policy-body:ca:global-affairs",
+        metadata={"category": "trade_body", "country_code": "ca"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Central Board of Indirect Taxes and Customs",
+        aliases=("CBIC India",),
+        entity_id="ades:policy-body:in:cbic",
+        metadata={"category": "customs_body", "country_code": "in"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Directorate General of Foreign Trade India",
+        aliases=("DGFT India",),
+        entity_id="ades:policy-body:in:dgft",
+        metadata={"category": "trade_body", "country_code": "in"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Ministry of Economy Trade and Industry Japan",
+        aliases=("METI", "Japan trade ministry"),
+        entity_id="ades:policy-body:jp:meti",
+        metadata={"category": "trade_body", "country_code": "jp"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Japan Customs",
+        aliases=(),
+        entity_id="ades:policy-body:jp:customs",
+        metadata={"category": "customs_body", "country_code": "jp"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Tax Administration Service Mexico",
+        aliases=("SAT Mexico",),
+        entity_id="ades:policy-body:mx:sat",
+        metadata={"category": "customs_body", "country_code": "mx"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Ministry of Economy Mexico",
+        aliases=("Mexico economy ministry",),
+        entity_id="ades:policy-body:mx:economy-ministry",
+        metadata={"category": "trade_body", "country_code": "mx"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Zakat Tax and Customs Authority",
+        aliases=("ZATCA", "Saudi customs authority"),
+        entity_id="ades:policy-body:sa:zatca",
+        metadata={"category": "customs_body", "country_code": "sa"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "General Authority of Foreign Trade Saudi Arabia",
+        aliases=("GAFT Saudi Arabia",),
+        entity_id="ades:policy-body:sa:gaft",
+        metadata={"category": "trade_body", "country_code": "sa"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "South African Revenue Service",
+        aliases=("SARS customs",),
+        entity_id="ades:policy-body:za:sars",
+        metadata={"category": "customs_body", "country_code": "za"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Department of Trade Industry and Competition South Africa",
+        aliases=("DTIC South Africa",),
+        entity_id="ades:policy-body:za:dtic",
+        metadata={"category": "trade_body", "country_code": "za"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Turkish Ministry of Trade",
+        aliases=("Turkey trade ministry",),
+        entity_id="ades:policy-body:tr:trade-ministry",
+        metadata={"category": "trade_body", "country_code": "tr"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Turkish Customs",
+        aliases=("Turkey customs",),
+        entity_id="ades:policy-body:tr:customs",
+        metadata={"category": "customs_body", "country_code": "tr"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "HM Revenue and Customs",
+        aliases=("HMRC",),
+        entity_id="ades:policy-body:uk:hmrc",
+        metadata={"category": "customs_body", "country_code": "uk"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Department for Business and Trade",
+        aliases=("DBT UK", "UK trade department"),
+        entity_id="ades:policy-body:uk:business-trade-department",
+        metadata={"category": "trade_body", "country_code": "uk"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Directorate General of Customs Argentina",
+        aliases=("Argentina Customs", "DGA Argentina"),
+        entity_id="ades:policy-body:ar:customs",
+        metadata={"category": "customs_body", "country_code": "ar"},
+        alias_quality="strong",
+    ),
+    _entity(
+        "organization",
+        "Secretariat of Industry and Trade Argentina",
+        aliases=("Argentina trade secretariat",),
+        entity_id="ades:policy-body:ar:industry-trade-secretariat",
+        metadata={"category": "trade_body", "country_code": "ar"},
+        alias_quality="strong",
+    ),
+)
+
+
+_BDYA_G20_PUBLIC_OFFICE_COUNTRIES: tuple[tuple[str, str, str], ...] = (
+    ("ar", "Argentina", "Argentine"),
+    ("au", "Australia", "Australian"),
+    ("br", "Brazil", "Brazilian"),
+    ("ca", "Canada", "Canadian"),
+    ("cn", "China", "Chinese"),
+    ("de", "Germany", "German"),
+    ("fr", "France", "French"),
+    ("id", "Indonesia", "Indonesian"),
+    ("in", "India", "Indian"),
+    ("it", "Italy", "Italian"),
+    ("jp", "Japan", "Japanese"),
+    ("kr", "South Korea", "South Korean"),
+    ("mx", "Mexico", "Mexican"),
+    ("ru", "Russia", "Russian"),
+    ("sa", "Saudi Arabia", "Saudi"),
+    ("tr", "Turkey", "Turkish"),
+    ("uk", "United Kingdom", "British"),
+    ("us", "United States", "American"),
+    ("za", "South Africa", "South African"),
+)
+
+
+def _public_office_role_entities() -> tuple[dict[str, object], ...]:
+    records: list[dict[str, object]] = []
+    for country_code, country_name, demonym in _BDYA_G20_PUBLIC_OFFICE_COUNTRIES:
+        office_specs = (
+            (
+                "head_of_government",
+                f"Office of the Head of Government of {country_name}",
+                (
+                    f"{demonym} president",
+                    f"{demonym} prime minister",
+                    f"{country_name} president",
+                    f"{country_name} prime minister",
+                ),
+            ),
+            (
+                "finance_minister",
+                f"Office of the Finance Minister of {country_name}",
+                (
+                    f"{demonym} finance minister",
+                    f"{demonym} economy minister",
+                    f"{country_name} finance minister",
+                    f"{country_name} economy minister",
+                ),
+            ),
+            (
+                "central_bank_governor",
+                f"Office of the Central Bank Governor of {country_name}",
+                (
+                    f"{demonym} central bank governor",
+                    f"{country_name} central bank governor",
+                ),
+            ),
+            (
+                "trade_official",
+                f"Office of the Trade Minister of {country_name}",
+                (
+                    f"{demonym} trade minister",
+                    f"{country_name} trade minister",
+                    f"{demonym} commerce minister",
+                    f"{country_name} commerce minister",
+                ),
+            ),
+        )
+        for role_name, canonical_text, aliases in office_specs:
+            records.append(
+                _entity(
+                    "organization",
+                    canonical_text,
+                    aliases=aliases,
+                    entity_id=f"ades:public-office:{country_code}:{role_name}",
+                    metadata={
+                        "category": "public_office",
+                        "country_code": country_code,
+                        "office_role": role_name,
+                        "current_official_refresh_required": True,
+                    },
+                    alias_quality="strong",
+                    direct_mention_required=True,
+                    quality_reasons=(
+                        "public_office_role",
+                        "current_official_refresh_required",
+                    ),
+                )
+            )
+    return tuple(records)
+
+
+BDYA_G20_PUBLIC_OFFICE_ROLE_ENTITIES = _public_office_role_entities()
+
+
+BDYA_GENERAL_OVERLAY_ENTITIES = (
+    *BDYA_GENERAL_OVERLAY_ENTITIES,
+    *BDYA_PHASE6_G20_INSTITUTION_EXTENSIONS,
+    *BDYA_G20_PUBLIC_OFFICE_ROLE_ENTITIES,
+)
+
+
 BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES: tuple[dict[str, object], ...] = (
     _entity("commodity", "Brent crude", aliases=("Brent oil", "Brent futures", "Brent crude futures"), entity_id="ades:impact:commodity:brent-crude", metadata={"category": "energy_benchmark"}),
     _entity("commodity", "WTI crude", aliases=("WTI oil", "West Texas Intermediate", "WTI crude futures"), entity_id="ades:impact:commodity:wti-crude", metadata={"category": "energy_benchmark"}),
@@ -974,6 +1476,38 @@ BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES: tuple[dict[str, object], ...] = (
 )
 
 
+BDYA_PHASE6_FINANCE_ONTOLOGY_EXTENSIONS: tuple[dict[str, object], ...] = (
+    _entity("macro_indicator", "DXY", aliases=("US Dollar Index", "dollar index"), entity_id="ades:impact:indicator:dxy", metadata={"category": "fx_indicator"}),
+    _entity("macro_indicator", "VIX", aliases=("CBOE Volatility Index", "volatility index"), entity_id="ades:impact:indicator:vix", metadata={"category": "risk_indicator"}),
+    _entity("macro_indicator", "MOVE Index", aliases=("bond volatility index", "ICE BofA MOVE Index"), entity_id="ades:impact:indicator:move-index", metadata={"category": "rates_volatility"}),
+    _entity("rate", "US 10-year Treasury yield", aliases=("10-year Treasury yield", "US 10Y yield", "Treasury yields"), entity_id="ades:impact:rate:us-10y-treasury", metadata={"country_code": "us", "category": "sovereign_yield"}),
+    _entity("rate", "German 10-year bund yield", aliases=("Bund yield", "German bund yields"), entity_id="ades:impact:rate:de-10y-bund", metadata={"country_code": "de", "category": "sovereign_yield"}),
+    _entity("rate", "UK 10-year gilt yield", aliases=("gilt yields", "UK gilt yields"), entity_id="ades:impact:rate:uk-10y-gilt", metadata={"country_code": "uk", "category": "sovereign_yield"}),
+    _entity("rate", "Japan 10-year government bond yield", aliases=("JGB yield", "Japan government bond yields"), entity_id="ades:impact:rate:jp-10y-jgb", metadata={"country_code": "jp", "category": "sovereign_yield"}),
+    _entity("policy", "Energy reservation policy", aliases=("gas reservation policy", "domestic gas reservation", "energy reservation rules"), entity_id="ades:impact:policy:energy-reservation", metadata={"category": "energy_policy"}),
+    _entity("policy", "Production quota", aliases=("oil production quota", "output quota", "supply quota"), entity_id="ades:impact:policy:production-quota", metadata={"category": "supply_policy"}),
+    _entity("policy", "Price cap", aliases=("oil price cap", "gas price cap", "energy price cap"), entity_id="ades:impact:policy:price-cap", metadata={"category": "market_intervention"}),
+    _entity("policy", "Windfall tax", aliases=("windfall profits tax", "energy windfall tax"), entity_id="ades:impact:policy:windfall-tax", metadata={"category": "tax_policy"}),
+    _entity("policy", "Mining royalties", aliases=("mineral royalties", "mining royalty hike"), entity_id="ades:impact:policy:mining-royalties", metadata={"category": "resource_policy"}),
+    _entity("policy", "Export quota", aliases=("export quotas", "commodity export quota"), entity_id="ades:impact:policy:export-quota", metadata={"category": "trade_restriction"}),
+    _entity("macro_indicator", "Core inflation", aliases=("core CPI", "underlying inflation"), entity_id="ades:impact:macro:core-inflation", metadata={"category": "inflation"}),
+    _entity("macro_indicator", "Retail sales", aliases=("consumer spending", "retail spending"), entity_id="ades:impact:macro:retail-sales", metadata={"category": "consumption"}),
+    _entity("macro_indicator", "Consumer confidence", aliases=("consumer sentiment",), entity_id="ades:impact:macro:consumer-confidence", metadata={"category": "confidence"}),
+    _entity("macro_indicator", "Current account", aliases=("current-account deficit", "current-account surplus"), entity_id="ades:impact:macro:current-account", metadata={"category": "external_balance"}),
+    _entity("sector", "Technology", aliases=("tech sector", "technology sector"), entity_id="ades:impact:sector:technology", metadata={"category": "sector"}),
+    _entity("sector", "Biotechnology", aliases=("biotech sector",), entity_id="ades:impact:sector:biotechnology", metadata={"category": "sector"}),
+    _entity("sector", "Pharmaceuticals", aliases=("pharma sector", "drugmakers"), entity_id="ades:impact:sector:pharmaceuticals", metadata={"category": "sector"}),
+    _entity("sector", "Retail", aliases=("retail sector", "retailers"), entity_id="ades:impact:sector:retail", metadata={"category": "sector"}),
+    _entity("sector", "Homebuilders", aliases=("homebuilder stocks", "homebuilding sector"), entity_id="ades:impact:sector:homebuilders", metadata={"category": "sector"}),
+)
+
+
+BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES = (
+    *BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES,
+    *BDYA_PHASE6_FINANCE_ONTOLOGY_EXTENSIONS,
+)
+
+
 @dataclass(frozen=True)
 class DomainPackSpec:
     pack_id: str
@@ -1076,6 +1610,106 @@ BDYA_DOMAIN_PACK_SPECS: tuple[DomainPackSpec, ...] = (
         ),
     ),
 )
+
+
+BDYA_DOMAIN_PACK_ENTITY_EXTENSIONS: dict[str, tuple[dict[str, object], ...]] = {
+    "business-vector-en": (
+        _entity("business_concept", "Initial public offering", aliases=("IPO", "stock-market debut", "share listing"), entity_id="ades:business:concept:ipo"),
+        _entity("business_concept", "Secondary offering", aliases=("follow-on offering", "share sale"), entity_id="ades:business:concept:secondary-offering"),
+        _entity("business_concept", "Dividend policy", aliases=("dividend cut", "dividend increase", "special dividend"), entity_id="ades:business:concept:dividend-policy"),
+        _entity("business_concept", "Credit rating action", aliases=("rating downgrade", "rating upgrade", "credit outlook"), entity_id="ades:business:concept:credit-rating-action"),
+        _entity("business_concept", "Layoffs", aliases=("job cuts", "workforce reduction", "headcount reduction"), entity_id="ades:business:concept:layoffs"),
+        _entity("business_concept", "Factory shutdown", aliases=("plant shutdown", "production halt", "factory closure"), entity_id="ades:business:concept:factory-shutdown"),
+        _entity("business_concept", "Capacity expansion", aliases=("production expansion", "new factory", "capacity increase"), entity_id="ades:business:concept:capacity-expansion"),
+        _entity("business_concept", "Raw material shortage", aliases=("input shortage", "material shortage", "component shortage"), entity_id="ades:business:concept:raw-material-shortage"),
+        _entity("business_concept", "Cybersecurity incident", aliases=("cyber attack", "data breach", "ransomware attack"), entity_id="ades:business:concept:cybersecurity-incident"),
+        _entity("business_concept", "Litigation", aliases=("lawsuit", "legal claim", "court ruling"), entity_id="ades:business:concept:litigation"),
+        _entity("business_concept", "Joint venture", aliases=("strategic partnership", "joint-venture agreement"), entity_id="ades:business:concept:joint-venture"),
+        _entity("business_concept", "Spin-off", aliases=("spinoff", "business separation"), entity_id="ades:business:concept:spin-off"),
+        _entity("business_concept", "Market share", aliases=("market-share gains", "market-share loss"), entity_id="ades:business:concept:market-share"),
+        _entity("business_concept", "Pricing power", aliases=("price increases", "price cuts", "margin pressure"), entity_id="ades:business:concept:pricing-power"),
+        _entity("business_concept", "Inventory build", aliases=("inventory glut", "inventory drawdown"), entity_id="ades:business:concept:inventory"),
+    ),
+    "economics-vector-en": (
+        _entity("economics_concept", "Core inflation", aliases=("core CPI", "underlying inflation"), entity_id="ades:economics:concept:core-inflation"),
+        _entity("economics_concept", "Retail sales", aliases=("consumer spending", "retail spending"), entity_id="ades:economics:concept:retail-sales"),
+        _entity("economics_concept", "Consumer confidence", aliases=("consumer sentiment", "confidence index"), entity_id="ades:economics:concept:consumer-confidence"),
+        _entity("economics_concept", "Current account", aliases=("current-account deficit", "current-account surplus"), entity_id="ades:economics:concept:current-account"),
+        _entity("economics_concept", "Currency intervention", aliases=("FX intervention", "foreign-exchange intervention"), entity_id="ades:economics:concept:currency-intervention"),
+        _entity("economics_concept", "Devaluation", aliases=("currency devaluation", "currency depreciation"), entity_id="ades:economics:concept:devaluation"),
+        _entity("economics_concept", "Yield curve", aliases=("yield-curve steepening", "yield-curve inversion"), entity_id="ades:economics:concept:yield-curve"),
+        _entity("economics_concept", "Bond auction", aliases=("government bond auction", "treasury auction"), entity_id="ades:economics:concept:bond-auction"),
+        _entity("economics_concept", "Sovereign debt", aliases=("public debt", "government debt"), entity_id="ades:economics:concept:sovereign-debt"),
+        _entity("economics_concept", "Tax policy", aliases=("tax hike", "tax cut", "tax reform"), entity_id="ades:economics:concept:tax-policy"),
+        _entity("economics_concept", "Subsidies", aliases=("subsidy cuts", "government subsidies"), entity_id="ades:economics:concept:subsidies"),
+        _entity("economics_concept", "Austerity", aliases=("spending cuts", "fiscal austerity"), entity_id="ades:economics:concept:austerity"),
+        _entity("economics_concept", "Fiscal stimulus", aliases=("stimulus package", "government stimulus"), entity_id="ades:economics:concept:fiscal-stimulus"),
+        _entity("economics_concept", "Money supply", aliases=("M2 money supply", "liquidity growth"), entity_id="ades:economics:concept:money-supply"),
+        _entity("economics_concept", "Reserve requirement", aliases=("reserve ratio", "required reserves"), entity_id="ades:economics:concept:reserve-requirement"),
+    ),
+    "politics-vector-en": (
+        _entity("politics_concept", "Cabinet reshuffle", aliases=("ministerial reshuffle", "cabinet change"), entity_id="ades:politics:concept:cabinet-reshuffle"),
+        _entity("politics_concept", "Coalition government", aliases=("coalition talks", "coalition agreement"), entity_id="ades:politics:concept:coalition-government"),
+        _entity("politics_concept", "Parliamentary vote", aliases=("confidence vote", "no-confidence vote", "legislative vote"), entity_id="ades:politics:concept:parliamentary-vote"),
+        _entity("politics_concept", "Government shutdown", aliases=("shutdown deadline", "funding standoff"), entity_id="ades:politics:concept:government-shutdown"),
+        _entity("politics_concept", "State of emergency", aliases=("emergency decree", "martial law"), entity_id="ades:politics:concept:state-of-emergency"),
+        _entity("politics_concept", "Diplomatic relations", aliases=("diplomatic dispute", "ambassador recall"), entity_id="ades:politics:concept:diplomatic-relations"),
+        _entity("politics_concept", "Defense spending", aliases=("military spending", "defense budget"), entity_id="ades:politics:concept:defense-spending"),
+        _entity("politics_concept", "Trade negotiations", aliases=("trade talks", "trade deal talks"), entity_id="ades:politics:concept:trade-negotiations"),
+        _entity("politics_concept", "Border closure", aliases=("border restrictions", "border shutdown"), entity_id="ades:politics:concept:border-closure"),
+        _entity("politics_concept", "Maritime security", aliases=("shipping security", "naval patrols"), entity_id="ades:politics:concept:maritime-security"),
+        _entity("politics_concept", "Peace talks", aliases=("peace negotiations", "peace process"), entity_id="ades:politics:concept:peace-talks"),
+        _entity("politics_concept", "Referendum", aliases=("popular vote", "constitutional referendum"), entity_id="ades:politics:concept:referendum"),
+        _entity("politics_concept", "Energy policy", aliases=("energy regulation", "gas policy", "oil policy"), entity_id="ades:politics:concept:energy-policy"),
+        _entity("politics_concept", "Mining policy", aliases=("mining regulation", "mineral policy"), entity_id="ades:politics:concept:mining-policy"),
+        _entity("politics_concept", "Resource nationalism", aliases=("nationalization threat", "resource tax"), entity_id="ades:politics:concept:resource-nationalism"),
+    ),
+}
+
+
+BDYA_DOMAIN_PACK_RULE_EXTENSIONS: dict[str, tuple[dict[str, str], ...]] = {
+    "business-vector-en": (
+        _rule("ipo_listing_phrase", "business_concept", r"\b(?:IPO|initial public offering|stock-market debut|share listing)\b"),
+        _rule("rating_action_phrase", "business_concept", r"\b(?:rating downgrade|rating upgrade|credit outlook|credit rating)\b"),
+        _rule("capacity_supply_phrase", "business_concept", r"\b(?:capacity expansion|factory shutdown|production halt|material shortage|component shortage)\b"),
+    ),
+    "economics-vector-en": (
+        _rule("inflation_activity_phrase", "economics_concept", r"\b(?:core CPI|core inflation|retail sales|consumer confidence|consumer sentiment)\b"),
+        _rule("external_balance_phrase", "economics_concept", r"\b(?:current-account|current account|currency intervention|FX intervention|devaluation)\b"),
+        _rule("sovereign_rates_phrase", "economics_concept", r"\b(?:bond auction|yield curve|sovereign debt|treasury auction|reserve requirement)\b"),
+    ),
+    "politics-vector-en": (
+        _rule("government_stability_phrase", "politics_concept", r"\b(?:cabinet reshuffle|coalition talks|confidence vote|government shutdown|state of emergency)\b"),
+        _rule("trade_diplomacy_phrase", "politics_concept", r"\b(?:trade negotiations?|diplomatic dispute|border closure|referendum)\b"),
+        _rule("resource_policy_phrase", "politics_concept", r"\b(?:energy policy|gas policy|oil policy|mining policy|resource nationalism|nationali[sz]ation)\b"),
+    ),
+}
+
+
+def _extend_domain_pack_specs(
+    specs: tuple[DomainPackSpec, ...],
+) -> tuple[DomainPackSpec, ...]:
+    extended_specs: list[DomainPackSpec] = []
+    for spec in specs:
+        extended_specs.append(
+            DomainPackSpec(
+                pack_id=spec.pack_id,
+                domain=spec.domain,
+                description=spec.description,
+                entities=(
+                    *spec.entities,
+                    *BDYA_DOMAIN_PACK_ENTITY_EXTENSIONS.get(spec.pack_id, ()),
+                ),
+                rules=(
+                    *spec.rules,
+                    *BDYA_DOMAIN_PACK_RULE_EXTENSIONS.get(spec.pack_id, ()),
+                ),
+            )
+        )
+    return tuple(extended_specs)
+
+
+BDYA_DOMAIN_PACK_SPECS = _extend_domain_pack_specs(BDYA_DOMAIN_PACK_SPECS)
 
 
 def build_bdya_domain_source_bundles(

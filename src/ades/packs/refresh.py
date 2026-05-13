@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 import shutil
-import subprocess
 
+from ..artifact_release import append_release_gate_warnings, run_release_gate_commands
 from .finance_quality import (
     DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES,
     DEFAULT_FINANCE_MAX_DROPPED_ALIAS_RATIO,
@@ -218,33 +218,11 @@ def _run_release_gate_commands(
     working_dir: str | Path | None,
     warnings: list[str],
 ) -> bool:
-    cwd = (
-        str(Path(working_dir).expanduser().resolve())
-        if working_dir is not None
-        else None
+    passed, gate_results = run_release_gate_commands(
+        commands,
+        working_dir=working_dir,
     )
-    passed = True
-    for command in commands:
-        result = subprocess.run(  # noqa: S602
-            command,
-            cwd=cwd,
-            shell=True,
-            check=False,
-            text=True,
-            capture_output=True,
-        )
-        if result.returncode == 0:
-            warnings.append(f"release_gate_passed:{command}")
-            continue
-        passed = False
-        warnings.append(f"release_gate_failed:{command}:exit_code={result.returncode}")
-        stdout = result.stdout.strip()
-        stderr = result.stderr.strip()
-        if stdout:
-            warnings.append(f"release_gate_stdout:{command}:{stdout[-1000:]}")
-        if stderr:
-            warnings.append(f"release_gate_stderr:{command}:{stderr[-1000:]}")
-        break
+    append_release_gate_warnings(gate_results, warnings=warnings)
     return passed
 
 

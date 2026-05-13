@@ -2450,6 +2450,9 @@ class VectorIndexBuildResponse(BaseModel):
     processed_line_count: int = 0
     matched_statement_count: int = 0
     allowed_predicates: list[str] = Field(default_factory=list)
+    release_gate_commands: list[str] = Field(default_factory=list)
+    release_gate_working_dir: str | None = None
+    release_gate_passed: bool = True
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -2460,6 +2463,8 @@ class QidGraphStoreBuildRequest(BaseModel):
     truthy_path: str
     output_dir: str
     predicate: list[str] = Field(default_factory=list)
+    release_gate_commands: list[str] = Field(default_factory=list)
+    release_gate_working_dir: str | None = None
 
     @model_validator(mode="after")
     def validate_bundle_dirs(self) -> "QidGraphStoreBuildRequest":
@@ -2489,6 +2494,9 @@ class QidGraphStoreBuildResponse(BaseModel):
     max_degree_total: int = 0
     mean_degree_total: float = 0.0
     p95_degree_total: int = 0
+    release_gate_commands: list[str] = Field(default_factory=list)
+    release_gate_working_dir: str | None = None
+    release_gate_passed: bool = True
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -2500,6 +2508,8 @@ class MarketGraphStoreBuildRequest(BaseModel):
     output_dir: str
     graph_version: str = "market-graph-v1"
     artifact_version: str | None = None
+    release_gate_commands: list[str] = Field(default_factory=list)
+    release_gate_working_dir: str | None = None
 
     @model_validator(mode="after")
     def validate_edge_tsv_paths(self) -> "MarketGraphStoreBuildRequest":
@@ -2525,4 +2535,7 @@ class MarketGraphStoreBuildResponse(BaseModel):
     edge_tsv_paths: list[str] = Field(default_factory=list)
     pack_ids: list[str] = Field(default_factory=list)
     processed_edge_row_count: int = 0
+    release_gate_commands: list[str] = Field(default_factory=list)
+    release_gate_working_dir: str | None = None
+    release_gate_passed: bool = True
     warnings: list[str] = Field(default_factory=list)

@@ -29,6 +29,8 @@ def test_cli_registry_build_qid_graph_index_calls_public_api(
         qdrant_api_key,
         collection_name,
         publish_alias,
+        release_gate_commands,
+        release_gate_working_dir,
     ) -> VectorIndexBuildResponse:
         captured["bundle_dirs"] = bundle_dirs
         captured["truthy_path"] = truthy_path
@@ -39,6 +41,8 @@ def test_cli_registry_build_qid_graph_index_calls_public_api(
         captured["qdrant_api_key"] = qdrant_api_key
         captured["collection_name"] = collection_name
         captured["publish_alias"] = publish_alias
+        captured["release_gate_commands"] = release_gate_commands
+        captured["release_gate_working_dir"] = release_gate_working_dir
         return VectorIndexBuildResponse(
             output_dir=str(output_dir),
             manifest_path=str(output_dir / "manifest.json"),
@@ -71,6 +75,8 @@ def test_cli_registry_build_qid_graph_index_calls_public_api(
             str(output_dir),
             "--predicate",
             "P31",
+            "--release-gate-command",
+            "echo vector-gate",
         ],
     )
 
@@ -79,6 +85,7 @@ def test_cli_registry_build_qid_graph_index_calls_public_api(
     assert payload["point_count"] == 2
     assert captured["bundle_dirs"] == [bundle_dir]
     assert captured["allowed_predicates"] == ["P31"]
+    assert captured["release_gate_commands"] == ["echo vector-gate"]
 
 
 def test_cli_registry_build_qid_graph_index_from_store_calls_public_api(
@@ -104,6 +111,8 @@ def test_cli_registry_build_qid_graph_index_from_store_calls_public_api(
         qdrant_api_key,
         collection_name,
         publish_alias,
+        release_gate_commands,
+        release_gate_working_dir,
     ) -> VectorIndexBuildResponse:
         captured["bundle_dirs"] = bundle_dirs
         captured["graph_store_path"] = graph_store_path
@@ -115,6 +124,8 @@ def test_cli_registry_build_qid_graph_index_from_store_calls_public_api(
         captured["qdrant_api_key"] = qdrant_api_key
         captured["collection_name"] = collection_name
         captured["publish_alias"] = publish_alias
+        captured["release_gate_commands"] = release_gate_commands
+        captured["release_gate_working_dir"] = release_gate_working_dir
         return VectorIndexBuildResponse(
             output_dir=str(output_dir),
             manifest_path=str(output_dir / "manifest.json"),

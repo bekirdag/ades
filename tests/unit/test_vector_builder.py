@@ -1,6 +1,7 @@
 import gzip
 import json
 from pathlib import Path
+import sys
 
 from ades.vector import builder as builder_module
 from ades.vector import graph_builder as graph_builder_module
@@ -152,6 +153,40 @@ def test_build_qid_graph_index_can_publish_to_qdrant(tmp_path: Path, monkeypatch
     assert captured["payload_index_collection_name"] == "ades-qids-20260419"
     assert captured["alias_name"] == "ades-qids-current"
     assert len(captured["points"]) == 2
+
+
+def test_build_qid_graph_index_blocks_qdrant_publish_when_release_gate_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
+    bundle_dir = _bundle_dir(tmp_path)
+    truthy_path = tmp_path / "truthy.nt"
+    truthy_path.write_text(
+        "<http://www.wikidata.org/entity/Q1> <http://www.wikidata.org/prop/direct/P31> <http://www.wikidata.org/entity/Q43229> .\n",
+        encoding="utf-8",
+    )
+
+    class _FailIfUsedClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            raise AssertionError("Qdrant publication should not run")
+
+    monkeypatch.setattr(builder_module, "QdrantVectorSearchClient", _FailIfUsedClient)
+
+    response = builder_module.build_qid_graph_index(
+        [bundle_dir],
+        truthy_path=truthy_path,
+        output_dir=tmp_path / "artifact",
+        dimensions=8,
+        allowed_predicates=["P31"],
+        qdrant_url="http://qdrant.local:6333",
+        collection_name="ades-qids-20260513",
+        publish_alias="ades-qids-current",
+        release_gate_commands=[f'{sys.executable} -c "import sys; sys.exit(7)"'],
+        release_gate_working_dir=tmp_path,
+    )
+
+    assert response.release_gate_passed is False
+    assert response.published is False
+    assert any(warning.startswith("release_gate_failed:") for warning in response.warnings)
 
 
 def test_iter_text_lines_prefers_pigz_over_rapidgzip(tmp_path: Path, monkeypatch) -> None:

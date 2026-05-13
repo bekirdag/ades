@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -119,6 +120,24 @@ def test_market_graph_builder_merges_edges_and_computes_seed_degree(tmp_path: Pa
             "war_escalation",
         )
         assert edges[0].direction_preconditions == ("transit_disruption", "war_risk")
+
+
+def test_market_graph_builder_records_release_gate_failure(tmp_path: Path) -> None:
+    node_path, edge_path = _write_market_graph_tsvs(tmp_path)
+    response = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact",
+        artifact_version="2026-05-05T00:00:00Z",
+        release_gate_commands=[f'{sys.executable} -c "import sys; sys.exit(7)"'],
+        release_gate_working_dir=tmp_path,
+    )
+
+    assert response.release_gate_passed is False
+    assert response.release_gate_working_dir == str(tmp_path.resolve())
+    assert any(warning.startswith("release_gate_failed:") for warning in response.warnings)
+    manifest = Path(response.manifest_path).read_text(encoding="utf-8")
+    assert '"release_gate_passed": false' in manifest
 
 
 def test_market_graph_builder_requires_plan_edge_columns(tmp_path: Path) -> None:

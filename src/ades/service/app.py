@@ -1357,6 +1357,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 truthy_path=request.truthy_path,
                 output_dir=request.output_dir,
                 allowed_predicates=request.predicate or None,
+                release_gate_commands=request.release_gate_commands,
+                release_gate_working_dir=request.release_gate_working_dir,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1379,6 +1381,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 node_tsv_paths=request.node_tsv_paths,
                 graph_version=request.graph_version,
                 artifact_version=request.artifact_version,
+                release_gate_commands=request.release_gate_commands,
+                release_gate_working_dir=request.release_gate_working_dir,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import ExitStack, contextmanager
 from importlib import resources
 from pathlib import Path
-from typing import Iterator
+from typing import Iterable, Iterator
 
 from ..service.models import MarketGraphStoreBuildResponse
 from .graph_builder import build_market_graph_store
@@ -47,6 +47,8 @@ def build_starter_market_graph_store(
     *,
     output_dir: str | Path,
     artifact_version: str = STARTER_ARTIFACT_VERSION,
+    release_gate_commands: Iterable[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> MarketGraphStoreBuildResponse:
     """Build the reviewed starter market graph artifact."""
 
@@ -56,4 +58,6 @@ def build_starter_market_graph_store(
             edge_tsv_paths=[edge_path],
             output_dir=output_dir,
             artifact_version=artifact_version,
+            release_gate_commands=release_gate_commands,
+            release_gate_working_dir=release_gate_working_dir,
         )

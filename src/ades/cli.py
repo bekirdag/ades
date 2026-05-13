@@ -16,17 +16,24 @@ from rich.table import Table
 from rich.text import Text
 from typer.main import get_command
 
+from .artifact_release import (
+    load_artifact_descriptors_from_spec,
+    parse_artifact_descriptor,
+    write_artifact_release_manifest,
+)
 from .api import activate_pack as api_activate_pack
 from .api import benchmark_runtime as api_benchmark_runtime
 from .api import benchmark_matcher_backends as api_benchmark_matcher_backends
 from .api import build_finance_source_bundle as api_build_finance_source_bundle
 from .api import build_finance_country_source_bundles as api_build_finance_country_source_bundles
 from .api import build_general_source_bundle as api_build_general_source_bundle
+from .api import build_market_graph_store as api_build_market_graph_store
 from .api import build_medical_source_bundle as api_build_medical_source_bundle
 from .api import build_qid_graph_index as api_build_qid_graph_index
 from .api import build_qid_graph_index_from_store as api_build_qid_graph_index_from_store
 from .api import build_qid_graph_store as api_build_qid_graph_store
 from .api import build_registry as api_build_registry
+from .api import build_starter_market_graph_store as api_build_starter_market_graph_store
 from .api import compare_extraction_quality_reports as api_compare_extraction_quality_reports
 from .api import deactivate_pack as api_deactivate_pack
 from .api import diff_pack_versions as api_diff_pack_versions
@@ -2319,6 +2326,16 @@ def registry_build_qid_graph_index(
         "--publish-alias",
         help="Optional alias to atomically point at the published collection.",
     ),
+    release_gate_commands: list[str] = typer.Option(
+        [],
+        "--release-gate-command",
+        help="Shell command to run after QID artifact build and before Qdrant publication. Can be supplied multiple times.",
+    ),
+    release_gate_working_dir: Path | None = typer.Option(
+        None,
+        "--release-gate-working-dir",
+        help="Working directory for release gate commands.",
+    ),
 ) -> None:
     """Build one hosted QID graph index artifact and optionally publish it to Qdrant."""
 
@@ -2333,6 +2350,8 @@ def registry_build_qid_graph_index(
             qdrant_api_key=qdrant_api_key,
             collection_name=collection_name,
             publish_alias=publish_alias,
+            release_gate_commands=release_gate_commands,
+            release_gate_working_dir=release_gate_working_dir,
         )
     except (FileNotFoundError, ValueError) as exc:
         _exit_with_cli_error(exc)
@@ -2393,6 +2412,16 @@ def registry_build_qid_graph_index_from_store(
         "--publish-alias",
         help="Optional alias to atomically point at the published collection.",
     ),
+    release_gate_commands: list[str] = typer.Option(
+        [],
+        "--release-gate-command",
+        help="Shell command to run after QID artifact build and before Qdrant publication. Can be supplied multiple times.",
+    ),
+    release_gate_working_dir: Path | None = typer.Option(
+        None,
+        "--release-gate-working-dir",
+        help="Working directory for release gate commands.",
+    ),
 ) -> None:
     """Build one hosted QID graph index from an existing explicit graph-store artifact."""
 
@@ -2408,6 +2437,8 @@ def registry_build_qid_graph_index_from_store(
             qdrant_api_key=qdrant_api_key,
             collection_name=collection_name,
             publish_alias=publish_alias,
+            release_gate_commands=release_gate_commands,
+            release_gate_working_dir=release_gate_working_dir,
         )
     except (FileNotFoundError, ValueError) as exc:
         _exit_with_cli_error(exc)
@@ -2436,6 +2467,16 @@ def registry_build_qid_graph_store(
         "--predicate",
         help="Allowed Wikidata property id. Repeat to override the default predicate set.",
     ),
+    release_gate_commands: list[str] = typer.Option(
+        [],
+        "--release-gate-command",
+        help="Shell command to run after QID graph-store build. Can be supplied multiple times.",
+    ),
+    release_gate_working_dir: Path | None = typer.Option(
+        None,
+        "--release-gate-working-dir",
+        help="Working directory for release gate commands.",
+    ),
 ) -> None:
     """Build one explicit QID graph store for exact path and ancestor queries."""
 
@@ -2445,10 +2486,178 @@ def registry_build_qid_graph_store(
             truthy_path=truthy_path,
             output_dir=output_dir,
             allowed_predicates=predicate or None,
+            release_gate_commands=release_gate_commands,
+            release_gate_working_dir=release_gate_working_dir,
         )
     except (FileNotFoundError, ValueError) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
+    if not response.release_gate_passed:
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("build-market-graph-store")
+def registry_build_market_graph_store(
+    edge_tsv_paths: list[Path] = typer.Option(
+        ...,
+        "--edge-tsv-path",
+        help="Normalized market graph edge TSV path. Repeat for multiple edge lanes.",
+    ),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the market graph store and manifest should be written.",
+    ),
+    node_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--node-tsv-path",
+        help="Optional normalized market graph node TSV path. Repeat for multiple node lanes.",
+    ),
+    graph_version: str = typer.Option(
+        "market-graph-v1",
+        "--graph-version",
+        help="Stable market graph version recorded in the artifact manifest.",
+    ),
+    artifact_version: str | None = typer.Option(
+        None,
+        "--artifact-version",
+        help="Optional artifact version. Defaults to the current UTC timestamp.",
+    ),
+    release_gate_commands: list[str] = typer.Option(
+        [],
+        "--release-gate-command",
+        help="Shell command to run after market graph-store build. Can be supplied multiple times.",
+    ),
+    release_gate_working_dir: Path | None = typer.Option(
+        None,
+        "--release-gate-working-dir",
+        help="Working directory for release gate commands.",
+    ),
+) -> None:
+    """Build one market impact graph store from normalized TSV source lanes."""
+
+    try:
+        response = api_build_market_graph_store(
+            edge_tsv_paths=edge_tsv_paths,
+            output_dir=output_dir,
+            node_tsv_paths=node_tsv_paths,
+            graph_version=graph_version,
+            artifact_version=artifact_version,
+            release_gate_commands=release_gate_commands,
+            release_gate_working_dir=release_gate_working_dir,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+    if not response.release_gate_passed:
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("build-starter-market-graph-store")
+def registry_build_starter_market_graph_store(
+    output_dir: Path = typer.Option(
+        ...,
+        "--output-dir",
+        help="Directory where the packaged starter market graph store should be written.",
+    ),
+    artifact_version: str = typer.Option(
+        "2026-05-05T00:00:00Z",
+        "--artifact-version",
+        help="Artifact version recorded in the starter market graph manifest.",
+    ),
+    release_gate_commands: list[str] = typer.Option(
+        [],
+        "--release-gate-command",
+        help="Shell command to run after starter market graph-store build. Repeat as needed.",
+    ),
+    release_gate_working_dir: Path | None = typer.Option(
+        None,
+        "--release-gate-working-dir",
+        help="Working directory for release gate commands.",
+    ),
+) -> None:
+    """Build the packaged starter market impact graph store."""
+
+    try:
+        response = api_build_starter_market_graph_store(
+            output_dir=output_dir,
+            artifact_version=artifact_version,
+            release_gate_commands=release_gate_commands,
+            release_gate_working_dir=release_gate_working_dir,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.model_dump(mode="json"))
+    if not response.release_gate_passed:
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("write-artifact-release-manifest")
+def registry_write_artifact_release_manifest(
+    output: Path = typer.Option(
+        ...,
+        "--output",
+        help="Path where the unified artifact release manifest should be written.",
+    ),
+    artifact_spec: Path | None = typer.Option(
+        None,
+        "--artifact-spec",
+        help="Optional JSON spec with artifacts[] and rollback_instructions[].",
+    ),
+    artifact: list[str] = typer.Option(
+        [],
+        "--artifact",
+        help="Artifact descriptor as kind:path or kind:name:path. Repeat for multiple artifacts.",
+    ),
+    require_kind: list[str] = typer.Option(
+        [],
+        "--require-kind",
+        help="Artifact kind that must exist in the manifest. Repeat for required lanes.",
+    ),
+    rollback_instruction: list[str] = typer.Option(
+        [],
+        "--rollback-instruction",
+        help="Human-readable rollback instruction to embed in the manifest.",
+    ),
+    release_gate_commands: list[str] = typer.Option(
+        [],
+        "--release-gate-command",
+        help="Shell command to run before marking the artifact release manifest passed.",
+    ),
+    release_gate_working_dir: Path | None = typer.Option(
+        None,
+        "--release-gate-working-dir",
+        help="Working directory for release gate commands.",
+    ),
+) -> None:
+    """Write one manifest covering packs, market graph, QID, Qdrant, and recent-news artifacts."""
+
+    try:
+        descriptors = []
+        spec_rollback_instructions: list[str] = []
+        if artifact_spec is not None:
+            descriptors, spec_rollback_instructions = load_artifact_descriptors_from_spec(
+                artifact_spec,
+            )
+        descriptors.extend(parse_artifact_descriptor(value) for value in artifact)
+        if not descriptors:
+            raise ValueError("At least one artifact descriptor is required.")
+        manifest = write_artifact_release_manifest(
+            descriptors,
+            output_path=output,
+            release_gate_commands=release_gate_commands,
+            release_gate_working_dir=release_gate_working_dir,
+            require_kinds=require_kind,
+            rollback_instructions=[
+                *spec_rollback_instructions,
+                *rollback_instruction,
+            ],
+        )
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(manifest)
+    if not manifest.get("passed"):
+        raise typer.Exit(code=1)
 
 
 @registry_app.command("fetch-general-sources")

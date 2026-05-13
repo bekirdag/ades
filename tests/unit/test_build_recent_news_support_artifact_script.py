@@ -259,6 +259,106 @@ def test_recent_news_support_builder_reads_articles_records(tmp_path: Path) -> N
     }
 
 
+def test_recent_news_support_builder_reads_accepted_record_jsonl_and_promotes(
+    tmp_path: Path,
+) -> None:
+    record_jsonl_path = tmp_path / "bdya-records.jsonl"
+    record_jsonl_path.write_text(
+        json.dumps(
+            {
+                "status": "accepted",
+                "article_url": "https://example.com/bdya-production",
+                "published_at": "2026-05-13T10:00:00Z",
+                "topics": ["finance", "politics"],
+                "entities": [
+                    _entity("wikidata:Q10", "Turkey", "country"),
+                    _entity("wikidata:Q11", "Turkish lira", "currency"),
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "staging" / "recent_news_support.json"
+    promotion_path = tmp_path / "prod" / "recent_news_support.json"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--record-jsonl",
+            str(record_jsonl_path),
+            "--output",
+            str(output_path),
+            "--promote-to",
+            str(promotion_path),
+            "--release-gate-command",
+            f'{sys.executable} -c "print(\\\"gate ok\\\")"',
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    summary = json.loads(result.stdout)
+    artifact = json.loads(promotion_path.read_text(encoding="utf-8"))
+    promoted_summary = json.loads(
+        promotion_path.with_name("build_summary.json").read_text(encoding="utf-8")
+    )
+
+    assert summary["release_gate_passed"] is True
+    assert promoted_summary["promoted"] is True
+    assert sorted(artifact["qid_metadata"]) == ["wikidata:Q10", "wikidata:Q11"]
+
+
+def test_recent_news_support_builder_does_not_promote_when_gate_fails(
+    tmp_path: Path,
+) -> None:
+    record_jsonl_path = tmp_path / "bdya-records.jsonl"
+    record_jsonl_path.write_text(
+        json.dumps(
+            {
+                "status": "accepted",
+                "article_url": "https://example.com/bdya-production",
+                "topics": ["finance"],
+                "entities": [
+                    _entity("wikidata:Q10", "Turkey", "country"),
+                    _entity("wikidata:Q11", "Turkish lira", "currency"),
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "staging" / "recent_news_support.json"
+    promotion_path = tmp_path / "prod" / "recent_news_support.json"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--record-jsonl",
+            str(record_jsonl_path),
+            "--output",
+            str(output_path),
+            "--promote-to",
+            str(promotion_path),
+            "--release-gate-command",
+            f'{sys.executable} -c "import sys; sys.exit(7)"',
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    summary = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert summary["release_gate_passed"] is False
+    assert summary["promotion_skipped"] == "release_gate_failed"
+    assert not promotion_path.exists()
+
+
 def test_recent_news_support_builder_filters_probable_source_outlets_by_default(
     tmp_path: Path,
 ) -> None:

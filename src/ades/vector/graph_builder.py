@@ -9,6 +9,7 @@ from pathlib import Path
 import sqlite3
 from typing import Iterable
 
+from ..artifact_release import append_release_gate_warnings, run_release_gate_commands
 from ..service.models import QidGraphStoreBuildResponse
 from .builder import (
     DEFAULT_QID_GRAPH_ALLOWED_PREDICATES,
@@ -20,6 +21,30 @@ from .builder import (
 _GRAPH_STORE_BUILDER_VERSION = "qid-graph-store-v3"
 _NODE_BATCH_SIZE = 4096
 _EDGE_BATCH_SIZE = 4096
+
+
+def _run_artifact_release_gate(
+    *,
+    commands: Iterable[str] | None,
+    working_dir: str | Path | None,
+    warnings: list[str],
+) -> tuple[list[str], str | None, bool]:
+    resolved_commands = [
+        command.strip() for command in commands or [] if command and command.strip()
+    ]
+    resolved_working_dir = (
+        str(Path(working_dir).expanduser().resolve())
+        if working_dir is not None
+        else None
+    )
+    if not resolved_commands:
+        return resolved_commands, resolved_working_dir, True
+    passed, gate_results = run_release_gate_commands(
+        resolved_commands,
+        working_dir=working_dir,
+    )
+    append_release_gate_warnings(gate_results, warnings=warnings)
+    return resolved_commands, resolved_working_dir, passed
 
 
 def _prepare_graph_store(path: Path) -> sqlite3.Connection:
@@ -283,6 +308,8 @@ def build_qid_graph_store(
     truthy_path: str | Path,
     output_dir: str | Path,
     allowed_predicates: Iterable[str] | None = None,
+    release_gate_commands: Iterable[str] | None = None,
+    release_gate_working_dir: str | Path | None = None,
 ) -> QidGraphStoreBuildResponse:
     """Build one explicit QID graph store artifact for exact graph queries."""
 
@@ -329,6 +356,16 @@ def build_qid_graph_store(
     finally:
         connection.close()
 
+    (
+        resolved_release_gate_commands,
+        resolved_release_gate_working_dir,
+        release_gate_passed,
+    ) = _run_artifact_release_gate(
+        commands=release_gate_commands,
+        working_dir=release_gate_working_dir,
+        warnings=warnings,
+    )
+
     response = QidGraphStoreBuildResponse(
         output_dir=str(resolved_output_dir),
         manifest_path=str(manifest_path),
@@ -350,6 +387,9 @@ def build_qid_graph_store(
         max_degree_total=int(summary["max_degree_total"]),
         mean_degree_total=float(summary["mean_degree_total"]),
         p95_degree_total=int(summary["p95_degree_total"]),
+        release_gate_commands=resolved_release_gate_commands,
+        release_gate_working_dir=resolved_release_gate_working_dir,
+        release_gate_passed=release_gate_passed,
         warnings=warnings,
     )
     manifest_path.write_text(
