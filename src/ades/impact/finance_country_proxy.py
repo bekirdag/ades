@@ -215,6 +215,7 @@ _EQUITY_EVENT_TYPES = (
     "acquisition",
     "merger",
     "divestiture",
+    "key_person_ownership_governance",
     "default",
     "bankruptcy",
     "strike_labor_disruption",

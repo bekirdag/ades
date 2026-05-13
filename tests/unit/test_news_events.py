@@ -53,6 +53,23 @@ def test_extract_news_event_signals_covers_trade_ma_default_and_conflict() -> No
     assert "ceasefire_risk_relief" in by_type
 
 
+def test_extract_news_event_signals_covers_key_person_ownership_governance() -> None:
+    text = (
+        "Sam Altman testified that Elon Musk sought a 90% ownership stake in "
+        "OpenAI during a corporate governance trial."
+    )
+
+    by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
+
+    assert "key_person_ownership_governance" in by_type
+    assert "equity" in by_type[
+        "key_person_ownership_governance"
+    ].compatible_asset_families
+    assert "ticker" in by_type[
+        "key_person_ownership_governance"
+    ].compatible_asset_families
+
+
 def test_gate_terminal_candidates_requires_event_signal_for_policy_rate_proxy() -> None:
     policy_proxy = ImpactCandidate(
         entity_ref="ades:impact:rate:tr-policy-rate",
@@ -192,3 +209,48 @@ def test_gate_terminal_candidates_rejects_unexplained_indirect_ticker() -> None:
     assert warnings == [
         "event_signal_gate_filtered:missing_equity_direct_or_strong_event_path:1"
     ]
+
+
+def test_gate_terminal_candidates_keeps_key_person_ticker_with_governance_signal() -> None:
+    candidate = ImpactCandidate(
+        entity_ref="finance-us-ticker:TSLA",
+        name="TSLA",
+        entity_type="ticker",
+        evidence_level="shallow",
+        confidence=0.72,
+        source_entity_refs=["wikidata:Q317521"],
+        relationship_paths=[
+            ImpactRelationshipPath(
+                path_depth=1,
+                edges=[
+                    ImpactPathEdge(
+                        source_ref="wikidata:Q317521",
+                        target_ref="finance-us-ticker:TSLA",
+                        relation="person_affects_employer_ticker",
+                        evidence_level="direct",
+                        confidence=0.86,
+                        direction_hint="employer_equity_proxy",
+                        source_name="Tesla Investor Relations",
+                        source_url="https://ir.tesla.com/corporate/elon-musk",
+                        source_snapshot="2026-05-13",
+                        compatible_event_types=[
+                            "key_person_ownership_governance"
+                        ],
+                        direction_preconditions=[
+                            "strong_person_employer_event"
+                        ],
+                    )
+                ],
+            )
+        ],
+        compatible_event_types=["key_person_ownership_governance"],
+    )
+    signals = extract_news_event_signals(
+        "Sam Altman testified that Elon Musk sought a 90% ownership stake in OpenAI."
+    )
+
+    gated, warnings = gate_terminal_candidates_by_event_signals([candidate], signals)
+
+    assert warnings == []
+    assert gated[0].entity_ref == "finance-us-ticker:TSLA"
+    assert gated[0].compatible_event_types == ["key_person_ownership_governance"]

@@ -216,6 +216,17 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
         confidence=0.82,
     ),
     _EventRule(
+        event_type="key_person_ownership_governance",
+        patterns=(
+            _rx(r"\b(?:trial|lawsuit|court|legal\s+dispute|testif(?:y|ies|ied|ying))\b.{0,140}\b(?:stake|shares?|ownership|control|board|leadership|founder|ceo|chair|executive)\b"),
+            _rx(r"\b(?:stake|shares?|ownership|control|board|leadership|founder|ceo|chair|executive)\b.{0,140}\b(?:trial|lawsuit|court|legal\s+dispute|testif(?:y|ies|ied|ying))\b"),
+            _rx(r"\b(?:sought|wanted|asked|demanded|proposed|offered|bid|bids?|pursued)\b.{0,120}\b(?:stake|shares?|ownership|control|board|leadership)\b"),
+            _rx(r"\b(?:stake|shares?|ownership|control|board|leadership)\b.{0,120}\b(?:sought|wanted|asked|demanded|proposed|offered|bid|bids?|pursued)\b"),
+        ),
+        compatible_asset_families=("equity", "ticker", "sector"),
+        confidence=0.8,
+    ),
+    _EventRule(
         event_type="default",
         patterns=(
             _rx(r"\b(?:default|defaults|defaulted|debt\s+default|missed\s+(?:bond|debt|coupon)\s+payment|restructur(?:e|ed|ing)\s+debt)\b"),
@@ -292,6 +303,7 @@ _EQUITY_EVENT_SIGNAL_TYPES = {
     "acquisition",
     "merger",
     "divestiture",
+    "key_person_ownership_governance",
     "default",
     "bankruptcy",
     "strike_labor_disruption",

@@ -1826,8 +1826,33 @@ _FINANCE_COUNTRY_SHORT_ALIAS_STOPLIST = (
     | _NUMBER_SINGLE_TOKEN_WORDS
     | _RUNTIME_GENERIC_SINGLE_TOKEN_ALIAS_TEXTS
     | _FINANCE_COUNTRY_SHORT_ALIAS_DESCRIPTOR_TOKENS
-    | {"haci", "hacı", "omer", "ömer"}
+    | {
+        "coast",
+        "exchange",
+        "fort",
+        "haci",
+        "hacı",
+        "landmark",
+        "london",
+        "omer",
+        "ömer",
+        "silicon",
+        "source",
+        "sources",
+        "valley",
+    }
 )
+_FINANCE_COUNTRY_SHORT_ALIAS_GEOGRAPHIC_TAILS = {
+    "bay",
+    "beach",
+    "coast",
+    "harbor",
+    "harbour",
+    "island",
+    "mountain",
+    "river",
+    "valley",
+}
 
 
 def _runtime_country_alias_pattern(alias: RuntimeG20CountryAlias) -> re.Pattern[str]:
@@ -2110,9 +2135,14 @@ def _runtime_finance_country_short_alias_surface_allowed(surface: str) -> bool:
     if not normalized_tokens:
         return False
     if len(tokens) != 1:
-        if normalized_tokens[0] in _GENERIC_PHRASE_LEADS:
+        if (
+            normalized_tokens[0] in _GENERIC_PHRASE_LEADS
+            or normalized_tokens[0] in _FINANCE_COUNTRY_SHORT_ALIAS_STOPLIST
+        ):
             return False
         if normalized_tokens[-1] in _TRAILING_FUNCTION_WORDS:
+            return False
+        if normalized_tokens[-1] in _FINANCE_COUNTRY_SHORT_ALIAS_GEOGRAPHIC_TAILS:
             return False
         if all(
             token in _FINANCE_COUNTRY_SHORT_ALIAS_STOPLIST
@@ -2122,6 +2152,8 @@ def _runtime_finance_country_short_alias_surface_allowed(surface: str) -> bool:
             return False
         return True
     token = tokens[0]
+    if normalized_tokens[0] in _FINANCE_COUNTRY_SHORT_ALIAS_STOPLIST:
+        return False
     if token.isupper():
         return True
     return any(character.isupper() for character in token[:1])
