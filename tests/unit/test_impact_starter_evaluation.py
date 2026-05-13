@@ -85,8 +85,8 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
         )
 
     assert report.warnings == []
-    assert report.case_count == 15
-    assert report.empty_path_rate == 0.0667
+    assert report.case_count == 17
+    assert report.empty_path_rate == 0.0588
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -99,6 +99,7 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert report.per_relation_family_recall["chokepoint_affects_sector"] == 1.0
     assert report.per_relation_family_recall["industrial_metal_affects_sector"] == 1.0
     assert report.per_relation_family_recall["issuer_has_listed_ticker"] == 1.0
+    assert report.per_relation_family_recall["person_affects_employer_ticker"] == 1.0
 
 
 def test_starter_source_manifest_has_required_fields():

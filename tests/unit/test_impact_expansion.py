@@ -348,6 +348,71 @@ def test_expand_impact_paths_bridges_identity_refs_before_traversal(tmp_path: Pa
     ].same_as_refs
 
 
+def test_expand_impact_paths_bridges_public_person_to_employer_ticker(
+    tmp_path: Path,
+) -> None:
+    node_path, edge_path = _write_market_graph_tsvs(tmp_path)
+    node_path.write_text(
+        node_path.read_text(encoding="utf-8")
+        + "\n".join(
+            [
+                (
+                    "wikidata:Q317521\tElon Musk\tperson\tgeneral-en\t0\t1\t"
+                    '{"same_as_refs":["person:elon-musk"]}'
+                    "\tgeneral-en,finance-us-en"
+                ),
+                (
+                    "finance-us-ticker:TSLA\tTSLA\tticker\tfinance-us-en\t1\t0\t"
+                    '{"same_as_refs":["wikidata:Q478214","finance-us-issuer:0001318605"]}'
+                    "\tfinance-us-en"
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    edge_path.write_text(
+        edge_path.read_text(encoding="utf-8")
+        + (
+            "wikidata:Q317521\tfinance-us-ticker:TSLA\tperson_affects_employer_ticker"
+            "\tdirect\t0.86\temployer_equity_proxy\tTesla Investor Relations"
+            "\thttps://ir.tesla.com/corporate/elon-musk"
+            "\t2026-05-13\t2026\tmonthly\tgeneral-en,finance-us-en\tbridge"
+            "\tearnings_beat,earnings_miss,guidance_raise,guidance_cut"
+            "\tstrong_person_employer_event"
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    build_response = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact",
+        artifact_version="2026-05-13T00:00:00Z",
+    )
+
+    result = expand_impact_paths(
+        ["wikidata:Q317521"],
+        enabled_packs=["general-en", "finance-us-en"],
+        settings=_settings(Path(build_response.artifact_path)),
+        max_depth=2,
+        max_candidates=10,
+    )
+
+    candidate_refs = {candidate.entity_ref for candidate in result.candidates}
+    assert "finance-us-ticker:TSLA" in candidate_refs
+    tsla_candidate = next(
+        candidate
+        for candidate in result.candidates
+        if candidate.entity_ref == "finance-us-ticker:TSLA"
+    )
+    assert (
+        tsla_candidate.relationship_paths[0].edges[0].relation
+        == "person_affects_employer_ticker"
+    )
+    assert "wikidata:Q317521" in tsla_candidate.source_entity_refs
+
+
 def test_tag_impact_enrichment_does_not_filter_to_response_pack_by_default(
     tmp_path: Path,
 ) -> None:

@@ -250,6 +250,39 @@
       "expected_relation_families": [
         "issuer_has_listed_ticker"
       ]
+    },
+    {
+      "name": "intertek_issuer_ticker_bridge",
+      "entity_refs": [
+        "finance-uk-issuer:04267576",
+        "wikidata:Q1136085"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-uk-en"
+      ],
+      "expected_candidate_refs": [
+        "finance-uk-ticker:itrk"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker"
+      ]
+    },
+    {
+      "name": "elon_musk_tesla_ticker_bridge",
+      "entity_refs": [
+        "wikidata:Q317521"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-us-en"
+      ],
+      "expected_candidate_refs": [
+        "finance-us-ticker:TSLA"
+      ],
+      "expected_relation_families": [
+        "person_affects_employer_ticker"
+      ]
     }
   ]
 }

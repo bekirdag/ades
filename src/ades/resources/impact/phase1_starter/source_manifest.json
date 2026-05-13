@@ -170,6 +170,16 @@
       "notes": "Battery and critical-mineral supply-chain relationship reference."
     },
     {
+      "source_name": "Intertek Group Overview",
+      "source_url": "https://www.intertek.com/investors/group-overview/",
+      "source_snapshot": "2026-05-13",
+      "source_year": 2026,
+      "refresh_policy": "monthly",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public company investor page; starter row stores only reviewed relationship metadata.",
+      "notes": "UK issuer-to-listed-ticker relationship reference for Intertek Group Plc."
+    },
+    {
       "source_name": "MSCI Global Equity Indexes",
       "source_url": "https://www.msci.com/our-solutions/indexes/global-equity-indexes",
       "source_snapshot": "2026-05-12",
@@ -248,6 +258,16 @@
       "normalized_output_allowed": true,
       "license_notes": "Official public SEC data documentation page; starter row stores only reviewed relationship metadata.",
       "notes": "Issuer-to-listed-ticker relationship reference."
+    },
+    {
+      "source_name": "Tesla Investor Relations",
+      "source_url": "https://ir.tesla.com/corporate/elon-musk",
+      "source_snapshot": "2026-05-13",
+      "source_year": 2026,
+      "refresh_policy": "monthly",
+      "normalized_output_allowed": true,
+      "license_notes": "Official public company investor-relations biography page; starter row stores only reviewed relationship metadata.",
+      "notes": "Public-person-to-listed-ticker relationship reference for Tesla leadership exposure."
     },
     {
       "source_name": "SIA State of the U.S. Semiconductor Industry",

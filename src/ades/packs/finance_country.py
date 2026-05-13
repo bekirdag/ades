@@ -10202,6 +10202,20 @@ def _derive_united_kingdom_fca_companies_house_entities(
             issuer_warnings.append(warning)
         if warning not in people_warnings and len(people_warnings) < 5:
             people_warnings.append(warning)
+    _append_united_kingdom_ticker_entities_from_issuer_metadata(
+        ticker_entities=ticker_entities,
+        issuer_entities=issuer_entities,
+    )
+    _enrich_united_kingdom_ticker_entities_with_issuer_metadata(
+        ticker_entities=ticker_entities,
+        issuer_entities=issuer_entities,
+    )
+    ticker_entities = _dedupe_entities(ticker_entities)
+    _enrich_united_kingdom_people_with_issuer_metadata(
+        people_entities=people_entities,
+        issuer_entities=issuer_entities,
+    )
+    people_entities = _dedupe_entities(people_entities)
 
     derived_files: list[dict[str, object]] = []
     if issuer_entities:
@@ -20886,13 +20900,26 @@ def _select_best_united_kingdom_issuer_wikidata_match(
     second_score = scored_candidates[1][0] if len(scored_candidates) > 1 else 0
     if best_score < 100 and (best_score < 70 or best_score - second_score < 20):
         return None
-    return _build_wikidata_resolution_match(
+    match = _build_wikidata_resolution_match(
         best_qid,
         entity_payloads.get(best_qid),
         entity_type="organization",
         alias_builder=_build_united_kingdom_wikidata_entity_aliases,
         label_languages=("en",),
     )
+    payload = entity_payloads.get(best_qid)
+    if isinstance(payload, dict):
+        lse_tickers = [
+            value
+            for value in _extract_wikidata_string_claim_values_for_property(
+                payload,
+                property_id=_WIKIDATA_LONDON_STOCK_EXCHANGE_COMPANY_ID_PROPERTY_ID,
+            )
+            if re.fullmatch(r"[A-Z0-9.]{1,12}", value)
+        ]
+        if len(lse_tickers) == 1:
+            match["ticker"] = lse_tickers[0]
+    return match
 
 
 def _select_best_united_kingdom_person_wikidata_match(
@@ -21746,6 +21773,35 @@ def _extract_wikidata_string_claim_values(payload: dict[str, Any]) -> set[str]:
     return values
 
 
+def _extract_wikidata_string_claim_values_for_property(
+    payload: dict[str, Any],
+    *,
+    property_id: str,
+) -> list[str]:
+    claims = payload.get("claims")
+    if not isinstance(claims, dict):
+        return []
+    property_claims = claims.get(property_id)
+    if not isinstance(property_claims, list):
+        return []
+    values: list[str] = []
+    for claim in property_claims:
+        if not isinstance(claim, dict):
+            continue
+        mainsnak = claim.get("mainsnak")
+        if not isinstance(mainsnak, dict):
+            continue
+        datavalue = mainsnak.get("datavalue")
+        if not isinstance(datavalue, dict):
+            continue
+        value = datavalue.get("value")
+        if isinstance(value, str):
+            normalized = _normalize_whitespace(value).upper()
+            if normalized:
+                values.append(normalized)
+    return _unique_aliases(values)
+
+
 def _extract_wikidata_entity_claim_ids(payload: dict[str, Any]) -> set[str]:
     values: set[str] = set()
     claims = payload.get("claims")
@@ -21893,6 +21949,9 @@ def _merge_wikidata_metadata(
     label = _normalize_whitespace(str(match.get("label", "")))
     if label:
         metadata["wikidata_label"] = label
+    ticker = _normalize_whitespace(str(match.get("ticker", ""))).upper()
+    if ticker and not _normalize_whitespace(str(metadata.get("ticker", ""))):
+        metadata["ticker"] = ticker
     wikidata_aliases = [
         alias
         for alias in match.get("aliases", [])
@@ -25446,6 +25505,81 @@ def _enrich_united_kingdom_ticker_entities_with_issuer_metadata(
             source_value = _normalize_whitespace(str(issuer_metadata.get(source_key, "")))
             if source_value and not _normalize_whitespace(str(metadata.get(target_key, ""))):
                 metadata[target_key] = source_value
+
+
+def _append_united_kingdom_ticker_entities_from_issuer_metadata(
+    *,
+    ticker_entities: list[dict[str, object]],
+    issuer_entities: list[dict[str, object]],
+) -> None:
+    existing_tickers = {
+        _normalize_whitespace(
+            str(
+                entity.get("metadata", {}).get("ticker", "")
+                if isinstance(entity.get("metadata"), dict)
+                else entity.get("canonical_text", "")
+            )
+        ).upper()
+        for entity in ticker_entities
+    }
+    for issuer_entity in issuer_entities:
+        if str(issuer_entity.get("entity_type", "")) != "organization":
+            continue
+        issuer_metadata = issuer_entity.get("metadata")
+        if not isinstance(issuer_metadata, dict):
+            continue
+        ticker = _normalize_whitespace(str(issuer_metadata.get("ticker", ""))).upper()
+        if not ticker or ticker in existing_tickers:
+            continue
+        if not re.fullmatch(r"[A-Z0-9.]{1,12}", ticker):
+            continue
+        issuer_name = _normalize_whitespace(str(issuer_entity.get("canonical_text", "")))
+        if not issuer_name:
+            continue
+        metadata: dict[str, object] = {
+            "country_code": "uk",
+            "category": "ticker",
+            "ticker": ticker,
+            "issuer_name": issuer_name,
+        }
+        for source_key in (
+            "company_number",
+            "isin",
+            "listing_category",
+            "market_status",
+            "trading_venue",
+            "market_segment",
+            "currency",
+            "wikidata_qid",
+            "wikidata_slug",
+            "wikidata_entity_id",
+            "wikidata_url",
+            "wikidata_label",
+        ):
+            source_value = issuer_metadata.get(source_key)
+            if isinstance(source_value, str) and _normalize_whitespace(source_value):
+                metadata[source_key] = _normalize_whitespace(source_value)
+        aliases = _unique_aliases(
+            [
+                ticker,
+                issuer_name,
+                *[
+                    alias
+                    for alias in issuer_entity.get("aliases", [])
+                    if isinstance(alias, str) and _normalize_whitespace(alias)
+                ],
+            ]
+        )
+        ticker_entities.append(
+            {
+                "entity_type": "ticker",
+                "canonical_text": ticker,
+                "aliases": aliases,
+                "entity_id": f"finance-uk-ticker:{ticker.casefold()}",
+                "metadata": metadata,
+            }
+        )
+        existing_tickers.add(ticker)
 
 
 def _enrich_united_kingdom_people_with_issuer_metadata(

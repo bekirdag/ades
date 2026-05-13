@@ -48,6 +48,10 @@ ades:market-location:red-sea	Red Sea	chokepoint		0	1	{"same_as_refs":["wikidata:
 ades:market-location:taiwan-strait	Taiwan Strait	chokepoint		0	1	{"same_as_refs":["wikidata:Q37950"],"wikidata":"Q37950"}	general-en,finance-en
 finance-us-issuer:0001318605	Tesla Inc.	issuer	finance-us-en	0	1	{"same_as_refs":["wikidata:Q478214","FINANCE-US-ISSUER_0001318605"],"ticker_ref":"finance-us-ticker:TSLA"}	finance-us-en
 finance-us-ticker:TSLA	TSLA	ticker	finance-us-en	1	0	{"same_as_refs":["wikidata:Q478214","FINANCE-US-TICKER_TSLA","finance-us-issuer:0001318605"]}	finance-us-en
+finance-uk-issuer:04267576	Intertek Group Plc	issuer	finance-uk-en	0	1	{"same_as_refs":["wikidata:Q1136085"],"ticker_ref":"finance-uk-ticker:itrk"}	finance-uk-en
+finance-uk-ticker:itrk	ITRK	ticker	finance-uk-en	1	0	{"same_as_refs":["wikidata:Q1136085","finance-uk-issuer:04267576"],"issuer_ref":"finance-uk-issuer:04267576"}	finance-uk-en
+wikidata:Q1136085	Intertek Group Plc	organization	general-en	0	1	{"same_as_refs":["finance-uk-issuer:04267576"],"wikidata":"Q1136085"}	general-en,finance-uk-en
+wikidata:Q317521	Elon Musk	person	general-en	0	1	{"same_as_refs":["person:elon-musk"],"wikidata":"Q317521"}	general-en,finance-us-en
 geonames:6252001	United States	country		0	1	{"country_code":"us","geonames":"6252001","same_as_refs":["country:us","wikidata:Q30"],"wikidata":"Q30"}	general-en,finance-en
 wikidata:Q121826282	OPEC+	organization		0	1	{"wikidata":"Q121826282"}	general-en,finance-en
 wikidata:Q159	Russia	country		0	1	{"country_code":"ru","geonames_id":"2017370","same_as_refs":["country:ru","geonames:2017370"],"wikidata":"Q159"}	general-en,finance-en

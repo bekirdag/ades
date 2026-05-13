@@ -7078,6 +7078,7 @@ def test_resolve_united_kingdom_issuer_wikidata_matches_prefers_isin_and_ticker(
 
     assert warnings == []
     assert matches["company-number:05429800"]["qid"] == "Q230100001"
+    assert matches["company-number:05429800"]["ticker"] == "SPA"
     assert "1Spatial" in matches["company-number:05429800"]["aliases"]
 
 
@@ -7196,6 +7197,42 @@ def test_enrich_united_kingdom_entities_with_wikidata_merges_issuer_ticker_and_p
         source.get("name") == "wikidata-united-kingdom-entity-resolution"
         for source in downloaded_sources
     )
+
+
+def test_append_united_kingdom_ticker_entities_from_wikidata_issuer_metadata() -> None:
+    ticker_entities: list[dict[str, object]] = []
+    issuer_entities = [
+        {
+            "entity_id": "finance-uk-issuer:04267576",
+            "entity_type": "organization",
+            "canonical_text": "Intertek Group Plc",
+            "aliases": ["Intertek", "Intertek Group"],
+            "metadata": {
+                "country_code": "uk",
+                "category": "issuer",
+                "company_number": "04267576",
+                "isin": "GB0031638363",
+                "ticker": "ITRK",
+                "trading_venue": "London Stock Exchange",
+                "wikidata_qid": "Q1136085",
+                "wikidata_entity_id": "wikidata:Q1136085",
+            },
+        }
+    ]
+
+    finance_country_module._append_united_kingdom_ticker_entities_from_issuer_metadata(
+        ticker_entities=ticker_entities,
+        issuer_entities=issuer_entities,
+    )
+
+    assert len(ticker_entities) == 1
+    ticker_entity = ticker_entities[0]
+    assert ticker_entity["entity_id"] == "finance-uk-ticker:itrk"
+    assert ticker_entity["canonical_text"] == "ITRK"
+    assert "Intertek Group Plc" in ticker_entity["aliases"]
+    assert ticker_entity["metadata"]["company_number"] == "04267576"
+    assert ticker_entity["metadata"]["isin"] == "GB0031638363"
+    assert ticker_entity["metadata"]["wikidata_entity_id"] == "wikidata:Q1136085"
 
 
 def test_extract_united_states_sec_insider_people_entity_parses_reporting_owner() -> None:
