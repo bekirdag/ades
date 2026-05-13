@@ -53,6 +53,17 @@ def test_extract_news_event_signals_covers_trade_ma_default_and_conflict() -> No
     assert "ceasefire_risk_relief" in by_type
 
 
+def test_extract_news_event_signals_covers_takeover_approach_language() -> None:
+    text = (
+        "Intertek backed a GBP10.6bn takeover approach from Swedish private "
+        "equity firm EQT after rebuffing earlier offers."
+    )
+
+    by_type = {signal.event_type for signal in extract_news_event_signals(text)}
+
+    assert "acquisition" in by_type
+
+
 def test_extract_news_event_signals_covers_key_person_ownership_governance() -> None:
     text = (
         "Sam Altman testified that Elon Musk sought a 90% ownership stake in "

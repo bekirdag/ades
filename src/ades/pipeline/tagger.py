@@ -3413,6 +3413,12 @@ def _should_skip_single_token_lookup_candidate(
             following_token = normalize_lookup_text(_next_token(segment_text, end))
             if following_token in _PROPOSAL_GENERATED_PERSON_ORG_CONTINUATION_TOKENS:
                 return True
+            if _has_whitespace_adjacent_titleish_token(
+                segment_text,
+                start=start,
+                end=end,
+            ):
+                return True
             if _single_token_occurrence_count(segment_text, matched_text) < 2:
                 return True
             return _wordfreq_zipf_en(normalized_matched_text) >= 4.95

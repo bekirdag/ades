@@ -195,6 +195,9 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
         event_type="acquisition",
         patterns=(
             _rx(r"\b(?:acquire|acquires|acquired|buy|buys|bought|takeover|take\s+over|purchase|purchases|purchased)\b.{0,90}\b(?:company|stake|shares?|business|unit|assets?)\b"),
+            _rx(r"\b(?:back|backs|backed|backing|recommend(?:s|ed|ing)?|agree(?:s|d|ing)?\s+to|accept(?:s|ed|ing)?|reject(?:s|ed|ing)?|rebuff(?:s|ed|ing)?)\b.{0,100}\b(?:takeover|buyout|bid|approach|offer)\b"),
+            _rx(r"\b(?:takeover|buyout)\b.{0,100}\b(?:bid|approach|offer|from|by)\b"),
+            _rx(r"\b(?:bid|approach|offer)\b.{0,100}\b(?:takeover|buyout)\b"),
         ),
         compatible_asset_families=("equity", "ticker", "sector"),
         confidence=0.82,

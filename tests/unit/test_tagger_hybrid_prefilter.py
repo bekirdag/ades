@@ -47,6 +47,21 @@ def test_finance_single_token_ticker_lookup_keeps_repeated_issuer_surface() -> N
     )
 
 
+def test_finance_single_token_ticker_lookup_skips_person_name_fragment() -> None:
+    text = "Sam Altman said Elon Musk wanted 90 percent of OpenAI."
+
+    assert _should_skip_single_token_lookup_candidate(
+        matched_text="Sam",
+        candidate_value="Sam",
+        canonical_text="SAM",
+        candidate_label="ticker",
+        candidate_domain="finance",
+        segment_text=text,
+        start=0,
+        end=len("Sam"),
+    )
+
+
 def test_finance_single_token_ticker_lookup_skips_common_word_fragment() -> None:
     assert _should_skip_single_token_lookup_candidate(
         matched_text="peers",
