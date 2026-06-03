@@ -222,6 +222,20 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
     synthetic_ticker_identifiers = json.loads(nodes["finance-us-ticker:DEF"]["identifiers_json"])
     assert synthetic_ticker_identifiers["issuer_ref"] == "finance-us-issuer:0002"
     assert synthetic_ticker_identifiers["ticker_ref"] == "finance-us-ticker:DEF"
+    assert nodes["ades:impact:commodity:copper"]["is_tradable"] == "true"
+    assert nodes["ades:impact:commodity:aluminum"]["is_tradable"] == "true"
+    assert nodes["ades:impact:commodity:steel"]["is_tradable"] == "true"
+    copper_identifiers = json.loads(
+        nodes["ades:impact:commodity:copper"]["identifiers_json"]
+    )
+    aluminum_identifiers = json.loads(
+        nodes["ades:impact:commodity:aluminum"]["identifiers_json"]
+    )
+    assert copper_identifiers["futures_symbol"] == "HG"
+    assert "COMEX:HG" in copper_identifiers["terminal_proxy_refs"]
+    assert aluminum_identifiers["lme_contract_code"] == "AH"
+    assert "LME:AH" in aluminum_identifiers["terminal_proxy_refs"]
+    assert "CME:ALI" in aluminum_identifiers["terminal_proxy_refs"]
 
     assert result.artifact_path is not None
     assert result.artifact_edge_count is not None

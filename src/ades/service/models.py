@@ -1787,6 +1787,20 @@ class NewsAnalyzeHints(BaseModel):
     topics: list[str] = Field(default_factory=list)
 
 
+class NewsAnalyzeRawEntity(BaseModel):
+    """Optional upstream entity hint supplied before ADES pack matching."""
+
+    text: str | None = None
+    name: str | None = None
+    canonical_text: str | None = None
+    label: str | None = None
+    entity_type: str | None = None
+    category: str | None = None
+    entity_ref: str | None = None
+    entity_id: str | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
 class NewsAnalyzeOptions(BaseModel):
     """Options for the normalized news-analysis contract."""
 
@@ -1825,6 +1839,8 @@ class NewsAnalyzeRequest(BaseModel):
     retrieval_profile: str | None = None
     country_hint: str | None = None
     packs: list[str] = Field(default_factory=list)
+    raw_entities: list[NewsAnalyzeRawEntity] = Field(default_factory=list)
+    categorized_entities: list[NewsAnalyzeRawEntity] = Field(default_factory=list)
     options: NewsAnalyzeOptions = Field(default_factory=NewsAnalyzeOptions)
 
     @model_validator(mode="after")

@@ -340,6 +340,245 @@ def test_news_analyze_country_hint_uses_impact_source_display_name(
     assert passive_by_ref["country:ir"]["name"] == "Iran"
 
 
+def test_news_analyze_promotes_commodity_mentions_to_direct_terminal_seeds(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-commodity-promotion-en", domain="politics")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="United States",
+                    label="country",
+                    start=text.index("United States"),
+                    end=text.index("United States") + len("United States"),
+                    confidence=0.91,
+                    relevance=0.93,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="general",
+                    ),
+                    link=EntityLink(
+                        entity_id="country:us",
+                        canonical_text="United States",
+                        provider="ades",
+                    ),
+                ),
+                EntityMatch(
+                    text="Trump",
+                    label="person",
+                    start=text.index("Trump"),
+                    end=text.index("Trump") + len("Trump"),
+                    confidence=0.91,
+                    relevance=0.9,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="politics",
+                    ),
+                    link=EntityLink(
+                        entity_id="wikidata:Q22686",
+                        canonical_text="Donald Trump",
+                        provider="wikidata",
+                    ),
+                ),
+            ],
+            topics=[TopicMatch(label="politics", score=0.88, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        refs = set(entity_refs)
+        assert {
+            "ades:impact:commodity:aluminum",
+            "ades:impact:commodity:copper",
+            "ades:impact:commodity:steel",
+        } <= refs
+        commodity_refs = [
+            "ades:impact:commodity:aluminum",
+            "ades:impact:commodity:copper",
+            "ades:impact:commodity:steel",
+        ]
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-06-02",
+            artifact_hash="sha256:test",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref=ref,
+                    name=ref.rsplit(":", 1)[-1].replace("-", " ").title(),
+                    entity_type="commodity",
+                    is_graph_seed=True,
+                    seed_degree=1,
+                    is_tradable=True,
+                )
+                for ref in commodity_refs
+            ],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref=ref,
+                    name=ref.rsplit(":", 1)[-1].replace("-", " ").title(),
+                    entity_type="commodity",
+                    evidence_level="direct",
+                    confidence=0.94,
+                    source_entity_refs=[ref],
+                    relationship_paths=[],
+                )
+                for ref in commodity_refs
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Trump tariffs target metals",
+            "text": "United States officials said Trump tariffs on steel and imported metals would rise.",
+            "packs": [pack_id],
+            "categorized_entities": [
+                {"text": "aluminum", "entity_type": "industrial_metal"},
+                {"name": "Copper", "label": "commodity"},
+            ],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    expected_refs = {
+        "ades:impact:commodity:aluminum",
+        "ades:impact:commodity:copper",
+        "ades:impact:commodity:steel",
+    }
+    refs = {candidate["entity_ref"] for candidate in payload["terminal_impact_candidates"]}
+    assert expected_refs <= refs
+    assert all(
+        candidate["compatible_event_types"] == ["tariff"]
+        for candidate in payload["terminal_impact_candidates"]
+        if candidate["entity_ref"] in expected_refs
+    )
+    passive_refs = {entity["entity_ref"] for entity in payload["passive_entities"]}
+    assert "ades:impact:commodity:copper" not in passive_refs
+
+
+def test_news_analyze_promotes_precious_metal_market_moves(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-gold-promotion-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[],
+            topics=[TopicMatch(label="finance", score=0.88, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert "ades:impact:commodity:gold" in set(entity_refs)
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-06-02",
+            artifact_hash="sha256:test",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="ades:impact:commodity:gold",
+                    name="Gold",
+                    entity_type="commodity",
+                    is_graph_seed=True,
+                    seed_degree=1,
+                    is_tradable=True,
+                )
+            ],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref="ades:impact:commodity:gold",
+                    name="Gold",
+                    entity_type="commodity",
+                    evidence_level="direct",
+                    confidence=0.94,
+                    source_entity_refs=["ades:impact:commodity:gold"],
+                    relationship_paths=[],
+                )
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Gold slips as Middle East tensions keep inflation risks elevated",
+            "text": (
+                "Gold slips as Middle East tensions keep inflation risks elevated. "
+                "Investors said gold prices fell while safe-haven demand stayed in focus."
+            ),
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    refs = {candidate["entity_ref"] for candidate in payload["terminal_impact_candidates"]}
+    assert "ades:impact:commodity:gold" in refs
+    assert all(
+        candidate["compatible_event_types"] == ["safe_haven_commodity_move"]
+        for candidate in payload["terminal_impact_candidates"]
+        if candidate["entity_ref"] == "ades:impact:commodity:gold"
+    )
+
+
 def test_news_analyze_returns_review_only_relationship_proposals(
     tmp_path: Path,
     monkeypatch,

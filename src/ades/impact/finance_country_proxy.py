@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 from typing import Iterable, Iterator
 
+from ..packs.bdya_phase6 import BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES
 from .graph_builder import build_market_graph_store
 from .starter import starter_source_paths
 
@@ -135,6 +136,27 @@ TRADABLE_ENTITY_TYPES = {
     "rate",
     "indicator",
     "risk_indicator",
+    "crypto",
+}
+_MARKET_ONTOLOGY_NODE_TYPES = {
+    "commodity",
+    "crypto",
+    "currency",
+    "market_index",
+    "rate",
+}
+_COMMODITY_CONTRACT_IDENTIFIER_OVERRIDES: dict[str, dict[str, object]] = {
+    "ades:impact:commodity:copper": {
+        "exchange": "COMEX",
+        "futures_symbol": "HG",
+        "terminal_proxy_refs": ["COMEX:HG"],
+    },
+    "ades:impact:commodity:aluminum": {
+        "exchange": "LME",
+        "lme_contract_code": "AH",
+        "terminal_proxy_refs": ["LME:AH", "CME:ALI"],
+        "cme_benchmark_symbol": "ALI",
+    },
 }
 
 POLITICAL_OR_PUBLIC_ENTITY_TYPES = {
@@ -766,6 +788,52 @@ def _global_proxy_nodes(pack_id: str) -> list[dict[str, object]]:
             pack_ids=pack_id,
         ),
     ]
+
+
+def _market_ontology_terminal_nodes() -> list[dict[str, object]]:
+    nodes: list[dict[str, object]] = []
+    for record in BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES:
+        entity_type = str(record.get("entity_type") or "").strip().casefold()
+        metadata = dict(record.get("metadata") or {})
+        category = str(metadata.get("category") or "").strip().casefold()
+        if (
+            entity_type not in _MARKET_ONTOLOGY_NODE_TYPES
+            and entity_type not in TRADABLE_ENTITY_TYPES
+            and category not in TRADABLE_ENTITY_TYPES
+        ):
+            continue
+        entity_ref = str(record.get("entity_id") or "").strip()
+        canonical_name = str(record.get("canonical_text") or "").strip()
+        if not entity_ref or not canonical_name:
+            continue
+        identifiers = dict(metadata)
+        identifiers.setdefault("category", category or entity_type)
+        if entity_type == "commodity":
+            identifiers.setdefault("commodity", entity_ref.rsplit(":", 1)[-1])
+            identifiers.update(_COMMODITY_CONTRACT_IDENTIFIER_OVERRIDES.get(entity_ref, {}))
+        aliases = [
+            str(alias).strip()
+            for alias in record.get("aliases", [])
+            if str(alias).strip()
+        ]
+        if aliases:
+            identifiers.setdefault("aliases", aliases)
+        nodes.append(
+            _node_row(
+                entity_ref=entity_ref,
+                canonical_name=canonical_name,
+                entity_type=entity_type,
+                library_id="finance-en",
+                is_tradable=(
+                    entity_type in TRADABLE_ENTITY_TYPES
+                    or category in TRADABLE_ENTITY_TYPES
+                ),
+                is_seed_eligible=True,
+                identifiers=identifiers,
+                pack_ids="finance-en",
+            )
+        )
+    return nodes
 
 
 def _relation_event_types(relation: str) -> tuple[str, ...]:
@@ -2095,6 +2163,11 @@ def build_finance_country_proxy_source_lane(
     pack_summaries: list[dict[str, object]] = []
     extra_pack_summaries: list[dict[str, object]] = []
     extra_proxy_entity_refs: set[str] = set()
+
+    for ontology_node in _market_ontology_terminal_nodes():
+        nodes.setdefault(str(ontology_node["entity_ref"]), ontology_node)
+        if str(ontology_node.get("is_tradable")) == "true":
+            terminal_node_refs.add(str(ontology_node["entity_ref"]))
 
     pack_dirs = discover_finance_country_pack_dirs(packs_root)
     source_year = datetime.now(timezone.utc).year

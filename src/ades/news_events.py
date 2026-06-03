@@ -380,6 +380,25 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
         confidence=0.81,
     ),
     _EventRule(
+        event_type="safe_haven_commodity_move",
+        patterns=(
+            _rx(
+                r"\b(?:gold|silver|platinum|palladium|precious\s+metals?)\b.{0,90}\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|trade(?:s|d|ing)?|edge(?:s|d|ing)?)\b"
+            ),
+            _rx(
+                r"\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|trade(?:s|d|ing)?|edge(?:s|d|ing)?)\b.{0,90}\b(?:gold|silver|platinum|palladium|precious\s+metals?)\b"
+            ),
+        ),
+        compatible_asset_families=(
+            "commodity",
+            "currency",
+            "equity_index",
+            "country_risk",
+            "safe_haven",
+        ),
+        confidence=0.83,
+    ),
+    _EventRule(
         event_type="war_escalation",
         patterns=(
             _rx(

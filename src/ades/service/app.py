@@ -157,6 +157,7 @@ from .models import (
     NewsAnalyzeCountryScope,
     NewsAnalyzePackDecision,
     NewsAnalyzePassiveEntity,
+    NewsAnalyzeRawEntity,
     NewsAnalyzeRelationshipProposal,
     NewsAnalyzeRequest,
     NewsAnalyzeResponse,
@@ -166,6 +167,7 @@ from .models import (
     TagRequest,
     TagResponse,
 )
+from ..packs.bdya_phase6 import BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES
 from ..packs.g20_country_aliases import DEFAULT_CURATED_G20_COUNTRY_ENTITIES
 
 
@@ -364,6 +366,22 @@ _SOURCE_OUTLET_PATTERN = re.compile(
     r"cnbc|marketwatch|wall street journal|financial times)\b",
     re.IGNORECASE,
 )
+_DIRECT_MARKET_TERMINAL_ENTITY_TYPES = {"commodity", "crypto"}
+_DIRECT_MARKET_TERMINAL_SIGNAL_FAMILIES = {
+    "agriculture",
+    "commodity",
+    "energy",
+    "safe_haven",
+}
+
+
+@dataclass(frozen=True)
+class _DirectMarketTerminalRecord:
+    entity_ref: str
+    name: str
+    entity_type: str
+    category: str
+    aliases: tuple[str, ...]
 
 
 def _dedupe_string_values(values: list[str | None]) -> list[str]:
@@ -377,6 +395,121 @@ def _dedupe_string_values(values: list[str | None]) -> list[str]:
         seen.add(key)
         result.append(normalized)
     return result
+
+
+def _normalize_market_asset_phrase(value: object) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+
+
+def _phrase_matches_text(phrase: str, text: str) -> bool:
+    normalized = str(phrase or "").strip()
+    if len(normalized) < 3:
+        return False
+    return (
+        re.search(
+            rf"(?<![A-Za-z0-9]){re.escape(normalized)}(?![A-Za-z0-9])",
+            text,
+            re.IGNORECASE,
+        )
+        is not None
+    )
+
+
+def _direct_market_terminal_records() -> tuple[_DirectMarketTerminalRecord, ...]:
+    records: list[_DirectMarketTerminalRecord] = []
+    for record in BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES:
+        entity_type = str(record.get("entity_type") or "").strip().casefold()
+        if entity_type not in _DIRECT_MARKET_TERMINAL_ENTITY_TYPES:
+            continue
+        metadata = dict(record.get("metadata") or {})
+        category = str(metadata.get("category") or "").strip().casefold()
+        entity_ref = str(record.get("entity_id") or "").strip()
+        name = str(record.get("canonical_text") or "").strip()
+        if not entity_ref or not name:
+            continue
+        aliases = _dedupe_string_values(
+            [
+                name,
+                *[str(alias) for alias in record.get("aliases", []) if str(alias).strip()],
+            ]
+        )
+        records.append(
+            _DirectMarketTerminalRecord(
+                entity_ref=entity_ref,
+                name=name,
+                entity_type=entity_type,
+                category=category,
+                aliases=tuple(aliases),
+            )
+        )
+    return tuple(records)
+
+
+def _has_direct_market_terminal_signal(event_signals: list[object]) -> bool:
+    for signal in event_signals:
+        families = {
+            str(family).strip().casefold()
+            for family in getattr(signal, "compatible_asset_families", []) or []
+            if str(family).strip()
+        }
+        if families & _DIRECT_MARKET_TERMINAL_SIGNAL_FAMILIES:
+            return True
+    return False
+
+
+def _raw_entity_terminal_seed_ref(
+    raw_entity: NewsAnalyzeRawEntity,
+    *,
+    records: tuple[_DirectMarketTerminalRecord, ...],
+) -> str | None:
+    raw_ref = (raw_entity.entity_ref or raw_entity.entity_id or "").strip()
+    if raw_ref:
+        for record in records:
+            if raw_ref.casefold() == record.entity_ref.casefold():
+                return record.entity_ref
+
+    labels = {
+        str(value or "").strip().casefold()
+        for value in (raw_entity.entity_type, raw_entity.label, raw_entity.category)
+        if str(value or "").strip()
+    }
+    raw_phrase = _normalize_market_asset_phrase(
+        raw_entity.canonical_text or raw_entity.name or raw_entity.text
+    )
+    if not raw_phrase:
+        return None
+    for record in records:
+        accepted_labels = {record.entity_type}
+        if record.category:
+            accepted_labels.add(record.category)
+        if record.entity_type == "commodity":
+            accepted_labels.add("commodity")
+        if not (labels & accepted_labels):
+            continue
+        if any(raw_phrase == _normalize_market_asset_phrase(alias) for alias in record.aliases):
+            return record.entity_ref
+    return None
+
+
+def _direct_market_terminal_seed_refs(
+    *,
+    text: str,
+    request: NewsAnalyzeRequest,
+    event_signals: list[object],
+) -> list[str]:
+    if not _has_direct_market_terminal_signal(event_signals):
+        return []
+    records = _direct_market_terminal_records()
+    seed_refs: list[str] = []
+    for raw_entity in [*request.raw_entities, *request.categorized_entities]:
+        seed_ref = _raw_entity_terminal_seed_ref(raw_entity, records=records)
+        if seed_ref:
+            seed_refs.append(seed_ref)
+
+    for record in records:
+        if any(_phrase_matches_text(alias, text) for alias in record.aliases):
+            seed_refs.append(record.entity_ref)
+    return _dedupe_string_values(seed_refs)
 
 
 def _score_entity(entity: EntityMatch) -> float | None:
@@ -2359,6 +2492,12 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         entity_refs = _dedupe_string_values(
             [entity.link.entity_id if entity.link else None for entity in entities]
         )
+        direct_terminal_seed_refs = _direct_market_terminal_seed_refs(
+            text=analysis_text,
+            request=request,
+            event_signals=event_signals,
+        )
+        entity_refs = _dedupe_string_values([*entity_refs, *direct_terminal_seed_refs])
 
         impact_paths: ImpactExpansionResult | None = None
         include_relationships = (

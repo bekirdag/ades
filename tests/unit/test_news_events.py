@@ -92,6 +92,16 @@ def test_extract_news_event_signals_covers_key_person_leadership_events() -> Non
     assert "ticker" in by_type["key_person_ownership_governance"].compatible_asset_families
 
 
+def test_extract_news_event_signals_covers_precious_metal_market_moves() -> None:
+    text = "Gold slips as Middle East tensions keep inflation risks elevated."
+
+    by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
+
+    assert "safe_haven_commodity_move" in by_type
+    assert "commodity" in by_type["safe_haven_commodity_move"].compatible_asset_families
+    assert "safe_haven" in by_type["safe_haven_commodity_move"].compatible_asset_families
+
+
 def test_extract_news_event_signals_covers_chokepoint_flow_decline() -> None:
     text = "Oil flows through Strait of Hormuz fall nearly 30% in first quarter."
 
