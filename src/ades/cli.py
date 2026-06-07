@@ -474,7 +474,7 @@ def _echo_help(command_path: list[str] | None = None) -> None:
     with ExitStack() as stack:
         context: click.Context = stack.enter_context(click.Context(command, info_name="ades"))
         for segment in path:
-            if not isinstance(command, click.Group):
+            if not hasattr(command, "get_command"):
                 joined = " ".join(info_parts)
                 _exit_with_cli_error(
                     ValueError(f"Command `{joined}` does not have subcommands. Run `ades help` for the root command list.")

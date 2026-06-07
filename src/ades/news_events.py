@@ -399,6 +399,45 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
         confidence=0.83,
     ),
     _EventRule(
+        event_type="commodity_price_move",
+        patterns=(
+            _rx(
+                r"\b(?:oil|crude|brent|wti|natural\s+gas|gasoline|diesel|coffee|cocoa|sugar|wheat|corn|soybeans?|copper|iron\s+ore|coal|uranium)\b.{0,120}\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|climb(?:s|ed|ing)?|trade(?:s|d|ing)?|edge(?:s|d|ing)?)\b"
+            ),
+            _rx(
+                r"\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|climb(?:s|ed|ing)?|trade(?:s|d|ing)?|edge(?:s|d|ing)?)\b.{0,120}\b(?:oil|crude|brent|wti|natural\s+gas|gasoline|diesel|coffee|cocoa|sugar|wheat|corn|soybeans?|copper|iron\s+ore|coal|uranium)\b"
+            ),
+        ),
+        compatible_asset_families=("commodity", "energy", "agriculture", "safe_haven"),
+        confidence=0.82,
+    ),
+    _EventRule(
+        event_type="currency_market_move",
+        patterns=(
+            _rx(
+                r"\b(?:usd[/\-\s]?brl|dollar[/\-\s]?real|usd[/\-\s]?try|dollar[/\-\s]?lira|usd[/\-\s]?idr|dollar[/\-\s]?rupiah|currency|currencies|fx|forex|real|lira|rupiah)\b.{0,120}\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|weak(?:en|ened|ens|ening)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|strengthen(?:s|ed|ing)?|trade(?:s|d|ing)?)\b"
+            ),
+            _rx(
+                r"\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|weak(?:en|ened|ens|ening)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|strengthen(?:s|ed|ing)?|trade(?:s|d|ing)?)\b.{0,120}\b(?:usd[/\-\s]?brl|dollar[/\-\s]?real|usd[/\-\s]?try|dollar[/\-\s]?lira|usd[/\-\s]?idr|dollar[/\-\s]?rupiah|currency|currencies|fx|forex|real|lira|rupiah)\b"
+            ),
+        ),
+        compatible_asset_families=("currency", "rates", "equity_index", "country_risk"),
+        confidence=0.82,
+    ),
+    _EventRule(
+        event_type="equity_listing",
+        patterns=(
+            _rx(
+                r"\b(?:ipo|initial\s+public\s+offering|market\s+debut|public\s+listing|listing|listed|lists|float|flotation)\b.{0,120}\b(?:shares?|stock|ticker|exchange|bourse|market|company|miner|mining|drugmaker|pharma|telecom)\b"
+            ),
+            _rx(
+                r"\b(?:shares?|stock|ticker|exchange|bourse|market|company|miner|mining|drugmaker|pharma|telecom)\b.{0,120}\b(?:ipo|initial\s+public\s+offering|market\s+debut|public\s+listing|listing|listed|lists|float|flotation)\b"
+            ),
+        ),
+        compatible_asset_families=("equity", "ticker", "equity_index", "sector"),
+        confidence=0.82,
+    ),
+    _EventRule(
         event_type="war_escalation",
         patterns=(
             _rx(
@@ -454,6 +493,7 @@ _COMMODITY_SIGNAL_TYPES = {
     "strike_labor_disruption",
     "war_escalation",
     "ceasefire_risk_relief",
+    "commodity_price_move",
 }
 
 _EQUITY_EVENT_SIGNAL_TYPES = {
@@ -474,7 +514,33 @@ _EQUITY_EVENT_SIGNAL_TYPES = {
     "default",
     "bankruptcy",
     "strike_labor_disruption",
+    "equity_listing",
 }
+
+_BROAD_PROXY_SIGNAL_TYPES = {
+    *_POLICY_SIGNAL_TYPES,
+    "sanctions",
+    "tariff",
+    "export_control",
+    "war_escalation",
+    "ceasefire_risk_relief",
+    "default",
+    "bankruptcy",
+    "currency_market_move",
+}
+
+_BROAD_PROXY_TEXT_TOKENS = (
+    "country-risk",
+    "country risk",
+    "dxy",
+    "dollar index",
+    "global-equity",
+    "global equity",
+    "world equity",
+    "msci world",
+    "s&p 500",
+    "sp500",
+)
 
 _DIRECT_LISTING_OPERATING_SIGNAL_TYPES = {
     "supply_disruption",
@@ -632,6 +698,19 @@ def _candidate_has_direct_listing_path(candidate: ImpactCandidate) -> bool:
     return False
 
 
+def _candidate_is_broad_proxy(candidate: ImpactCandidate, families: set[str]) -> bool:
+    text = _candidate_text(candidate)
+    if any(token in text for token in _BROAD_PROXY_TEXT_TOKENS):
+        return True
+    if "country_risk" in families:
+        return True
+    if "currency" in families and candidate.evidence_level != "direct":
+        return True
+    if "equity_index" in families and candidate.evidence_level != "direct":
+        return True
+    return False
+
+
 def _candidate_edge_event_types(candidate: ImpactCandidate) -> set[str]:
     event_types = {event.casefold() for event in candidate.compatible_event_types}
     for path in candidate.relationship_paths:
@@ -696,6 +775,13 @@ def gate_terminal_candidates_by_event_signals(
         elif "rates" in families and not (signal_types & _POLICY_SIGNAL_TYPES):
             keep = False
             reason = "missing_policy_event_signal"
+        elif (
+            _candidate_is_broad_proxy(candidate, families)
+            and not direct_evidence
+            and not (signal_types & _BROAD_PROXY_SIGNAL_TYPES)
+        ):
+            keep = False
+            reason = "missing_broad_proxy_macro_event_signal"
         elif ("commodity" in families or "energy" in families) and not direct_evidence:
             if not (signal_types & _COMMODITY_SIGNAL_TYPES):
                 keep = False

@@ -976,6 +976,31 @@ def _passive_quality(entity: EntityMatch, hidden_reasons: list[str]) -> str:
     return "weak"
 
 
+def _passive_weak_alias_reasons(entity: EntityMatch) -> list[str]:
+    provenance = entity.provenance
+    if provenance is None:
+        return []
+    alias_quality = (
+        provenance.alias_quality.strip().casefold()
+        if provenance.alias_quality
+        else ""
+    )
+    reasons: list[str] = []
+    if provenance.weak_alias:
+        reasons.append("weak_alias")
+    if alias_quality in {"weak", "low_quality", "suspect", "search_only", "hidden"}:
+        reasons.append(f"{alias_quality}_alias")
+    return reasons
+
+
+def _passive_display_eligible(entity: EntityMatch, quality: str) -> bool:
+    if quality == "hidden_artifact":
+        return False
+    if quality != "weak":
+        return True
+    return not _passive_weak_alias_reasons(entity)
+
+
 def _is_tradable_entity(entity: EntityMatch, terminal_refs: set[str]) -> bool:
     entity_ref = _entity_ref(entity).casefold()
     if entity_ref in terminal_refs:
@@ -1022,6 +1047,7 @@ def _build_passive_entities(
         reasons = _dedupe_string_values(
             [
                 *hidden_reasons,
+                *_passive_weak_alias_reasons(entity),
                 *(entity.provenance.quality_reasons if entity.provenance else []),
             ]
         )
@@ -1033,7 +1059,7 @@ def _build_passive_entities(
                 label=entity.label,
                 role=role,  # type: ignore[arg-type]
                 quality=quality,  # type: ignore[arg-type]
-                display_eligible=quality != "hidden_artifact",
+                display_eligible=_passive_display_eligible(entity, quality),
                 source_pack=entity.provenance.source_pack if entity.provenance else None,
                 source_domain=entity.provenance.source_domain if entity.provenance else None,
                 aliases=_dedupe_string_values(entity.aliases)[:12],

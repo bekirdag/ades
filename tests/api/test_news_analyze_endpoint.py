@@ -248,6 +248,111 @@ def test_news_analyze_endpoint_returns_normalized_contract(
     assert payload["tag_responses"] == []
 
 
+def test_news_analyze_hides_weak_alias_passive_entities(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-weak-passive-aliases-en", domain="general")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="SIX",
+                    label="organization",
+                    start=text.index("SIX"),
+                    end=text.index("SIX") + len("SIX"),
+                    confidence=0.54,
+                    relevance=0.45,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="finance",
+                        alias_quality="suspect",
+                        weak_alias=True,
+                        quality_reasons=["ambiguous_acronym"],
+                    ),
+                    link=EntityLink(
+                        entity_id="wikidata:Q681967",
+                        canonical_text="SIX Group",
+                        provider="wikidata",
+                    ),
+                ),
+                EntityMatch(
+                    text="Lee",
+                    label="person",
+                    start=text.index("Lee"),
+                    end=text.index("Lee") + len("Lee"),
+                    confidence=0.51,
+                    relevance=0.48,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="business",
+                        alias_quality="weak",
+                        weak_alias=True,
+                        quality_reasons=["homograph_alias"],
+                    ),
+                    link=EntityLink(
+                        entity_id="wikidata:Q484597",
+                        canonical_text="Lee Enterprises",
+                        provider="wikidata",
+                    ),
+                ),
+            ],
+            topics=[TopicMatch(label="politics", score=0.7, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Local officials meet",
+            "text": "SIX said Lee met with local officials after a council hearing.",
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_terminal_candidates": False,
+                "include_impact_paths": False,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    passive_by_ref = {entity["entity_ref"]: entity for entity in payload["passive_entities"]}
+    six = passive_by_ref["wikidata:Q681967"]
+    lee = passive_by_ref["wikidata:Q484597"]
+    assert six["quality"] == "weak"
+    assert six["display_eligible"] is False
+    assert {"weak_alias", "suspect_alias", "ambiguous_acronym"} <= set(six["quality_reasons"])
+    assert lee["quality"] == "weak"
+    assert lee["display_eligible"] is False
+    assert {"weak_alias", "homograph_alias"} <= set(lee["quality_reasons"])
+    assert payload["unresolved_entities"] == []
+
+
 def test_news_analyze_country_hint_uses_impact_source_display_name(
     tmp_path: Path,
     monkeypatch,

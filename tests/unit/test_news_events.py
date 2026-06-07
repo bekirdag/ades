@@ -102,6 +102,23 @@ def test_extract_news_event_signals_covers_precious_metal_market_moves() -> None
     assert "safe_haven" in by_type["safe_haven_commodity_move"].compatible_asset_families
 
 
+def test_extract_news_event_signals_covers_weekly_market_coverage_batch() -> None:
+    text = (
+        "Coffee futures climbed after Brazilian crop forecasts tightened. "
+        "USD/BRL rose as traders repriced Brazil rate expectations. "
+        "A silver miner listed shares in an IPO on the local exchange."
+    )
+
+    by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
+
+    assert "commodity_price_move" in by_type
+    assert "agriculture" in by_type["commodity_price_move"].compatible_asset_families
+    assert "currency_market_move" in by_type
+    assert "currency" in by_type["currency_market_move"].compatible_asset_families
+    assert "equity_listing" in by_type
+    assert "ticker" in by_type["equity_listing"].compatible_asset_families
+
+
 def test_extract_news_event_signals_covers_chokepoint_flow_decline() -> None:
     text = "Oil flows through Strait of Hormuz fall nearly 30% in first quarter."
 
@@ -170,6 +187,60 @@ def test_gate_terminal_candidates_requires_event_signal_for_policy_rate_proxy() 
     assert warnings == []
     assert with_signal[0].entity_ref == policy_proxy.entity_ref
     assert with_signal[0].compatible_event_types == ["policy_rate_cut"]
+
+
+def test_gate_terminal_candidates_rejects_unsupported_broad_proxies() -> None:
+    broad_candidates = [
+        ImpactCandidate(
+            entity_ref="ades:impact:currency:dxy",
+            name="US Dollar Index",
+            entity_type="currency",
+            evidence_level="shallow",
+            confidence=0.61,
+            source_entity_refs=["country:us"],
+            relationship_paths=[],
+        ),
+        ImpactCandidate(
+            entity_ref="ades:impact:equity-index:global-equity",
+            name="Global Equity Proxy",
+            entity_type="market_index",
+            evidence_level="inferred",
+            confidence=0.49,
+            source_entity_refs=["country:us"],
+            relationship_paths=[],
+        ),
+        ImpactCandidate(
+            entity_ref="ades:impact:risk:us-country-risk",
+            name="US Country Risk",
+            entity_type="risk",
+            evidence_level="inferred",
+            confidence=0.42,
+            source_entity_refs=["country:us"],
+            relationship_paths=[],
+        ),
+    ]
+
+    gated, warnings = gate_terminal_candidates_by_event_signals(broad_candidates, [])
+
+    assert gated == []
+    assert warnings == ["event_signal_gate_filtered:missing_broad_proxy_macro_event_signal:3"]
+
+
+def test_gate_terminal_candidates_keeps_directly_mentioned_broad_market_asset() -> None:
+    direct_dxy = ImpactCandidate(
+        entity_ref="ades:impact:currency:dxy",
+        name="US Dollar Index",
+        entity_type="currency",
+        evidence_level="direct",
+        confidence=0.9,
+        source_entity_refs=["ades:impact:currency:dxy"],
+        relationship_paths=[],
+    )
+
+    gated, warnings = gate_terminal_candidates_by_event_signals([direct_dxy], [])
+
+    assert warnings == []
+    assert gated[0].entity_ref == "ades:impact:currency:dxy"
 
 
 def test_gate_terminal_candidates_honors_relationship_edge_event_metadata() -> None:

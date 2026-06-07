@@ -942,7 +942,7 @@ def _write_case_report(output_dir: Path, record: dict[str, Any]) -> Path:
     lines.extend(
         [
             "",
-            f"- Full JSON: `{output_dir / f'{record['case']['slug']}.responses.json'}`",
+            f"- Full JSON: `{output_dir / (record['case']['slug'] + '.responses.json')}`",
         ]
     )
     destination = output_dir / f"{record['case']['slug']}.report.md"
