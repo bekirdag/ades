@@ -353,6 +353,146 @@ def test_news_analyze_hides_weak_alias_passive_entities(
     assert payload["unresolved_entities"] == []
 
 
+def test_news_analyze_hides_contextual_passive_alias_collisions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-passive-alias-collisions-en", domain="general")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        def _collision_entity(
+            surface: str,
+            label: str,
+            entity_id: str,
+            canonical_text: str,
+            source_domain: str,
+        ) -> EntityMatch:
+            return EntityMatch(
+                text=surface,
+                label=label,
+                start=text.index(surface),
+                end=text.index(surface) + len(surface),
+                confidence=0.74,
+                relevance=0.68,
+                provenance=EntityProvenance(
+                    match_kind="alias",
+                    match_path="aliases.json",
+                    match_source="pack",
+                    source_pack=pack or pack_id,
+                    source_domain=source_domain,
+                ),
+                link=EntityLink(
+                    entity_id=entity_id,
+                    canonical_text=canonical_text,
+                    provider="wikidata",
+                ),
+            )
+
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                _collision_entity(
+                    "ONU",
+                    "organization",
+                    "wikidata:Q1065",
+                    "United Nations",
+                    "politics",
+                ),
+                _collision_entity(
+                    "OAS",
+                    "organization",
+                    "wikidata:Q123759",
+                    "Organization of American States",
+                    "politics",
+                ),
+                _collision_entity(
+                    "JMM",
+                    "organization",
+                    "wikidata:QJMM",
+                    "JMM Holdings",
+                    "business",
+                ),
+                _collision_entity(
+                    "MBG",
+                    "organization",
+                    "wikidata:Q27530",
+                    "Mercedes-Benz Group",
+                    "business",
+                ),
+                _collision_entity(
+                    "SIX",
+                    "organization",
+                    "wikidata:Q681967",
+                    "SIX Group",
+                    "finance",
+                ),
+                _collision_entity(
+                    "Lee",
+                    "person",
+                    "wikidata:Q484597",
+                    "Lee Enterprises",
+                    "business",
+                ),
+            ],
+            topics=[TopicMatch(label="politics", score=0.7, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Local officials meet",
+            "text": (
+                "ONU, OAS, JMM, MBG and SIX said Lee met with local officials "
+                "after a council hearing."
+            ),
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_terminal_candidates": False,
+                "include_impact_paths": False,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    passive_by_ref = {entity["entity_ref"]: entity for entity in payload["passive_entities"]}
+    acronym_refs = [
+        "wikidata:Q1065",
+        "wikidata:Q123759",
+        "wikidata:QJMM",
+        "wikidata:Q27530",
+        "wikidata:Q681967",
+    ]
+    for entity_ref in acronym_refs:
+        entity = passive_by_ref[entity_ref]
+        assert entity["quality"] == "weak"
+        assert entity["display_eligible"] is False
+        assert {"weak_alias", "ambiguous_acronym"} <= set(entity["quality_reasons"])
+
+    lee = passive_by_ref["wikidata:Q484597"]
+    assert lee["quality"] == "weak"
+    assert lee["display_eligible"] is False
+    assert {"weak_alias", "homograph_alias"} <= set(lee["quality_reasons"])
+
+
 def test_news_analyze_country_hint_uses_impact_source_display_name(
     tmp_path: Path,
     monkeypatch,

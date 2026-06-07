@@ -366,6 +366,14 @@ _SOURCE_OUTLET_PATTERN = re.compile(
     r"cnbc|marketwatch|wall street journal|financial times)\b",
     re.IGNORECASE,
 )
+_PASSIVE_COLLISION_SURFACE_REASONS = {
+    "jmm": ("weak_alias", "ambiguous_acronym"),
+    "mbg": ("weak_alias", "ambiguous_acronym"),
+    "oas": ("weak_alias", "ambiguous_acronym"),
+    "onu": ("weak_alias", "ambiguous_acronym"),
+    "six": ("weak_alias", "ambiguous_acronym"),
+    "lee": ("weak_alias", "homograph_alias"),
+}
 _DIRECT_MARKET_TERMINAL_ENTITY_TYPES = {"commodity", "crypto"}
 _DIRECT_MARKET_TERMINAL_SIGNAL_FAMILIES = {
     "agriculture",
@@ -952,9 +960,15 @@ def _passive_role(entity: EntityMatch, name: str) -> str:
     return "context_only"
 
 
-def _passive_quality(entity: EntityMatch, hidden_reasons: list[str]) -> str:
+def _passive_quality(
+    entity: EntityMatch,
+    hidden_reasons: list[str],
+    weak_alias_reasons: list[str] | None = None,
+) -> str:
     if hidden_reasons:
         return "hidden_artifact"
+    if weak_alias_reasons:
+        return "weak"
     provenance = entity.provenance
     alias_quality = (
         provenance.alias_quality.strip().casefold()
@@ -993,12 +1007,28 @@ def _passive_weak_alias_reasons(entity: EntityMatch) -> list[str]:
     return reasons
 
 
-def _passive_display_eligible(entity: EntityMatch, quality: str) -> bool:
+def _passive_contextual_alias_reasons(
+    entity: EntityMatch,
+    request: NewsAnalyzeRequest,
+    canonical_name: str,
+) -> list[str]:
+    surface = entity.text.strip()
+    normalized_surface = re.sub(r"[^A-Za-z0-9]+", "", surface).casefold()
+    reasons = _PASSIVE_COLLISION_SURFACE_REASONS.get(normalized_surface)
+    if not reasons:
+        return []
+    if canonical_name and canonical_name.casefold() != surface.casefold():
+        if _text_contains_entity_phrase(_news_analysis_text(request), canonical_name):
+            return []
+    return list(reasons)
+
+
+def _passive_display_eligible(quality: str, weak_alias_reasons: list[str]) -> bool:
     if quality == "hidden_artifact":
         return False
     if quality != "weak":
         return True
-    return not _passive_weak_alias_reasons(entity)
+    return not weak_alias_reasons
 
 
 def _is_tradable_entity(entity: EntityMatch, terminal_refs: set[str]) -> bool:
@@ -1043,11 +1073,17 @@ def _build_passive_entities(
                 and not _source_outlet_is_story_subject(request=request, name=name)
             ),
         )
-        quality = _passive_quality(entity, hidden_reasons)
+        weak_alias_reasons = _dedupe_string_values(
+            [
+                *_passive_weak_alias_reasons(entity),
+                *_passive_contextual_alias_reasons(entity, request, name),
+            ]
+        )
+        quality = _passive_quality(entity, hidden_reasons, weak_alias_reasons)
         reasons = _dedupe_string_values(
             [
                 *hidden_reasons,
-                *_passive_weak_alias_reasons(entity),
+                *weak_alias_reasons,
                 *(entity.provenance.quality_reasons if entity.provenance else []),
             ]
         )
@@ -1059,7 +1095,7 @@ def _build_passive_entities(
                 label=entity.label,
                 role=role,  # type: ignore[arg-type]
                 quality=quality,  # type: ignore[arg-type]
-                display_eligible=_passive_display_eligible(entity, quality),
+                display_eligible=_passive_display_eligible(quality, weak_alias_reasons),
                 source_pack=entity.provenance.source_pack if entity.provenance else None,
                 source_domain=entity.provenance.source_domain if entity.provenance else None,
                 aliases=_dedupe_string_values(entity.aliases)[:12],
