@@ -22,6 +22,12 @@ from .graph_store import MarketGraphEdge, MarketGraphNode, MarketGraphStore
 
 _DEPTH_DECAY = {0: 1.0, 1: 0.9, 2: 0.75}
 _MAX_DEPTH_CAP = 4
+_DIRECT_TERMINAL_REF_TYPES = {
+    "ades:impact:commodity:": "commodity",
+    "ades:impact:currency:": "currency",
+    "ades:impact:index:": "market_index",
+    "ades:impact:rate:": "policy_rate",
+}
 _EVENT_GATED_PROXY_RELATIONS = {
     "country_affects_country_risk_proxy",
     "country_affects_currency_index",
@@ -178,6 +184,23 @@ def _metadata_for_ref(
             confidence=1.0,
         )
     return _MentionMetadata(entity_ref=entity_ref, name=entity_ref)
+
+
+def _direct_terminal_type_for_ref(entity_ref: str) -> str | None:
+    normalized = entity_ref.casefold()
+    for prefix, entity_type in _DIRECT_TERMINAL_REF_TYPES.items():
+        if normalized.startswith(prefix):
+            return entity_type
+    return None
+
+
+def _direct_terminal_name_for_ref(entity_ref: str, entity_type: str) -> str:
+    slug = entity_ref.rsplit(":", 1)[-1].replace("-", " ").strip()
+    if not slug:
+        return entity_ref
+    if entity_type == "currency":
+        return slug.upper()
+    return slug.title()
 
 
 def _path_edges(edges: tuple[MarketGraphEdge, ...]) -> list[ImpactPathEdge]:
@@ -457,6 +480,12 @@ def _expand_with_store(
         graph_ref_candidates = graph_ref_candidates_by_requested.get(entity_ref, ())
         node = nodes.get(entity_ref) or nodes.get(traversal_ref)
         metadata_for_ref = _metadata_for_ref(entity_ref, node=node, mentions=mentions)
+        direct_terminal_type = _direct_terminal_type_for_ref(entity_ref) if node is None else None
+        direct_terminal_name = (
+            metadata_for_ref.name
+            if direct_terminal_type is None or metadata_for_ref.name != entity_ref
+            else _direct_terminal_name_for_ref(entity_ref, direct_terminal_type)
+        )
         is_graph_seed = entity_ref in seed_ref_set
         seed_confidence[entity_ref] = metadata_for_ref.confidence
         seed_degree = max(
@@ -465,12 +494,13 @@ def _expand_with_store(
         )
         is_tradable = any(
             nodes[graph_ref].is_tradable for graph_ref in graph_ref_candidates if graph_ref in nodes
-        )
+        ) or direct_terminal_type is not None
         source_entities.append(
             ImpactSourceEntity(
                 entity_ref=entity_ref,
-                name=metadata_for_ref.name,
-                entity_type=metadata_for_ref.entity_type or (node.entity_type if node else None),
+                name=direct_terminal_name,
+                entity_type=metadata_for_ref.entity_type
+                or (node.entity_type if node else direct_terminal_type),
                 library_id=metadata_for_ref.library_id or (node.library_id if node else None),
                 is_graph_seed=is_graph_seed,
                 seed_degree=seed_degree,
@@ -478,6 +508,18 @@ def _expand_with_store(
                 same_as_refs=list(same_as_refs_by_requested.get(entity_ref, ())),
             )
         )
+        if direct_terminal_type is not None and not graph_ref_candidates:
+            candidates_by_ref[entity_ref] = ImpactCandidate(
+                entity_ref=entity_ref,
+                name=direct_terminal_name,
+                entity_type=direct_terminal_type,
+                is_tradable=True,
+                evidence_level="direct",
+                confidence=metadata_for_ref.confidence,
+                source_entity_refs=[entity_ref],
+                relationship_paths=[],
+            )
+            continue
         for graph_ref in graph_ref_candidates:
             graph_node = nodes.get(graph_ref)
             if graph_node is None or not graph_node.is_tradable:

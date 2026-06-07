@@ -231,6 +231,40 @@ def test_expand_impact_paths_returns_direct_and_derived_candidates(tmp_path: Pat
     assert result.passive_paths[0].entity_ref in {"entity_hormuz", "entity_opec"}
 
 
+def test_expand_impact_paths_returns_direct_market_terminal_when_graph_lags(
+    tmp_path: Path,
+) -> None:
+    node_path, edge_path = _write_market_graph_tsvs(tmp_path)
+    build_response = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact",
+        artifact_version="2026-05-05T00:00:00Z",
+    )
+
+    result = expand_impact_paths(
+        ["ades:impact:commodity:coffee"],
+        enabled_packs=["finance-en"],
+        settings=_settings(Path(build_response.artifact_path)),
+        max_depth=2,
+        max_candidates=10,
+    )
+
+    by_ref = {candidate.entity_ref: candidate for candidate in result.candidates}
+    assert by_ref["ades:impact:commodity:coffee"].name == "Coffee"
+    assert by_ref["ades:impact:commodity:coffee"].entity_type == "commodity"
+    assert by_ref["ades:impact:commodity:coffee"].evidence_level == "direct"
+    assert by_ref["ades:impact:commodity:coffee"].source_entity_refs == [
+        "ades:impact:commodity:coffee"
+    ]
+    assert by_ref["ades:impact:commodity:coffee"].relationship_paths == []
+    source_entities = {source.entity_ref: source for source in result.source_entities}
+    assert source_entities["ades:impact:commodity:coffee"].name == "Coffee"
+    assert source_entities["ades:impact:commodity:coffee"].is_tradable is True
+    assert source_entities["ades:impact:commodity:coffee"].is_graph_seed is False
+    assert source_entities["ades:impact:commodity:coffee"].seed_degree == 0
+
+
 def test_expand_impact_paths_reports_only_selected_graph_seeds(tmp_path: Path) -> None:
     node_path, edge_path = _write_market_graph_tsvs(tmp_path)
     build_response = build_market_graph_store(
