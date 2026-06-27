@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from ades.extraction_quality import (
     ExtractionQualityReport,
     ExtractionCaseResult,
@@ -285,6 +287,16 @@ def test_record_tag_observation_aggregates_pack_health(tmp_path: Path) -> None:
     assert summary["warning_counts"] == {
         "low_entity_density:finance-en:0.0000<1.0000": 1
     }
+
+
+def test_pack_health_db_path_honors_env_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    override = tmp_path / "runtime" / "pack_health.sqlite3"
+
+    monkeypatch.setenv("ADES_PACK_HEALTH_DB_PATH", str(override))
+
+    assert pack_health_db_path(tmp_path / "storage") == override.resolve()
 
 
 def test_benchmark_runtime_pack_writes_consolidated_report(tmp_path: Path) -> None:

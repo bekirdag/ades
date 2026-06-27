@@ -6,6 +6,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import sqlite3
 from statistics import quantiles
@@ -21,6 +22,7 @@ from .service.models import TagResponse
 from .text_processing import normalize_lookup_text
 
 DEFAULT_EXTRACTION_QUALITY_ROOT = Path("/mnt/githubActions/ades_big_data/extraction_quality")
+PACK_HEALTH_DB_PATH_ENV = "ADES_PACK_HEALTH_DB_PATH"
 
 
 @dataclass(frozen=True)
@@ -676,6 +678,9 @@ def compare_quality_reports(
 def pack_health_db_path(storage_root: str | Path) -> Path:
     """Return the on-disk SQLite path used for pack-health telemetry."""
 
+    override = os.getenv(PACK_HEALTH_DB_PATH_ENV)
+    if override:
+        return Path(override).expanduser().resolve()
     root = Path(storage_root).expanduser().resolve()
     return root / "registry" / "pack_health.sqlite3"
 
