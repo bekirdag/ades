@@ -102,6 +102,10 @@ SMOKE_TAG_BATCH_ZERO_STATE_REUSE_SUMMARY_COUNT_FIELDS = (
     "reused_output_missing_count",
     "repaired_reused_output_count",
 )
+SMOKE_TAG_BATCH_ZERO_STATE_DUPLICATE_GENERATED_COUNT_FIELDS = (
+    "duplicate_count",
+    "generated_output_skipped_count",
+)
 SMOKE_TAG_BATCH_SUMMARY_INPUT_BYTE_FIELDS = (
     "discovered_input_bytes",
     "included_input_bytes",
@@ -1083,6 +1087,25 @@ def _parse_batch_zero_state_reuse_summary_counts(
     return zero_state_counts
 
 
+def _expected_smoke_batch_zero_state_duplicate_generated_counts() -> dict[str, int]:
+    return {
+        field_name: 0
+        for field_name in SMOKE_TAG_BATCH_ZERO_STATE_DUPLICATE_GENERATED_COUNT_FIELDS
+    }
+
+
+def _parse_batch_zero_state_duplicate_generated_counts(
+    result: ReleaseCommandResult,
+) -> dict[str, int] | None:
+    zero_state_counts: dict[str, int] = {}
+    for field_name in SMOKE_TAG_BATCH_ZERO_STATE_DUPLICATE_GENERATED_COUNT_FIELDS:
+        value = _parse_batch_summary_int_value(result, field_name)
+        if value is None:
+            return None
+        zero_state_counts[field_name] = value
+    return zero_state_counts
+
+
 def _expected_smoke_batch_summary_input_bytes() -> dict[str, int]:
     total_input_bytes = sum(_expected_smoke_batch_input_sizes())
     return {
@@ -2029,6 +2052,9 @@ def _run_python_install_smoke(
         serve_tag_files_zero_state_reuse_summary_counts = (
             _parse_batch_zero_state_reuse_summary_counts(serve_tag_files)
         )
+        serve_tag_files_zero_state_duplicate_generated_counts = (
+            _parse_batch_zero_state_duplicate_generated_counts(serve_tag_files)
+        )
         serve_tag_files_summary_input_bytes = _parse_batch_summary_input_bytes(
             serve_tag_files
         )
@@ -2136,6 +2162,9 @@ def _run_python_install_smoke(
         expected_serve_tag_files_zero_state_reuse_summary_counts = (
             _expected_smoke_batch_zero_state_reuse_summary_counts()
         )
+        expected_serve_tag_files_zero_state_duplicate_generated_counts = (
+            _expected_smoke_batch_zero_state_duplicate_generated_counts()
+        )
         expected_serve_tag_files_summary_input_bytes = (
             _expected_smoke_batch_summary_input_bytes()
         )
@@ -2174,6 +2203,10 @@ def _run_python_install_smoke(
             serve_tag_files_zero_state_reuse_summary_counts
             == expected_serve_tag_files_zero_state_reuse_summary_counts
         )
+        has_expected_serve_tag_files_zero_state_duplicate_generated_counts = (
+            serve_tag_files_zero_state_duplicate_generated_counts
+            == expected_serve_tag_files_zero_state_duplicate_generated_counts
+        )
         has_expected_serve_tag_files_summary_input_bytes = (
             serve_tag_files_summary_input_bytes
             == expected_serve_tag_files_summary_input_bytes
@@ -2206,6 +2239,10 @@ def _run_python_install_smoke(
         has_expected_serve_tag_files_replay_zero_state_reuse_summary_counts = (
             _parse_batch_zero_state_reuse_summary_counts(serve_tag_files_replay)
             == expected_serve_tag_files_zero_state_reuse_summary_counts
+        )
+        has_expected_serve_tag_files_replay_zero_state_duplicate_generated_counts = (
+            _parse_batch_zero_state_duplicate_generated_counts(serve_tag_files_replay)
+            == expected_serve_tag_files_zero_state_duplicate_generated_counts
         )
         has_expected_serve_tag_files_replay_summary_input_bytes = (
             _parse_batch_summary_input_bytes(serve_tag_files_replay)
@@ -2336,6 +2373,7 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_summary_item_counts
             and has_expected_serve_tag_files_zero_state_summary_counts
             and has_expected_serve_tag_files_zero_state_reuse_summary_counts
+            and has_expected_serve_tag_files_zero_state_duplicate_generated_counts
             and has_expected_serve_tag_files_summary_input_bytes
             and has_expected_serve_tag_files_source_fingerprints
             and has_expected_serve_tag_files_output_paths
@@ -2364,6 +2402,7 @@ def _run_python_install_smoke(
             and has_expected_serve_tag_files_replay_summary_item_counts
             and has_expected_serve_tag_files_replay_zero_state_summary_counts
             and has_expected_serve_tag_files_replay_zero_state_reuse_summary_counts
+            and has_expected_serve_tag_files_replay_zero_state_duplicate_generated_counts
             and has_expected_serve_tag_files_replay_summary_input_bytes
             and has_expected_serve_tag_files_replay_source_fingerprints
             and has_expected_serve_tag_files_replay_output_paths
@@ -2677,6 +2716,9 @@ def _run_npm_install_smoke(
         serve_tag_files_zero_state_reuse_summary_counts = (
             _parse_batch_zero_state_reuse_summary_counts(serve_tag_files)
         )
+        serve_tag_files_zero_state_duplicate_generated_counts = (
+            _parse_batch_zero_state_duplicate_generated_counts(serve_tag_files)
+        )
         serve_tag_files_summary_input_bytes = _parse_batch_summary_input_bytes(
             serve_tag_files
         )
@@ -2784,6 +2826,9 @@ def _run_npm_install_smoke(
         expected_serve_tag_files_zero_state_reuse_summary_counts = (
             _expected_smoke_batch_zero_state_reuse_summary_counts()
         )
+        expected_serve_tag_files_zero_state_duplicate_generated_counts = (
+            _expected_smoke_batch_zero_state_duplicate_generated_counts()
+        )
         expected_serve_tag_files_summary_input_bytes = (
             _expected_smoke_batch_summary_input_bytes()
         )
@@ -2822,6 +2867,10 @@ def _run_npm_install_smoke(
             serve_tag_files_zero_state_reuse_summary_counts
             == expected_serve_tag_files_zero_state_reuse_summary_counts
         )
+        has_expected_serve_tag_files_zero_state_duplicate_generated_counts = (
+            serve_tag_files_zero_state_duplicate_generated_counts
+            == expected_serve_tag_files_zero_state_duplicate_generated_counts
+        )
         has_expected_serve_tag_files_summary_input_bytes = (
             serve_tag_files_summary_input_bytes
             == expected_serve_tag_files_summary_input_bytes
@@ -2854,6 +2903,10 @@ def _run_npm_install_smoke(
         has_expected_serve_tag_files_replay_zero_state_reuse_summary_counts = (
             _parse_batch_zero_state_reuse_summary_counts(serve_tag_files_replay)
             == expected_serve_tag_files_zero_state_reuse_summary_counts
+        )
+        has_expected_serve_tag_files_replay_zero_state_duplicate_generated_counts = (
+            _parse_batch_zero_state_duplicate_generated_counts(serve_tag_files_replay)
+            == expected_serve_tag_files_zero_state_duplicate_generated_counts
         )
         has_expected_serve_tag_files_replay_summary_input_bytes = (
             _parse_batch_summary_input_bytes(serve_tag_files_replay)
@@ -2984,6 +3037,7 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_summary_item_counts
             and has_expected_serve_tag_files_zero_state_summary_counts
             and has_expected_serve_tag_files_zero_state_reuse_summary_counts
+            and has_expected_serve_tag_files_zero_state_duplicate_generated_counts
             and has_expected_serve_tag_files_summary_input_bytes
             and has_expected_serve_tag_files_source_fingerprints
             and has_expected_serve_tag_files_output_paths
@@ -3012,6 +3066,7 @@ def _run_npm_install_smoke(
             and has_expected_serve_tag_files_replay_summary_item_counts
             and has_expected_serve_tag_files_replay_zero_state_summary_counts
             and has_expected_serve_tag_files_replay_zero_state_reuse_summary_counts
+            and has_expected_serve_tag_files_replay_zero_state_duplicate_generated_counts
             and has_expected_serve_tag_files_replay_summary_input_bytes
             and has_expected_serve_tag_files_replay_source_fingerprints
             and has_expected_serve_tag_files_replay_output_paths
@@ -3216,6 +3271,19 @@ def _smoke_install_warnings(
         != expected_serve_tag_files_zero_state_reuse_summary_counts
     ):
         return [f"{prefix}_serve_tag_files_invalid_zero_state_reuse_summary_counts"]
+    serve_tag_files_zero_state_duplicate_generated_counts = (
+        _parse_batch_zero_state_duplicate_generated_counts(smoke_result.serve_tag_files)
+    )
+    expected_serve_tag_files_zero_state_duplicate_generated_counts = (
+        _expected_smoke_batch_zero_state_duplicate_generated_counts()
+    )
+    if (
+        serve_tag_files_zero_state_duplicate_generated_counts
+        != expected_serve_tag_files_zero_state_duplicate_generated_counts
+    ):
+        return [
+            f"{prefix}_serve_tag_files_invalid_zero_state_duplicate_generated_counts"
+        ]
     serve_tag_files_summary_input_bytes = _parse_batch_summary_input_bytes(
         smoke_result.serve_tag_files
     )
@@ -3502,6 +3570,18 @@ def _smoke_install_warnings(
         != expected_serve_tag_files_zero_state_reuse_summary_counts
     ):
         return [f"{prefix}_serve_tag_files_replay_invalid_zero_state_reuse_summary_counts"]
+    serve_tag_files_replay_zero_state_duplicate_generated_counts = (
+        _parse_batch_zero_state_duplicate_generated_counts(
+            smoke_result.serve_tag_files_replay
+        )
+    )
+    if (
+        serve_tag_files_replay_zero_state_duplicate_generated_counts
+        != expected_serve_tag_files_zero_state_duplicate_generated_counts
+    ):
+        return [
+            f"{prefix}_serve_tag_files_replay_invalid_zero_state_duplicate_generated_counts"
+        ]
     serve_tag_files_replay_summary_input_bytes = _parse_batch_summary_input_bytes(
         smoke_result.serve_tag_files_replay
     )

@@ -268,7 +268,6 @@ def test_recent_news_support_builder_reads_accepted_record_jsonl_and_promotes(
             {
                 "status": "accepted",
                 "article_url": "https://example.com/bdya-production",
-                "published_at": "2026-05-13T10:00:00Z",
                 "topics": ["finance", "politics"],
                 "entities": [
                     _entity("wikidata:Q10", "Turkey", "country"),
