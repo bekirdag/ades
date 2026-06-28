@@ -293,6 +293,25 @@ jobs:
           print(0)
           PY
           }
+          active_service_impact_root() {
+            python3 - <<'PY'
+          import json
+          import urllib.request
+          from pathlib import Path
+
+          try:
+              with urllib.request.urlopen("http://127.0.0.1:8734/v0/status", timeout=10) as response:
+                  payload = json.load(response)
+              configured_path = str(
+                  ((payload.get("impact_artifact") or {}).get("configured_path") or "")
+              ).strip()
+          except Exception:
+              configured_path = ""
+
+          if configured_path:
+              print(Path(configured_path).expanduser().parent)
+          PY
+          }
           merge_starter_impact_graph() {
             local current_root="$1"
             local starter_root="$2"
@@ -543,7 +562,12 @@ jobs:
           Environment=ADES_PACK_HEALTH_DB_PATH=/mnt/ades/storage/registry/pack_health.sqlite3
           EOF
           impact_release_root="/mnt/ades/impact/releases/$release_id"
-          impact_current_root="$HOME/.local/share/ades-artifacts/market-graph/current"
+          active_impact_root="$(active_service_impact_root)"
+          if [ -n "$active_impact_root" ]; then
+            impact_current_root="$active_impact_root"
+          else
+            impact_current_root="$HOME/.local/share/ades-artifacts/market-graph/current"
+          fi
           if [ -f "$impact_release_root/market_graph_store.sqlite" ]; then
             mkdir -p "$impact_current_root" "$HOME/.config/systemd/user/ades.service.d"
             switch_impact_current=1
