@@ -154,6 +154,48 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
         confidence=0.87,
     ),
     _EventRule(
+        event_type="sector_policy_change",
+        patterns=(
+            _rx(
+                r"\b(?:law|laws|bill|bills|legislation|act|rule|rules|regulation|regulations|parliament|lawmakers?|government|minister|ministry|regulator|agency)\b.{0,180}\b(?:pass(?:es|ed)?|approv(?:e|es|ed|al)|adopt(?:s|ed)?|enact(?:s|ed)?|introduc(?:e|es|ed)|propos(?:e|es|ed)|implement(?:s|ed)?|tighten(?:s|ed)?|relax(?:es|ed)?|rais(?:e|es|ed)|cut(?:s)?|lower(?:s|ed)?|ban(?:s|ned)?|limit(?:s|ed)?|cap(?:s|ped)?|subsid(?:y|ies|ise|ize|ised|ized))\b.{0,180}\b(?:mining|miners?|metals?|gold|silver|copper|lithium|uranium|oil|gas|energy|power|utilities|banks?|banking|financial|insurers?|telecom|technology|tech|semiconductor|pharma|drugmakers?|healthcare|transport|shipping|airlines?|agriculture|food|crypto|digital\s+asset|environmental|emissions?|carbon|royalt(?:y|ies)|tax|permit|permits|licen[cs]e|quota)\b"
+            ),
+            _rx(
+                r"\b(?:mining|miners?|metals?|gold|silver|copper|lithium|uranium|oil|gas|energy|power|utilities|banks?|banking|financial|insurers?|telecom|technology|tech|semiconductor|pharma|drugmakers?|healthcare|transport|shipping|airlines?|agriculture|food|crypto|digital\s+asset|environmental|emissions?|carbon)\b.{0,180}\b(?:law|laws|bill|bills|legislation|act|rule|rules|regulation|regulations|policy|royalt(?:y|ies)|tax|permit|permits|licen[cs]e|quota|subsid(?:y|ies)|ban|caps?|limit|limits)\b"
+            ),
+            _rx(
+                r"\b(?:royalt(?:y|ies)|windfall\s+tax|resource\s+rent\s+tax|mining\s+tax|export\s+levy|permit(?:ting)?\s+rule|licen[cs]ing\s+rule|environmental\s+rule|emissions?\s+rule)\b"
+            ),
+        ),
+        compatible_asset_families=(
+            "equity",
+            "ticker",
+            "sector",
+            "equity_index",
+            "commodity",
+            "country_risk",
+        ),
+        confidence=0.8,
+    ),
+    _EventRule(
+        event_type="regulatory_enforcement",
+        patterns=(
+            _rx(
+                r"\b(?:regulator|regulators|agency|watchdog|competition\s+authority|antitrust|securities\s+commission|environmental\s+agency|central\s+bank)\b.{0,180}\b(?:fine(?:s|d)?|penalt(?:y|ies)|probe|probes|investigat(?:e|es|ed|ion)|enforcement|crackdown|lawsuit|sue(?:s|d)?|order(?:s|ed)?|ban(?:s|ned)?|suspend(?:s|ed)?|revoke(?:s|d)?|licen[cs]e|settlement)\b"
+            ),
+            _rx(
+                r"\b(?:fine(?:s|d)?|penalt(?:y|ies)|probe|probes|investigat(?:e|es|ed|ion)|enforcement|crackdown|lawsuit|sue(?:s|d)?|order(?:s|ed)?|ban(?:s|ned)?|suspend(?:s|ed)?|revoke(?:s|d)?|settlement)\b.{0,180}\b(?:regulator|regulators|agency|watchdog|competition\s+authority|antitrust|securities\s+commission|environmental\s+agency|central\s+bank|banks?|miners?|utilities|telecom|pharma|technology|crypto|energy|oil|gas|airlines?|shipping)\b"
+            ),
+        ),
+        compatible_asset_families=(
+            "equity",
+            "ticker",
+            "sector",
+            "equity_index",
+            "country_risk",
+        ),
+        confidence=0.81,
+    ),
+    _EventRule(
         event_type="supply_disruption",
         patterns=(
             _rx(
@@ -486,6 +528,7 @@ _COMMODITY_SIGNAL_TYPES = {
     "sanctions",
     "tariff",
     "export_control",
+    "sector_policy_change",
     "supply_disruption",
     "production_decrease",
     "production_increase",
@@ -499,6 +542,8 @@ _COMMODITY_SIGNAL_TYPES = {
 _EQUITY_EVENT_SIGNAL_TYPES = {
     "tariff",
     "export_control",
+    "sector_policy_change",
+    "regulatory_enforcement",
     "sanctions",
     "supply_disruption",
     "production_decrease",
@@ -522,6 +567,8 @@ _BROAD_PROXY_SIGNAL_TYPES = {
     "sanctions",
     "tariff",
     "export_control",
+    "sector_policy_change",
+    "regulatory_enforcement",
     "war_escalation",
     "ceasefire_risk_relief",
     "default",

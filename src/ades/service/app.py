@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 import hashlib
+import os
 from pathlib import Path
 import re
 import time
@@ -79,6 +80,7 @@ from .models import (
     BatchTagResponse,
     EntityMatch,
     FileTagRequest,
+    ImpactCandidate,
     ImpactSourceEntity,
     ImpactExpansionRequest,
     ImpactExpansionResult,
@@ -277,6 +279,7 @@ _NEWS_ANALYZE_BASE_PACKS = (
     "politics-vector-en",
     "finance-en",
 )
+_ENV_TRUE_VALUES = {"1", "true", "yes", "y", "on"}
 _NEWS_ANALYZE_COUNTRY_FINANCE_PACK_BY_CODE = {
     "ar": "finance-ar-en",
     "au": "finance-au-en",
@@ -541,6 +544,120 @@ def _entity_name(entity: EntityMatch) -> str:
     return entity.text.strip()
 
 
+_DIRECT_TERMINAL_REF_PREFIXES = (
+    "ades:impact:commodity:",
+    "ades:impact:crypto:",
+    "ades:impact:currency:",
+    "ades:impact:equity-index:",
+    "ades:impact:index:",
+    "ades:impact:rates:",
+    "ades:impact:bond:",
+)
+_DIRECT_TERMINAL_TYPE_TOKENS = {
+    "bond",
+    "commodity",
+    "crypto",
+    "currency",
+    "equity",
+    "equity_index",
+    "etf",
+    "forex",
+    "fx",
+    "index",
+    "rate",
+    "rates",
+    "stock",
+    "ticker",
+}
+
+
+def _direct_terminal_entity_type(entity_ref: str, entity_type: str | None) -> str | None:
+    normalized_ref = entity_ref.strip().casefold()
+    normalized_type = (entity_type or "").strip().casefold()
+    if "-ticker:" in normalized_ref or ":ticker:" in normalized_ref:
+        return "ticker"
+    if ":equity:" in normalized_ref or normalized_type in {"equity", "stock", "ticker"}:
+        return normalized_type or "equity"
+    if normalized_ref.startswith("ades:impact:commodity:"):
+        return "commodity"
+    if normalized_ref.startswith("ades:impact:crypto:"):
+        return "crypto"
+    if normalized_ref.startswith("ades:impact:currency:"):
+        return "currency"
+    if normalized_ref.startswith(("ades:impact:equity-index:", "ades:impact:index:")):
+        return "index"
+    if normalized_ref.startswith("ades:impact:rates:"):
+        return "rates"
+    if normalized_ref.startswith("ades:impact:bond:"):
+        return "bond"
+    return entity_type
+
+
+def _is_direct_terminal_source_entity(source_entity: ImpactSourceEntity) -> bool:
+    entity_ref = source_entity.entity_ref.strip()
+    normalized_ref = entity_ref.casefold()
+    normalized_type = (source_entity.entity_type or "").strip().casefold()
+    if normalized_ref.startswith("finance-") and (
+        "-ticker:" in normalized_ref or ":ticker:" in normalized_ref or ":equity:" in normalized_ref
+    ):
+        return True
+    if any(normalized_ref.startswith(prefix) for prefix in _DIRECT_TERMINAL_REF_PREFIXES):
+        return True
+    return bool(
+        source_entity.is_tradable
+        and (
+            normalized_type in _DIRECT_TERMINAL_TYPE_TOKENS
+            or any(token in normalized_ref for token in (":ticker:", "-ticker:", ":equity:"))
+        )
+    )
+
+
+def _direct_terminal_candidates_from_source_entities(
+    source_entities: list[ImpactSourceEntity],
+) -> list[ImpactCandidate]:
+    candidates: list[ImpactCandidate] = []
+    seen_refs: set[str] = set()
+    for source_entity in source_entities:
+        entity_ref = source_entity.entity_ref.strip()
+        if not entity_ref or entity_ref in seen_refs:
+            continue
+        if not _is_direct_terminal_source_entity(source_entity):
+            continue
+        seen_refs.add(entity_ref)
+        candidates.append(
+            ImpactCandidate(
+                entity_ref=entity_ref,
+                name=source_entity.name.strip() or entity_ref,
+                entity_type=_direct_terminal_entity_type(
+                    entity_ref,
+                    source_entity.entity_type,
+                ),
+                is_tradable=True,
+                evidence_level="direct",
+                confidence=0.92 if source_entity.is_graph_seed else 0.86,
+                source_entity_refs=[entity_ref],
+                relationship_paths=[],
+                compatible_event_types=[],
+            )
+        )
+    return candidates
+
+
+def _merge_direct_terminal_candidates(
+    direct_candidates: list[ImpactCandidate],
+    expanded_candidates: list[ImpactCandidate],
+) -> list[ImpactCandidate]:
+    merged: list[ImpactCandidate] = []
+    seen_refs: set[str] = set()
+    for candidate in [*direct_candidates, *expanded_candidates]:
+        ref = candidate.entity_ref.strip()
+        if not ref or ref in seen_refs:
+            continue
+        seen_refs.add(ref)
+        merged.append(candidate)
+    return merged
+
+
 def _entity_merge_key(entity: EntityMatch) -> str:
     if entity.link and entity.link.entity_id.strip():
         entity_ref = entity.link.entity_id.strip().casefold()
@@ -594,6 +711,25 @@ def _merge_entity_matches(entities: list[EntityMatch]) -> list[EntityMatch]:
 def _normalize_news_packs(request: NewsAnalyzeRequest, settings: Settings) -> list[str]:
     requested = request.packs or [settings.default_pack]
     return _dedupe_string_values(requested)[: request.options.max_packs]
+
+
+def _news_analyze_hybrid_option(request: NewsAnalyzeRequest) -> bool | None:
+    if request.options.hybrid is not None:
+        return request.options.hybrid
+    raw_value = os.getenv("ADES_NEWS_ANALYZE_HYBRID_ENABLED")
+    if raw_value is None or not raw_value.strip():
+        return None
+    return raw_value.strip().lower() in _ENV_TRUE_VALUES
+
+
+def _news_analyze_hybrid_pack_limit() -> int | None:
+    raw_value = os.getenv("ADES_NEWS_ANALYZE_HYBRID_PACK_LIMIT")
+    if raw_value is None or not raw_value.strip():
+        return None
+    try:
+        return max(0, int(raw_value))
+    except ValueError:
+        return None
 
 
 def _pack_is_available(registry: PackRegistry, pack_id: str) -> bool:
@@ -994,11 +1130,7 @@ def _passive_weak_alias_reasons(entity: EntityMatch) -> list[str]:
     provenance = entity.provenance
     if provenance is None:
         return []
-    alias_quality = (
-        provenance.alias_quality.strip().casefold()
-        if provenance.alias_quality
-        else ""
-    )
+    alias_quality = provenance.alias_quality.strip().casefold() if provenance.alias_quality else ""
     reasons: list[str] = []
     if provenance.weak_alias:
         reasons.append("weak_alias")
@@ -1489,7 +1621,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     app = FastAPI(title="ades", version=__version__, lifespan=lifespan)
 
     @app.get("/healthz")
-    def healthz() -> dict[str, str]:
+    async def healthz() -> dict[str, str]:
         """Simple health endpoint."""
 
         return {"status": "ok", "version": __version__}
@@ -2495,6 +2627,9 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         include_graph_support = (
             request.options.include_graph_support or include_relationship_proposals
         )
+        hybrid_option = _news_analyze_hybrid_option(request)
+        hybrid_pack_limit = _news_analyze_hybrid_pack_limit()
+        hybrid_pack_count = 0
         packs, pack_decisions = _build_initial_news_pack_plan(
             request=request,
             settings=settings,
@@ -2502,9 +2637,16 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         )
 
         def _run_pack_batch(batch_packs: list[str]) -> None:
+            nonlocal hybrid_pack_count
             for pack in batch_packs:
                 if any(response.pack == pack for response in tag_responses):
                     continue
+                pack_hybrid = hybrid_option
+                if hybrid_option is True and hybrid_pack_limit is not None:
+                    if hybrid_pack_count >= hybrid_pack_limit:
+                        pack_hybrid = False
+                    else:
+                        hybrid_pack_count += 1
                 try:
                     runtime_state.prewarm_pack(pack)
                     response = tag(
@@ -2513,7 +2655,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                         content_type=request.content_type,
                         storage_root=storage_root,
                         debug=request.options.debug,
-                        hybrid=request.options.hybrid,
+                        hybrid=pack_hybrid,
                         include_related_entities=include_related_entities,
                         include_graph_support=include_graph_support,
                         refine_links=request.options.refine_links,
@@ -2593,6 +2735,18 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             warnings.extend(impact_paths.warnings)
 
         expanded_terminal_candidates = impact_paths.candidates if impact_paths else []
+        if impact_paths is not None:
+            direct_terminal_candidates = _direct_terminal_candidates_from_source_entities(
+                impact_paths.source_entities
+            )
+            if direct_terminal_candidates:
+                expanded_terminal_candidates = _merge_direct_terminal_candidates(
+                    direct_terminal_candidates,
+                    expanded_terminal_candidates,
+                )
+                impact_paths = impact_paths.model_copy(
+                    update={"candidates": expanded_terminal_candidates}
+                )
         if impact_paths is not None:
             expanded_terminal_candidates, event_gate_warnings = (
                 gate_terminal_candidates_by_event_signals(

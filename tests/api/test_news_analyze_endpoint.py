@@ -60,6 +60,105 @@ def test_news_analyze_endpoint_is_feature_flagged(tmp_path: Path) -> None:
     assert response.json()["detail"] == "ADES_NEWS_ANALYZE_DISABLED"
 
 
+def test_news_analyze_endpoint_can_enable_hybrid_from_news_env(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_news_pack(tmp_path)
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_HYBRID_ENABLED", "true")
+    monkeypatch.setenv("ADES_HYBRID_ENABLED", "false")
+    hybrid_values: list[bool | None] = []
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        hybrid: bool | None = None,
+        **_: object,
+    ) -> TagResponse:
+        hybrid_values.append(hybrid)
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[],
+            topics=[],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "text": "Oil shipping risk rose near the Strait of Hormuz.",
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": False,
+                "include_terminal_candidates": False,
+                "include_impact_paths": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert hybrid_values == [True]
+
+
+def test_news_analyze_endpoint_can_limit_news_hybrid_packs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    first_pack_id = _install_news_pack(tmp_path)
+    second_pack_id = _install_named_pack(tmp_path, "news-contract-alt-en")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_HYBRID_ENABLED", "true")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_HYBRID_PACK_LIMIT", "1")
+    hybrid_values: list[bool | None] = []
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        hybrid: bool | None = None,
+        **_: object,
+    ) -> TagResponse:
+        hybrid_values.append(hybrid)
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or first_pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[],
+            topics=[],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "text": "Oil shipping risk rose near the Strait of Hormuz.",
+            "packs": [first_pack_id, second_pack_id],
+            "options": {
+                "include_passive_entities": False,
+                "include_terminal_candidates": False,
+                "include_impact_paths": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert hybrid_values == [True, False]
+
+
 def test_news_analyze_endpoint_returns_normalized_contract(
     tmp_path: Path,
     monkeypatch,
@@ -824,6 +923,103 @@ def test_news_analyze_promotes_precious_metal_market_moves(
     )
 
 
+def test_news_analyze_promotes_tradable_source_entities_to_terminals(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-direct-equity-source-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Example Corp",
+                    label="ticker",
+                    start=text.index("Example Corp"),
+                    end=text.index("Example Corp") + len("Example Corp"),
+                    confidence=0.95,
+                    relevance=0.96,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="finance",
+                    ),
+                    link=EntityLink(
+                        entity_id="finance-us-ticker:EXM",
+                        canonical_text="Example Corp",
+                        provider="ades",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="finance", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert "finance-us-ticker:EXM" in set(entity_refs)
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-06-28",
+            artifact_hash="sha256:test",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="finance-us-ticker:EXM",
+                    name="Example Corp",
+                    entity_type="ticker",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=True,
+                )
+            ],
+            candidates=[],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Example Corp reports earnings",
+            "text": "Example Corp reported earnings that moved its shares.",
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    candidates = {
+        candidate["entity_ref"]: candidate for candidate in payload["terminal_impact_candidates"]
+    }
+    assert "finance-us-ticker:EXM" in candidates
+    assert candidates["finance-us-ticker:EXM"]["evidence_level"] == "direct"
+    assert candidates["finance-us-ticker:EXM"]["source_entity_refs"] == ["finance-us-ticker:EXM"]
+    assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
 def test_news_analyze_returns_review_only_relationship_proposals(
     tmp_path: Path,
     monkeypatch,
@@ -1198,9 +1394,7 @@ def test_news_analyze_suppresses_relationship_proposals_without_market_event(
     assert payload["relationship_proposals"] == []
     unresolved_by_ref = {entity["entity_ref"]: entity for entity in payload["unresolved_entities"]}
     assert unresolved_by_ref["wikidata:Qminister"]["candidate_proposals"] == 0
-    assert unresolved_by_ref["wikidata:Qminister"]["missing_reason"] == (
-        "no_market_event_signal"
-    )
+    assert unresolved_by_ref["wikidata:Qminister"]["missing_reason"] == ("no_market_event_signal")
 
 
 def test_news_analyze_dedupes_pack_scoped_heuristic_entities(

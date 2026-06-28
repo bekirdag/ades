@@ -26,9 +26,14 @@ from .api import benchmark_runtime as api_benchmark_runtime
 from .api import benchmark_matcher_backends as api_benchmark_matcher_backends
 from .api import build_finance_source_bundle as api_build_finance_source_bundle
 from .api import build_finance_country_source_bundles as api_build_finance_country_source_bundles
+from .api import (
+    build_finance_country_proxy_source_lane as api_build_finance_country_proxy_source_lane,
+)
 from .api import build_general_source_bundle as api_build_general_source_bundle
+from .api import build_issuer_exposure_source_lane as api_build_issuer_exposure_source_lane
 from .api import build_market_graph_store as api_build_market_graph_store
 from .api import build_medical_source_bundle as api_build_medical_source_bundle
+from .api import build_policy_sector_source_lane as api_build_policy_sector_source_lane
 from .api import build_qid_graph_index as api_build_qid_graph_index
 from .api import build_qid_graph_index_from_store as api_build_qid_graph_index_from_store
 from .api import build_qid_graph_store as api_build_qid_graph_store
@@ -39,19 +44,42 @@ from .api import deactivate_pack as api_deactivate_pack
 from .api import diff_pack_versions as api_diff_pack_versions
 from .api import evaluate_extraction_quality as api_evaluate_extraction_quality
 from .api import evaluate_live_news_feedback as api_evaluate_live_news_feedback
-from .api import evaluate_extraction_release_thresholds as api_evaluate_extraction_release_thresholds
+from .api import (
+    evaluate_extraction_release_thresholds as api_evaluate_extraction_release_thresholds,
+)
+from .api import (
+    evaluate_impact_news_analysis_golden_set as api_evaluate_impact_news_analysis_golden_set,
+)
 from .api import evaluate_vector_quality as api_evaluate_vector_quality
-from .api import evaluate_vector_release_thresholds_from_report as api_evaluate_vector_release_thresholds
+from .api import (
+    evaluate_vector_release_thresholds_from_report as api_evaluate_vector_release_thresholds,
+)
 from .api import fetch_finance_source_snapshot as api_fetch_finance_source_snapshot
-from .api import fetch_finance_country_source_snapshots as api_fetch_finance_country_source_snapshots
+from .api import (
+    fetch_finance_country_source_snapshots as api_fetch_finance_country_source_snapshots,
+)
 from .api import fetch_general_source_snapshot as api_fetch_general_source_snapshot
 from .api import fetch_medical_source_snapshot as api_fetch_medical_source_snapshot
+from .api import DEFAULT_BDYA_GAP_BACKLOG_IMPORT_OUTPUT_ROOT
+from .api import DEFAULT_FINANCE_COUNTRY_PROXY_PACKS_ROOT
+from .api import DEFAULT_FINANCE_COUNTRY_PROXY_SOURCE_OUTPUT_ROOT
+from .api import DEFAULT_FINANCE_COUNTRY_SOURCE_LANE_INPUT_OUTPUT_ROOT
+from .api import DEFAULT_ISSUER_EXPOSURE_SOURCE_OUTPUT_ROOT
+from .api import DEFAULT_POLICY_SECTOR_SOURCE_OUTPUT_ROOT
+from .api import DEFAULT_PROPOSAL_PROMOTION_OUTPUT_ROOT
+from .api import (
+    derive_finance_country_source_lane_inputs as api_derive_finance_country_source_lane_inputs,
+)
 from .api import generate_pack_source as api_generate_pack_source
 from .api import get_pack_health as api_get_pack_health
+from .api import import_bdya_gap_backlog as api_import_bdya_gap_backlog
 from .api import lookup_candidates as api_lookup_candidates
 from .api import list_available_packs as api_list_available_packs
 from .api import list_packs as api_list_packs
 from .api import prepare_registry_deploy_release as api_prepare_registry_deploy_release
+from .api import (
+    promote_reviewed_relationship_proposals as api_promote_reviewed_relationship_proposals,
+)
 from .api import publish_generated_registry_release as api_publish_generated_registry_release
 from .api import publish_release as api_publish_release
 from .api import pull_pack as api_pull_pack
@@ -60,13 +88,16 @@ from .api import report_generated_pack as api_report_generated_pack
 from .api import remove_pack as api_remove_pack
 from .api import release_versions as api_release_versions
 from .api import status as api_status
-from .api import smoke_test_published_generated_registry as api_smoke_test_published_generated_registry
+from .api import (
+    smoke_test_published_generated_registry as api_smoke_test_published_generated_registry,
+)
 from .api import sync_release_version as api_sync_release_version
 from .api import tag as api_tag
 from .api import tag_file as api_tag_file
 from .api import tag_files as api_tag_files
 from .api import validate_general_pack_quality as api_validate_general_pack_quality
 from .api import validate_finance_pack_quality as api_validate_finance_pack_quality
+from .api import validate_market_graph_source_lanes as api_validate_market_graph_source_lanes
 from .api import validate_medical_pack_quality as api_validate_medical_pack_quality
 from .api import validate_release as api_validate_release
 from .api import verify_release as api_verify_release
@@ -238,7 +269,9 @@ def _installer(*, registry_url: str | None = None) -> PackInstaller:
     )
 
 
-def _echo_pack_listing(*, mode: str, packs: list[dict[str, object]], registry_url: str | None = None) -> None:
+def _echo_pack_listing(
+    *, mode: str, packs: list[dict[str, object]], registry_url: str | None = None
+) -> None:
     """Render one installed or available pack listing."""
 
     payload: dict[str, object] = {
@@ -368,20 +401,22 @@ def _echo_pack_health_summary(payload: dict[str, object]) -> None:
         ["OBSERVATIONS", _format_cli_cell(payload.get("observation_count"))],
         ["LATEST VERSION", _format_cli_cell(payload.get("latest_pack_version"))],
         ["LATEST OBSERVED", _format_cli_cell(payload.get("latest_observed_at"))],
-        ["AVG ENTITIES", _format_cli_cell(f"{float(payload.get('average_entity_count', 0.0)):.2f}")],
+        [
+            "AVG ENTITIES",
+            _format_cli_cell(f"{float(payload.get('average_entity_count', 0.0)):.2f}"),
+        ],
         [
             "AVG DENSITY",
-            _format_cli_cell(
-                f"{float(payload.get('average_entities_per_100_tokens', 0.0)):.2f}"
-            ),
+            _format_cli_cell(f"{float(payload.get('average_entities_per_100_tokens', 0.0)):.2f}"),
         ],
-        ["ZERO ENTITY RATE", _format_cli_cell(f"{float(payload.get('zero_entity_rate', 0.0)):.2%}")],
+        [
+            "ZERO ENTITY RATE",
+            _format_cli_cell(f"{float(payload.get('zero_entity_rate', 0.0)):.2%}"),
+        ],
         ["WARNING RATE", _format_cli_cell(f"{float(payload.get('warning_rate', 0.0)):.2%}")],
         [
             "LOW DENSITY RATE",
-            _format_cli_cell(
-                f"{float(payload.get('low_density_warning_rate', 0.0)):.2%}"
-            ),
+            _format_cli_cell(f"{float(payload.get('low_density_warning_rate', 0.0)):.2%}"),
         ],
         ["P95 LATENCY MS", _format_cli_cell(payload.get("p95_timing_ms"))],
     ]
@@ -451,10 +486,7 @@ def _render_pack_listing(
     if registry_url is not None:
         raise typer.BadParameter("--registry-url can only be used with available pack listings.")
     try:
-        packs = [
-            pack.model_dump(mode="json")
-            for pack in api_list_packs(active_only=active_only)
-        ]
+        packs = [pack.model_dump(mode="json") for pack in api_list_packs(active_only=active_only)]
     except FileNotFoundError as exc:
         _exit_with_configuration_error(exc)
     except (UnsupportedRuntimeConfigurationError, ValueError) as exc:
@@ -477,12 +509,18 @@ def _echo_help(command_path: list[str] | None = None) -> None:
             if not hasattr(command, "get_command"):
                 joined = " ".join(info_parts)
                 _exit_with_cli_error(
-                    ValueError(f"Command `{joined}` does not have subcommands. Run `ades help` for the root command list.")
+                    ValueError(
+                        f"Command `{joined}` does not have subcommands. Run `ades help` for the root command list."
+                    )
                 )
             next_command = command.get_command(context, segment)
             if next_command is None:
                 joined = " ".join(["ades", *path])
-                _exit_with_cli_error(ValueError(f"Unknown command path `{joined}`. Run `ades help` for the available commands."))
+                _exit_with_cli_error(
+                    ValueError(
+                        f"Unknown command path `{joined}`. Run `ades help` for the available commands."
+                    )
+                )
             command = next_command
             info_parts.append(segment)
             context = stack.enter_context(click.Context(command, info_name=segment, parent=context))
@@ -749,7 +787,9 @@ def list_default(
         "--active-only",
         help="List only active installed packs when using --installed.",
     ),
-    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable table."),
+    json_output: bool = typer.Option(
+        False, "--json", help="Print JSON instead of a human-readable table."
+    ),
     registry_url: str | None = typer.Option(
         None,
         "--registry-url",
@@ -772,8 +812,12 @@ def list_default(
 def packs_default(
     ctx: typer.Context,
     available: bool = typer.Option(False, "--available", help="List registry packs instead."),
-    active_only: bool = typer.Option(False, "--active-only", help="List only active installed packs."),
-    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable table."),
+    active_only: bool = typer.Option(
+        False, "--active-only", help="List only active installed packs."
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="Print JSON instead of a human-readable table."
+    ),
     registry_url: str | None = typer.Option(
         None,
         "--registry-url",
@@ -795,8 +839,12 @@ def packs_default(
 @packs_app.command("list")
 def packs_list(
     available: bool = typer.Option(False, "--available", help="List registry packs instead."),
-    active_only: bool = typer.Option(False, "--active-only", help="List only active installed packs."),
-    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable table."),
+    active_only: bool = typer.Option(
+        False, "--active-only", help="List only active installed packs."
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="Print JSON instead of a human-readable table."
+    ),
     registry_url: str | None = typer.Option(
         None,
         "--registry-url",
@@ -825,7 +873,9 @@ def list_packs_alias(
         "--active-only",
         help="List only active installed packs when using --installed.",
     ),
-    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable table."),
+    json_output: bool = typer.Option(
+        False, "--json", help="Print JSON instead of a human-readable table."
+    ),
     registry_url: str | None = typer.Option(
         None,
         "--registry-url",
@@ -844,8 +894,12 @@ def list_packs_alias(
 
 @list_app.command("installed")
 def list_installed_alias(
-    active_only: bool = typer.Option(False, "--active-only", help="List only active installed packs."),
-    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable table."),
+    active_only: bool = typer.Option(
+        False, "--active-only", help="List only active installed packs."
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="Print JSON instead of a human-readable table."
+    ),
 ) -> None:
     """List installed packs with a human-readable table by default."""
 
@@ -912,7 +966,9 @@ def packs_lookup(
         "--fuzzy",
         help="Use fuzzy operator lookup when the backend supports it.",
     ),
-    active_only: bool = typer.Option(True, "--active-only/--include-inactive", help="Search only active packs by default."),
+    active_only: bool = typer.Option(
+        True, "--active-only/--include-inactive", help="Search only active packs by default."
+    ),
     limit: int = typer.Option(20, min=1, max=100, help="Maximum number of candidates to return."),
 ) -> None:
     """Search deterministic alias and rule metadata from the configured local store."""
@@ -967,7 +1023,9 @@ def packs_health(
 @app.command()
 def pull(
     pack: str,
-    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a human-readable summary."),
+    json_output: bool = typer.Option(
+        False, "--json", help="Print JSON instead of a human-readable summary."
+    ),
     registry_url: str | None = typer.Option(
         None,
         "--registry-url",
@@ -1049,7 +1107,13 @@ def registry_generate_pack(
             include_build_metadata=include_build_metadata,
             include_build_only=include_build_only,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
@@ -1088,7 +1152,13 @@ def registry_report_pack(
             include_build_metadata=include_build_metadata,
             include_build_only=include_build_only,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
@@ -1166,7 +1236,13 @@ def registry_refresh_generated_packs(
             release_gate_commands=release_gate_commands,
             release_gate_working_dir=release_gate_working_dir,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
     if not response.passed:
@@ -1289,7 +1365,9 @@ def registry_smoke_published_release(
 
 @registry_app.command("validate-finance-quality")
 def registry_validate_finance_quality(
-    bundle_dir: Path = typer.Argument(..., help="Normalized finance bundle directory with bundle.json."),
+    bundle_dir: Path = typer.Argument(
+        ..., help="Normalized finance bundle directory with bundle.json."
+    ),
     output_dir: Path = typer.Option(
         ...,
         "--output-dir",
@@ -1345,7 +1423,13 @@ def registry_validate_finance_quality(
             max_ambiguous_aliases=max_ambiguous_aliases,
             max_dropped_alias_ratio=max_dropped_alias_ratio,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
     if not response.passed:
@@ -1354,7 +1438,9 @@ def registry_validate_finance_quality(
 
 @registry_app.command("validate-general-quality")
 def registry_validate_general_quality(
-    bundle_dir: Path = typer.Argument(..., help="Normalized general bundle directory with bundle.json."),
+    bundle_dir: Path = typer.Argument(
+        ..., help="Normalized general bundle directory with bundle.json."
+    ),
     output_dir: Path = typer.Option(
         ...,
         "--output-dir",
@@ -1410,7 +1496,13 @@ def registry_validate_general_quality(
             max_ambiguous_aliases=max_ambiguous_aliases,
             max_dropped_alias_ratio=max_dropped_alias_ratio,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
     if not response.passed:
@@ -1419,7 +1511,9 @@ def registry_validate_general_quality(
 
 @registry_app.command("validate-medical-quality")
 def registry_validate_medical_quality(
-    bundle_dir: Path = typer.Argument(..., help="Normalized medical bundle directory with bundle.json."),
+    bundle_dir: Path = typer.Argument(
+        ..., help="Normalized medical bundle directory with bundle.json."
+    ),
     general_bundle_dir: Path = typer.Option(
         ...,
         "--general-bundle-dir",
@@ -1481,7 +1575,13 @@ def registry_validate_medical_quality(
             max_ambiguous_aliases=max_ambiguous_aliases,
             max_dropped_alias_ratio=max_dropped_alias_ratio,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
     if not response.passed:
@@ -1627,6 +1727,119 @@ def registry_evaluate_live_news(
     except (FileNotFoundError, ValueError, httpx.HTTPError) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
+
+
+@registry_app.command("evaluate-impact-news-analysis-golden")
+def registry_evaluate_impact_news_analysis_golden(
+    golden_set_path: Path = typer.Option(
+        ...,
+        "--golden-set-path",
+        help="BDYA-generated ADES impact golden JSONL path.",
+    ),
+    artifact_path: Path | None = typer.Option(
+        None,
+        "--artifact-path",
+        help="Optional market graph artifact path to use for impact expansion.",
+    ),
+    storage_root: Path | None = typer.Option(
+        None,
+        "--storage-root",
+        help="Optional ADES storage root containing installed packs.",
+    ),
+    pack_ids: list[str] = typer.Option(
+        None,
+        "--pack",
+        help="Optional installed pack id to force for each case. Repeatable.",
+    ),
+    reviewed_only: bool = typer.Option(
+        False,
+        "--reviewed-only/--include-unreviewed",
+        help="Skip backlog-seeded cases that still need human review.",
+    ),
+    max_cases: int | None = typer.Option(
+        None,
+        "--max-cases",
+        min=1,
+        help="Optional case limit for bounded smoke runs.",
+    ),
+    max_depth: int = typer.Option(
+        2,
+        "--max-depth",
+        min=1,
+        max=4,
+        help="Maximum impact graph traversal depth.",
+    ),
+    impact_seed_limit: int | None = typer.Option(
+        None,
+        "--impact-seed-limit",
+        min=1,
+        help="Optional maximum graph seed count for impact expansion.",
+    ),
+    max_terminal_candidates: int = typer.Option(
+        25,
+        "--max-terminal-candidates",
+        min=0,
+        max=100,
+        help="Maximum terminal candidates returned by /v0/news/analyze.",
+    ),
+    min_terminal_candidate_recall: float = typer.Option(
+        1.0,
+        "--min-terminal-candidate-recall",
+        min=0.0,
+        max=1.0,
+        help="Minimum required terminal candidate recall.",
+    ),
+    min_terminal_candidate_precision: float = typer.Option(
+        0.95,
+        "--min-terminal-candidate-precision",
+        min=0.0,
+        max=1.0,
+        help="Minimum required terminal candidate precision after accepted proxies.",
+    ),
+    min_source_entity_recall: float = typer.Option(
+        0.8,
+        "--min-source-entity-recall",
+        min=0.0,
+        max=1.0,
+        help="Minimum required source entity recall.",
+    ),
+    min_event_type_recall: float = typer.Option(
+        0.8,
+        "--min-event-type-recall",
+        min=0.0,
+        max=1.0,
+        help="Minimum required event type recall.",
+    ),
+    fail_on_warnings: bool = typer.Option(
+        True,
+        "--fail-on-warnings/--allow-warnings",
+        help="Treat ADES news-analysis warnings as gate failures.",
+    ),
+) -> None:
+    """Evaluate `/v0/news/analyze` impact output against BDYA golden fixtures."""
+
+    try:
+        response = api_evaluate_impact_news_analysis_golden_set(
+            golden_set_path=golden_set_path,
+            artifact_path=artifact_path,
+            storage_root=storage_root,
+            packs=pack_ids,
+            reviewed_only=reviewed_only,
+            max_cases=max_cases,
+            max_depth=max_depth,
+            impact_seed_limit=impact_seed_limit,
+            max_terminal_candidates=max_terminal_candidates,
+            min_terminal_candidate_recall=min_terminal_candidate_recall,
+            min_terminal_candidate_precision=min_terminal_candidate_precision,
+            min_source_entity_recall=min_source_entity_recall,
+            min_event_type_recall=min_event_type_recall,
+            fail_on_warnings=fail_on_warnings,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.to_dict())
+    if not response.passed:
+        raise typer.Exit(code=1)
 
 
 @registry_app.command("benchmark-runtime")
@@ -2089,7 +2302,13 @@ def registry_fetch_finance_sources(
             finance_people_max_companies=finance_people_max_companies,
             user_agent=user_agent,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
@@ -2156,7 +2375,13 @@ def registry_build_finance_bundle(
             output_dir=output_dir,
             version=version,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
@@ -2193,7 +2418,13 @@ def registry_fetch_finance_country_sources(
             country_codes=country_code or None,
             user_agent=user_agent,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
@@ -2230,7 +2461,13 @@ def registry_build_finance_country_bundles(
             country_codes=country_code or None,
             version=version,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
@@ -2273,7 +2510,13 @@ def registry_build_general_bundle(
             output_dir=output_dir,
             version=version,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
@@ -2553,6 +2796,350 @@ def registry_build_market_graph_store(
         raise typer.Exit(code=1)
 
 
+@registry_app.command("build-finance-country-proxy-source-lane")
+def registry_build_finance_country_proxy_source_lane(
+    packs_root: Path = typer.Option(
+        DEFAULT_FINANCE_COUNTRY_PROXY_PACKS_ROOT,
+        "--packs-root",
+        help="Runtime packs root containing finance-*-en pack directories.",
+    ),
+    output_root: Path = typer.Option(
+        DEFAULT_FINANCE_COUNTRY_PROXY_SOURCE_OUTPUT_ROOT,
+        "--output-root",
+        help="Root directory where normalized finance-country proxy lanes are written.",
+    ),
+    run_id: str | None = typer.Option(
+        None,
+        "--run-id",
+        help="Stable run id. Defaults to the current UTC timestamp.",
+    ),
+    build_artifact: bool = typer.Option(
+        False,
+        "--build-artifact",
+        help="Also build a market graph artifact from the generated source lane.",
+    ),
+    artifact_output_root: Path | None = typer.Option(
+        None,
+        "--artifact-output-root",
+        help="Optional artifact output root when --build-artifact is set.",
+    ),
+    include_starter_graph: bool = typer.Option(
+        True,
+        "--include-starter-graph/--no-starter-graph",
+        help="Include the packaged starter market graph while building an artifact.",
+    ),
+    extra_proxy_pack_ids: list[str] = typer.Option(
+        [],
+        "--extra-proxy-pack-id",
+        help="Additional non-country pack id to proxy to global tradable terminals.",
+    ),
+    no_extra_proxy_packs: bool = typer.Option(
+        False,
+        "--no-extra-proxy-packs",
+        help="Disable the default non-country domain pack proxy enrichment.",
+    ),
+    minimum_edge_count: int = typer.Option(
+        0,
+        "--minimum-edge-count",
+        min=0,
+        help="Fail if the generated lane has fewer edges than this threshold.",
+    ),
+) -> None:
+    """Build finance-country pack proxy lanes for the market impact graph."""
+
+    try:
+        response = api_build_finance_country_proxy_source_lane(
+            packs_root=packs_root,
+            output_root=output_root,
+            run_id=run_id,
+            artifact_output_root=artifact_output_root,
+            build_artifact=build_artifact,
+            include_starter_graph=include_starter_graph,
+            extra_proxy_pack_ids=() if no_extra_proxy_packs else (extra_proxy_pack_ids or None),
+            minimum_edge_count=minimum_edge_count,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.to_json_dict())
+
+
+@registry_app.command("derive-finance-country-source-lane-inputs")
+def registry_derive_finance_country_source_lane_inputs(
+    packs_root: Path = typer.Option(
+        DEFAULT_FINANCE_COUNTRY_PROXY_PACKS_ROOT,
+        "--packs-root",
+        help="Root containing installed finance-country pack directories.",
+    ),
+    output_root: Path = typer.Option(
+        DEFAULT_FINANCE_COUNTRY_SOURCE_LANE_INPUT_OUTPUT_ROOT,
+        "--output-root",
+        help=(
+            "Root directory where derived issuer-sector and issuer-geography "
+            "input TSVs are written."
+        ),
+    ),
+    run_id: str | None = typer.Option(
+        None,
+        "--run-id",
+        help="Stable run id. Defaults to the current UTC timestamp.",
+    ),
+) -> None:
+    """Derive reusable source-lane input TSVs from finance-country packs."""
+
+    try:
+        response = api_derive_finance_country_source_lane_inputs(
+            packs_root=packs_root,
+            output_root=output_root,
+            run_id=run_id,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.to_json_dict())
+
+
+@registry_app.command("build-policy-sector-source-lane")
+def registry_build_policy_sector_source_lane(
+    policy_sector_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--policy-sector-tsv-path",
+        help=("Policy/regulator/law to sector TSV path. Repeat for multiple policy-sector lanes."),
+    ),
+    issuer_sector_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--issuer-sector-tsv-path",
+        help=("Issuer to sector/ticker TSV path. Repeat for multiple issuer sector lanes."),
+    ),
+    output_root: Path = typer.Option(
+        DEFAULT_POLICY_SECTOR_SOURCE_OUTPUT_ROOT,
+        "--output-root",
+        help="Root directory where normalized policy-sector source lanes are written.",
+    ),
+    run_id: str | None = typer.Option(
+        None,
+        "--run-id",
+        help="Stable run id. Defaults to the current UTC timestamp.",
+    ),
+    build_artifact: bool = typer.Option(
+        False,
+        "--build-artifact",
+        help="Also build a market graph artifact from the generated source lane.",
+    ),
+    artifact_output_root: Path | None = typer.Option(
+        None,
+        "--artifact-output-root",
+        help="Optional artifact output root when --build-artifact is set.",
+    ),
+    include_starter_graph: bool = typer.Option(
+        True,
+        "--include-starter-graph/--no-starter-graph",
+        help="Include the packaged starter market graph while building an artifact.",
+    ),
+    extra_node_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--extra-node-tsv-path",
+        help="Additional normalized graph node TSV path for artifact build.",
+    ),
+    extra_edge_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--extra-edge-tsv-path",
+        help="Additional normalized graph edge TSV path for artifact build.",
+    ),
+    namespace: str = typer.Option(
+        "policy-sector",
+        "--namespace",
+        help="Namespace used when generating missing entity refs.",
+    ),
+) -> None:
+    """Build normalized policy-sector market graph source lanes."""
+
+    try:
+        response = api_build_policy_sector_source_lane(
+            policy_sector_tsv_paths=policy_sector_tsv_paths,
+            issuer_sector_tsv_paths=issuer_sector_tsv_paths,
+            output_root=output_root,
+            run_id=run_id,
+            artifact_output_root=artifact_output_root,
+            build_artifact=build_artifact,
+            include_starter_graph=include_starter_graph,
+            extra_node_tsv_paths=extra_node_tsv_paths,
+            extra_edge_tsv_paths=extra_edge_tsv_paths,
+            namespace=namespace,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.to_json_dict())
+
+
+@registry_app.command("build-issuer-exposure-source-lane")
+def registry_build_issuer_exposure_source_lane(
+    issuer_commodity_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--issuer-commodity-tsv-path",
+        help=("Issuer to commodity exposure TSV path. Repeat for multiple issuer-commodity lanes."),
+    ),
+    issuer_geography_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--issuer-geography-tsv-path",
+        help=(
+            "Issuer to country/region exposure TSV path. Repeat for multiple "
+            "issuer-geography lanes."
+        ),
+    ),
+    issuer_supply_chain_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--issuer-supply-chain-tsv-path",
+        help=("Issuer supply-chain/counterparty TSV path. Repeat for multiple supply-chain lanes."),
+    ),
+    output_root: Path = typer.Option(
+        DEFAULT_ISSUER_EXPOSURE_SOURCE_OUTPUT_ROOT,
+        "--output-root",
+        help="Root directory where normalized issuer-exposure source lanes are written.",
+    ),
+    run_id: str | None = typer.Option(
+        None,
+        "--run-id",
+        help="Stable run id. Defaults to the current UTC timestamp.",
+    ),
+    build_artifact: bool = typer.Option(
+        False,
+        "--build-artifact",
+        help="Also build a market graph artifact from the generated source lane.",
+    ),
+    artifact_output_root: Path | None = typer.Option(
+        None,
+        "--artifact-output-root",
+        help="Optional artifact output root when --build-artifact is set.",
+    ),
+    include_starter_graph: bool = typer.Option(
+        True,
+        "--include-starter-graph/--no-starter-graph",
+        help="Include the packaged starter market graph while building an artifact.",
+    ),
+    extra_node_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--extra-node-tsv-path",
+        help="Additional normalized graph node TSV path for artifact build.",
+    ),
+    extra_edge_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--extra-edge-tsv-path",
+        help="Additional normalized graph edge TSV path for artifact build.",
+    ),
+    namespace: str = typer.Option(
+        "issuer-exposure",
+        "--namespace",
+        help="Namespace used when generating missing entity refs.",
+    ),
+) -> None:
+    """Build normalized issuer exposure market graph source lanes."""
+
+    try:
+        response = api_build_issuer_exposure_source_lane(
+            issuer_commodity_tsv_paths=issuer_commodity_tsv_paths,
+            issuer_geography_tsv_paths=issuer_geography_tsv_paths,
+            issuer_supply_chain_tsv_paths=issuer_supply_chain_tsv_paths,
+            output_root=output_root,
+            run_id=run_id,
+            artifact_output_root=artifact_output_root,
+            build_artifact=build_artifact,
+            include_starter_graph=include_starter_graph,
+            extra_node_tsv_paths=extra_node_tsv_paths,
+            extra_edge_tsv_paths=extra_edge_tsv_paths,
+            namespace=namespace,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.to_json_dict())
+
+
+@registry_app.command("import-bdya-impact-gap-backlog")
+def registry_import_bdya_impact_gap_backlog(
+    input_paths: list[Path] = typer.Option(
+        ...,
+        "--input",
+        help="BDYA impact-gap backlog JSONL path. Repeat to merge multiple exports.",
+    ),
+    output_root: Path = typer.Option(
+        DEFAULT_BDYA_GAP_BACKLOG_IMPORT_OUTPUT_ROOT,
+        "--output-root",
+        help="Root directory where ADES review queue files are written.",
+    ),
+    run_id: str | None = typer.Option(
+        None,
+        "--run-id",
+        help="Stable import run id. Defaults to the current UTC timestamp.",
+    ),
+) -> None:
+    """Import BDYA impact-gap backlog JSONL into ADES review queues."""
+
+    try:
+        response = api_import_bdya_gap_backlog(
+            input_paths=input_paths,
+            output_root=output_root,
+            run_id=run_id,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.to_json_dict())
+
+
+@registry_app.command("validate-market-graph-source-lanes")
+def registry_validate_market_graph_source_lanes(
+    edge_tsv_paths: list[Path] = typer.Option(
+        ...,
+        "--edge-tsv-path",
+        help="Normalized market graph edge TSV path. Repeat for multiple lanes.",
+    ),
+    sample_limit: int = typer.Option(
+        50,
+        "--sample-limit",
+        min=1,
+        help="Maximum number of warning samples to include in the JSON output.",
+    ),
+) -> None:
+    """Validate market graph source-lane relation and source metadata."""
+
+    try:
+        response = api_validate_market_graph_source_lanes(
+            edge_tsv_paths=edge_tsv_paths,
+            sample_limit=sample_limit,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.to_json_dict())
+
+
+@registry_app.command("promote-reviewed-relationship-proposals")
+def registry_promote_reviewed_relationship_proposals(
+    input_paths: list[Path] = typer.Option(
+        ...,
+        "--input",
+        help=("Reviewed relationship proposal JSONL path. Repeat to merge multiple review queues."),
+    ),
+    output_root: Path = typer.Option(
+        DEFAULT_PROPOSAL_PROMOTION_OUTPUT_ROOT,
+        "--output-root",
+        help="Root directory where accepted edge TSV and review outputs are written.",
+    ),
+    run_id: str | None = typer.Option(
+        None,
+        "--run-id",
+        help="Stable promotion run id. Defaults to the current UTC timestamp.",
+    ),
+) -> None:
+    """Promote accepted reviewed proposals into graph edge TSV rows."""
+
+    try:
+        response = api_promote_reviewed_relationship_proposals(
+            input_paths=input_paths,
+            output_root=output_root,
+            run_id=run_id,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.to_json_dict())
+
+
 @registry_app.command("build-starter-market-graph-store")
 def registry_build_starter_market_graph_store(
     output_dir: Path = typer.Option(
@@ -2740,7 +3327,13 @@ def registry_fetch_general_sources(
             geonames_alternate_deletes_url=geonames_alternate_deletes_url,
             user_agent=user_agent,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
@@ -2815,7 +3408,13 @@ def registry_fetch_medical_sources(
             uniprot_max_records=uniprot_max_records,
             clinical_trials_max_records=clinical_trials_max_records,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
@@ -2876,7 +3475,13 @@ def registry_build_medical_bundle(
             output_dir=output_dir,
             version=version,
         )
-    except (FileNotFoundError, FileExistsError, IsADirectoryError, NotADirectoryError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        IsADirectoryError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         _exit_with_cli_error(exc)
     _echo_json(response.model_dump(mode="json"))
 
@@ -3002,7 +3607,9 @@ def release_versions() -> None:
 
 
 @release_app.command("sync-version")
-def release_sync_version(version: str = typer.Argument(..., help="Target release version.")) -> None:
+def release_sync_version(
+    version: str = typer.Argument(..., help="Target release version."),
+) -> None:
     """Synchronize Python and npm release versions to one target."""
 
     try:
@@ -3058,10 +3665,14 @@ def release_manifest(
 @app.command()
 def tag(
     text: str | None = typer.Argument(None, help="Inline text to tag."),
-    file: Path | None = typer.Option(None, "--file", help="Tag a local file instead of inline text."),
+    file: Path | None = typer.Option(
+        None, "--file", help="Tag a local file instead of inline text."
+    ),
     pack: str | None = typer.Option(None, help="Pack id, for example finance-en."),
     content_type: str | None = typer.Option(None, help="Override the input content type."),
-    output: Path | None = typer.Option(None, "--output", help="Write JSON output to this file path."),
+    output: Path | None = typer.Option(
+        None, "--output", help="Write JSON output to this file path."
+    ),
     output_dir: Path | None = typer.Option(
         None,
         "--output-dir",
@@ -3261,7 +3872,9 @@ def tag_files(
     if reuse_unchanged_outputs and not skip_unchanged:
         raise typer.BadParameter("Use --skip-unchanged when enabling --reuse-unchanged-outputs.")
     if repair_missing_reused_outputs and manifest_input is None:
-        raise typer.BadParameter("Use --manifest-input when enabling --repair-missing-reused-outputs.")
+        raise typer.BadParameter(
+            "Use --manifest-input when enabling --repair-missing-reused-outputs."
+        )
     if repair_missing_reused_outputs and not reuse_unchanged_outputs:
         raise typer.BadParameter(
             "Use --reuse-unchanged-outputs when enabling --repair-missing-reused-outputs."

@@ -13,6 +13,11 @@ from typing import Iterable, Iterator
 
 from ..packs.bdya_phase6 import BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES
 from .graph_builder import build_market_graph_store
+from .relationship_schema import (
+    relation_direction_preconditions as schema_relation_direction_preconditions,
+    relation_event_types as schema_relation_event_types,
+    relation_family_for_relation,
+)
 from .starter import starter_source_paths
 
 DEFAULT_BIG_DATA_ROOT = Path("/mnt/githubActions/ades_big_data")
@@ -185,6 +190,8 @@ _COUNTRY_RISK_EVENT_TYPES = (
     "sanctions",
     "tariff",
     "export_control",
+    "sector_policy_change",
+    "regulatory_enforcement",
     "fiscal_expansion",
     "fiscal_austerity",
     "default",
@@ -202,6 +209,8 @@ _GLOBAL_EQUITY_EVENT_TYPES = (
     "sanctions",
     "tariff",
     "export_control",
+    "sector_policy_change",
+    "regulatory_enforcement",
     "earnings_beat",
     "earnings_miss",
     "guidance_raise",
@@ -227,6 +236,8 @@ _POLICY_RATE_EVENT_TYPES = (
 _EQUITY_EVENT_TYPES = (
     "tariff",
     "export_control",
+    "sector_policy_change",
+    "regulatory_enforcement",
     "sanctions",
     "earnings_beat",
     "earnings_miss",
@@ -811,11 +822,7 @@ def _market_ontology_terminal_nodes() -> list[dict[str, object]]:
         if entity_type == "commodity":
             identifiers.setdefault("commodity", entity_ref.rsplit(":", 1)[-1])
             identifiers.update(_COMMODITY_CONTRACT_IDENTIFIER_OVERRIDES.get(entity_ref, {}))
-        aliases = [
-            str(alias).strip()
-            for alias in record.get("aliases", [])
-            if str(alias).strip()
-        ]
+        aliases = [str(alias).strip() for alias in record.get("aliases", []) if str(alias).strip()]
         if aliases:
             identifiers.setdefault("aliases", aliases)
         nodes.append(
@@ -825,8 +832,7 @@ def _market_ontology_terminal_nodes() -> list[dict[str, object]]:
                 entity_type=entity_type,
                 library_id="finance-en",
                 is_tradable=(
-                    entity_type in TRADABLE_ENTITY_TYPES
-                    or category in TRADABLE_ENTITY_TYPES
+                    entity_type in TRADABLE_ENTITY_TYPES or category in TRADABLE_ENTITY_TYPES
                 ),
                 is_seed_eligible=True,
                 identifiers=identifiers,
@@ -837,65 +843,11 @@ def _market_ontology_terminal_nodes() -> list[dict[str, object]]:
 
 
 def _relation_event_types(relation: str) -> tuple[str, ...]:
-    if relation.endswith("_dxy_proxy"):
-        return _DXY_EVENT_TYPES
-    if relation.endswith("_country_risk_proxy") or relation.endswith("_global_policy_risk_proxy"):
-        return _COUNTRY_RISK_EVENT_TYPES
-    if relation.endswith("_global_equity_proxy"):
-        return _GLOBAL_EQUITY_EVENT_TYPES
-    if relation.endswith("_policy_rate_proxy"):
-        return _POLICY_RATE_EVENT_TYPES
-    if relation in {
-        "issuer_supplier_to_issuer",
-        "issuer_customer_of_issuer",
-        "issuer_partner_of_issuer",
-    }:
-        return _SUPPLY_CHAIN_EVENT_TYPES
-    if relation in {
-        "issuer_in_sector",
-        "issuer_in_index",
-        "sector_affects_index",
-        "index_affects_country_index_proxy",
-    }:
-        return _GLOBAL_EQUITY_EVENT_TYPES
-    if relation in {"issuer_has_listed_ticker", "person_affects_employer_ticker"} | _ROLE_RELATIONS:
-        return _EQUITY_EVENT_TYPES
-    return ()
+    return schema_relation_event_types(relation)
 
 
 def _edge_family_for_relation(relation: str) -> str:
-    if relation in {
-        "issuer_has_listed_ticker",
-        "ticker_represents_issuer",
-        "issuer_has_exchange_listing",
-        "ticker_listed_on_exchange",
-    }:
-        return "identity_listing"
-    if relation in _PERSON_TO_ISSUER_RELATIONS or relation == "person_affects_employer_ticker":
-        return "person_to_issuer"
-    if relation in {
-        "issuer_supplier_to_issuer",
-        "issuer_customer_of_issuer",
-        "issuer_partner_of_issuer",
-    }:
-        return "supply_chain_counterparty"
-    if relation in _ORGANIZATION_TO_ISSUER_RELATIONS:
-        return "organization_control"
-    if relation in {"issuer_in_sector", "sector_affects_index"}:
-        return "sector_exposure"
-    if relation in {"issuer_in_index", "index_affects_country_index_proxy"}:
-        return "index_membership"
-    if relation.startswith("country_affects_") or relation.endswith("_policy_rate_proxy"):
-        return "country_macro_policy"
-    if relation.endswith("_currency_proxy") or relation.endswith("_usd_proxy"):
-        return "currency_proxy"
-    if relation.endswith("_dxy_proxy"):
-        return "dxy_proxy"
-    if relation.endswith("_country_risk_proxy") or relation.endswith("_global_policy_risk_proxy"):
-        return "risk_proxy"
-    if relation.endswith("_global_equity_proxy"):
-        return "global_equity_proxy"
-    return "other"
+    return relation_family_for_relation(relation)
 
 
 def _edge_family_counts_from_relations(relation_counts: dict[str, int]) -> dict[str, int]:
@@ -907,33 +859,7 @@ def _edge_family_counts_from_relations(relation_counts: dict[str, int]) -> dict[
 
 
 def _relation_direction_preconditions(relation: str) -> tuple[str, ...]:
-    if relation.endswith("_dxy_proxy"):
-        return ("usd_or_rates_context", "risk_or_safe_haven_context")
-    if relation.endswith("_country_risk_proxy") or relation.endswith("_global_policy_risk_proxy"):
-        return ("explicit_risk_event", "fiscal_or_credit_signal")
-    if relation.endswith("_global_equity_proxy"):
-        return ("macro_policy_or_risk_signal", "equity_event_signal")
-    if relation.endswith("_policy_rate_proxy"):
-        return ("rate_inflation_central_bank_or_fiscal_signal",)
-    if relation == "issuer_has_listed_ticker":
-        return ("direct_issuer_or_security_mention",)
-    if relation == "person_affects_employer_ticker":
-        return ("strong_person_employer_event",)
-    if relation in _PERSON_TO_ISSUER_RELATIONS:
-        return ("strong_key_person_or_ownership_event",)
-    if relation in {
-        "issuer_supplier_to_issuer",
-        "issuer_customer_of_issuer",
-        "issuer_partner_of_issuer",
-    }:
-        return ("supply_chain_or_counterparty_event",)
-    if relation in {"issuer_in_sector", "issuer_in_index"}:
-        return ("direct_issuer_or_sector_membership_evidence",)
-    if relation in {"sector_affects_index", "index_affects_country_index_proxy"}:
-        return ("sector_or_index_event_signal",)
-    if relation in _ORGANIZATION_TO_ISSUER_RELATIONS:
-        return ("strong_ownership_or_control_event",)
-    return ()
+    return schema_relation_direction_preconditions(relation)
 
 
 def _edge(
@@ -2275,6 +2201,21 @@ def build_finance_country_proxy_source_lane(
                         pack_ids=pack_id,
                     )
                     terminal_node_refs.add(edge.target_ref)
+                if edge.relation == "ticker_trades_on_exchange" and edge.target_ref not in nodes:
+                    exchange_segment = edge.target_ref.rsplit(":", 1)[-1]
+                    nodes[edge.target_ref] = _node_row(
+                        entity_ref=edge.target_ref,
+                        canonical_name=exchange_segment.upper(),
+                        entity_type="exchange",
+                        library_id=pack_id,
+                        is_tradable=False,
+                        is_seed_eligible=True,
+                        identifiers={
+                            "country_code": country_code,
+                            "exchange": exchange_segment,
+                        },
+                        pack_ids=pack_id,
+                    )
 
             for edge in _default_proxy_edges(
                 entity,

@@ -2588,6 +2588,9 @@ class MarketGraphStoreBuildResponse(BaseModel):
     pack_ids: list[str] = Field(default_factory=list)
     relation_counts: dict[str, int] = Field(default_factory=dict)
     edge_family_counts: dict[str, int] = Field(default_factory=dict)
+    source_tier_counts: dict[str, int] = Field(default_factory=dict)
+    source_warning_counts: dict[str, int] = Field(default_factory=dict)
+    relation_warning_counts: dict[str, int] = Field(default_factory=dict)
     processed_edge_row_count: int = 0
     release_gate_commands: list[str] = Field(default_factory=list)
     release_gate_working_dir: str | None = None

@@ -32,6 +32,9 @@ dev = [
   "pytest>=8.2,<9.0",
   "ruff>=0.4,<1.0",
 ]
+hybrid = [
+  "spacy>=3.8,<4.0",
+]
 server = [
   "psycopg[binary,pool]>=3.2,<4.0",
 ]

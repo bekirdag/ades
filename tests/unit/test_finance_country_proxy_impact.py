@@ -167,6 +167,11 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
         "finance-us-ticker:DEF",
     ) in edge_keys
     assert (
+        "finance-us-ticker:ABC",
+        "ticker_trades_on_exchange",
+        "finance-us:nyse",
+    ) in edge_keys
+    assert (
         "finance-person:0001:chief-executive",
         "person_affects_employer_ticker",
         "finance-us-ticker:ABC",
@@ -219,18 +224,17 @@ def test_finance_country_proxy_generator_writes_direct_and_proxy_edges(tmp_path:
     }
     issuer_identifiers = json.loads(nodes["finance-us-issuer:0001"]["identifiers_json"])
     assert issuer_identifiers["ticker_ref"] == "finance-us-ticker:ABC"
+    exchange_identifiers = json.loads(nodes["finance-us:nyse"]["identifiers_json"])
+    assert exchange_identifiers["country_code"] == "us"
+    assert exchange_identifiers["exchange"] == "nyse"
     synthetic_ticker_identifiers = json.loads(nodes["finance-us-ticker:DEF"]["identifiers_json"])
     assert synthetic_ticker_identifiers["issuer_ref"] == "finance-us-issuer:0002"
     assert synthetic_ticker_identifiers["ticker_ref"] == "finance-us-ticker:DEF"
     assert nodes["ades:impact:commodity:copper"]["is_tradable"] == "true"
     assert nodes["ades:impact:commodity:aluminum"]["is_tradable"] == "true"
     assert nodes["ades:impact:commodity:steel"]["is_tradable"] == "true"
-    copper_identifiers = json.loads(
-        nodes["ades:impact:commodity:copper"]["identifiers_json"]
-    )
-    aluminum_identifiers = json.loads(
-        nodes["ades:impact:commodity:aluminum"]["identifiers_json"]
-    )
+    copper_identifiers = json.loads(nodes["ades:impact:commodity:copper"]["identifiers_json"])
+    aluminum_identifiers = json.loads(nodes["ades:impact:commodity:aluminum"]["identifiers_json"])
     assert copper_identifiers["futures_symbol"] == "HG"
     assert "COMEX:HG" in copper_identifiers["terminal_proxy_refs"]
     assert aluminum_identifiers["lme_contract_code"] == "AH"
@@ -656,6 +660,20 @@ def test_finance_country_proxy_generator_builds_supply_chain_and_sector_edges(
     )
     assert "ades:impact:index:us-market" in {
         candidate.entity_ref for candidate in sector_result.candidates
+    }
+
+    sector_policy_result = expand_impact_paths(
+        ["finance-us-sector:technology"],
+        settings=Settings(
+            impact_expansion_enabled=True,
+            impact_expansion_artifact_path=result.artifact_path,
+        ),
+        max_depth=1,
+        max_candidates=8,
+        compatible_event_types=["sector_policy_change"],
+    )
+    assert "ades:impact:index:us-market" in {
+        candidate.entity_ref for candidate in sector_policy_result.candidates
     }
 
 

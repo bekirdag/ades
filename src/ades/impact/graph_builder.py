@@ -13,6 +13,13 @@ from typing import Iterable
 
 from ..artifact_release import append_release_gate_warnings, run_release_gate_commands
 from ..service.models import MarketGraphStoreBuildResponse
+from .relationship_schema import (
+    normalized_relation_direction_preconditions,
+    normalized_relation_event_types,
+    relation_family_for_relation,
+    validate_relation_metadata,
+)
+from .source_catalog import classify_source_tier, validate_source_attribution
 
 MARKET_GRAPH_STORE_FILENAME = "market_graph_store.sqlite"
 MARKET_GRAPH_MANIFEST_FILENAME = "market_graph_store_manifest.json"
@@ -186,43 +193,7 @@ def _parse_int_or_none(value: object | None, *, name: str) -> int | None:
 
 
 def _edge_family_for_relation(relation: str) -> str:
-    if relation in {
-        "issuer_has_listed_ticker",
-        "ticker_represents_issuer",
-        "issuer_has_exchange_listing",
-        "ticker_listed_on_exchange",
-    }:
-        return "identity_listing"
-    if relation.startswith("person_"):
-        return "person_to_issuer"
-    if relation in {
-        "private_company_controls_public_issuer",
-        "holding_company_controls_public_issuer",
-    }:
-        return "organization_control"
-    if relation in {
-        "issuer_supplier_to_issuer",
-        "issuer_customer_of_issuer",
-        "issuer_partner_of_issuer",
-    }:
-        return "supply_chain_counterparty"
-    if relation in {"issuer_in_sector", "sector_affects_index"}:
-        return "sector_exposure"
-    if relation in {"issuer_in_index", "index_affects_country_index_proxy"}:
-        return "index_membership"
-    if relation.startswith("country_affects_") or relation.endswith("_policy_rate_proxy"):
-        return "country_macro_policy"
-    if "commodity" in relation or "chokepoint" in relation or "production_region" in relation:
-        return "geography_commodity"
-    if relation.endswith("_currency_proxy") or relation.endswith("_usd_proxy"):
-        return "currency_proxy"
-    if relation.endswith("_dxy_proxy"):
-        return "dxy_proxy"
-    if relation.endswith("_country_risk_proxy") or relation.endswith("_global_policy_risk_proxy"):
-        return "risk_proxy"
-    if relation.endswith("_global_equity_proxy"):
-        return "global_equity_proxy"
-    return "other"
+    return relation_family_for_relation(relation)
 
 
 def _relation_and_family_counts(
@@ -235,6 +206,25 @@ def _relation_and_family_counts(
         family = _edge_family_for_relation(edge.relation)
         edge_family_counts[family] = edge_family_counts.get(family, 0) + 1
     return dict(sorted(relation_counts.items())), dict(sorted(edge_family_counts.items()))
+
+
+def _source_tier_counts(edges: Iterable[_EdgeRecord]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for edge in edges:
+        source_tier = classify_source_tier(edge.source_name, edge.source_url)
+        counts[source_tier] = counts.get(source_tier, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _warning_code_counts(warnings: Iterable[str], *, prefix: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    marker = f"{prefix}:"
+    for warning in warnings:
+        if not warning.startswith(marker):
+            continue
+        code = warning[len(marker) :].split(":", 1)[0]
+        counts[code] = counts.get(code, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _parse_json_dict_text(value: object | None) -> str:
@@ -464,6 +454,26 @@ def _parse_edge_rows(
             confidence = _parse_float(row.get("confidence"), name="confidence")
             source_year = _parse_int_or_none(row.get("source_year"), name="source_year")
             edge_version = _normalize_text(row.get("version")) or artifact_version
+            row_compatible_event_types = _parse_string_list(row.get("compatible_event_types"))
+            row_direction_preconditions = _parse_string_list(row.get("direction_preconditions"))
+            source_warning_codes = validate_source_attribution(
+                source_name=source_name,
+                source_url=source_url,
+                source_snapshot=source_snapshot,
+            )
+            for warning_code in source_warning_codes:
+                warnings.append(
+                    f"source_warning:{warning_code}:{source_ref}:{relation}:{target_ref}"
+                )
+            relation_warning_codes = validate_relation_metadata(
+                relation=relation,
+                configured_event_types=row_compatible_event_types,
+                configured_preconditions=row_direction_preconditions,
+            )
+            for warning_code in relation_warning_codes:
+                warnings.append(
+                    f"relation_warning:{warning_code}:{source_ref}:{relation}:{target_ref}"
+                )
             edge_id = _edge_id_for(
                 {
                     "source_ref": source_ref,
@@ -488,8 +498,14 @@ def _parse_edge_rows(
                 version=edge_version,
                 packs=packs,
                 notes=notes,
-                compatible_event_types=_parse_string_list(row.get("compatible_event_types")),
-                direction_preconditions=_parse_string_list(row.get("direction_preconditions")),
+                compatible_event_types=normalized_relation_event_types(
+                    relation,
+                    row_compatible_event_types,
+                ),
+                direction_preconditions=normalized_relation_direction_preconditions(
+                    relation,
+                    row_direction_preconditions,
+                ),
             )
             existing = edges.get(record.dedupe_key)
             if existing is None:
@@ -838,6 +854,9 @@ def build_market_graph_store(
 
     warnings = node_warnings + edge_warnings + implicit_node_warnings
     relation_counts, edge_family_counts = _relation_and_family_counts(edges.values())
+    source_tier_counts = _source_tier_counts(edges.values())
+    source_warning_counts = _warning_code_counts(warnings, prefix="source_warning")
+    relation_warning_counts = _warning_code_counts(warnings, prefix="relation_warning")
     (
         resolved_release_gate_commands,
         resolved_release_gate_working_dir,
@@ -864,6 +883,9 @@ def build_market_graph_store(
         pack_ids=pack_ids,
         relation_counts=relation_counts,
         edge_family_counts=edge_family_counts,
+        source_tier_counts=source_tier_counts,
+        source_warning_counts=source_warning_counts,
+        relation_warning_counts=relation_warning_counts,
         processed_edge_row_count=processed_edge_row_count,
         release_gate_commands=resolved_release_gate_commands,
         release_gate_working_dir=resolved_release_gate_working_dir,

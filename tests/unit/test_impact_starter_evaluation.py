@@ -30,8 +30,7 @@ def test_starter_market_graph_covers_inner_ring_families(tmp_path):
 
     with sqlite3.connect(response.artifact_path) as connection:
         families = {
-            str(row[0])
-            for row in connection.execute("SELECT DISTINCT relation FROM impact_edges")
+            str(row[0]) for row in connection.execute("SELECT DISTINCT relation FROM impact_edges")
         }
     assert {
         "country_exports_commodity",
@@ -106,7 +105,9 @@ def test_starter_source_manifest_has_required_fields():
     with starter_source_manifest_path() as manifest_path:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    assert payload["storage_policy"].endswith("/mnt/githubActions/ades_big_data, not in the package.")
+    assert payload["storage_policy"].endswith(
+        "/mnt/githubActions/ades_big_data, not in the package."
+    )
     assert payload["normalized_files"] == ["impact_nodes.tsv", "impact_edges.tsv"]
     assert len(payload["sources"]) >= 8
     for source in payload["sources"]:
@@ -137,18 +138,18 @@ def test_article_golden_set_evaluates_extraction_then_impact(tmp_path: Path):
                             "ades:heuristic_structural_location:general-en:location:strait-of-hormuz",
                             "wikidata:Q794",
                         ],
-                            "expected_candidate_refs": [
-                                "ades:impact:commodity:crude-oil",
-                                "ades:impact:currency:usd",
-                                "ades:impact:sector:airlines",
-                            ],
+                        "expected_candidate_refs": [
+                            "ades:impact:commodity:crude-oil",
+                            "ades:impact:currency:usd",
+                            "ades:impact:sector:airlines",
+                        ],
                         "expected_passive_refs": ["wikidata:Q121826282"],
                         "expected_relation_families": [
-                                "chokepoint_affects_commodity",
-                                "commodity_traded_in_currency",
-                                "country_member_of_bloc",
-                                "energy_input_affects_sector",
-                            ],
+                            "chokepoint_affects_commodity",
+                            "commodity_traded_in_currency",
+                            "country_member_of_bloc",
+                            "energy_input_affects_sector",
+                        ],
                     }
                 ],
             }

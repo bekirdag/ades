@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
 
 from .config import Settings, get_settings
 from .distribution import (
@@ -237,7 +239,47 @@ from .impact.evaluation import (
     evaluate_impact_article_golden_set as run_evaluate_impact_article_golden_set,
     evaluate_impact_golden_set as run_evaluate_impact_golden_set,
 )
+from .impact.news_analysis_evaluation import (
+    ImpactNewsAnalysisGoldenCase,
+    ImpactNewsAnalysisGoldenSetReport,
+    evaluate_impact_news_analysis_golden_set as run_evaluate_impact_news_analysis_golden_set,
+)
+from .impact.bdya_gap_backlog import (
+    DEFAULT_OUTPUT_ROOT as DEFAULT_BDYA_GAP_BACKLOG_IMPORT_OUTPUT_ROOT,
+    BdyaGapBacklogImportResult,
+    import_bdya_gap_backlog as run_import_bdya_gap_backlog,
+)
+from .impact.finance_country_proxy import (
+    DEFAULT_PACKS_ROOT as DEFAULT_FINANCE_COUNTRY_PROXY_PACKS_ROOT,
+    DEFAULT_SOURCE_OUTPUT_ROOT as DEFAULT_FINANCE_COUNTRY_PROXY_SOURCE_OUTPUT_ROOT,
+    FinanceCountryProxyBuildResult,
+    build_finance_country_proxy_source_lane as run_build_finance_country_proxy_source_lane,
+)
 from .impact.graph_builder import build_market_graph_store as run_build_market_graph_store
+from .impact.issuer_exposure import (
+    DEFAULT_SOURCE_OUTPUT_ROOT as DEFAULT_ISSUER_EXPOSURE_SOURCE_OUTPUT_ROOT,
+    IssuerExposureBuildResult,
+    build_issuer_exposure_source_lane as run_build_issuer_exposure_source_lane,
+)
+from .impact.policy_sector_proxy import (
+    DEFAULT_SOURCE_OUTPUT_ROOT as DEFAULT_POLICY_SECTOR_SOURCE_OUTPUT_ROOT,
+    PolicySectorProxyBuildResult,
+    build_policy_sector_source_lane as run_build_policy_sector_source_lane,
+)
+from .impact.proposal_promoter import (
+    DEFAULT_OUTPUT_ROOT as DEFAULT_PROPOSAL_PROMOTION_OUTPUT_ROOT,
+    ProposalPromotionResult,
+    promote_reviewed_relationship_proposals as run_promote_reviewed_relationship_proposals,
+)
+from .impact.source_lane_validation import (
+    ImpactSourceLaneValidationResult,
+    validate_market_graph_source_lanes as run_validate_market_graph_source_lanes,
+)
+from .impact.source_lane_inputs import (
+    DEFAULT_OUTPUT_ROOT as DEFAULT_FINANCE_COUNTRY_SOURCE_LANE_INPUT_OUTPUT_ROOT,
+    FinanceCountrySourceLaneInputDerivationResult,
+    derive_finance_country_source_lane_inputs as run_derive_finance_country_source_lane_inputs,
+)
 from .impact.starter import build_starter_market_graph_store as run_build_starter_market_graph_store
 
 if TYPE_CHECKING:
@@ -578,13 +620,10 @@ def _vector_readiness(settings: Settings) -> VectorReadinessResponse:
             raw_payload_schema = info.get("payload_schema")
             schema = raw_payload_schema if isinstance(raw_payload_schema, dict) else {}
             payload_indexes = {
-                field_name: field_name in schema
-                for field_name in _STATUS_PAYLOAD_INDEX_FIELDS
+                field_name: field_name in schema for field_name in _STATUS_PAYLOAD_INDEX_FIELDS
             }
             missing_indexes = [
-                field_name
-                for field_name, present in payload_indexes.items()
-                if not present
+                field_name for field_name, present in payload_indexes.items() if not present
             ]
             if missing_indexes:
                 warnings.append("qdrant_payload_indexes_missing:" + ",".join(missing_indexes))
@@ -3671,6 +3710,151 @@ def build_market_graph_store(
     )
 
 
+def build_finance_country_proxy_source_lane(
+    *,
+    packs_root: str | Path = DEFAULT_FINANCE_COUNTRY_PROXY_PACKS_ROOT,
+    output_root: str | Path = DEFAULT_FINANCE_COUNTRY_PROXY_SOURCE_OUTPUT_ROOT,
+    run_id: str | None = None,
+    artifact_output_root: str | Path | None = None,
+    build_artifact: bool = False,
+    include_starter_graph: bool = True,
+    extra_proxy_pack_ids: Iterable[str] | None = None,
+    minimum_edge_count: int = 0,
+) -> FinanceCountryProxyBuildResult:
+    """Build finance-country pack proxy lanes for the market impact graph."""
+
+    kwargs: dict[str, object] = {
+        "packs_root": packs_root,
+        "output_root": output_root,
+        "run_id": run_id,
+        "artifact_output_root": artifact_output_root,
+        "build_artifact": build_artifact,
+        "include_starter_graph": include_starter_graph,
+        "minimum_edge_count": minimum_edge_count,
+    }
+    if extra_proxy_pack_ids is not None:
+        kwargs["extra_proxy_pack_ids"] = extra_proxy_pack_ids
+    return run_build_finance_country_proxy_source_lane(**kwargs)
+
+
+def derive_finance_country_source_lane_inputs(
+    *,
+    packs_root: str | Path = DEFAULT_FINANCE_COUNTRY_PROXY_PACKS_ROOT,
+    output_root: str | Path = DEFAULT_FINANCE_COUNTRY_SOURCE_LANE_INPUT_OUTPUT_ROOT,
+    run_id: str | None = None,
+) -> FinanceCountrySourceLaneInputDerivationResult:
+    """Derive reusable source-lane input TSVs from finance-country packs."""
+
+    return run_derive_finance_country_source_lane_inputs(
+        packs_root=packs_root,
+        output_root=output_root,
+        run_id=run_id,
+    )
+
+
+def build_policy_sector_source_lane(
+    *,
+    policy_sector_tsv_paths: Iterable[str | Path],
+    issuer_sector_tsv_paths: Iterable[str | Path] = (),
+    output_root: str | Path = DEFAULT_POLICY_SECTOR_SOURCE_OUTPUT_ROOT,
+    run_id: str | None = None,
+    artifact_output_root: str | Path | None = None,
+    build_artifact: bool = False,
+    include_starter_graph: bool = True,
+    extra_node_tsv_paths: Iterable[str | Path] = (),
+    extra_edge_tsv_paths: Iterable[str | Path] = (),
+    namespace: str = "policy-sector",
+) -> PolicySectorProxyBuildResult:
+    """Build normalized policy-sector market graph source lanes."""
+
+    return run_build_policy_sector_source_lane(
+        policy_sector_tsv_paths=policy_sector_tsv_paths,
+        issuer_sector_tsv_paths=issuer_sector_tsv_paths,
+        output_root=output_root,
+        run_id=run_id,
+        artifact_output_root=artifact_output_root,
+        build_artifact=build_artifact,
+        include_starter_graph=include_starter_graph,
+        extra_node_tsv_paths=extra_node_tsv_paths,
+        extra_edge_tsv_paths=extra_edge_tsv_paths,
+        namespace=namespace,
+    )
+
+
+def build_issuer_exposure_source_lane(
+    *,
+    issuer_commodity_tsv_paths: Iterable[str | Path] = (),
+    issuer_geography_tsv_paths: Iterable[str | Path] = (),
+    issuer_supply_chain_tsv_paths: Iterable[str | Path] = (),
+    output_root: str | Path = DEFAULT_ISSUER_EXPOSURE_SOURCE_OUTPUT_ROOT,
+    run_id: str | None = None,
+    artifact_output_root: str | Path | None = None,
+    build_artifact: bool = False,
+    include_starter_graph: bool = True,
+    extra_node_tsv_paths: Iterable[str | Path] = (),
+    extra_edge_tsv_paths: Iterable[str | Path] = (),
+    namespace: str = "issuer-exposure",
+) -> IssuerExposureBuildResult:
+    """Build normalized issuer exposure market graph source lanes."""
+
+    return run_build_issuer_exposure_source_lane(
+        issuer_commodity_tsv_paths=issuer_commodity_tsv_paths,
+        issuer_geography_tsv_paths=issuer_geography_tsv_paths,
+        issuer_supply_chain_tsv_paths=issuer_supply_chain_tsv_paths,
+        output_root=output_root,
+        run_id=run_id,
+        artifact_output_root=artifact_output_root,
+        build_artifact=build_artifact,
+        include_starter_graph=include_starter_graph,
+        extra_node_tsv_paths=extra_node_tsv_paths,
+        extra_edge_tsv_paths=extra_edge_tsv_paths,
+        namespace=namespace,
+    )
+
+
+def import_bdya_gap_backlog(
+    *,
+    input_paths: Iterable[str | Path],
+    output_root: str | Path = DEFAULT_BDYA_GAP_BACKLOG_IMPORT_OUTPUT_ROOT,
+    run_id: str | None = None,
+) -> BdyaGapBacklogImportResult:
+    """Import BDYA impact-gap backlog JSONL into ADES review queues."""
+
+    return run_import_bdya_gap_backlog(
+        input_paths=input_paths,
+        output_root=output_root,
+        run_id=run_id,
+    )
+
+
+def validate_market_graph_source_lanes(
+    *,
+    edge_tsv_paths: Iterable[str | Path],
+    sample_limit: int = 50,
+) -> ImpactSourceLaneValidationResult:
+    """Validate source attribution and relation metadata for market graph lanes."""
+
+    return run_validate_market_graph_source_lanes(
+        edge_tsv_paths=edge_tsv_paths,
+        sample_limit=sample_limit,
+    )
+
+
+def promote_reviewed_relationship_proposals(
+    *,
+    input_paths: Iterable[str | Path],
+    output_root: str | Path = DEFAULT_PROPOSAL_PROMOTION_OUTPUT_ROOT,
+    run_id: str | None = None,
+) -> ProposalPromotionResult:
+    """Promote reviewed relationship proposals into graph edge TSV lanes."""
+
+    return run_promote_reviewed_relationship_proposals(
+        input_paths=input_paths,
+        output_root=output_root,
+        run_id=run_id,
+    )
+
+
 def build_starter_market_graph_store(
     *,
     output_dir: str | Path,
@@ -3686,6 +3870,24 @@ def build_starter_market_graph_store(
         release_gate_commands=release_gate_commands,
         release_gate_working_dir=release_gate_working_dir,
     )
+
+
+@contextmanager
+def _temporary_env_values(updates: dict[str, str | None]):
+    previous = {key: os.environ.get(key) for key in updates}
+    try:
+        for key, value in updates.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def evaluate_impact_expansion_golden_set(
@@ -3707,6 +3909,97 @@ def evaluate_impact_expansion_golden_set(
         max_candidates=max_candidates,
         max_paths_per_candidate=max_paths_per_candidate,
     )
+
+
+def evaluate_impact_news_analysis_golden_set(
+    *,
+    golden_set_path: str | Path,
+    artifact_path: str | Path | None = None,
+    storage_root: str | Path | None = None,
+    packs: Iterable[str] | None = None,
+    reviewed_only: bool = False,
+    max_cases: int | None = None,
+    max_depth: int = 2,
+    impact_seed_limit: int | None = None,
+    max_terminal_candidates: int = 25,
+    min_terminal_candidate_recall: float = 1.0,
+    min_terminal_candidate_precision: float = 0.95,
+    min_source_entity_recall: float = 0.8,
+    min_event_type_recall: float = 0.8,
+    fail_on_warnings: bool = True,
+) -> ImpactNewsAnalysisGoldenSetReport:
+    """Evaluate `/v0/news/analyze` impact output against BDYA golden fixtures."""
+
+    selected_packs = tuple(str(pack).strip() for pack in packs or () if str(pack).strip())
+    env_updates = {
+        "ADES_NEWS_ANALYZE_ENABLED": "1",
+        "ADES_IMPACT_EXPANSION_ENABLED": "1",
+        "ADES_IMPACT_EXPANSION_MAX_DEPTH": str(max_depth),
+        "ADES_IMPACT_EXPANSION_MAX_CANDIDATES": str(max_terminal_candidates),
+        "ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED": "0",
+    }
+    if artifact_path is not None:
+        env_updates["ADES_IMPACT_EXPANSION_ARTIFACT_PATH"] = str(Path(artifact_path).expanduser())
+    if impact_seed_limit is not None:
+        env_updates["ADES_IMPACT_EXPANSION_SEED_LIMIT"] = str(impact_seed_limit)
+
+    with _temporary_env_values(env_updates):
+        from fastapi.testclient import TestClient
+
+        service_app = create_service_app(storage_root=storage_root)
+        with TestClient(service_app) as client:
+
+            def analyze_case(case: ImpactNewsAnalysisGoldenCase) -> dict[str, Any]:
+                payload: dict[str, Any] = {
+                    "text": case.text,
+                    "content_type": "text/plain",
+                    "options": {
+                        "include_passive_entities": True,
+                        "include_terminal_candidates": True,
+                        "include_relationship_paths": True,
+                        "include_impact_paths": True,
+                        "include_tag_responses": False,
+                        "impact_max_depth": max_depth,
+                        "max_terminal_candidates": max_terminal_candidates,
+                    },
+                }
+                if case.title:
+                    payload["title"] = case.title
+                if case.summary:
+                    payload["description"] = case.summary
+                if selected_packs:
+                    payload["packs"] = list(selected_packs)
+                if impact_seed_limit is not None:
+                    payload["options"]["impact_seed_limit"] = impact_seed_limit
+                response = client.post("/v0/news/analyze", json=payload)
+                if response.status_code == 200:
+                    data = response.json()
+                    return data if isinstance(data, dict) else {}
+                try:
+                    detail = response.json().get("detail", response.text)
+                except ValueError:
+                    detail = response.text
+                return {
+                    "terminal_impact_candidates": [],
+                    "source_entities": [],
+                    "event_signals": [],
+                    "warnings": [
+                        f"ADES_NEWS_ANALYZE_HTTP_{response.status_code}:{str(detail)[:180]}"
+                    ],
+                    "timing_ms": 0,
+                }
+
+            return run_evaluate_impact_news_analysis_golden_set(
+                golden_set_path=golden_set_path,
+                analyzer=analyze_case,
+                reviewed_only=reviewed_only,
+                min_terminal_candidate_recall=min_terminal_candidate_recall,
+                min_terminal_candidate_precision=min_terminal_candidate_precision,
+                min_source_entity_recall=min_source_entity_recall,
+                min_event_type_recall=min_event_type_recall,
+                fail_on_warnings=fail_on_warnings,
+                max_cases=max_cases,
+            )
 
 
 def evaluate_impact_article_golden_set(

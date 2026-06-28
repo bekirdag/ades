@@ -91,6 +91,44 @@ def test_tag_endpoint_can_enable_hybrid_linking(tmp_path: Path, monkeypatch) -> 
     assert payload["entities"][0]["provenance"]["match_kind"] == "proposal"
 
 
+def test_tag_endpoint_honors_env_enabled_hybrid_by_default(tmp_path: Path, monkeypatch) -> None:
+    pack_id = _install_endpoint_pack(tmp_path)
+    client = TestClient(create_app(storage_root=tmp_path))
+    monkeypatch.setenv("ADES_HYBRID_ENABLED", "true")
+
+    def _proposal_spans(text: str, **_: object) -> list[ProposalSpan]:
+        start = text.index("Entity Alpha")
+        end = start + len("Entity Alpha")
+        return [
+            ProposalSpan(
+                start=start,
+                end=end,
+                text=text[start:end],
+                label="organization",
+                confidence=0.84,
+                model_name="env-enabled-proposer",
+                model_version="test",
+            )
+        ]
+
+    monkeypatch.setattr("ades.pipeline.tagger.get_proposal_spans", _proposal_spans)
+
+    response = client.post(
+        "/v0/tag",
+        json={
+            "text": "Entity Alpha moved.",
+            "pack": pack_id,
+            "content_type": "text/plain",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entities"][0]["text"] == "Entity Alpha"
+    assert payload["entities"][0]["provenance"]["match_kind"] == "proposal"
+    assert payload["entities"][0]["provenance"]["model_name"] == "env-enabled-proposer"
+
+
 def test_tag_endpoint_rejects_invalid_boolean_options(tmp_path: Path) -> None:
     pack_id = _install_endpoint_pack(tmp_path)
     client = TestClient(create_app(storage_root=tmp_path))
@@ -109,9 +147,7 @@ def test_tag_endpoint_rejects_invalid_boolean_options(tmp_path: Path) -> None:
     assert "Invalid boolean option for debug." in response.json()["detail"]
 
 
-def test_tag_endpoint_can_request_related_entity_enrichment(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_tag_endpoint_can_request_related_entity_enrichment(tmp_path: Path, monkeypatch) -> None:
     pack_id = _install_endpoint_pack(tmp_path)
     client = TestClient(create_app(storage_root=tmp_path))
 

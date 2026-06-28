@@ -56,6 +56,23 @@ def test_extract_news_event_signals_covers_trade_ma_default_and_conflict() -> No
     assert "ceasefire_risk_relief" in by_type
 
 
+def test_extract_news_event_signals_covers_sector_policy_and_regulatory_events() -> None:
+    text = (
+        "UK parliament passed legislation raising mining royalties for gold and copper miners. "
+        "The competition regulator opened an antitrust probe into telecom operators."
+    )
+
+    by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
+
+    assert "sector_policy_change" in by_type
+    assert "sector" in by_type["sector_policy_change"].compatible_asset_families
+    assert "ticker" in by_type["sector_policy_change"].compatible_asset_families
+    assert "commodity" in by_type["sector_policy_change"].compatible_asset_families
+    assert "regulatory_enforcement" in by_type
+    assert "sector" in by_type["regulatory_enforcement"].compatible_asset_families
+    assert "equity" in by_type["regulatory_enforcement"].compatible_asset_families
+
+
 def test_extract_news_event_signals_covers_takeover_approach_language() -> None:
     text = (
         "Intertek backed a GBP10.6bn takeover approach from Swedish private "
@@ -464,3 +481,44 @@ def test_gate_terminal_candidates_keeps_source_backed_key_person_path() -> None:
     assert warnings == []
     assert gated[0].entity_ref == "finance-au-ticker:nsx:BTG"
     assert gated[0].compatible_event_types == ["key_person_ownership_governance"]
+
+
+def test_gate_terminal_candidates_keeps_source_backed_sector_policy_ticker_path() -> None:
+    candidate = ImpactCandidate(
+        entity_ref="finance-uk-ticker:anto",
+        name="Antofagasta",
+        entity_type="ticker",
+        evidence_level="shallow",
+        confidence=0.81,
+        source_entity_refs=["finance-uk-sector:mining"],
+        relationship_paths=[
+            ImpactRelationshipPath(
+                path_depth=1,
+                edges=[
+                    ImpactPathEdge(
+                        source_ref="finance-uk-sector:mining",
+                        target_ref="finance-uk-ticker:anto",
+                        relation="sector_affects_issuer",
+                        evidence_level="direct",
+                        confidence=0.86,
+                        direction_hint="sector_policy_exposure",
+                        source_name="ades-finance-country-pack-metadata",
+                        source_url="file:///packs/finance-uk-en/sources.json",
+                        source_snapshot="2026-06-28",
+                        compatible_event_types=["sector_policy_change"],
+                        direction_preconditions=["sector_policy_event_signal"],
+                    )
+                ],
+            )
+        ],
+        compatible_event_types=["sector_policy_change"],
+    )
+
+    signals = extract_news_event_signals(
+        "UK parliament passed legislation raising mining royalties for gold and copper miners."
+    )
+    gated, warnings = gate_terminal_candidates_by_event_signals([candidate], signals)
+
+    assert warnings == []
+    assert gated[0].entity_ref == "finance-uk-ticker:anto"
+    assert gated[0].compatible_event_types == ["sector_policy_change"]

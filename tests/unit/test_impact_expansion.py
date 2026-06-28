@@ -104,9 +104,12 @@ def test_market_graph_builder_merges_edges_and_computes_seed_degree(tmp_path: Pa
         "country_member_of_bloc": 1,
     }
     assert response.edge_family_counts == {
+        "country_membership": 1,
         "geography_commodity": 2,
-        "other": 1,
     }
+    assert response.source_tier_counts == {"test_fixture": 3}
+    assert response.source_warning_counts == {"test_fixture_source_not_promotable": 4}
+    assert response.relation_warning_counts == {}
     assert any(warning.startswith("duplicate_edge_merged") for warning in response.warnings)
 
     with MarketGraphStore(response.artifact_path) as store:
@@ -128,6 +131,80 @@ def test_market_graph_builder_merges_edges_and_computes_seed_degree(tmp_path: Pa
             "war_escalation",
         )
         assert edges[0].direction_preconditions == ("transit_disruption", "war_risk")
+
+
+def test_market_graph_builder_defaults_relation_metadata_from_schema(
+    tmp_path: Path,
+) -> None:
+    node_path = tmp_path / "impact_nodes.tsv"
+    edge_path = tmp_path / "impact_edges.tsv"
+    node_path.write_text(
+        "\t".join(["entity_ref", "canonical_name", "entity_type"])
+        + "\n"
+        + "\n".join(
+            [
+                "entity_fca\tFinancial Conduct Authority\tregulator",
+                "sector_mining\tMining sector\tsector",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    edge_path.write_text(
+        "\t".join(
+            [
+                "source_ref",
+                "target_ref",
+                "relation",
+                "evidence_level",
+                "confidence",
+                "direction_hint",
+                "source_name",
+                "source_url",
+                "source_snapshot",
+                "source_year",
+                "refresh_policy",
+                "pack_ids",
+                "notes",
+                "compatible_event_types",
+                "direction_preconditions",
+            ]
+        )
+        + "\n"
+        + (
+            "entity_fca\tsector_mining\tregulator_affects_sector\tdirect\t0.91\t"
+            "policy_risk\tFCA\thttps://www.fca.org.uk/publication/policy/mining\t"
+            "2026-06-28\t2026\tannual\tfinance-uk-en\tpolicy lane\t\t\n"
+        ),
+        encoding="utf-8",
+    )
+
+    response = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact",
+        artifact_version="2026-06-28T00:00:00Z",
+    )
+
+    assert response.source_tier_counts == {"regulator": 1}
+    assert response.source_warning_counts == {}
+    assert response.relation_warning_counts == {}
+    with MarketGraphStore(response.artifact_path) as store:
+        edges = store.outbound_edges_batch(["entity_fca"])["entity_fca"]
+
+    assert set(edges[0].compatible_event_types) == {
+        "sector_policy_change",
+        "regulatory_enforcement",
+        "fiscal_expansion",
+        "fiscal_austerity",
+        "tariff",
+        "export_control",
+        "sanctions",
+    }
+    assert set(edges[0].direction_preconditions) == {
+        "sector_policy_event_signal",
+        "jurisdiction_or_regulator_context",
+    }
 
 
 def test_market_graph_builder_records_release_gate_failure(tmp_path: Path) -> None:
@@ -216,11 +293,11 @@ def test_expand_impact_paths_returns_direct_and_derived_candidates(tmp_path: Pat
         "entity_hormuz",
         "entity_iran",
     ]
-    assert by_ref["entity_crude_oil"].compatible_event_types == [
+    assert {
         "shipping_chokepoint_disruption",
         "supply_disruption",
         "war_escalation",
-    ]
+    }.issubset(set(by_ref["entity_crude_oil"].compatible_event_types))
     assert by_ref["entity_crude_oil"].relationship_paths[0].edges[0].direction_preconditions == [
         "transit_disruption",
         "war_risk",
