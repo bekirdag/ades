@@ -985,7 +985,16 @@ def test_news_analyze_promotes_tradable_source_entities_to_terminals(
                     is_graph_seed=True,
                     seed_degree=0,
                     is_tradable=True,
-                )
+                ),
+                ImpactSourceEntity(
+                    entity_ref="wikidata:QEXM",
+                    name="Example Corp",
+                    same_as_refs=["finance-us-ticker:EXA"],
+                    entity_type="organization",
+                    is_graph_seed=True,
+                    seed_degree=1,
+                    is_tradable=False,
+                ),
             ],
             candidates=[],
         )
@@ -1017,6 +1026,12 @@ def test_news_analyze_promotes_tradable_source_entities_to_terminals(
     assert "finance-us-ticker:EXM" in candidates
     assert candidates["finance-us-ticker:EXM"]["evidence_level"] == "direct"
     assert candidates["finance-us-ticker:EXM"]["source_entity_refs"] == ["finance-us-ticker:EXM"]
+    assert "finance-us-ticker:EXA" in candidates
+    assert candidates["finance-us-ticker:EXA"]["evidence_level"] == "direct"
+    assert candidates["finance-us-ticker:EXA"]["source_entity_refs"] == [
+        "wikidata:QEXM",
+        "finance-us-ticker:EXA",
+    ]
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 

@@ -571,6 +571,17 @@ _DIRECT_TERMINAL_TYPE_TOKENS = {
 }
 
 
+def _is_direct_terminal_ref(entity_ref: str) -> bool:
+    normalized_ref = entity_ref.strip().casefold()
+    if not normalized_ref:
+        return False
+    if normalized_ref.startswith("finance-") and (
+        "-ticker:" in normalized_ref or ":ticker:" in normalized_ref or ":equity:" in normalized_ref
+    ):
+        return True
+    return any(normalized_ref.startswith(prefix) for prefix in _DIRECT_TERMINAL_REF_PREFIXES)
+
+
 def _direct_terminal_entity_type(entity_ref: str, entity_type: str | None) -> str | None:
     normalized_ref = entity_ref.strip().casefold()
     normalized_type = (entity_type or "").strip().casefold()
@@ -597,11 +608,7 @@ def _is_direct_terminal_source_entity(source_entity: ImpactSourceEntity) -> bool
     entity_ref = source_entity.entity_ref.strip()
     normalized_ref = entity_ref.casefold()
     normalized_type = (source_entity.entity_type or "").strip().casefold()
-    if normalized_ref.startswith("finance-") and (
-        "-ticker:" in normalized_ref or ":ticker:" in normalized_ref or ":equity:" in normalized_ref
-    ):
-        return True
-    if any(normalized_ref.startswith(prefix) for prefix in _DIRECT_TERMINAL_REF_PREFIXES):
+    if _is_direct_terminal_ref(normalized_ref):
         return True
     return bool(
         source_entity.is_tradable
@@ -612,6 +619,20 @@ def _is_direct_terminal_source_entity(source_entity: ImpactSourceEntity) -> bool
     )
 
 
+def _direct_terminal_refs_from_source_entity(
+    source_entity: ImpactSourceEntity,
+) -> list[str]:
+    refs: list[str] = []
+    entity_ref = source_entity.entity_ref.strip()
+    if entity_ref and _is_direct_terminal_source_entity(source_entity):
+        refs.append(entity_ref)
+    for same_as_ref in source_entity.same_as_refs:
+        same_as = same_as_ref.strip()
+        if same_as and _is_direct_terminal_ref(same_as):
+            refs.append(same_as)
+    return _dedupe_string_values(refs)
+
+
 def _direct_terminal_candidates_from_source_entities(
     source_entities: list[ImpactSourceEntity],
 ) -> list[ImpactCandidate]:
@@ -619,27 +640,27 @@ def _direct_terminal_candidates_from_source_entities(
     seen_refs: set[str] = set()
     for source_entity in source_entities:
         entity_ref = source_entity.entity_ref.strip()
-        if not entity_ref or entity_ref in seen_refs:
-            continue
-        if not _is_direct_terminal_source_entity(source_entity):
-            continue
-        seen_refs.add(entity_ref)
-        candidates.append(
-            ImpactCandidate(
-                entity_ref=entity_ref,
-                name=source_entity.name.strip() or entity_ref,
-                entity_type=_direct_terminal_entity_type(
-                    entity_ref,
-                    source_entity.entity_type,
-                ),
-                is_tradable=True,
-                evidence_level="direct",
-                confidence=0.92 if source_entity.is_graph_seed else 0.86,
-                source_entity_refs=[entity_ref],
-                relationship_paths=[],
-                compatible_event_types=[],
+        for terminal_ref in _direct_terminal_refs_from_source_entity(source_entity):
+            if terminal_ref in seen_refs:
+                continue
+            seen_refs.add(terminal_ref)
+            source_refs = [ref for ref in (entity_ref, terminal_ref) if ref]
+            candidates.append(
+                ImpactCandidate(
+                    entity_ref=terminal_ref,
+                    name=source_entity.name.strip() or terminal_ref,
+                    entity_type=_direct_terminal_entity_type(
+                        terminal_ref,
+                        source_entity.entity_type,
+                    ),
+                    is_tradable=True,
+                    evidence_level="direct",
+                    confidence=0.92 if source_entity.is_graph_seed else 0.86,
+                    source_entity_refs=_dedupe_string_values(source_refs),
+                    relationship_paths=[],
+                    compatible_event_types=[],
+                )
             )
-        )
     return candidates
 
 
