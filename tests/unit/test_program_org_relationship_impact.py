@@ -46,6 +46,11 @@ REVIEWED_GERMANY_BOERSE_BAFIN_BMWK_FCAS_FIXTURE = Path(
     "program_org_relationship/reviewed/2026-06-29/"
     "germany_boerse_bafin_bmwk_fcas_relationships.tsv"
 )
+REVIEWED_INDIA_NSE_BSE_RBI_POLICY_FIXTURE = Path(
+    "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/"
+    "program_org_relationship/reviewed/2026-06-29/"
+    "india_nse_bse_rbi_policy_relationships.tsv"
+)
 
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
@@ -1379,3 +1384,162 @@ def test_reviewed_germany_fixture_expands_boerse_and_keeps_policy_guardrails(
         candidate_refs, passive_refs = expanded_refs(source_ref)
         assert expected_passive_refs.issubset(passive_refs)
         assert candidate_refs.isdisjoint(no_policy_candidate_refs)
+
+
+def test_reviewed_india_fixture_expands_nse_macro_trade_and_policy_guardrails(
+    tmp_path: Path,
+) -> None:
+    if not REVIEWED_INDIA_NSE_BSE_RBI_POLICY_FIXTURE.exists():
+        pytest.skip("reviewed India NSE/RBI/policy fixture is not mounted")
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[REVIEWED_INDIA_NSE_BSE_RBI_POLICY_FIXTURE],
+        output_root=tmp_path / "impact_relationships",
+        run_id="reviewed-india-nse-bse-rbi-policy",
+        build_artifact=True,
+        include_starter_graph=False,
+        artifact_output_root=tmp_path / "artifacts",
+    )
+
+    assert result.relationship_row_count == 136
+    assert result.relation_counts == {
+        "central_bank_affects_credit_sector": 4,
+        "central_bank_affects_currency": 1,
+        "central_bank_affects_rates": 4,
+        "export_program_affects_sector": 6,
+        "government_body_affects_sector": 35,
+        "issuer_has_listed_ticker": 16,
+        "issuer_in_sector": 16,
+        "org_in_sector": 3,
+        "payment_network_operated_by_org": 1,
+        "policy_program_affects_sector": 1,
+        "program_operated_by_org": 1,
+        "public_facility_available_to_sector": 1,
+        "regulator_affects_sector": 20,
+        "sector_affects_index": 2,
+        "statistics_body_reports_macro_indicator": 3,
+        "ticker_listed_on_exchange": 16,
+        "trade_agreement_affects_sector": 4,
+        "trade_agreement_counterparty_country": 2,
+    }
+    assert result.node_type_counts == {
+        "country": 2,
+        "currency": 1,
+        "exchange": 1,
+        "government_body": 17,
+        "issuer": 16,
+        "macro_indicator": 3,
+        "market_index": 2,
+        "organization": 1,
+        "payment_network": 1,
+        "program": 2,
+        "rate": 4,
+        "regulator": 9,
+        "sector": 61,
+        "ticker": 16,
+        "trade_agreement": 1,
+    }
+
+    validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
+    assert validation.invalid_row_count == 0
+    assert validation.source_warning_counts == {}
+    assert validation.relation_warning_counts == {}
+    assert validation.source_tier_counts == {
+        "exchange": 50,
+        "government": 62,
+        "issuer_disclosed": 4,
+        "regulator": 20,
+    }
+
+    assert result.artifact_path is not None
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    for tradable_ref in [
+        "finance-in-ticker:HUDCO",
+        "finance-in-ticker:RELIANCE",
+        "finance-in:nifty-50",
+        "ades:impact:currency:inr",
+        "ades:impact:rate:in-repo-rate",
+    ]:
+        assert nodes[tradable_ref]["is_tradable"] == "true"
+    for passive_ref in [
+        "ades:trade-agreement:in-om:cepa",
+        "ades:sector:in:seafood-exports",
+        "ades:payment-network:in:upi",
+    ]:
+        assert nodes[passive_ref]["is_tradable"] == "false"
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=result.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=60,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    hudco_candidate_refs, hudco_passive_refs = expanded_refs("finance-in-issuer:HUDCO")
+    assert hudco_candidate_refs == {"finance-in-ticker:HUDCO"}
+    assert {"ades:sector:in:public-sector-borrowers", "finance-in:nse"}.issubset(hudco_passive_refs)
+    assert "ades:impact:currency:inr" not in hudco_candidate_refs
+
+    rbi_candidate_refs, rbi_passive_refs = expanded_refs("ades:org:in:rbi")
+    assert rbi_candidate_refs == {
+        "ades:impact:currency:inr",
+        "ades:impact:rate:in-crr",
+        "ades:impact:rate:in-gsec-10y",
+        "ades:impact:rate:in-repo-rate",
+        "ades:impact:rate:in-slr",
+    }
+    assert {
+        "ades:sector:in:banking",
+        "ades:sector:in:fx-funding",
+        "ades:sector:in:nbfc",
+        "ades:sector:in:public-sector-borrowers",
+    }.issubset(rbi_passive_refs)
+    assert "finance-in-ticker:HDFCBANK" not in rbi_candidate_refs
+
+    cepa_candidate_refs, cepa_passive_refs = expanded_refs("ades:trade-agreement:in-om:cepa")
+    assert cepa_candidate_refs == set()
+    assert {
+        "ades:country:IN",
+        "ades:country:OM",
+        "ades:sector:in:seafood-exports",
+        "ades:sector:in:export-logistics",
+        "ades:sector:in:ports-logistics",
+    }.issubset(cepa_passive_refs)
+    assert "ades:impact:currency:inr" not in cepa_candidate_refs
+
+    upi_candidate_refs, upi_passive_refs = expanded_refs("ades:payment-network:in:upi")
+    assert upi_candidate_refs == set()
+    assert {
+        "ades:org:in:npci",
+        "ades:sector:in:digital-payments",
+        "ades:sector:in:fintech",
+        "ades:sector:in:payments",
+    }.issubset(upi_passive_refs)
+
+    trai_candidate_refs, trai_passive_refs = expanded_refs("ades:org:in:trai")
+    assert trai_candidate_refs == set()
+    assert {
+        "ades:sector:in:broadband",
+        "ades:sector:in:spectrum",
+        "ades:sector:in:telecom",
+    }.issubset(trai_passive_refs)
+    assert "finance-in-ticker:BHARTIARTL" not in trai_candidate_refs
+
+    pli_candidate_refs, pli_passive_refs = expanded_refs(
+        "ades:program:in:production-linked-incentive"
+    )
+    assert pli_candidate_refs == set()
+    assert {
+        "ades:org:in:dpiit",
+        "ades:sector:in:industrial-policy",
+        "ades:sector:in:logistics",
+        "ades:sector:in:manufacturing",
+        "ades:sector:in:startups",
+    }.issubset(pli_passive_refs)

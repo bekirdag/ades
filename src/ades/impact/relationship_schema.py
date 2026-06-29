@@ -162,8 +162,18 @@ ORGANIZATION_CONTROL_RELATIONS = {
 PROGRAM_ORG_RELATIONS = {
     "program_operated_by_org",
     "program_loan_recipient_org",
+    "payment_network_operated_by_org",
     "product_owned_by_org",
     "brand_owned_by_org",
+}
+POLICY_PROGRAM_RELATIONS = {
+    "policy_program_affects_sector",
+    "public_facility_available_to_sector",
+    "export_program_affects_sector",
+}
+TRADE_AGREEMENT_RELATIONS = {
+    "trade_agreement_affects_sector",
+    "trade_agreement_counterparty_country",
 }
 PROJECT_ORG_RELATIONS = {
     "project_operated_by_org",
@@ -285,7 +295,12 @@ def relation_family_for_relation(relation: str) -> str:
         return "supply_chain_counterparty"
     if relation in SECTOR_EXPOSURE_RELATIONS or relation in ORG_SECTOR_RELATIONS:
         return "sector_exposure"
-    if relation in POLICY_SECTOR_RELATIONS or relation in INFRASTRUCTURE_PROJECT_RELATIONS:
+    if (
+        relation in POLICY_SECTOR_RELATIONS
+        or relation in INFRASTRUCTURE_PROJECT_RELATIONS
+        or relation in POLICY_PROGRAM_RELATIONS
+        or relation in TRADE_AGREEMENT_RELATIONS
+    ):
         return "policy_sector_exposure"
     if relation in {"issuer_in_index", "index_affects_country_index_proxy"}:
         return "index_membership"
@@ -345,8 +360,10 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         "index_affects_country_index_proxy",
     }:
         return GLOBAL_EQUITY_EVENT_TYPES
-    if relation in POLICY_SECTOR_RELATIONS:
+    if relation in POLICY_SECTOR_RELATIONS or relation in POLICY_PROGRAM_RELATIONS:
         return POLICY_SECTOR_EVENT_TYPES
+    if relation in TRADE_AGREEMENT_RELATIONS:
+        return tuple(dict.fromkeys((*POLICY_SECTOR_EVENT_TYPES, "supply_disruption")))
     if relation in INFRASTRUCTURE_PROJECT_RELATIONS:
         return tuple(dict.fromkeys((*POLICY_SECTOR_EVENT_TYPES, *SUPPLY_CHAIN_EVENT_TYPES)))
     if relation in ORG_SECTOR_RELATIONS:
@@ -480,6 +497,35 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
         return ("direct_org_or_sector_membership_evidence",)
     if relation in POLICY_SECTOR_RELATIONS:
         return ("sector_policy_event_signal", "jurisdiction_or_regulator_context")
+    if relation == "public_facility_available_to_sector":
+        return (
+            "credit_lending_or_liquidity_signal",
+            "public_facility_or_funding_context",
+            "jurisdiction_or_regulator_context",
+        )
+    if relation == "export_program_affects_sector":
+        return (
+            "trade_or_export_program_signal",
+            "sector_policy_event_signal",
+            "jurisdiction_or_regulator_context",
+        )
+    if relation == "policy_program_affects_sector":
+        return (
+            "program_policy_budget_or_incentive_signal",
+            "sector_policy_event_signal",
+            "jurisdiction_or_regulator_context",
+        )
+    if relation == "trade_agreement_affects_sector":
+        return (
+            "trade_agreement_or_market_access_signal",
+            "export_import_or_tariff_context",
+            "jurisdiction_or_trade_counterparty_context",
+        )
+    if relation == "trade_agreement_counterparty_country":
+        return (
+            "direct_trade_agreement_mention",
+            "bilateral_counterparty_context",
+        )
     if relation in ISSUER_EXPOSURE_RELATIONS:
         return ("source_backed_issuer_exposure", "compatible_event_signal")
     if relation in COMMODITY_SECTOR_RELATIONS:

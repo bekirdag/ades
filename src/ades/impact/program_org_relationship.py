@@ -32,6 +32,7 @@ DEFAULT_PACK_ID = "program-org-relationship-en"
 
 SUPPORTED_NODE_TYPES = {
     "program",
+    "trade_agreement",
     "product",
     "brand",
     "project",
@@ -47,6 +48,8 @@ SUPPORTED_NODE_TYPES = {
     "rate",
     "security",
     "sector",
+    "country",
+    "payment_network",
     "ticker",
     "exchange",
 }
@@ -55,8 +58,14 @@ TRADABLE_NODE_TYPES = {"currency", "market_index", "rate", "security", "ticker"}
 SUPPORTED_RELATIONS = {
     "program_operated_by_org",
     "program_loan_recipient_org",
+    "policy_program_affects_sector",
+    "public_facility_available_to_sector",
+    "export_program_affects_sector",
     "product_owned_by_org",
     "brand_owned_by_org",
+    "payment_network_operated_by_org",
+    "trade_agreement_counterparty_country",
+    "trade_agreement_affects_sector",
     "project_operated_by_org",
     "project_participant_org",
     "defense_project_affects_sector",

@@ -549,6 +549,100 @@ def test_starter_graph_includes_promoted_germany_relationships(tmp_path: Path) -
         assert candidate_refs.isdisjoint(no_policy_candidate_refs)
 
 
+def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        india_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_india/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-in-ticker:HUDCO',
+                    'finance-in:nifty-50',
+                    'ades:impact:currency:inr',
+                    'ades:impact:rate:in-repo-rate'
+                )
+                """
+            )
+        }
+        cepa_targets = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT target_ref
+                FROM impact_edges
+                WHERE source_ref = 'ades:trade-agreement:in-om:cepa'
+                """
+            )
+        }
+
+    assert india_edge_count == 136
+    assert tradable_rows == {
+        "ades:impact:currency:inr": (1, 0),
+        "ades:impact:rate:in-repo-rate": (1, 0),
+        "finance-in-ticker:HUDCO": (1, 0),
+        "finance-in:nifty-50": (1, 0),
+    }
+    assert {
+        "ades:country:IN",
+        "ades:country:OM",
+        "ades:sector:in:export-logistics",
+        "ades:sector:in:marine-products",
+        "ades:sector:in:ports-logistics",
+        "ades:sector:in:seafood-exports",
+    } == cepa_targets
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=60,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    hudco_candidate_refs, hudco_passive_refs = expanded_refs("finance-in-issuer:HUDCO")
+    assert hudco_candidate_refs == {"finance-in-ticker:HUDCO"}
+    assert "ades:sector:in:public-sector-borrowers" in hudco_passive_refs
+    assert "ades:impact:currency:inr" not in hudco_candidate_refs
+
+    rbi_candidate_refs, rbi_passive_refs = expanded_refs("ades:org:in:rbi")
+    assert rbi_candidate_refs == {
+        "ades:impact:currency:inr",
+        "ades:impact:rate:in-crr",
+        "ades:impact:rate:in-gsec-10y",
+        "ades:impact:rate:in-repo-rate",
+        "ades:impact:rate:in-slr",
+    }
+    assert "ades:sector:in:fx-funding" in rbi_passive_refs
+
+    cepa_candidate_refs, cepa_passive_refs = expanded_refs("ades:trade-agreement:in-om:cepa")
+    assert cepa_candidate_refs == set()
+    assert {"ades:country:OM", "ades:sector:in:seafood-exports"}.issubset(cepa_passive_refs)
+    assert "ades:impact:currency:inr" not in cepa_candidate_refs
+
+    upi_candidate_refs, upi_passive_refs = expanded_refs("ades:payment-network:in:upi")
+    assert upi_candidate_refs == set()
+    assert {"ades:org:in:npci", "ades:sector:in:digital-payments"}.issubset(upi_passive_refs)
+
+
 def test_article_golden_set_evaluates_extraction_then_impact(tmp_path: Path):
     response = build_starter_market_graph_store(output_dir=tmp_path / "artifact")
     golden_set_path = tmp_path / "article_golden_set.json"

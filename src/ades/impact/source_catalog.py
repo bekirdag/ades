@@ -152,6 +152,29 @@ _OFFICIAL_HOST_FRAGMENTS = (
     "govdata.de",
     "umweltbundesamt.de",
     "bmuv.de",
+    "rbi.org.in",
+    "mospi.gov.in",
+    "finmin.gov.in",
+    "financialservices.gov.in",
+    "dipam.gov.in",
+    "indiabudget.gov.in",
+    "data.gov.in",
+    "dpiit.gov.in",
+    "meity.gov.in",
+    "ism.gov.in",
+    "heavyindustries.gov.in",
+    "investindia.gov.in",
+    "commerce.gov.in",
+    "dgft.gov.in",
+    "mpeda.gov.in",
+    "pib.gov.in",
+    "dot.gov.in",
+    "cea.nic.in",
+    "powermin.gov.in",
+    "mnre.gov.in",
+    "morth.nic.in",
+    "nhai.gov.in",
+    "mca.gov.in",
 )
 _EXCHANGE_HOST_FRAGMENTS = (
     "nasdaq.com",
@@ -241,6 +264,18 @@ _REGULATOR_HOST_FRAGMENTS = (
     "kba.de",
     "lba.de",
     "eba.bund.de",
+    "sebi.gov.in",
+    "nsdl.co.in",
+    "cdslindia.com",
+    "trai.gov.in",
+    "cercind.gov.in",
+    "pngrb.gov.in",
+    "cci.gov.in",
+    "irdai.gov.in",
+    "pfrda.org.in",
+    "ibbi.gov.in",
+    "cdsco.gov.in",
+    "dgca.gov.in",
 )
 _LICENSED_HOST_FRAGMENTS = ("msci.com", "openfigi.com")
 _INDUSTRY_ASSOCIATION_HOST_FRAGMENTS = ("semiconductors.org",)
@@ -323,6 +358,7 @@ _ISSUER_DISCLOSED_HOST_FRAGMENTS = (
     "siemens-energy.com",
     "deutsche-boerse.com",
     "airbus.com",
+    "npci.org.in",
 )
 
 

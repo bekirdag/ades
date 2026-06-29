@@ -182,6 +182,30 @@ def test_relationship_schema_covers_program_org_relationship_paths() -> None:
     assert relation_direction_preconditions("org_in_sector") == (
         "direct_org_or_sector_membership_evidence",
     )
+    assert relation_family_for_relation("payment_network_operated_by_org") == (
+        "program_org_relationship"
+    )
+    assert "source_backed_program_org_evidence" in relation_direction_preconditions(
+        "payment_network_operated_by_org"
+    )
+    assert relation_family_for_relation("public_facility_available_to_sector") == (
+        "policy_sector_exposure"
+    )
+    assert "public_facility_or_funding_context" in relation_direction_preconditions(
+        "public_facility_available_to_sector"
+    )
+    assert relation_family_for_relation("trade_agreement_affects_sector") == (
+        "policy_sector_exposure"
+    )
+    assert "trade_agreement_or_market_access_signal" in relation_direction_preconditions(
+        "trade_agreement_affects_sector"
+    )
+    assert relation_family_for_relation("trade_agreement_counterparty_country") == (
+        "policy_sector_exposure"
+    )
+    assert "bilateral_counterparty_context" in relation_direction_preconditions(
+        "trade_agreement_counterparty_country"
+    )
 
 
 def test_relationship_schema_defaults_and_warnings_are_non_fatal() -> None:
@@ -766,6 +790,24 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     assert (
         classify_source_tier("Destatis official homepage", "https://www.destatis.de/EN/")
         == SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("RBI official site", "https://www.rbi.org.in/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("MoSPI official site", "https://www.mospi.gov.in/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("SEBI official site", "https://www.sebi.gov.in/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("TRAI official site", "https://www.trai.gov.in/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("NSE HUDCO quote", "https://www.nseindia.com/") == (
+        SOURCE_TIER_EXCHANGE
+    )
+    assert classify_source_tier("NPCI UPI product overview", "https://www.npci.org.in/") == (
+        SOURCE_TIER_ISSUER_DISCLOSED
     )
     assert (
         classify_source_tier(

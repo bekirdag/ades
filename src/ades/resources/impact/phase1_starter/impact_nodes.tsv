@@ -393,3 +393,140 @@ finance-de-ticker:SAP	SAP	ticker	finance-de-en	true	false	"{""jurisdiction"": ""
 finance-de-ticker:SIE	SIE	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
 finance-de:boerse-frankfurt	Boerse Frankfurt	exchange	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
 finance-de:dax	DAX	market_index	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:country:IN	India	country	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:country:OM	Oman	country	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:impact:currency:inr	Indian rupee	currency	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:impact:rate:in-crr	India cash reserve ratio	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:impact:rate:in-gsec-10y	India 10-year government security yield proxy	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:impact:rate:in-repo-rate	RBI repo rate	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:impact:rate:in-slr	India statutory liquidity ratio	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:index:in:nifty-bank	NIFTY Bank	market_index	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:macro:in:cpi	India CPI	macro_indicator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:macro:in:gdp	India GDP	macro_indicator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:macro:in:iip	India Index of Industrial Production	macro_indicator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:cci	Competition Commission of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:cdsco	Central Drugs Standard Control Organisation	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:cea	Central Electricity Authority	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:cerc	Central Electricity Regulatory Commission	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:commerce	Ministry of Commerce and Industry	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dfs	Department of Financial Services	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dgca	Directorate General of Civil Aviation	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dgft	Directorate General of Foreign Trade	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dipam	Department of Investment and Public Asset Management	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dot	Department of Telecommunications	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dpiit	Department for Promotion of Industry and Internal Trade	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:irdai	Insurance Regulatory and Development Authority of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:ism	India Semiconductor Mission	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:meity	Ministry of Electronics and Information Technology	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:mhi	Ministry of Heavy Industries	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:mnre	Ministry of New and Renewable Energy	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:morth	Ministry of Road Transport and Highways	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:mospi	Ministry of Statistics and Programme Implementation	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:mpeda	Marine Products Export Development Authority	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:nhai	National Highways Authority of India	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:npci	National Payments Corporation of India	organization	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:pfrda	Pension Fund Regulatory and Development Authority	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:pngrb	Petroleum and Natural Gas Regulatory Board	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:power-ministry	Ministry of Power	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:rbi	Reserve Bank of India	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:trai	Telecom Regulatory Authority of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:payment-network:in:upi	Unified Payments Interface	payment_network	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:program:in:production-linked-incentive	Production Linked Incentive scheme	program	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:program:in:rbi-forex-facility	RBI forex facility	program	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:autos	Automobiles	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:aviation	Aviation	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:banking	Banking	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:batteries	Batteries	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:broadband	Broadband	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:brokerage	Brokerage	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:capital-goods	Capital goods	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:city-gas-distribution	City gas distribution	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:competition-policy	Competition policy	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:consumer-staples	Consumer staples	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:data-protection	Data protection	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:digital-payments	Digital payments	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:digital-platforms	Digital platforms	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:disinvestment	Disinvestment	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:electricity	Electricity	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:electronics	Electronics	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:energy-conglomerates	Energy conglomerates	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:evs	Electric vehicles	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:export-logistics	Export logistics	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:exports	Exports	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:financial-inclusion	Financial inclusion	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:fintech	Fintech	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:fx-funding	Foreign-currency funding	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:green-hydrogen	Green hydrogen	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:highways	Highways	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:indian-banking-equities	Indian banking equities	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:indian-equity-market	Indian equity market	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:industrial-policy	Industrial policy	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:infrastructure-construction	Infrastructure construction	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:insurance	Insurance	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:it-services	IT services	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:listed-issuers	Listed issuers	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:logistics	Logistics	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:manufacturing	Manufacturing	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:marine-products	Marine products	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:market-infrastructure	Market infrastructure	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:medical-devices	Medical devices	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:mutual-funds	Mutual funds	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:natural-gas	Natural gas	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:nbfc	Non-bank financial companies	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:payments	Payments	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:pensions	Pensions	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:pharmaceuticals	Pharmaceuticals	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:pipelines	Pipelines	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:ports-logistics	Ports and logistics	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:power-generation	Power generation	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:power-grid	Power grid	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:power-transmission	Power transmission	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:public-sector-borrowers	Public-sector borrowers	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:public-sector-enterprises	Public-sector enterprises	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:renewables	Renewables	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:roads	Roads	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:seafood-exports	Seafood exports	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:securities-markets	Securities markets	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:semiconductors	Semiconductors	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:solar	Solar	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:spectrum	Spectrum	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:startups	Startups	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:telecom	Telecommunications	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:toll-roads	Toll roads	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:transport-infrastructure	Transport infrastructure	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:trade-agreement:in-om:cepa	India-Oman CEPA	trade_agreement	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:ADANIPORTS	Adani Ports and Special Economic Zone Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:AXISBANK	Axis Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:BAJFINANCE	Bajaj Finance Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:BHARTIARTL	Bharti Airtel Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:HDFCBANK	HDFC Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:HUDCO	Housing & Urban Development Corporation Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:ICICIBANK	ICICI Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:INFY	Infosys Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:ITC	ITC Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:KOTAKBANK	Kotak Mahindra Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:LT	Larsen & Toubro Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:MARUTI	Maruti Suzuki India Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:RELIANCE	Reliance Industries Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:SBIN	State Bank of India	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:SUNPHARMA	Sun Pharmaceutical Industries Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:TCS	Tata Consultancy Services Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:ADANIPORTS	ADANIPORTS	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:AXISBANK	AXISBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:BAJFINANCE	BAJFINANCE	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:BHARTIARTL	BHARTIARTL	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:HDFCBANK	HDFCBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:HUDCO	HUDCO	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:ICICIBANK	ICICIBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:INFY	INFY	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:ITC	ITC	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:KOTAKBANK	KOTAKBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:LT	LT	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:MARUTI	MARUTI	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:RELIANCE	RELIANCE	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:SBIN	SBIN	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:SUNPHARMA	SUNPHARMA	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:TCS	TCS	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in:nifty-50	NIFTY 50	market_index	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in:nse	National Stock Exchange of India	exchange	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in:sebi	Securities and Exchange Board of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
