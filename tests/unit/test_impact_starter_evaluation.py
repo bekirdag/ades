@@ -4,10 +4,12 @@ import json
 import sqlite3
 from pathlib import Path
 
+from ades.config import Settings
 from ades.impact.evaluation import (
     evaluate_impact_article_golden_set,
     evaluate_impact_golden_set,
 )
+from ades.impact.expansion import expand_impact_paths
 from ades.impact.starter import (
     build_starter_market_graph_store,
     starter_golden_set_path,
@@ -105,6 +107,7 @@ def test_starter_source_manifest_has_required_fields():
     with starter_source_manifest_path() as manifest_path:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
 
+    assert payload["generated_at"] == "2026-06-29T00:00:00Z"
     assert payload["storage_policy"].endswith(
         "/mnt/githubActions/ades_big_data, not in the package."
     )
@@ -119,6 +122,41 @@ def test_starter_source_manifest_has_required_fields():
         assert source["normalized_output_allowed"] is True
         assert source["license_notes"]
         assert source["notes"]
+
+
+def test_starter_graph_includes_promoted_australia_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        australia_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_australia/%'
+                """
+            ).fetchone()[0]
+        )
+        asx_200_row = connection.execute(
+            """
+            SELECT is_tradable, is_seed_eligible
+            FROM impact_nodes
+            WHERE entity_ref = 'finance-au:asx-200'
+            """
+        ).fetchone()
+
+    assert australia_edge_count == 30
+    assert asx_200_row == (1, 0)
+
+    expansion = expand_impact_paths(
+        ["ades:sector:au:australian-equity-market"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=5,
+    )
+    candidate_refs = {candidate.entity_ref for candidate in expansion.candidates}
+    assert "finance-au:asx-200" in candidate_refs
 
 
 def test_article_golden_set_evaluates_extraction_then_impact(tmp_path: Path):

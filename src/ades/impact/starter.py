@@ -11,7 +11,7 @@ from ..service.models import MarketGraphStoreBuildResponse
 from .graph_builder import build_market_graph_store
 
 STARTER_RESOURCE_PACKAGE = "ades.resources.impact.phase1_starter"
-STARTER_ARTIFACT_VERSION = "2026-05-05T00:00:00Z"
+STARTER_ARTIFACT_VERSION = "2026-06-29T00:00:00Z"
 
 
 @contextmanager

@@ -1,14 +1,24 @@
 {
   "schema_version": 1,
   "name": "phase1_starter_market_impact_sources",
-  "generated_at": "2026-05-05T00:00:00Z",
-  "description": "Reviewed starter source manifest for the packaged Phase 1 market impact relationship lane.",
+  "generated_at": "2026-06-29T00:00:00Z",
+  "description": "Reviewed starter source manifest for the packaged Phase 1 market impact relationship lane, including promoted country relationship slices.",
   "storage_policy": "Large raw downloads and normalized bulk outputs belong under /mnt/githubActions/ades_big_data, not in the package.",
   "normalized_files": [
     "impact_nodes.tsv",
     "impact_edges.tsv"
   ],
   "sources": [
+    {
+      "source_name": "Australia reviewed program/org relationship source lane",
+      "source_url": "https://www.asx.com.au/markets/trade-our-cash-market/directory",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_australia/2026-06-29/SOURCE_INVENTORY.md",
+      "source_year": 2026,
+      "refresh_policy": "refresh_on_country_source_lane_update",
+      "normalized_output_allowed": true,
+      "license_notes": "Reviewed source lane stores only normalized relationship metadata; source URLs and evidence snippets are carried in row notes and retained under /mnt/githubActions/ades_big_data.",
+      "notes": "Production-promoted Australia first slice covering ASX issuer/ticker/index bridges, APRA/ASIC/TGA regulators, and government program or sector relationships from official public evidence."
+    },
     {
       "source_name": "Australian Office of the Chief Economist Resources and Energy Quarterly",
       "source_url": "https://www.industry.gov.au/publications/resources-and-energy-quarterly",

@@ -60,3 +60,39 @@ wikidata:Q53536	Federal Reserve System	central_bank		0	1	{"wikidata":"Q53536"}	g
 wikidata:Q794	Iran	country		0	1	{"country_code":"ir","geonames_id":"130758","same_as_refs":["country:ir","geonames:130758"],"wikidata":"Q794"}	general-en,finance-en
 wikidata:Q8901	European Central Bank	central_bank		0	1	{"wikidata":"Q8901"}	general-en,finance-en
 wikidata:Q899	Suez Canal	chokepoint		0	1	{"wikidata":"Q899"}	general-en
+ades:exchange:au:asx	ASX	exchange	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:issuer:au:bhp-group	BHP Group	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:issuer:au:commonwealth-bank-of-australia	Commonwealth Bank of Australia	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:org:au:apra	Australian Prudential Regulation Authority	regulator	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:org:au:arena	Australian Renewable Energy Agency	government_body	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:org:au:asic	Australian Securities and Investments Commission	regulator	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:org:au:ato	Australian Taxation Office	government_body	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:org:au:cefc	Clean Energy Finance Corporation	government_body	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:org:au:housing-australia	Housing Australia	government_body	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:org:au:nrfc	National Reconstruction Fund Corporation	government_body	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:org:au:tga	Therapeutic Goods Administration	regulator	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:org:au:transport-for-nsw	Transport for NSW	government_body	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:program:au:five-percent-deposit-scheme	Australian Government 5% Deposit Scheme	program	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:program:au:fuel-tax-credits	Fuel Tax Credits	program	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:program:au:help-to-buy-scheme	Australian Government Help to Buy Scheme	program	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:australian-equity-market	Australian equity market	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:banking	Australian banking sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:clean-technology	Australian clean technology sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:critical-minerals	Australian critical minerals and resources sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:financial-services	Australian financial services sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:fuel-retail	Australian fuel retail sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:grid-infrastructure	Australian grid infrastructure sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:housing-credit	Australian housing credit sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:industrial-manufacturing	Australian industrial manufacturing sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:insurance	Australian insurance sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:materials	Australian materials sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:medical-cannabis	Australian medicinal cannabis sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:renewable-energy	Australian renewable energy sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:road-safety-insurance	Australian road safety and motor insurance sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:securities-market	Australian securities and markets sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:superannuation	Australian superannuation sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:transport-logistics	Australian transport and logistics sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:transport-policy	Australian transport policy sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+finance-au-ticker:BHP	BHP	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
+finance-au-ticker:CBA	CBA	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
+finance-au:asx-200	S&P/ASX 200	market_index	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
