@@ -10,6 +10,16 @@
   ],
   "sources": [
     {
+      "source_name": "Germany reviewed program/org relationship source lane",
+      "source_url": "https://www.boerse-frankfurt.de/equity/sap-se",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_germany/2026-06-29/SOURCE_INVENTORY.md",
+      "source_year": 2026,
+      "refresh_policy": "refresh_on_country_source_lane_update",
+      "normalized_output_allowed": true,
+      "license_notes": "Reviewed source lane stores only normalized relationship metadata; source URLs and evidence snippets are retained under /mnt/githubActions/ades_big_data.",
+      "notes": "Production-promoted Germany first slice covering Boerse Frankfurt issuer/ticker/index bridges, ECB/Bundesbank/Destatis macro rows, BaFin/Bundesnetzagentur/BMWK official sector relationships, Kraftwerksstrategie program evidence, and FCAS/SCAF project guardrails."
+    },
+    {
       "source_name": "Australia reviewed program/org relationship source lane",
       "source_url": "https://www.asx.com.au/markets/trade-our-cash-market/directory",
       "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_australia/2026-06-29/SOURCE_INVENTORY.md",

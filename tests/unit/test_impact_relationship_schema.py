@@ -153,6 +153,12 @@ def test_relationship_schema_covers_program_org_relationship_paths() -> None:
         "source_backed_project_org_evidence",
         "compatible_event_signal",
     )
+    assert relation_family_for_relation("project_participant_org") == ("project_org_relationship")
+    assert relation_direction_preconditions("project_participant_org") == (
+        "direct_project_mention",
+        "source_backed_project_org_evidence",
+        "compatible_event_signal",
+    )
     assert relation_family_for_relation("infrastructure_project_affects_sector") == (
         "policy_sector_exposure"
     )
@@ -160,6 +166,16 @@ def test_relationship_schema_covers_program_org_relationship_paths() -> None:
     assert relation_direction_preconditions("infrastructure_project_affects_sector") == (
         "infrastructure_project_event_signal",
         "capacity_delay_or_logistics_context",
+        "jurisdiction_or_project_context",
+    )
+    assert relation_family_for_relation("defense_project_affects_sector") == (
+        "policy_sector_exposure"
+    )
+    assert "sector_policy_change" in relation_event_types("defense_project_affects_sector")
+    assert "supply_disruption" in relation_event_types("defense_project_affects_sector")
+    assert relation_direction_preconditions("defense_project_affects_sector") == (
+        "defense_project_event_signal",
+        "procurement_budget_or_collaboration_context",
         "jurisdiction_or_project_context",
     )
     assert relation_family_for_relation("org_in_sector") == "sector_exposure"
@@ -705,6 +721,56 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
         classify_source_tier(
             "Tencent investors",
             "https://www.tencent.com/en-us/investors.html",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
+            "Boerse Frankfurt SAP equity page",
+            "https://www.boerse-frankfurt.de/equity/sap-se",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert classify_source_tier("Xetra instruments", "https://www.xetra.com/xetra-en/") == (
+        SOURCE_TIER_EXCHANGE
+    )
+    assert classify_source_tier("STOXX DAX page", "https://stoxx.com/index/dax/") == (
+        SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "BaFin official homepage",
+            "https://www.bafin.de/EN/Homepage/homepage_node.html",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "Bundesnetzagentur official homepage",
+            "https://www.bundesnetzagentur.de/EN/Home/home_node.html",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "BMWK power plant strategy",
+            "https://www.bmwk.de/Redaktion/EN/Pressemitteilungen/2024/02/"
+            "20240205-germany-agrees-on-key-elements-of-a-power-plant-strategy.html",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier("Bundesbank official homepage", "https://www.bundesbank.de/en")
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier("Destatis official homepage", "https://www.destatis.de/EN/")
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Airbus FCAS official page",
+            "https://www.airbus.com/en/products-services/defence/future-combat-air-system-fcas",
         )
         == SOURCE_TIER_ISSUER_DISCLOSED
     )

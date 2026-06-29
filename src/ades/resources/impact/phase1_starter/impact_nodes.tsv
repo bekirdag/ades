@@ -305,3 +305,91 @@ finance-hk-ticker:hkex:03988	03988	ticker	finance-hk-en	true	false	"{""exchange"
 finance-hk-ticker:hkex:09988	09988	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""KYG017191142"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""09988""}"	finance-hk-en,finance-cn-en
 finance-us-issuer:0000104169	Walmart Inc.	issuer	finance-us-en	false	true	"{""jurisdiction"": ""US""}"	finance-us-en,general-en
 finance-us-ticker:WMT	WMT	ticker	finance-us-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""mic"": ""XNYS"", ""ticker_symbol"": ""WMT""}"	finance-us-en,general-en
+ades:impact:macro:de-cpi	Germany CPI	macro_indicator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:impact:macro:de-gdp	Germany GDP	macro_indicator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:impact:macro:de-industrial-production	Germany industrial production	macro_indicator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:impact:rate:ecb-deposit-rate	ECB deposit facility rate	rate	finance-de-en	true	false	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
+ades:org:de:bafin	BaFin	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:bfarm	BfArM	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:bmwk	Federal Ministry for Economic Affairs and Climate Action	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:bsi	Federal Office for Information Security	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:bundeskartellamt	Bundeskartellamt	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:bundesnetzagentur	Bundesnetzagentur	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:destatis	Destatis	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:deutsche-bundesbank	Deutsche Bundesbank	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:pei	Paul-Ehrlich-Institut	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:uba	German Environment Agency	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:eu:airbus	Airbus	organization	finance-de-en	false	true	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
+ades:org:eu:ecb	European Central Bank	government_body	finance-de-en	false	true	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
+ades:program:de:kraftwerksstrategie	Kraftwerksstrategie	program	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:project:eu:fcas-scaf	Future Combat Air System / SCAF	project	finance-de-en	false	true	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
+ades:sector:de:aerospace	Aerospace	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:asset-management	Asset management	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:autos	Automobiles	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:banking	Banking	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:biologics	Biologics	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:broadband-fiber	Broadband and fiber	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:chemicals	Chemicals	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:climate-policy	Climate policy	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:competition-policy	Competition policy	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:consumer-retail	Consumer retail	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:credit	Credit	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:critical-infrastructure	Critical infrastructure	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:crypto-assets	Crypto assets	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:cybersecurity	Cybersecurity	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:defense	Defense	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:digital-platforms	Digital platforms	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:electricity	Electricity	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:emissions	Emissions	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:environmental-regulation	Environmental regulation	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:financial-market-infrastructure	Financial market infrastructure	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:gas-fired-generation	Gas-fired generation	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:german-equity-market	German equity market	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:health-care	Health care	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:hydrogen	Hydrogen	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:industrial-machinery	Industrial machinery	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:industrial-policy	Industrial policy	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:industrial-software	Industrial software	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:insurance	Insurance	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:medical-devices	Medical devices	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:natural-gas	Natural gas	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:pharmaceuticals	Pharmaceuticals	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:power-equipment	Power equipment	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:power-grid	Power grid	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:securities-markets	Securities markets	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:semiconductors	Semiconductors	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:telecom	Telecommunications	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:utilities	Utilities	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:sector:de:vaccines	Vaccines	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0005140008	Deutsche Bank AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0005190003	BMW AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0005557508	Deutsche Telekom AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0005810055	Deutsche Boerse AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0006231004	Infineon Technologies AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0007030009	Rheinmetall AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0007037129	RWE AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0007100000	Mercedes-Benz Group AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0007164600	SAP SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0007236101	Siemens AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0008404005	Allianz SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE000A0D9PT0	MTU Aero Engines AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE000BASF111	BASF SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE000ENAG999	E.ON SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE000ENER6Y0	Siemens Energy AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:ALV	ALV	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:BAS	BAS	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:BMW	BMW	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:DB1	DB1	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:DBK	DBK	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:DTE	DTE	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:ENR	ENR	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:EOAN	EOAN	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:IFX	IFX	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:MBG	MBG	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:MTX	MTX	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:RHM	RHM	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:RWE	RWE	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:SAP	SAP	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:SIE	SIE	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de:boerse-frankfurt	Boerse Frankfurt	exchange	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de:dax	DAX	market_index	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en

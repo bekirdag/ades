@@ -167,11 +167,13 @@ PROGRAM_ORG_RELATIONS = {
 }
 PROJECT_ORG_RELATIONS = {
     "project_operated_by_org",
+    "project_participant_org",
 }
 ORG_SECTOR_RELATIONS = {
     "org_in_sector",
 }
 INFRASTRUCTURE_PROJECT_RELATIONS = {
+    "defense_project_affects_sector",
     "infrastructure_project_affects_sector",
 }
 SUPPLY_CHAIN_RELATIONS = {
@@ -457,6 +459,12 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
             "direct_project_mention",
             "source_backed_project_org_evidence",
             "compatible_event_signal",
+        )
+    if relation == "defense_project_affects_sector":
+        return (
+            "defense_project_event_signal",
+            "procurement_budget_or_collaboration_context",
+            "jurisdiction_or_project_context",
         )
     if relation in SUPPLY_CHAIN_RELATIONS:
         return ("supply_chain_or_counterparty_event",)

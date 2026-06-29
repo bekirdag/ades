@@ -41,6 +41,11 @@ REVIEWED_CHINA_SSE_SZSE_PBOC_POLICY_FIXTURE = Path(
     "program_org_relationship/reviewed/2026-06-29/"
     "china_sse_szse_pboc_policy_relationships.tsv"
 )
+REVIEWED_GERMANY_BOERSE_BAFIN_BMWK_FCAS_FIXTURE = Path(
+    "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/"
+    "program_org_relationship/reviewed/2026-06-29/"
+    "germany_boerse_bafin_bmwk_fcas_relationships.tsv"
+)
 
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
@@ -1176,6 +1181,201 @@ def test_reviewed_china_fixture_expands_exchange_paths_and_keeps_policy_guardrai
         ),
     ]
     for source_ref, expected_passive_refs in policy_expectations:
+        candidate_refs, passive_refs = expanded_refs(source_ref)
+        assert expected_passive_refs.issubset(passive_refs)
+        assert candidate_refs.isdisjoint(no_policy_candidate_refs)
+
+
+def test_reviewed_germany_fixture_expands_boerse_and_keeps_policy_guardrails(
+    tmp_path: Path,
+) -> None:
+    if not REVIEWED_GERMANY_BOERSE_BAFIN_BMWK_FCAS_FIXTURE.exists():
+        pytest.skip("reviewed Germany Boerse/BaFin/BMWK/FCAS fixture is not mounted")
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[REVIEWED_GERMANY_BOERSE_BAFIN_BMWK_FCAS_FIXTURE],
+        output_root=tmp_path / "impact_relationships",
+        run_id="reviewed-germany-boerse-bafin-bmwk-fcas",
+        build_artifact=True,
+        include_starter_graph=False,
+        artifact_output_root=tmp_path / "artifacts",
+    )
+
+    assert result.relationship_row_count == 89
+    assert result.relation_counts == {
+        "central_bank_affects_credit_sector": 2,
+        "central_bank_affects_currency": 1,
+        "central_bank_affects_rates": 1,
+        "defense_project_affects_sector": 2,
+        "government_body_affects_sector": 10,
+        "issuer_has_listed_ticker": 15,
+        "issuer_in_sector": 15,
+        "program_operated_by_org": 1,
+        "project_participant_org": 1,
+        "regulator_affects_sector": 22,
+        "sector_affects_index": 1,
+        "statistics_body_reports_macro_indicator": 3,
+        "ticker_listed_on_exchange": 15,
+    }
+    assert result.node_type_counts == {
+        "currency": 1,
+        "exchange": 1,
+        "government_body": 5,
+        "issuer": 15,
+        "macro_indicator": 3,
+        "market_index": 1,
+        "organization": 1,
+        "program": 1,
+        "project": 1,
+        "rate": 1,
+        "regulator": 6,
+        "sector": 38,
+        "ticker": 15,
+    }
+
+    validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
+    assert validation.invalid_row_count == 0
+    assert validation.source_warning_counts == {}
+    assert validation.relation_warning_counts == {}
+    assert validation.source_tier_counts == {
+        "exchange": 46,
+        "government": 20,
+        "issuer_disclosed": 1,
+        "regulator": 22,
+    }
+
+    assert result.artifact_path is not None
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    for tradable_ref in [
+        "finance-de-ticker:SAP",
+        "finance-de-ticker:RHM",
+        "finance-de-ticker:ENR",
+        "finance-de:dax",
+        "ades:impact:currency:eur",
+        "ades:impact:rate:ecb-deposit-rate",
+    ]:
+        assert nodes[tradable_ref]["is_tradable"] == "true"
+    for passive_ref in [
+        "ades:sector:de:gas-fired-generation",
+        "ades:sector:de:defense",
+        "ades:project:eu:fcas-scaf",
+    ]:
+        assert nodes[passive_ref]["is_tradable"] == "false"
+
+    with MarketGraphStore(result.artifact_path) as store:
+        sap_edges = store.outbound_edges_batch(["finance-de-issuer:DE0007164600"])[
+            "finance-de-issuer:DE0007164600"
+        ]
+        bmwk_edges = store.outbound_edges_batch(["ades:org:de:bmwk"])["ades:org:de:bmwk"]
+        fcas_edges = store.outbound_edges_batch(["ades:project:eu:fcas-scaf"])[
+            "ades:project:eu:fcas-scaf"
+        ]
+
+    assert {edge.target_ref for edge in sap_edges} == {
+        "ades:sector:de:industrial-software",
+        "finance-de-ticker:SAP",
+    }
+    assert {edge.target_ref for edge in bmwk_edges} == {
+        "ades:sector:de:electricity",
+        "ades:sector:de:gas-fired-generation",
+        "ades:sector:de:hydrogen",
+        "ades:sector:de:industrial-policy",
+        "ades:sector:de:natural-gas",
+        "ades:sector:de:power-grid",
+    }
+    assert {edge.target_ref for edge in fcas_edges} == {
+        "ades:org:eu:airbus",
+        "ades:sector:de:aerospace",
+        "ades:sector:de:defense",
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=result.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=40,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    sap_candidate_refs, sap_passive_refs = expanded_refs("finance-de-issuer:DE0007164600")
+    assert sap_candidate_refs == {"finance-de-ticker:SAP"}
+    assert "ades:sector:de:industrial-software" in sap_passive_refs
+    assert "ades:impact:currency:eur" not in sap_candidate_refs
+
+    equity_candidate_refs, _ = expanded_refs("ades:sector:de:german-equity-market")
+    assert equity_candidate_refs == {"finance-de:dax"}
+
+    ecb_candidate_refs, _ = expanded_refs("ades:org:eu:ecb")
+    assert ecb_candidate_refs == {
+        "ades:impact:currency:eur",
+        "ades:impact:rate:ecb-deposit-rate",
+    }
+
+    no_policy_candidate_refs = {
+        "ades:impact:currency:eur",
+        "ades:impact:rate:ecb-deposit-rate",
+        "finance-de:dax",
+        "finance-de-ticker:ALV",
+        "finance-de-ticker:BAS",
+        "finance-de-ticker:BMW",
+        "finance-de-ticker:DB1",
+        "finance-de-ticker:DBK",
+        "finance-de-ticker:DTE",
+        "finance-de-ticker:ENR",
+        "finance-de-ticker:EOAN",
+        "finance-de-ticker:IFX",
+        "finance-de-ticker:MBG",
+        "finance-de-ticker:MTX",
+        "finance-de-ticker:RHM",
+        "finance-de-ticker:RWE",
+        "finance-de-ticker:SAP",
+        "finance-de-ticker:SIE",
+    }
+    for source_ref, expected_passive_refs in [
+        (
+            "ades:org:de:bmwk",
+            {
+                "ades:sector:de:electricity",
+                "ades:sector:de:gas-fired-generation",
+                "ades:sector:de:natural-gas",
+                "ades:sector:de:power-grid",
+            },
+        ),
+        (
+            "ades:program:de:kraftwerksstrategie",
+            {
+                "ades:org:de:bmwk",
+                "ades:sector:de:electricity",
+                "ades:sector:de:gas-fired-generation",
+                "ades:sector:de:natural-gas",
+                "ades:sector:de:power-grid",
+            },
+        ),
+        (
+            "ades:project:eu:fcas-scaf",
+            {
+                "ades:org:eu:airbus",
+                "ades:sector:de:aerospace",
+                "ades:sector:de:defense",
+            },
+        ),
+        (
+            "ades:org:de:bundesnetzagentur",
+            {
+                "ades:sector:de:electricity",
+                "ades:sector:de:gas-fired-generation",
+                "ades:sector:de:natural-gas",
+                "ades:sector:de:power-grid",
+                "ades:sector:de:telecom",
+            },
+        ),
+    ]:
         candidate_refs, passive_refs = expanded_refs(source_ref)
         assert expected_passive_refs.issubset(passive_refs)
         assert candidate_refs.isdisjoint(no_policy_candidate_refs)

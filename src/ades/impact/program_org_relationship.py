@@ -58,6 +58,8 @@ SUPPORTED_RELATIONS = {
     "product_owned_by_org",
     "brand_owned_by_org",
     "project_operated_by_org",
+    "project_participant_org",
+    "defense_project_affects_sector",
     "infrastructure_project_affects_sector",
     "org_in_sector",
     "org_part_of_holding",
