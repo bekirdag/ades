@@ -811,6 +811,46 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     )
     assert (
         classify_source_tier(
+            "Euronext Milan BMED equity product page",
+            "https://live.euronext.com/en/product/equities/IT0004776628-MTAA",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "Borsa Italiana official list",
+            "https://www.borsaitaliana.it/listino-ufficiale.en.htm",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "Banca d'Italia tasks page",
+            "https://www.bancaditalia.it/compiti/index.html",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("ISTAT official site", "https://www.istat.it/en/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("CONSOB Italian markets", "https://www.consob.it/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("ARERA official site", "https://www.arera.it/en/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("PagoPA official site", "https://www.pagopa.it/en/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Banca Mediolanum investor relations",
+            "https://www.bancamediolanum.it/corporate-governance",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
             "Airbus FCAS official page",
             "https://www.airbus.com/en/products-services/defence/future-combat-air-system-fcas",
         )

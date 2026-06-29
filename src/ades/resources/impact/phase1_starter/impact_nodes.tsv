@@ -530,3 +530,165 @@ finance-in-ticker:TCS	TCS	ticker	finance-in-en	true	false	"{""jurisdiction"": ""
 finance-in:nifty-50	NIFTY 50	market_index	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 finance-in:nse	National Stock Exchange of India	exchange	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 finance-in:sebi	Securities and Exchange Board of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:impact:rate:it-btp-10y	Italy 10-year BTP yield	rate	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:impact:rate:it-btp-bund-spread	Italy BTP-Bund spread	rate	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:macro:it:consumer-prices	Italy Consumer prices	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:macro:it:employment	Italy Employment	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:macro:it:foreign-trade	Italy Foreign trade	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:macro:it:gdp	Italy GDP	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:macro:it:industrial-production	Italy Industrial production	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:agcm	AGCM	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:agcom	AGCOM	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:aifa	AIFA	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:anac	ANAC	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:arera	ARERA	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:art	Transport Regulation Authority	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:cdp	Cassa Depositi e Prestiti	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:covip	COVIP	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:enac	ENAC	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:gme	Gestore dei Mercati Energetici	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:gse	Gestore dei Servizi Energetici	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:invitalia	Invitalia	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:istat	ISTAT	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:ivass	IVASS	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:mase	Ministry of Environment and Energy Security	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:mef	Ministry of Economy and Finance	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:mimit	Ministry of Enterprises and Made in Italy	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:mit	Ministry of Infrastructure and Transport	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:pagopa	PagoPA	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:sace	SACE	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:simest	SIMEST	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:payment-network:it:pagopa	PagoPA payment network	payment_network	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:program:it:garanzia-italia	Garanzia Italia	program	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:program:it:pnrr	Italy National Recovery and Resilience Plan	program	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:program:it:simest-394-fund	SIMEST 394 Fund	program	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:aerospace-defense	Aerospace Defense	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:airports	Airports	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:asset-management	Asset Management	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:autos	Autos	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:aviation	Aviation	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:banking	Banking	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:broadband	Broadband	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:brokerage	Brokerage	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:competition-policy	Competition Policy	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:consumer-retail	Consumer Retail	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:corporate-finance	Corporate Finance	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:credit	Credit	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:digital-payments	Digital Payments	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:digital-platforms	Digital Platforms	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:digital-policy	Digital Policy	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:digitalization	Digitalization	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:education	Education	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:electricity	Electricity	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:electricity-market	Electricity Market	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:energy	Energy	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:energy-incentives	Energy Incentives	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:energy-transition	Energy Transition	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:export-credit	Export Credit	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:export-finance	Export Finance	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:financial-stability	Financial stability	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:fiscal-policy	Fiscal Policy	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:gas-distribution	Gas Distribution	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:health-care	Health Care	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:industrial-policy	Industrial Policy	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:infrastructure	Infrastructure	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:infrastructure-finance	Infrastructure Finance	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:insurance	Insurance	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:insurance-consumer-protection	Insurance Consumer Protection	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:insurance-distribution	Insurance Distribution	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:internationalization	Internationalization	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:investment-banking	Investment Banking	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:investment-incentives	Investment Incentives	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:italian-equity-market	Italian equity market	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:listed-issuers	Listed Issuers	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:manufacturing	Manufacturing	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:market-infrastructure	Market Infrastructure	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:media	Media	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:natural-gas	Natural Gas	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:online-brokerage	Online Brokerage	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:payments	Payments	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:pension-funds	Pension Funds	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:pharmaceuticals	Pharmaceuticals	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:ports-logistics	Ports Logistics	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:postal-logistics	Postal Logistics	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:power-grid	Power Grid	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:power-trading	Power Trading	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:public-administration	Public Administration	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:public-finance	Public Finance	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:public-procurement	Public Procurement	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:public-sector-investment	Public Sector Investment	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:public-sector-payments	Public Sector Payments	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:railways	Railways	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:renewables	Renewables	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:roads	Roads	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:securities-markets	Securities Markets	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:smes	Smes	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:sovereign-debt	Sovereign Debt	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:spectrum	Spectrum	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:state-holdings	State Holdings	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:takeovers	Takeovers	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:tariffs	Tariffs	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:tax-policy	Tax Policy	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:telecom	Telecom	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:toll-roads	Toll Roads	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:transport-infrastructure	Transport Infrastructure	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:water	Water	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:sector:it:wealth-management	Wealth Management	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0000062072-ordinary	Generali ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0000062957-ordinary	Mediobanca ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0000066123-ordinary	BPER Banca ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0000072170-ordinary	FinecoBank ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0000072618-ordinary	Intesa Sanpaolo ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003132476-ordinary	Eni ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003153415-ordinary	Snam ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003242622-ordinary	Terna ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003497168-ordinary	Telecom Italia ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003796171-ordinary	Poste Italiane ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003856405-ordinary	Leonardo ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0004776628-ordinary	Banca Mediolanum ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0005211237-ordinary	Italgas ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0005218380-ordinary	Banco BPM ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0005239360-ordinary	UniCredit ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0005366767-ordinary	Nexi ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0005508921-ordinary	Banca Monte dei Paschi di Siena ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:nl0011585146-ordinary	Ferrari ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0000062072	Generali	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0000062957	Mediobanca	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0000066123	BPER Banca	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0000072170	FinecoBank	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0000072618	Intesa Sanpaolo	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003132476	Eni	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003153415	Snam	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003242622	Terna	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003497168	Telecom Italia	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003796171	Poste Italiane	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003856405	Leonardo	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0004776628	Banca Mediolanum	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0005211237	Italgas	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0005218380	Banco BPM	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0005239360	UniCredit	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0005366767	Nexi	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0005508921	Banca Monte dei Paschi di Siena	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:NL0011585146	Ferrari	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:BAMI	BAMI	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:BMED	BMED	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:BMPS	BMPS	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:BPE	BPE	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:ENI	ENI	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:FBK	FBK	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:G	G	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:IG	IG	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:ISP	ISP	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:LDO	LDO	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:MB	MB	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:NEXI	NEXI	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:PST	PST	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:RACE	RACE	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:SRG	SRG	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:TIT	TIT	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:TRN	TRN	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:UCG	UCG	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it:bank-of-italy	Banca d'Italia	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it:borsa-italiana	Borsa Italiana	exchange	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it:consob	CONSOB	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it:ftse-mib	FTSE MIB	market_index	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en

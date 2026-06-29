@@ -643,6 +643,112 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
     assert {"ades:org:in:npci", "ades:sector:in:digital-payments"}.issubset(upi_passive_refs)
 
 
+def test_starter_graph_includes_promoted_italy_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        italy_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_italy/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-it-ticker:BMED',
+                    'ades:security:it:borsa:it0004776628-ordinary',
+                    'finance-it:ftse-mib',
+                    'ades:impact:currency:eur',
+                    'ades:impact:rate:it-btp-10y'
+                )
+                """
+            )
+        }
+        bank_targets = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT target_ref
+                FROM impact_edges
+                WHERE source_ref = 'finance-it:bank-of-italy'
+                """
+            )
+        }
+
+    assert italy_edge_count == 187
+    assert tradable_rows == {
+        "ades:impact:currency:eur": (1, 1),
+        "ades:impact:rate:it-btp-10y": (1, 0),
+        "ades:security:it:borsa:it0004776628-ordinary": (1, 0),
+        "finance-it-ticker:BMED": (1, 0),
+        "finance-it:ftse-mib": (1, 0),
+    }
+    assert {
+        "ades:impact:currency:eur",
+        "ades:impact:rate:ecb-deposit-rate",
+        "ades:impact:rate:it-btp-10y",
+        "ades:impact:rate:it-btp-bund-spread",
+        "ades:sector:it:banking",
+        "ades:sector:it:credit",
+        "ades:sector:it:financial-stability",
+        "ades:sector:it:payments",
+    } == bank_targets
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=80,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    bmed_candidate_refs, bmed_passive_refs = expanded_refs("finance-it-issuer:IT0004776628")
+    assert bmed_candidate_refs == {
+        "ades:security:it:borsa:it0004776628-ordinary",
+        "finance-it-ticker:BMED",
+    }
+    assert "ades:sector:it:wealth-management" in bmed_passive_refs
+    assert "ades:impact:currency:eur" not in bmed_candidate_refs
+
+    bank_candidate_refs, bank_passive_refs = expanded_refs("finance-it:bank-of-italy")
+    assert bank_candidate_refs == {
+        "ades:impact:currency:eur",
+        "ades:impact:rate:ecb-deposit-rate",
+        "ades:impact:rate:it-btp-10y",
+        "ades:impact:rate:it-btp-bund-spread",
+    }
+    assert "ades:sector:it:banking" in bank_passive_refs
+    assert "finance-it-ticker:BMED" not in bank_candidate_refs
+
+    consob_candidate_refs, consob_passive_refs = expanded_refs("finance-it:consob")
+    assert consob_candidate_refs == set()
+    assert {"ades:sector:it:listed-issuers", "ades:sector:it:securities-markets"}.issubset(
+        consob_passive_refs
+    )
+
+    pnrr_candidate_refs, pnrr_passive_refs = expanded_refs("ades:program:it:pnrr")
+    assert pnrr_candidate_refs == set()
+    assert {"ades:org:it:mef", "ades:sector:it:infrastructure"}.issubset(pnrr_passive_refs)
+    assert "ades:impact:currency:eur" not in pnrr_candidate_refs
+
+    equity_candidate_refs, _ = expanded_refs("ades:sector:it:italian-equity-market")
+    assert equity_candidate_refs == {"finance-it:ftse-mib"}
+
+
 def test_article_golden_set_evaluates_extraction_then_impact(tmp_path: Path):
     response = build_starter_market_graph_store(output_dir=tmp_path / "artifact")
     golden_set_path = tmp_path / "article_golden_set.json"
