@@ -41,13 +41,16 @@ SUPPORTED_NODE_TYPES = {
     "holding_company",
     "issuer",
     "market_index",
+    "macro_indicator",
     "regulator",
+    "currency",
+    "rate",
     "security",
     "sector",
     "ticker",
     "exchange",
 }
-TRADABLE_NODE_TYPES = {"market_index", "security", "ticker"}
+TRADABLE_NODE_TYPES = {"currency", "market_index", "rate", "security", "ticker"}
 
 SUPPORTED_RELATIONS = {
     "program_operated_by_org",
@@ -64,6 +67,10 @@ SUPPORTED_RELATIONS = {
     "issuer_has_security",
     "issuer_in_sector",
     "government_body_affects_sector",
+    "central_bank_affects_currency",
+    "central_bank_affects_rates",
+    "central_bank_affects_credit_sector",
+    "statistics_body_reports_macro_indicator",
     "regulator_affects_sector",
     "policy_body_affects_sector",
     "law_affects_sector",

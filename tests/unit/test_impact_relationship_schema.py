@@ -93,6 +93,29 @@ def test_relationship_schema_preserves_existing_finance_country_defaults() -> No
     assert "inflation_shock" in relation_event_types("food_commodity_affects_inflation")
     assert relation_family_for_relation("central_bank_affects_rates") == ("country_macro_policy")
     assert "policy_rate_hike" in relation_event_types("central_bank_affects_rates")
+    assert relation_family_for_relation("central_bank_affects_currency") == ("country_macro_policy")
+    assert relation_family_for_relation("central_bank_affects_credit_sector") == (
+        "country_macro_policy"
+    )
+    assert relation_family_for_relation("statistics_body_reports_macro_indicator") == (
+        "country_macro_policy"
+    )
+    assert "tariff" in relation_event_types("central_bank_affects_currency")
+    assert "policy_rate_hike" in relation_event_types("central_bank_affects_credit_sector")
+    assert "inflation_shock" in relation_event_types("statistics_body_reports_macro_indicator")
+    assert relation_direction_preconditions("central_bank_affects_currency") == (
+        "currency_or_rates_context",
+        "macro_policy_or_risk_signal",
+        "fx_fixing_or_capital_flow_signal",
+    )
+    assert relation_direction_preconditions("central_bank_affects_credit_sector") == (
+        "credit_lending_or_liquidity_signal",
+        "property_bank_or_financing_context",
+    )
+    assert relation_direction_preconditions("statistics_body_reports_macro_indicator") == (
+        "macro_statistics_release_signal",
+        "inflation_growth_or_property_indicator_context",
+    )
 
 
 def test_relationship_schema_covers_program_org_relationship_paths() -> None:
@@ -613,6 +636,75 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
         classify_source_tier(
             "Rogers investor relations",
             "https://about.rogers.com/investor-relations/",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
+            "SSE company profile query",
+            "https://query.sse.com.cn/commonQuery.do",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier("SZSE English site", "https://www.szse.cn/English/")
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "CNInfo stock list",
+            "https://www.cninfo.com.cn/data/yellowpages/getYellowpageStockList",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "BSE security information",
+            "https://www.bse.cn/nqxxController/nqxxCnzq.do",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "HKEX list of securities",
+            "https://www.hkex.com.hk/eng/services/trading/securities/securitieslists/ListOfSecurities.xlsx",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier("CSI index page", "https://www.csindex.com.cn/mobile-web/")
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "PBOC monetary policy",
+            "https://www.pbc.gov.cn/en/3688006/index.html",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier("NBS statistics", "https://www.stats.gov.cn/english/")
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier("SAMR homepage", "https://www.samr.gov.cn/") == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier("CSRC English site", "https://www.csrc.gov.cn/csrc_en/")
+        == SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("ChinaClear", "https://www.chinaclear.cn/") == SOURCE_TIER_REGULATOR
+    assert (
+        classify_source_tier(
+            "Sam's Club corporate page",
+            "https://corporate.walmart.com/about/samsclub",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
+            "Tencent investors",
+            "https://www.tencent.com/en-us/investors.html",
         )
         == SOURCE_TIER_ISSUER_DISCLOSED
     )

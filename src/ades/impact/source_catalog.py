@@ -114,6 +114,30 @@ _OFFICIAL_HOST_FRAGMENTS = (
     "fcc-fac.ca",
     "agriculture.canada.ca",
     "competition-bureau.canada.ca",
+    "pbc.gov.cn",
+    "safe.gov.cn",
+    "stats.gov.cn",
+    "mof.gov.cn",
+    "english.www.gov.cn",
+    "www.gov.cn",
+    "ndrc.gov.cn",
+    "en.ndrc.gov.cn",
+    "miit.gov.cn",
+    "sasac.gov.cn",
+    "en.sasac.gov.cn",
+    "nfra.gov.cn",
+    "samr.gov.cn",
+    "cac.gov.cn",
+    "nea.gov.cn",
+    "mee.gov.cn",
+    "english.mee.gov.cn",
+    "nmpa.gov.cn",
+    "english.nmpa.gov.cn",
+    "mofcom.gov.cn",
+    "english.mofcom.gov.cn",
+    "most.gov.cn",
+    "en.most.gov.cn",
+    "chinamoney.com.cn",
 )
 _EXCHANGE_HOST_FRAGMENTS = (
     "nasdaq.com",
@@ -142,6 +166,14 @@ _EXCHANGE_HOST_FRAGMENTS = (
     "tmx.com",
     "money.tmx.com",
     "thecse.com",
+    "sse.com.cn",
+    "english.sse.com.cn",
+    "query.sse.com.cn",
+    "szse.cn",
+    "cninfo.com.cn",
+    "bse.cn",
+    "csindex.com.cn",
+    "hkexnews.hk",
 )
 _REGULATOR_HOST_FRAGMENTS = (
     "fca.org.uk",
@@ -181,6 +213,9 @@ _REGULATOR_HOST_FRAGMENTS = (
     "osfi-bsif.gc.ca",
     "cer-rec.gc.ca",
     "crtc.gc.ca",
+    "csrc.gov.cn",
+    "chinaclear.cn",
+    "sfc.hk",
 )
 _LICENSED_HOST_FRAGMENTS = ("msci.com", "openfigi.com")
 _INDUSTRY_ASSOCIATION_HOST_FRAGMENTS = ("semiconductors.org",)
@@ -243,6 +278,10 @@ _ISSUER_DISCLOSED_HOST_FRAGMENTS = (
     "loblaw.ca",
     "metro.ca",
     "corpo.metro.ca",
+    "tencent.com",
+    "alibabagroup.com",
+    "walmart.com",
+    "stock.walmart.com",
 )
 
 
@@ -294,6 +333,7 @@ def classify_source_tier(source_name: str | None, source_url: str | None) -> str
         host.endswith(".gov")
         or host.endswith(".gov.uk")
         or host.endswith(".gov.au")
+        or host.endswith(".gov.cn")
         or _contains_any(host, _OFFICIAL_HOST_FRAGMENTS)
     ):
         return SOURCE_TIER_GOVERNMENT

@@ -281,6 +281,151 @@ def test_starter_graph_includes_promoted_canada_relationships(tmp_path: Path) ->
     assert "ades:currency:CAD" not in osfi_candidate_refs
 
 
+def test_starter_graph_includes_promoted_china_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        china_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_china/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-cn:csi-300',
+                    'ades:impact:currency:cny',
+                    'ades:impact:rate:cn-lpr',
+                    'finance-us-ticker:WMT'
+                )
+                """
+            )
+        }
+        bank_of_china_security_targets = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT target_ref
+                FROM impact_edges
+                WHERE source_ref = 'finance-cn-issuer:601988'
+                  AND relation = 'issuer_has_security'
+                """
+            )
+        }
+        same_as_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE relation = 'same_as'
+                  AND source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_china/%'
+                """
+            ).fetchone()[0]
+        )
+        pboc_preconditions = {
+            str(row[0]): set(json.loads(row[1]))
+            for row in connection.execute(
+                """
+                SELECT relation, direction_preconditions_json
+                FROM impact_edges
+                WHERE source_ref = 'finance-cn:pboc'
+                  AND relation IN (
+                      'central_bank_affects_currency',
+                      'central_bank_affects_rates'
+                  )
+                """
+            )
+        }
+
+    assert china_edge_count == 81
+    assert tradable_rows == {
+        "finance-cn:csi-300": (1, 0),
+        "ades:impact:currency:cny": (1, 0),
+        "ades:impact:rate:cn-lpr": (1, 0),
+        "finance-us-ticker:WMT": (1, 0),
+    }
+    assert bank_of_china_security_targets == {
+        "ades:security:cn:sse:601988-ashare",
+        "ades:security:hk:hkex:03988-hshare",
+    }
+    assert same_as_count == 0
+    assert "fx_fixing_or_capital_flow_signal" in pboc_preconditions["central_bank_affects_currency"]
+    assert "liquidity_or_policy_rate_signal" in pboc_preconditions["central_bank_affects_rates"]
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=40,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    sams_candidate_refs, sams_passive_refs = expanded_refs("ades:brand:global:sams-club")
+    assert sams_candidate_refs == {"finance-us-ticker:WMT"}
+    assert "finance-us-issuer:0000104169" in sams_passive_refs
+    assert "ades:impact:currency:cny" not in sams_candidate_refs
+    assert "finance-cn:csi-300" not in sams_candidate_refs
+
+    equity_candidate_refs, _ = expanded_refs("ades:sector:cn:mainland-equity-market")
+    assert equity_candidate_refs == {"finance-cn:csi-300"}
+
+    no_policy_candidate_refs = {
+        "ades:impact:currency:cny",
+        "ades:impact:rate:cn-lpr",
+        "finance-cn:csi-300",
+        "finance-cn-ticker:002594",
+        "finance-cn-ticker:300750",
+        "finance-cn-ticker:600028",
+        "finance-cn-ticker:600519",
+        "finance-cn-ticker:600941",
+        "finance-cn-ticker:601398",
+        "finance-cn-ticker:601628",
+        "finance-cn-ticker:601988",
+        "finance-cn-ticker:920185",
+        "finance-hk-ticker:hkex:00700",
+        "finance-hk-ticker:hkex:00941",
+        "finance-hk-ticker:hkex:03988",
+        "finance-hk-ticker:hkex:09988",
+        "finance-us-ticker:WMT",
+    }
+    for source_ref, expected_passive_refs in [
+        (
+            "ades:org:cn:state-administration-for-market-regulation",
+            {
+                "ades:sector:cn:consumer-retail",
+                "ades:sector:cn:food-safety",
+                "ades:sector:cn:platform-internet",
+            },
+        ),
+        (
+            "ades:org:cn:ministry-of-industry-and-information-technology",
+            {
+                "ades:sector:cn:batteries",
+                "ades:sector:cn:ev-and-nev",
+                "ades:sector:cn:semiconductors",
+                "ades:sector:cn:telecom",
+            },
+        ),
+    ]:
+        candidate_refs, passive_refs = expanded_refs(source_ref)
+        assert expected_passive_refs.issubset(passive_refs)
+        assert candidate_refs.isdisjoint(no_policy_candidate_refs)
+
+
 def test_article_golden_set_evaluates_extraction_then_impact(tmp_path: Path):
     response = build_starter_market_graph_store(output_dir=tmp_path / "artifact")
     golden_set_path = tmp_path / "article_golden_set.json"

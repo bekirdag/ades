@@ -40,6 +40,16 @@
       "notes": "Production-promoted Canada first slice covering TMX issuer/ticker/index bridges, Bank of Canada/OSFI/CIB/ISED/CER/CRTC/CMHC/FCC/AAFC/Global Affairs official sector relationships, and guardrailed project/program paths."
     },
     {
+      "source_name": "China reviewed program/org relationship source lane",
+      "source_url": "https://query.sse.com.cn/commonQuery.do",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_china/2026-06-29/SOURCE_INVENTORY.md",
+      "source_year": 2026,
+      "refresh_policy": "refresh_on_country_source_lane_update",
+      "normalized_output_allowed": true,
+      "license_notes": "Reviewed source lane stores only normalized relationship metadata; source URLs and evidence snippets are retained under /mnt/githubActions/ades_big_data.",
+      "notes": "Production-promoted China first slice covering SSE/SZSE/CNInfo/BSE/HKEX issuer/ticker/security bridges, PBOC/SAFE/NBS macro guardrail rows, official regulator or government sector rows, and Sam's Club/Walmart brand evidence without broad sector-to-issuer fanout."
+    },
+    {
       "source_name": "Australian Office of the Chief Economist Resources and Energy Quarterly",
       "source_url": "https://www.industry.gov.au/publications/resources-and-energy-quarterly",
       "source_snapshot": "2026-05-12",

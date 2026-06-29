@@ -243,6 +243,10 @@ SANCTIONS_RELATIONS = {
 CENTRAL_BANK_RELATIONS = {
     "central_bank_affects_currency",
     "central_bank_affects_rates",
+    "central_bank_affects_credit_sector",
+}
+STATISTICS_RELATIONS = {
+    "statistics_body_reports_macro_indicator",
 }
 COUNTRY_MEMBERSHIP_RELATIONS = {
     "country_member_of_bloc",
@@ -306,7 +310,7 @@ def relation_family_for_relation(relation: str) -> str:
         return "risk_proxy"
     if relation.endswith("_global_equity_proxy"):
         return "global_equity_proxy"
-    if relation in CENTRAL_BANK_RELATIONS:
+    if relation in CENTRAL_BANK_RELATIONS or relation in STATISTICS_RELATIONS:
         return "country_macro_policy"
     if relation in COUNTRY_MEMBERSHIP_RELATIONS:
         return "country_membership"
@@ -357,8 +361,20 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         return COMMODITY_EXPOSURE_EVENT_TYPES
     if relation in SANCTIONS_RELATIONS:
         return ("sanctions", "export_control", "war_escalation", "ceasefire_risk_relief")
-    if relation in CENTRAL_BANK_RELATIONS:
+    if relation == "central_bank_affects_currency":
+        return CURRENCY_PROXY_EVENT_TYPES
+    if relation in {"central_bank_affects_rates", "central_bank_affects_credit_sector"}:
         return POLICY_RATE_EVENT_TYPES
+    if relation in STATISTICS_RELATIONS:
+        return (
+            "inflation_shock",
+            "future_policy_expectation",
+            "fiscal_expansion",
+            "fiscal_austerity",
+            "policy_rate_cut",
+            "policy_rate_hike",
+            "policy_rate_hold",
+        )
     if relation in COUNTRY_MEMBERSHIP_RELATIONS:
         return COUNTRY_RISK_EVENT_TYPES
     if relation in CRYPTO_POLICY_RELATIONS:
@@ -500,8 +516,27 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
         return ("commodity_currency_pricing", "usd_context", "risk_signal")
     if relation in SANCTIONS_RELATIONS:
         return ("new_sanctions", "secondary_sanctions", "export_restriction", "risk_relief")
-    if relation in CENTRAL_BANK_RELATIONS:
-        return ("rate_cut", "rate_hike", "rate_hold", "inflation_surprise", "fiscal_signal")
+    if relation == "central_bank_affects_currency":
+        return (
+            "currency_or_rates_context",
+            "macro_policy_or_risk_signal",
+            "fx_fixing_or_capital_flow_signal",
+        )
+    if relation == "central_bank_affects_rates":
+        return (
+            "rate_inflation_central_bank_or_fiscal_signal",
+            "liquidity_or_policy_rate_signal",
+        )
+    if relation == "central_bank_affects_credit_sector":
+        return (
+            "credit_lending_or_liquidity_signal",
+            "property_bank_or_financing_context",
+        )
+    if relation in STATISTICS_RELATIONS:
+        return (
+            "macro_statistics_release_signal",
+            "inflation_growth_or_property_indicator_context",
+        )
     if relation in COUNTRY_MEMBERSHIP_RELATIONS:
         return ("country_bloc_membership", "production_or_export_signal")
     if relation in CRYPTO_POLICY_RELATIONS:

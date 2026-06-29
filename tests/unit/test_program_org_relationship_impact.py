@@ -36,6 +36,11 @@ REVIEWED_CANADA_TMX_BOC_INFRASTRUCTURE_FIXTURE = Path(
     "program_org_relationship/reviewed/2026-06-29/"
     "canada_tmx_boc_infrastructure_relationships.tsv"
 )
+REVIEWED_CHINA_SSE_SZSE_PBOC_POLICY_FIXTURE = Path(
+    "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/"
+    "program_org_relationship/reviewed/2026-06-29/"
+    "china_sse_szse_pboc_policy_relationships.tsv"
+)
 
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
@@ -966,3 +971,211 @@ def test_reviewed_canada_fixture_expands_tmx_and_keeps_policy_guardrails(
         candidate_refs, passive_refs = expanded_refs(source_ref)
         assert expected_passive_refs.issubset(passive_refs)
         assert candidate_refs.isdisjoint(no_policy_ticker_refs)
+
+
+def test_reviewed_china_fixture_expands_exchange_paths_and_keeps_policy_guardrails(
+    tmp_path: Path,
+) -> None:
+    if not REVIEWED_CHINA_SSE_SZSE_PBOC_POLICY_FIXTURE.exists():
+        pytest.skip("reviewed China SSE/SZSE/PBOC policy fixture is not mounted")
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[REVIEWED_CHINA_SSE_SZSE_PBOC_POLICY_FIXTURE],
+        output_root=tmp_path / "impact_relationships",
+        run_id="reviewed-china-sse-szse-pboc-policy",
+        build_artifact=True,
+        include_starter_graph=False,
+        artifact_output_root=tmp_path / "artifacts",
+    )
+
+    assert result.relationship_row_count == 81
+    assert result.relation_counts == {
+        "brand_owned_by_org": 1,
+        "central_bank_affects_credit_sector": 3,
+        "central_bank_affects_currency": 1,
+        "central_bank_affects_rates": 1,
+        "government_body_affects_sector": 12,
+        "issuer_has_listed_ticker": 14,
+        "issuer_has_security": 4,
+        "issuer_in_sector": 9,
+        "policy_body_affects_sector": 1,
+        "regulator_affects_sector": 9,
+        "sector_affects_index": 1,
+        "security_has_identifier": 4,
+        "security_listed_on_exchange": 4,
+        "statistics_body_reports_macro_indicator": 3,
+        "ticker_listed_on_exchange": 14,
+    }
+    assert result.node_type_counts == {
+        "brand": 1,
+        "currency": 1,
+        "exchange": 5,
+        "government_body": 7,
+        "issuer": 12,
+        "macro_indicator": 3,
+        "market_index": 1,
+        "rate": 1,
+        "regulator": 4,
+        "sector": 28,
+        "security": 4,
+        "ticker": 14,
+    }
+
+    validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
+    assert validation.invalid_row_count == 0
+    assert validation.source_warning_counts == {}
+    assert validation.relation_warning_counts == {}
+    assert validation.source_tier_counts == {
+        "exchange": 48,
+        "government": 28,
+        "regulator": 5,
+    }
+
+    assert result.artifact_path is not None
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    for tradable_ref in [
+        "finance-cn-ticker:600519",
+        "finance-cn-ticker:300750",
+        "finance-hk-ticker:hkex:00700",
+        "finance-hk-ticker:hkex:09988",
+        "finance-cn:csi-300",
+        "ades:impact:currency:cny",
+        "ades:impact:rate:cn-lpr",
+        "finance-us-ticker:WMT",
+    ]:
+        assert nodes[tradable_ref]["is_tradable"] == "true"
+    for passive_ref in [
+        "ades:sector:cn:banking",
+        "ades:sector:cn:consumer-retail",
+        "ades:macro:cn:gdp",
+    ]:
+        assert nodes[passive_ref]["is_tradable"] == "false"
+
+    edges = _read_tsv(result.edge_tsv_path)
+    assert all(row["relation"] != "same_as" for row in edges)
+    pboc_edges = [row for row in edges if row["source_ref"] == "finance-cn:pboc"]
+    assert {row["target_ref"] for row in pboc_edges} == {
+        "ades:impact:currency:cny",
+        "ades:impact:rate:cn-lpr",
+        "ades:sector:cn:banking",
+        "ades:sector:cn:local-government-finance",
+        "ades:sector:cn:real-estate",
+    }
+    cny_edge = next(row for row in pboc_edges if row["relation"] == "central_bank_affects_currency")
+    assert "fx_fixing_or_capital_flow_signal" in cny_edge["direction_preconditions"]
+    lpr_edge = next(row for row in pboc_edges if row["relation"] == "central_bank_affects_rates")
+    assert "liquidity_or_policy_rate_signal" in lpr_edge["direction_preconditions"]
+    assert not any("North Korea" in row["notes"] for row in edges)
+    edge_refs = {ref for row in edges for ref in (row["source_ref"], row["target_ref"])}
+    assert "finance-us-ticker:BABA" not in edge_refs
+    assert "finance-us-ticker:PDD" not in edge_refs
+
+    with MarketGraphStore(result.artifact_path) as store:
+        bank_of_china_edges = store.outbound_edges_batch(["finance-cn-issuer:601988"])[
+            "finance-cn-issuer:601988"
+        ]
+        samr_edges = store.outbound_edges_batch(
+            ["ades:org:cn:state-administration-for-market-regulation"]
+        )["ades:org:cn:state-administration-for-market-regulation"]
+
+    assert {edge.target_ref for edge in bank_of_china_edges} == {
+        "ades:security:cn:sse:601988-ashare",
+        "ades:security:hk:hkex:03988-hshare",
+        "ades:sector:cn:banking",
+        "finance-cn-ticker:601988",
+        "finance-hk-ticker:hkex:03988",
+    }
+    assert {edge.target_ref for edge in samr_edges} == {
+        "ades:sector:cn:consumer-retail",
+        "ades:sector:cn:food-safety",
+        "ades:sector:cn:platform-internet",
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=result.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=40,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    maotai_candidate_refs, maotai_passive_refs = expanded_refs("finance-cn-issuer:600519")
+    assert maotai_candidate_refs == {"finance-cn-ticker:600519"}
+    assert "ades:sector:cn:consumer-staples" in maotai_passive_refs
+    assert "ades:impact:currency:cny" not in maotai_candidate_refs
+
+    boc_candidate_refs, boc_passive_refs = expanded_refs("finance-cn-issuer:601988")
+    assert {
+        "ades:security:cn:sse:601988-ashare",
+        "ades:security:hk:hkex:03988-hshare",
+        "finance-cn-ticker:601988",
+        "finance-hk-ticker:hkex:03988",
+    }.issubset(boc_candidate_refs)
+    assert "ades:sector:cn:banking" in boc_passive_refs
+    assert "ades:impact:currency:cny" not in boc_candidate_refs
+
+    sams_candidate_refs, sams_passive_refs = expanded_refs("ades:brand:global:sams-club")
+    assert sams_candidate_refs == {"finance-us-ticker:WMT"}
+    assert "finance-us-issuer:0000104169" in sams_passive_refs
+    assert "ades:impact:currency:cny" not in sams_candidate_refs
+    assert "finance-cn:csi-300" not in sams_candidate_refs
+
+    equity_candidate_refs, _ = expanded_refs("ades:sector:cn:mainland-equity-market")
+    assert equity_candidate_refs == {"finance-cn:csi-300"}
+
+    pboc_candidate_refs, pboc_passive_refs = expanded_refs("finance-cn:pboc")
+    assert pboc_candidate_refs == {"ades:impact:currency:cny", "ades:impact:rate:cn-lpr"}
+    assert {
+        "ades:sector:cn:banking",
+        "ades:sector:cn:local-government-finance",
+        "ades:sector:cn:real-estate",
+    }.issubset(pboc_passive_refs)
+
+    no_policy_candidate_refs = {
+        "ades:impact:currency:cny",
+        "ades:impact:rate:cn-lpr",
+        "finance-cn:csi-300",
+        "finance-cn-ticker:002594",
+        "finance-cn-ticker:300750",
+        "finance-cn-ticker:600028",
+        "finance-cn-ticker:600519",
+        "finance-cn-ticker:600941",
+        "finance-cn-ticker:601398",
+        "finance-cn-ticker:601628",
+        "finance-cn-ticker:601988",
+        "finance-cn-ticker:920185",
+        "finance-hk-ticker:hkex:00700",
+        "finance-hk-ticker:hkex:00941",
+        "finance-hk-ticker:hkex:03988",
+        "finance-hk-ticker:hkex:09988",
+        "finance-us-ticker:WMT",
+    }
+    policy_expectations = [
+        (
+            "ades:org:cn:state-administration-for-market-regulation",
+            {
+                "ades:sector:cn:consumer-retail",
+                "ades:sector:cn:food-safety",
+                "ades:sector:cn:platform-internet",
+            },
+        ),
+        (
+            "ades:org:cn:ministry-of-industry-and-information-technology",
+            {
+                "ades:sector:cn:batteries",
+                "ades:sector:cn:ev-and-nev",
+                "ades:sector:cn:semiconductors",
+                "ades:sector:cn:telecom",
+            },
+        ),
+    ]
+    for source_ref, expected_passive_refs in policy_expectations:
+        candidate_refs, passive_refs = expanded_refs(source_ref)
+        assert expected_passive_refs.issubset(passive_refs)
+        assert candidate_refs.isdisjoint(no_policy_candidate_refs)

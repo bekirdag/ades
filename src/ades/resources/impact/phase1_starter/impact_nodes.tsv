@@ -224,3 +224,84 @@ finance-ca-ticker:tsx:shop	SHOP	ticker	finance-ca-en	true	false	"{""exchange"": 
 finance-ca-ticker:tsx:t	T	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""T""}"	finance-ca-en
 finance-ca-ticker:tsx:td	TD	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""TD""}"	finance-ca-en
 finance-ca:sp-tsx-composite	S&P/TSX Composite Index	market_index	finance-ca-en	true	false	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:brand:global:sams-club	Sam's Club	brand	finance-us-en	false	true	"{""jurisdiction"": ""US""}"	finance-us-en,general-en
+ades:exchange:hk:hkex	Hong Kong Exchanges and Clearing	exchange	finance-hk-en	false	true	"{""exchange"": ""HKEX"", ""isin"": ""CNE1000001Z5"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""03988""}"	finance-hk-en,finance-cn-en
+ades:exchange:us:nyse	New York Stock Exchange	exchange	finance-us-en	false	true	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""mic"": ""XNYS"", ""ticker_symbol"": ""WMT""}"	finance-us-en,general-en
+ades:impact:currency:cny	Chinese yuan	currency	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:impact:rate:cn-lpr	PBOC loan prime rate	rate	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:issuer:hk:alibaba-group-holding	Alibaba Group Holding Limited	issuer	finance-hk-en	false	true	"{""jurisdiction"": ""HK""}"	finance-hk-en,finance-cn-en
+ades:issuer:hk:tencent-holdings	Tencent Holdings Limited	issuer	finance-hk-en	false	true	"{""jurisdiction"": ""HK""}"	finance-hk-en,finance-cn-en
+ades:macro:cn:cpi	China CPI	macro_indicator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:macro:cn:gdp	China GDP	macro_indicator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:macro:cn:ppi	China PPI	macro_indicator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:cyberspace-administration-of-china	Cyberspace Administration of China	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:ministry-of-industry-and-information-technology	Ministry of Industry and Information Technology	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:national-bureau-of-statistics	National Bureau of Statistics of China	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:national-development-and-reform-commission	National Development and Reform Commission	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:national-energy-administration	National Energy Administration	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:national-medical-products-administration	National Medical Products Administration	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:state-administration-for-market-regulation	State Administration for Market Regulation	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:state-administration-of-foreign-exchange	State Administration of Foreign Exchange	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:state-owned-assets-supervision-and-administration-commission	State-owned Assets Supervision and Administration Commission	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:banking	Banking	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+ades:sector:cn:batteries	Batteries	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+ades:sector:cn:coal	Coal	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:consumer-retail	Consumer retail	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:consumer-staples	Consumer staples and liquor	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+ades:sector:cn:data-and-cybersecurity	Data and cybersecurity	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:electric-utilities	Electric utilities	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:electronics-manufacturing	Electronics manufacturing	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+ades:sector:cn:energy	Energy	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:ev-and-nev	EV and NEV autos	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+ades:sector:cn:food-safety	Food safety	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:fx-and-reserves	FX and reserves	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:industrial-policy	Industrial policy	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:infrastructure	Infrastructure	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:insurance	Insurance	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+ades:sector:cn:local-government-finance	Local government finance	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:mainland-equity-market	Mainland China equity market	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+ades:sector:cn:market-infrastructure	Market infrastructure	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:medtech	Medtech	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:oil-and-gas	Oil and gas	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+ades:sector:cn:pharma	Pharma	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:platform-internet	Platform internet	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:real-estate	Real estate	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:renewable-energy	Renewable energy	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:securities	Securities	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:semiconductors	Semiconductors	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:state-owned-enterprise-reform	State-owned enterprise reform	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:sector:cn:telecom	Telecommunications	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+ades:security:cn:sse:600941-ashare	China Mobile Limited A-share 600941	security	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600941""}"	finance-cn-en
+ades:security:cn:sse:601988-ashare	Bank of China Limited A-share 601988	security	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601988""}"	finance-cn-en
+ades:security:hk:hkex:00941-hshare	China Mobile Limited H-share 00941	security	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""HK0941009539"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""00941""}"	finance-hk-en,finance-cn-en
+ades:security:hk:hkex:03988-hshare	Bank of China Limited H-share 03988	security	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""CNE1000001Z5"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""03988""}"	finance-hk-en,finance-cn-en
+finance-cn-issuer:002594	BYD Company Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:300750	Contemporary Amperex Technology Co., Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:600028	China Petroleum & Chemical Corporation	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:600519	Kweichow Moutai Co.,Ltd.	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:600941	China Mobile Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:601398	Industrial and Commercial Bank of China Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:601628	China Life Insurance Company Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:601988	Bank of China Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:920185	BTR New Material Group Co., Ltd.	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-ticker:002594	002594	ticker	finance-cn-en	true	false	"{""exchange"": ""SZSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHE"", ""ticker_symbol"": ""002594""}"	finance-cn-en
+finance-cn-ticker:300750	300750	ticker	finance-cn-en	true	false	"{""exchange"": ""SZSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHE"", ""ticker_symbol"": ""300750""}"	finance-cn-en
+finance-cn-ticker:600028	600028	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600028""}"	finance-cn-en
+finance-cn-ticker:600519	600519	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""isin"": ""CNE0000018R8"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600519""}"	finance-cn-en
+finance-cn-ticker:600941	600941	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600941""}"	finance-cn-en
+finance-cn-ticker:601398	601398	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601398""}"	finance-cn-en
+finance-cn-ticker:601628	601628	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601628""}"	finance-cn-en
+finance-cn-ticker:601988	601988	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601988""}"	finance-cn-en
+finance-cn-ticker:920185	920185	ticker	finance-cn-en	true	false	"{""exchange"": ""BSE"", ""isin"": ""CNE100003YM4"", ""jurisdiction"": ""CN"", ""mic"": ""XBSE"", ""ticker_symbol"": ""920185""}"	finance-cn-en
+finance-cn:bse	Beijing Stock Exchange	exchange	finance-cn-en	false	true	"{""exchange"": ""BSE"", ""jurisdiction"": ""CN"", ""mic"": ""XBSE"", ""ticker_symbol"": ""920185""}"	finance-cn-en
+finance-cn:csi-300	CSI 300	market_index	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn:csrc	China Securities Regulatory Commission	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+finance-cn:pboc	People's Bank of China	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+finance-cn:sse	Shanghai Stock Exchange	exchange	finance-cn-en	false	true	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600519""}"	finance-cn-en
+finance-cn:szse	Shenzhen Stock Exchange	exchange	finance-cn-en	false	true	"{""exchange"": ""SZSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHE"", ""ticker_symbol"": ""300750""}"	finance-cn-en
+finance-hk-ticker:hkex:00700	00700	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""KYG875721634"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""00700""}"	finance-hk-en,finance-cn-en
+finance-hk-ticker:hkex:00941	00941	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""HK0941009539"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""00941""}"	finance-hk-en,finance-cn-en
+finance-hk-ticker:hkex:03988	03988	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""CNE1000001Z5"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""03988""}"	finance-hk-en,finance-cn-en
+finance-hk-ticker:hkex:09988	09988	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""KYG017191142"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""09988""}"	finance-hk-en,finance-cn-en
+finance-us-issuer:0000104169	Walmart Inc.	issuer	finance-us-en	false	true	"{""jurisdiction"": ""US""}"	finance-us-en,general-en
+finance-us-ticker:WMT	WMT	ticker	finance-us-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""mic"": ""XNYS"", ""ticker_symbol"": ""WMT""}"	finance-us-en,general-en
