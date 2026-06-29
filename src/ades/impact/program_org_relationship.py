@@ -34,6 +34,7 @@ SUPPORTED_NODE_TYPES = {
     "program",
     "product",
     "brand",
+    "project",
     "organization",
     "government_body",
     "legal_entity",
@@ -50,8 +51,12 @@ TRADABLE_NODE_TYPES = {"market_index", "security", "ticker"}
 
 SUPPORTED_RELATIONS = {
     "program_operated_by_org",
+    "program_loan_recipient_org",
     "product_owned_by_org",
     "brand_owned_by_org",
+    "project_operated_by_org",
+    "infrastructure_project_affects_sector",
+    "org_in_sector",
     "org_part_of_holding",
     "org_subsidiary_of_org",
     "holding_parent_is_issuer",

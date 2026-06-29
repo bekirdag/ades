@@ -26,6 +26,11 @@ REVIEWED_AUSTRALIA_ASX_REGULATOR_PROGRAM_FIXTURE = Path(
     "program_org_relationship/reviewed/2026-06-29/"
     "australia_asx_regulator_program_relationships.tsv"
 )
+REVIEWED_BRAZIL_B3_BNDES_TRANSPORT_FIXTURE = Path(
+    "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/"
+    "program_org_relationship/reviewed/2026-06-29/"
+    "brazil_b3_bndes_transport_relationships.tsv"
+)
 
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
@@ -579,3 +584,184 @@ def test_reviewed_australia_fixture_expands_asx_and_keeps_program_guardrails(
     }
     assert "finance-au:asx-200" in equity_candidate_refs
     assert "ades:currency:AUD" not in equity_candidate_refs
+
+
+def test_reviewed_brazil_fixture_expands_b3_and_keeps_project_guardrails(
+    tmp_path: Path,
+) -> None:
+    if not REVIEWED_BRAZIL_B3_BNDES_TRANSPORT_FIXTURE.exists():
+        pytest.skip("reviewed Brazil B3/BNDES/transport fixture is not mounted")
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[REVIEWED_BRAZIL_B3_BNDES_TRANSPORT_FIXTURE],
+        output_root=tmp_path / "impact_relationships",
+        run_id="reviewed-brazil-b3-bndes-transport",
+        build_artifact=True,
+        include_starter_graph=False,
+        artifact_output_root=tmp_path / "artifacts",
+    )
+
+    assert result.relationship_row_count == 47
+    assert result.relation_counts == {
+        "government_body_affects_sector": 8,
+        "infrastructure_project_affects_sector": 6,
+        "issuer_has_listed_ticker": 6,
+        "issuer_in_sector": 5,
+        "org_in_sector": 1,
+        "program_loan_recipient_org": 1,
+        "program_operated_by_org": 2,
+        "regulator_affects_sector": 7,
+        "sector_affects_index": 1,
+        "sector_affects_issuer": 4,
+        "ticker_listed_on_exchange": 6,
+    }
+    assert result.node_type_counts == {
+        "exchange": 1,
+        "government_body": 4,
+        "issuer": 5,
+        "market_index": 1,
+        "organization": 1,
+        "program": 2,
+        "project": 2,
+        "regulator": 5,
+        "sector": 16,
+        "ticker": 6,
+    }
+
+    validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
+    assert validation.invalid_row_count == 0
+    assert validation.source_warning_counts == {}
+    assert validation.relation_warning_counts == {}
+    assert validation.source_tier_counts == {
+        "exchange": 22,
+        "government": 18,
+        "regulator": 7,
+    }
+
+    assert result.artifact_path is not None
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    assert nodes["finance-br-ticker:PETR3"]["is_tradable"] == "true"
+    assert nodes["finance-br-ticker:PETR4"]["is_tradable"] == "true"
+    assert nodes["finance-br-ticker:RAIL3"]["is_tradable"] == "true"
+    assert nodes["finance-br:ibovespa"]["is_tradable"] == "true"
+    assert nodes["ades:project:br:ferrograo"]["is_seed_eligible"] == "true"
+    assert nodes["ades:sector:br:rail-infrastructure"]["is_tradable"] == "false"
+
+    with MarketGraphStore(result.artifact_path) as store:
+        petrobras_edges = store.outbound_edges_batch(["ades:issuer:br:petrobras"])[
+            "ades:issuer:br:petrobras"
+        ]
+        ferrograo_edges = store.outbound_edges_batch(["ades:project:br:ferrograo"])[
+            "ades:project:br:ferrograo"
+        ]
+        bndes_program_edges = store.outbound_edges_batch(["ades:program:br:bndes-mais-inovacao"])[
+            "ades:program:br:bndes-mais-inovacao"
+        ]
+
+    assert {edge.target_ref for edge in petrobras_edges} == {
+        "ades:sector:br:oil-gas",
+        "finance-br-ticker:PETR3",
+        "finance-br-ticker:PETR4",
+    }
+    assert {edge.target_ref for edge in ferrograo_edges} == {
+        "ades:sector:br:agriculture-export-logistics",
+        "ades:sector:br:rail-infrastructure",
+        "ades:sector:br:transport-logistics",
+    }
+    assert {edge.target_ref for edge in bndes_program_edges} == {
+        "ades:org:br:bndes",
+        "ades:org:br:zilia-technologies",
+    }
+
+    petrobras_expansion = expand_impact_paths(
+        ["ades:issuer:br:petrobras"],
+        artifact_path=result.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    petrobras_candidate_refs = {
+        candidate.entity_ref for candidate in petrobras_expansion.candidates
+    }
+    assert {"finance-br-ticker:PETR3", "finance-br-ticker:PETR4"}.issubset(petrobras_candidate_refs)
+    assert "ades:currency:BRL" not in petrobras_candidate_refs
+
+    for issuer_ref, ticker_ref in [
+        ("ades:issuer:br:vale", "finance-br-ticker:VALE3"),
+        ("ades:issuer:br:banco-do-brasil", "finance-br-ticker:BBAS3"),
+        ("ades:issuer:br:rumo", "finance-br-ticker:RAIL3"),
+    ]:
+        expansion = expand_impact_paths(
+            [issuer_ref],
+            artifact_path=result.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=2,
+            max_candidates=10,
+            include_passive_paths=True,
+        )
+        candidate_refs = {candidate.entity_ref for candidate in expansion.candidates}
+        assert ticker_ref in candidate_refs
+        assert "ades:currency:BRL" not in candidate_refs
+
+    bndes_expansion = expand_impact_paths(
+        ["ades:program:br:bndes-mais-inovacao"],
+        artifact_path=result.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=4,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    bndes_passive_refs = {path.entity_ref for path in bndes_expansion.passive_paths}
+    bndes_candidate_refs = {candidate.entity_ref for candidate in bndes_expansion.candidates}
+    assert "ades:org:br:bndes" in bndes_passive_refs
+    assert "ades:org:br:zilia-technologies" in bndes_passive_refs
+    assert "ades:sector:br:semiconductors" in bndes_passive_refs
+    assert "finance-br-ticker:RAIL3" not in bndes_candidate_refs
+    assert "ades:currency:BRL" not in bndes_candidate_refs
+
+    for project_ref in ["ades:project:br:ferrograo", "ades:project:br:fico-railway"]:
+        project_expansion = expand_impact_paths(
+            [project_ref],
+            artifact_path=result.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=3,
+            max_candidates=10,
+            include_passive_paths=True,
+        )
+        project_passive_refs = {path.entity_ref for path in project_expansion.passive_paths}
+        project_candidate_refs = {
+            candidate.entity_ref for candidate in project_expansion.candidates
+        }
+        assert "ades:sector:br:rail-infrastructure" in project_passive_refs
+        assert "ades:sector:br:transport-logistics" in project_passive_refs
+        assert "ades:sector:br:agriculture-export-logistics" in project_passive_refs
+        assert "finance-br-ticker:RAIL3" not in project_candidate_refs
+        assert "finance-br:ibovespa" not in project_candidate_refs
+        assert "ades:currency:BRL" not in project_candidate_refs
+
+    equity_market_expansion = expand_impact_paths(
+        ["ades:sector:br:brazilian-equity-market"],
+        artifact_path=result.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    equity_candidate_refs = {
+        candidate.entity_ref for candidate in equity_market_expansion.candidates
+    }
+    assert "finance-br:ibovespa" in equity_candidate_refs
+    assert "ades:currency:BRL" not in equity_candidate_refs
+
+    anp_expansion = expand_impact_paths(
+        ["ades:org:br:anp"],
+        artifact_path=result.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=4,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    anp_candidate_refs = {candidate.entity_ref for candidate in anp_expansion.candidates}
+    assert {"finance-br-ticker:PETR3", "finance-br-ticker:PETR4"}.issubset(anp_candidate_refs)
+    assert "ades:currency:BRL" not in anp_candidate_refs

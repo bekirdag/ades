@@ -96,3 +96,46 @@ ades:sector:au:transport-policy	Australian transport policy sector	sector	financ
 finance-au-ticker:BHP	BHP	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
 finance-au-ticker:CBA	CBA	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
 finance-au:asx-200	S&P/ASX 200	market_index	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:exchange:br:b3	B3	exchange	finance-br-en	false	true	"{""exchange"": ""B3"", ""isin"": ""BRPETRACNOR9"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""PETR3""}"	finance-br-en
+ades:issuer:br:b3	B3 S.A. - Brasil, Bolsa, Balcão	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:issuer:br:banco-do-brasil	Banco do Brasil S.A.	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:issuer:br:petrobras	Petróleo Brasileiro S.A. - Petrobras	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:issuer:br:rumo	Rumo S.A.	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:issuer:br:vale	Vale S.A.	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:anatel	Agência Nacional de Telecomunicações	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:aneel	Agência Nacional de Energia Elétrica	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:anp	Agência Nacional do Petróleo, Gás Natural e Biocombustíveis	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:antt	Agência Nacional de Transportes Terrestres	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:bndes	Banco Nacional de Desenvolvimento Econômico e Social	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:cvm	Comissão de Valores Mobiliários	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:mapa	Ministério da Agricultura e Pecuária	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:mdic	Ministério do Desenvolvimento, Indústria, Comércio e Serviços	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:ministerio-transportes	Ministério dos Transportes	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:zilia-technologies	Zilia Technologies	organization	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:program:br:bndes-mais-inovacao	BNDES Mais Inovação	program	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:program:br:plano-safra-2025-2026	Plano Safra 2025/2026	program	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:project:br:ferrograo	Ferrogrão EF-170	project	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:project:br:fico-railway	FICO railway	project	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:agribusiness	Brazil agribusiness	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:agriculture-export-logistics	Brazil agriculture export logistics	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:banking	Brazil banking	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:brazilian-equity-market	Brazilian equity market	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:development-finance	Brazil development finance	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:electricity	Brazil electricity	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:fuel-retail-distribution	Brazil fuel retail and distribution	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:industrial-policy	Brazil industrial policy	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:mining-iron-ore	Brazil mining and iron ore	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:oil-gas	Brazil oil and gas	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:rail-infrastructure	Brazil rail infrastructure	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:rural-credit	Brazil rural credit	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:securities-market	Brazil securities market	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:semiconductors	Brazil semiconductors	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:telecommunications	Brazil telecommunications	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:sector:br:transport-logistics	Brazil transport and logistics	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+finance-br-ticker:B3SA3	B3SA3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRB3SAACNOR6"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""B3SA3""}"	finance-br-en
+finance-br-ticker:BBAS3	BBAS3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRBBASACNOR3"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""BBAS3""}"	finance-br-en
+finance-br-ticker:PETR3	PETR3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRPETRACNOR9"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""PETR3""}"	finance-br-en
+finance-br-ticker:PETR4	PETR4	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRPETRACNPR6"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""PETR4""}"	finance-br-en
+finance-br-ticker:RAIL3	RAIL3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRRAILACNOR9"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""RAIL3""}"	finance-br-en
+finance-br-ticker:VALE3	VALE3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRVALEACNOR0"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""VALE3""}"	finance-br-en
+finance-br:ibovespa	Ibovespa	market_index	finance-br-en	true	false	"{""jurisdiction"": ""BR""}"	finance-br-en

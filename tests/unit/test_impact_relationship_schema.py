@@ -114,6 +114,31 @@ def test_relationship_schema_covers_program_org_relationship_paths() -> None:
         "direct_company_mention",
         "corporate_action",
     )
+    assert relation_family_for_relation("program_loan_recipient_org") == (
+        "program_org_relationship"
+    )
+    assert "source_backed_program_org_evidence" in relation_direction_preconditions(
+        "program_loan_recipient_org"
+    )
+    assert relation_family_for_relation("project_operated_by_org") == ("project_org_relationship")
+    assert relation_direction_preconditions("project_operated_by_org") == (
+        "direct_project_mention",
+        "source_backed_project_org_evidence",
+        "compatible_event_signal",
+    )
+    assert relation_family_for_relation("infrastructure_project_affects_sector") == (
+        "policy_sector_exposure"
+    )
+    assert "supply_disruption" in relation_event_types("infrastructure_project_affects_sector")
+    assert relation_direction_preconditions("infrastructure_project_affects_sector") == (
+        "infrastructure_project_event_signal",
+        "capacity_delay_or_logistics_context",
+        "jurisdiction_or_project_context",
+    )
+    assert relation_family_for_relation("org_in_sector") == "sector_exposure"
+    assert relation_direction_preconditions("org_in_sector") == (
+        "direct_org_or_sector_membership_evidence",
+    )
 
 
 def test_relationship_schema_defaults_and_warnings_are_non_fatal() -> None:
@@ -385,6 +410,59 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
             "https://www.transport.nsw.gov.au/",
         )
         == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "B3 company detail API",
+            "https://sistemaswebb3-listados.b3.com.br/listedCompaniesProxy/CompanyCall/GetDetail/test",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier("CVM regulator page", "https://www.gov.br/cvm/en")
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "BNDES institutional page",
+            "https://www.bndes.gov.br/SiteBNDES/bndes/bndes_en/Institucional/The_BNDES/",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "ANP regulator page",
+            "https://www.gov.br/anp/en/access-information/what-is-anp/what-is-anp",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "ANEEL regulator page",
+            "https://www.gov.br/aneel/en",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "Transport Ministry Ferrogrão page",
+            "https://www.gov.br/transportes/pt-br/assuntos/sustentabilidade/gt-da-ef-170-ferrograo",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Petrobras profile",
+            "https://petrobras.com.br/en/quem-somos/perfil",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
+            "Rumo investor relations",
+            "https://ri.rumolog.com/en/",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
     )
     assert (
         classify_source_tier(

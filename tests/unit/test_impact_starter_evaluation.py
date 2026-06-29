@@ -159,6 +159,58 @@ def test_starter_graph_includes_promoted_australia_relationships(tmp_path: Path)
     assert "finance-au:asx-200" in candidate_refs
 
 
+def test_starter_graph_includes_promoted_brazil_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        brazil_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_brazil/%'
+                """
+            ).fetchone()[0]
+        )
+        ibovespa_row = connection.execute(
+            """
+            SELECT is_tradable, is_seed_eligible
+            FROM impact_nodes
+            WHERE entity_ref = 'finance-br:ibovespa'
+            """
+        ).fetchone()
+
+    assert brazil_edge_count == 47
+    assert ibovespa_row == (1, 0)
+
+    equity_expansion = expand_impact_paths(
+        ["ades:sector:br:brazilian-equity-market"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=5,
+    )
+    equity_candidate_refs = {candidate.entity_ref for candidate in equity_expansion.candidates}
+    assert "finance-br:ibovespa" in equity_candidate_refs
+
+    ferrograo_expansion = expand_impact_paths(
+        ["ades:project:br:ferrograo"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=3,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    ferrograo_candidate_refs = {
+        candidate.entity_ref for candidate in ferrograo_expansion.candidates
+    }
+    ferrograo_passive_refs = {path.entity_ref for path in ferrograo_expansion.passive_paths}
+    assert "ades:sector:br:rail-infrastructure" in ferrograo_passive_refs
+    assert "ades:sector:br:transport-logistics" in ferrograo_passive_refs
+    assert "finance-br-ticker:RAIL3" not in ferrograo_candidate_refs
+    assert "finance-br:ibovespa" not in ferrograo_candidate_refs
+
+
 def test_article_golden_set_evaluates_extraction_then_impact(tmp_path: Path):
     response = build_starter_market_graph_store(output_dir=tmp_path / "artifact")
     golden_set_path = tmp_path / "article_golden_set.json"

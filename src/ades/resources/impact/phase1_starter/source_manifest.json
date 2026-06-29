@@ -20,6 +20,16 @@
       "notes": "Production-promoted Australia first slice covering ASX issuer/ticker/index bridges, APRA/ASIC/TGA regulators, and government program or sector relationships from official public evidence."
     },
     {
+      "source_name": "Brazil reviewed program/org relationship source lane",
+      "source_url": "https://sistemaswebb3-listados.b3.com.br/listedCompaniesProxy/CompanyCall/",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_brazil/2026-06-29/SOURCE_INVENTORY.md",
+      "source_year": 2026,
+      "refresh_policy": "refresh_on_country_source_lane_update",
+      "normalized_output_allowed": true,
+      "license_notes": "Reviewed source lane stores only normalized relationship metadata; source URLs and evidence snippets are retained under /mnt/githubActions/ades_big_data.",
+      "notes": "Production-promoted Brazil first slice covering B3 issuer/ticker/index bridges, BNDES/Zilia program relationships, transport projects, and official regulator or government sector relationships."
+    },
+    {
       "source_name": "Australian Office of the Chief Economist Resources and Energy Quarterly",
       "source_url": "https://www.industry.gov.au/publications/resources-and-energy-quarterly",
       "source_snapshot": "2026-05-12",

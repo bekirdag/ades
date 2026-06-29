@@ -161,8 +161,18 @@ ORGANIZATION_CONTROL_RELATIONS = {
 }
 PROGRAM_ORG_RELATIONS = {
     "program_operated_by_org",
+    "program_loan_recipient_org",
     "product_owned_by_org",
     "brand_owned_by_org",
+}
+PROJECT_ORG_RELATIONS = {
+    "project_operated_by_org",
+}
+ORG_SECTOR_RELATIONS = {
+    "org_in_sector",
+}
+INFRASTRUCTURE_PROJECT_RELATIONS = {
+    "infrastructure_project_affects_sector",
 }
 SUPPLY_CHAIN_RELATIONS = {
     "issuer_supplier_to_issuer",
@@ -261,13 +271,15 @@ def relation_family_for_relation(relation: str) -> str:
         return "person_to_issuer"
     if relation in PROGRAM_ORG_RELATIONS:
         return "program_org_relationship"
+    if relation in PROJECT_ORG_RELATIONS:
+        return "project_org_relationship"
     if relation in ORGANIZATION_CONTROL_RELATIONS:
         return "organization_control"
     if relation in SUPPLY_CHAIN_RELATIONS:
         return "supply_chain_counterparty"
-    if relation in SECTOR_EXPOSURE_RELATIONS:
+    if relation in SECTOR_EXPOSURE_RELATIONS or relation in ORG_SECTOR_RELATIONS:
         return "sector_exposure"
-    if relation in POLICY_SECTOR_RELATIONS:
+    if relation in POLICY_SECTOR_RELATIONS or relation in INFRASTRUCTURE_PROJECT_RELATIONS:
         return "policy_sector_exposure"
     if relation in {"issuer_in_index", "index_affects_country_index_proxy"}:
         return "index_membership"
@@ -329,6 +341,10 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         return GLOBAL_EQUITY_EVENT_TYPES
     if relation in POLICY_SECTOR_RELATIONS:
         return POLICY_SECTOR_EVENT_TYPES
+    if relation in INFRASTRUCTURE_PROJECT_RELATIONS:
+        return tuple(dict.fromkeys((*POLICY_SECTOR_EVENT_TYPES, *SUPPLY_CHAIN_EVENT_TYPES)))
+    if relation in ORG_SECTOR_RELATIONS:
+        return POLICY_SECTOR_EVENT_TYPES
     if relation in {"issuer_exposed_to_country", "issuer_exposed_to_region"}:
         return COUNTRY_REGION_EXPOSURE_EVENT_TYPES
     if relation == "issuer_exposed_to_supply_chain":
@@ -353,6 +369,7 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         or relation in PERSON_TO_ISSUER_RELATIONS
         or relation in ORGANIZATION_CONTROL_RELATIONS
         or relation in PROGRAM_ORG_RELATIONS
+        or relation in PROJECT_ORG_RELATIONS
     ):
         return EQUITY_EVENT_TYPES
     return ()
@@ -417,10 +434,24 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
             "source_backed_program_org_evidence",
             "compatible_event_signal",
         )
+    if relation in PROJECT_ORG_RELATIONS:
+        return (
+            "direct_project_mention",
+            "source_backed_project_org_evidence",
+            "compatible_event_signal",
+        )
     if relation in SUPPLY_CHAIN_RELATIONS:
         return ("supply_chain_or_counterparty_event",)
+    if relation in INFRASTRUCTURE_PROJECT_RELATIONS:
+        return (
+            "infrastructure_project_event_signal",
+            "capacity_delay_or_logistics_context",
+            "jurisdiction_or_project_context",
+        )
     if relation in {"issuer_in_sector", "issuer_in_index"}:
         return ("direct_issuer_or_sector_membership_evidence",)
+    if relation in ORG_SECTOR_RELATIONS:
+        return ("direct_org_or_sector_membership_evidence",)
     if relation in POLICY_SECTOR_RELATIONS:
         return ("sector_policy_event_signal", "jurisdiction_or_regulator_context")
     if relation in ISSUER_EXPOSURE_RELATIONS:
