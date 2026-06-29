@@ -31,6 +31,11 @@ REVIEWED_BRAZIL_B3_BNDES_TRANSPORT_FIXTURE = Path(
     "program_org_relationship/reviewed/2026-06-29/"
     "brazil_b3_bndes_transport_relationships.tsv"
 )
+REVIEWED_CANADA_TMX_BOC_INFRASTRUCTURE_FIXTURE = Path(
+    "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/"
+    "program_org_relationship/reviewed/2026-06-29/"
+    "canada_tmx_boc_infrastructure_relationships.tsv"
+)
 
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
@@ -196,6 +201,7 @@ def test_program_org_relationship_builds_program_holding_issuer_ticker_path(
         "IDX:BBRI",
     ) in edge_keys
     program_edge = next(row for row in edges if row["relation"] == "program_operated_by_org")
+    assert program_edge["confidence"] == "0.95"
     assert "PNM Mekaar is operated by PNM" in program_edge["notes"]
     assert "direct_program_product_or_brand_mention" in (
         program_edge["direction_preconditions"].split(",")
@@ -765,3 +771,198 @@ def test_reviewed_brazil_fixture_expands_b3_and_keeps_project_guardrails(
     anp_candidate_refs = {candidate.entity_ref for candidate in anp_expansion.candidates}
     assert {"finance-br-ticker:PETR3", "finance-br-ticker:PETR4"}.issubset(anp_candidate_refs)
     assert "ades:currency:BRL" not in anp_candidate_refs
+
+
+def test_reviewed_canada_fixture_expands_tmx_and_keeps_policy_guardrails(
+    tmp_path: Path,
+) -> None:
+    if not REVIEWED_CANADA_TMX_BOC_INFRASTRUCTURE_FIXTURE.exists():
+        pytest.skip("reviewed Canada TMX/BoC/infrastructure fixture is not mounted")
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[REVIEWED_CANADA_TMX_BOC_INFRASTRUCTURE_FIXTURE],
+        output_root=tmp_path / "impact_relationships",
+        run_id="reviewed-canada-tmx-boc-infrastructure",
+        build_artifact=True,
+        include_starter_graph=False,
+        artifact_output_root=tmp_path / "artifacts",
+    )
+
+    assert result.relationship_row_count == 79
+    assert result.relation_counts == {
+        "government_body_affects_sector": 28,
+        "infrastructure_project_affects_sector": 6,
+        "issuer_has_listed_ticker": 10,
+        "issuer_in_sector": 7,
+        "program_operated_by_org": 5,
+        "regulator_affects_sector": 12,
+        "sector_affects_index": 1,
+        "ticker_listed_on_exchange": 10,
+    }
+    assert result.node_type_counts == {
+        "exchange": 1,
+        "government_body": 7,
+        "issuer": 10,
+        "market_index": 1,
+        "program": 5,
+        "project": 2,
+        "regulator": 5,
+        "sector": 44,
+        "ticker": 10,
+    }
+
+    validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
+    assert validation.invalid_row_count == 0
+    assert validation.source_warning_counts == {}
+    assert validation.relation_warning_counts == {}
+    assert validation.source_tier_counts == {
+        "exchange": 22,
+        "government": 38,
+        "issuer_disclosed": 7,
+        "regulator": 12,
+    }
+
+    assert result.artifact_path is not None
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    for ticker_ref in [
+        "finance-ca-ticker:tsx:ry",
+        "finance-ca-ticker:tsx:td",
+        "finance-ca-ticker:tsx:shop",
+        "finance-ca-ticker:tsx:enb",
+        "finance-ca-ticker:tsx:cnq",
+        "finance-ca-ticker:tsx:cnr",
+        "finance-ca-ticker:tsx:cp",
+        "finance-ca-ticker:tsx:bce",
+        "finance-ca-ticker:tsx:t",
+        "finance-ca-ticker:tsx:rci.b",
+    ]:
+        assert nodes[ticker_ref]["is_tradable"] == "true"
+    assert nodes["finance-ca:sp-tsx-composite"]["is_tradable"] == "true"
+    assert nodes["ades:sector:ca:banking"]["is_tradable"] == "false"
+    assert nodes["ades:project:ca:contrecoeur-port-terminal"]["is_seed_eligible"] == "true"
+
+    with MarketGraphStore(result.artifact_path) as store:
+        rbc_edges = store.outbound_edges_batch(["ades:issuer:ca:royal-bank-of-canada"])[
+            "ades:issuer:ca:royal-bank-of-canada"
+        ]
+        osfi_edges = store.outbound_edges_batch(["ades:org:ca:osfi"])["ades:org:ca:osfi"]
+        boc_edges = store.outbound_edges_batch(["ades:org:ca:bank-of-canada"])[
+            "ades:org:ca:bank-of-canada"
+        ]
+        contrecoeur_edges = store.outbound_edges_batch(
+            ["ades:project:ca:contrecoeur-port-terminal"]
+        )["ades:project:ca:contrecoeur-port-terminal"]
+
+    assert {edge.target_ref for edge in rbc_edges} == {"finance-ca-ticker:tsx:ry"}
+    assert {edge.target_ref for edge in osfi_edges} == {
+        "ades:sector:ca:banking",
+        "ades:sector:ca:insurance",
+        "ades:sector:ca:pension-plans",
+    }
+    assert {edge.target_ref for edge in boc_edges} == {
+        "ades:sector:ca:foreign-exchange",
+        "ades:sector:ca:interest-rates",
+        "ades:sector:ca:monetary-policy",
+    }
+    assert {edge.target_ref for edge in contrecoeur_edges} == {
+        "ades:sector:ca:port-infrastructure",
+        "ades:sector:ca:public-infrastructure",
+        "ades:sector:ca:trade-logistics",
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=result.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=20,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    issuer_candidate_refs, _ = expanded_refs("ades:issuer:ca:royal-bank-of-canada")
+    assert "finance-ca-ticker:tsx:ry" in issuer_candidate_refs
+    assert "ades:currency:CAD" not in issuer_candidate_refs
+
+    shopify_candidate_refs, shopify_passive_refs = expanded_refs("ades:issuer:ca:shopify")
+    assert "finance-ca-ticker:tsx:shop" in shopify_candidate_refs
+    assert "ades:sector:ca:commerce-software" in shopify_passive_refs
+    assert "ades:currency:CAD" not in shopify_candidate_refs
+
+    equity_candidate_refs, _ = expanded_refs("ades:sector:ca:canadian-equity-market")
+    assert "finance-ca:sp-tsx-composite" in equity_candidate_refs
+    assert "ades:currency:CAD" not in equity_candidate_refs
+
+    no_policy_ticker_refs = {
+        "finance-ca-ticker:tsx:ry",
+        "finance-ca-ticker:tsx:td",
+        "finance-ca-ticker:tsx:shop",
+        "finance-ca-ticker:tsx:enb",
+        "finance-ca-ticker:tsx:cnq",
+        "finance-ca-ticker:tsx:cnr",
+        "finance-ca-ticker:tsx:cp",
+        "finance-ca-ticker:tsx:bce",
+        "finance-ca-ticker:tsx:t",
+        "finance-ca-ticker:tsx:rci.b",
+        "finance-ca:sp-tsx-composite",
+        "ades:currency:CAD",
+    }
+    expansion_expectations = [
+        (
+            "ades:org:ca:osfi",
+            {
+                "ades:sector:ca:banking",
+                "ades:sector:ca:insurance",
+                "ades:sector:ca:pension-plans",
+            },
+        ),
+        (
+            "ades:org:ca:bank-of-canada",
+            {
+                "ades:sector:ca:foreign-exchange",
+                "ades:sector:ca:interest-rates",
+                "ades:sector:ca:monetary-policy",
+            },
+        ),
+        (
+            "ades:project:ca:contrecoeur-port-terminal",
+            {
+                "ades:sector:ca:port-infrastructure",
+                "ades:sector:ca:public-infrastructure",
+                "ades:sector:ca:trade-logistics",
+            },
+        ),
+        (
+            "ades:org:ca:crtc",
+            {
+                "ades:sector:ca:broadband",
+                "ades:sector:ca:broadcasting-media",
+                "ades:sector:ca:telecommunications",
+            },
+        ),
+        (
+            "ades:org:ca:global-affairs-canada",
+            {
+                "ades:sector:ca:agriculture-export",
+                "ades:sector:ca:trade-logistics",
+                "ades:sector:ca:mining",
+            },
+        ),
+        (
+            "ades:program:ca:cmhc-mortgage-loan-insurance",
+            {
+                "ades:org:ca:cmhc",
+                "ades:sector:ca:housing-finance",
+                "ades:sector:ca:housing-supply",
+                "ades:sector:ca:mortgage-lending",
+            },
+        ),
+    ]
+    for source_ref, expected_passive_refs in expansion_expectations:
+        candidate_refs, passive_refs = expanded_refs(source_ref)
+        assert expected_passive_refs.issubset(passive_refs)
+        assert candidate_refs.isdisjoint(no_policy_ticker_refs)

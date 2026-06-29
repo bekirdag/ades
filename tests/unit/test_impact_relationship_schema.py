@@ -79,6 +79,10 @@ def test_relationship_schema_preserves_existing_finance_country_defaults() -> No
     assert relation_direction_preconditions("index_affects_country_index_proxy") == (
         "sector_or_index_event_signal",
     )
+    assert relation_direction_preconditions("ticker_listed_on_exchange") == (
+        "direct_issuer_or_security_mention",
+        "direct_listing_evidence",
+    )
     assert relation_family_for_relation("shipping_chokepoint_affects_commodity") == (
         "geography_commodity"
     )
@@ -488,6 +492,129 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
             "https://rionegro.gov.ar/articulo/59571/abren-las-inscripciones-al-programa-emprendedores-rio-negro-2026",
         )
         == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "TMX company directory",
+            "https://www.tsx.com/json/company-directory/search/tsx/Royal%20Bank",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier("TMX quote", "https://money.tmx.com/en/quote/RY")
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "Bank of Canada policy rate",
+            "https://www.bankofcanada.ca/core-functions/monetary-policy/key-interest-rate/",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Canada Infrastructure Bank investments",
+            "https://www.cib-bic.ca/en/investments/",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Strategic Innovation Fund",
+            "https://ised-isde.canada.ca/site/strategic-innovation-fund/en",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "CMHC mortgage loan insurance",
+            "https://www.cmhc-schl.gc.ca/consumers/home-buying/mortgage-loan-insurance-for-consumers",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Farm Credit Canada",
+            "https://www.fcc-fac.ca/en",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Agriculture and Agri-Food Canada AgriStability",
+            "https://agriculture.canada.ca/en/programs/agristability",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Global Affairs Canada trade sectors",
+            "https://www.international.gc.ca/world-monde/international_relations-relations_internationales/turkiye/relations.aspx",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "OSFI regulated institutions",
+            "https://www.osfi-bsif.gc.ca/en/supervision/financial-institutions",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "Canada Energy Regulator facilities",
+            "https://www.cer-rec.gc.ca/en/about/who-we-are-what-we-do/facilities-we-regulate/",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "CRTC telecommunications",
+            "https://crtc.gc.ca/eng/home-accueil.htm",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "SEDAR+ public filings",
+            "https://www.sedarplus.ca/landingpage/",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "Canadian Securities Administrators",
+            "https://www.securities-administrators.ca/",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "Shopify investors",
+            "https://www.shopify.com/investors",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
+            "Canadian Natural investor information",
+            "https://www.cnrl.com/investor-information/",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
+            "CPKC investor relations",
+            "https://investor.cpkcr.com/",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
+            "Rogers investor relations",
+            "https://about.rogers.com/investor-relations/",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
     )
     assert classify_source_tier("unit test", "https://example.test/source") == (
         SOURCE_TIER_TEST_FIXTURE

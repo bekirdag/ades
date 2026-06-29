@@ -414,6 +414,8 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
             "earnings_signal",
             "labor_disruption",
         )
+    if relation in {"ticker_listed_on_exchange", "ticker_trades_on_exchange"}:
+        return ("direct_issuer_or_security_mention", "direct_listing_evidence")
     if relation in {
         "issuer_has_security",
         "security_has_identifier",

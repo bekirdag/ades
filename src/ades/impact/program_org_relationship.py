@@ -187,6 +187,16 @@ def _notes(row: dict[str, str]) -> str:
     return " | ".join(parts)
 
 
+def _confidence(row: dict[str, str]) -> str:
+    raw = _coalesce(row, "confidence")
+    if not raw:
+        return "0.9"
+    parsed = float(raw)
+    if parsed < 0 or parsed > 1:
+        raise ValueError(f"Invalid confidence: {raw!r}")
+    return f"{parsed:.4g}"
+
+
 def _edge_input_row(row: dict[str, str]) -> dict[str, str]:
     normalized = dict(row)
     if not _coalesce(normalized, "source_name"):
@@ -319,7 +329,7 @@ def _add_relationship_row(
         row=_edge_input_row(row),
         pack_ids=pack_ids,
         evidence_level=_coalesce(row, "evidence_level") or "direct",
-        confidence="0.9",
+        confidence=_confidence(row),
         direction_hint=_coalesce(row, "direction_hint") or "relationship_chain",
     )
     edges[(source_ref, target_ref, relation, edge["source_snapshot"])] = edge

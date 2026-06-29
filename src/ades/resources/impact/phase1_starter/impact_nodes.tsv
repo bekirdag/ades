@@ -139,3 +139,88 @@ finance-br-ticker:PETR4	PETR4	ticker	finance-br-en	true	false	"{""exchange"": ""
 finance-br-ticker:RAIL3	RAIL3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRRAILACNOR9"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""RAIL3""}"	finance-br-en
 finance-br-ticker:VALE3	VALE3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRVALEACNOR0"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""VALE3""}"	finance-br-en
 finance-br:ibovespa	Ibovespa	market_index	finance-br-en	true	false	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:exchange:ca:tsx	Toronto Stock Exchange	exchange	finance-ca-en	false	true	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE""}"	finance-ca-en
+ades:issuer:ca:bce	BCE Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:canadian-national-railway	Canadian National Railway Company	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:canadian-natural-resources	Canadian Natural Resources Limited	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:canadian-pacific-kansas-city	Canadian Pacific Kansas City Limited	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:enbridge	Enbridge Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:rogers-communications	Rogers Communications Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:royal-bank-of-canada	Royal Bank of Canada	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:shopify	Shopify Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:telus	TELUS Corporation	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:toronto-dominion-bank	Toronto-Dominion Bank (The)	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:aafc	Agriculture and Agri-Food Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:bank-of-canada	Bank of Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:canada-energy-regulator	Canada Energy Regulator	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:canada-infrastructure-bank	Canada Infrastructure Bank	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:canadian-securities-administrators	Canadian Securities Administrators	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:cmhc	Canada Mortgage and Housing Corporation	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:crtc	Canadian Radio-television and Telecommunications Commission	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:farm-credit-canada	Farm Credit Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:global-affairs-canada	Global Affairs Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:ised	Innovation, Science and Economic Development Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:osfi	Office of the Superintendent of Financial Institutions	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:sedar-plus	SEDAR+	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:program:ca:agriinvest	AgriInvest	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:program:ca:agristability	AgriStability	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:program:ca:cmhc-mortgage-loan-insurance	CMHC mortgage loan insurance	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:program:ca:net-zero-accelerator	Net Zero Accelerator Initiative	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:program:ca:strategic-innovation-fund	Strategic Innovation Fund / Strategic Response Fund	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:project:ca:contrecoeur-port-terminal	Contrecoeur Port Terminal	project	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:project:ca:oneida-energy-storage	Oneida Energy Storage	project	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:agriculture	Canada agriculture	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:agriculture-export	Canada agriculture export	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:agriculture-finance	Canada agriculture finance	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:agriculture-income-support	Canada agriculture income support	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:banking	Canada banking	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:broadband	Canada broadband	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:broadcasting-media	Canada broadcasting and media	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:canadian-equity-market	Canadian equity market	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:clean-power	Canada clean power	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:clean-technology	Canada clean technology	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:cleantech	Canada cleantech	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:commerce-software	Canada commerce software	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:critical-minerals	Canada critical minerals	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:decarbonization	Canada decarbonization	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:digital-infrastructure-ai	Canada digital infrastructure and AI	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:electricity-storage	Canada electricity storage	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:electricity-transmission	Canada electricity transmission	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:energy	Canada energy	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:energy-infrastructure	Canada energy infrastructure	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:ev-batteries	Canada EV batteries and battery ecosystem	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:farm-credit	Canada farm credit	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:foreign-exchange	Canada foreign exchange	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:housing-finance	Canada housing finance	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:housing-supply	Canada housing supply	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:ict	Canada ICT	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:industrial-policy	Canada industrial policy	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:infrastructure	Canada infrastructure	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:insurance	Canada insurance	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:interest-rates	Canada interest rates	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:mining	Canada mining	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:monetary-policy	Canada monetary policy	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:mortgage-lending	Canada mortgage lending	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:oil-gas-production	Canada oil and gas production	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:pension-plans	Canada pension plans	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:pipeline-infrastructure	Canada pipeline infrastructure	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:port-infrastructure	Canada port infrastructure	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:public-company-disclosure	Canada public-company disclosure	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:public-infrastructure	Canada public infrastructure	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:rail-freight	Canada rail freight	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:securities-regulation	Canada securities regulation	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:telecommunications	Canada telecommunications	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:trade-logistics	Canada trade logistics	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:trade-transport	Canada trade and transportation infrastructure	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:sector:ca:transportation	Canada transportation	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+finance-ca-ticker:tsx:bce	BCE	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""BCE""}"	finance-ca-en
+finance-ca-ticker:tsx:cnq	CNQ	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""CNQ""}"	finance-ca-en
+finance-ca-ticker:tsx:cnr	CNR	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""CNR""}"	finance-ca-en
+finance-ca-ticker:tsx:cp	CP	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""CP""}"	finance-ca-en
+finance-ca-ticker:tsx:enb	ENB	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""ENB""}"	finance-ca-en
+finance-ca-ticker:tsx:rci.b	RCI.B	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""RCI.B""}"	finance-ca-en
+finance-ca-ticker:tsx:ry	RY	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""RY""}"	finance-ca-en
+finance-ca-ticker:tsx:shop	SHOP	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""SHOP""}"	finance-ca-en
+finance-ca-ticker:tsx:t	T	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""T""}"	finance-ca-en
+finance-ca-ticker:tsx:td	TD	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""TD""}"	finance-ca-en
+finance-ca:sp-tsx-composite	S&P/TSX Composite Index	market_index	finance-ca-en	true	false	"{""jurisdiction"": ""CA""}"	finance-ca-en

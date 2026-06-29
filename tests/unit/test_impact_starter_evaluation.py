@@ -211,6 +211,76 @@ def test_starter_graph_includes_promoted_brazil_relationships(tmp_path: Path) ->
     assert "finance-br:ibovespa" not in ferrograo_candidate_refs
 
 
+def test_starter_graph_includes_promoted_canada_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        canada_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_canada/%'
+                """
+            ).fetchone()[0]
+        )
+        sp_tsx_row = connection.execute(
+            """
+            SELECT is_tradable, is_seed_eligible
+            FROM impact_nodes
+            WHERE entity_ref = 'finance-ca:sp-tsx-composite'
+            """
+        ).fetchone()
+
+    assert canada_edge_count == 79
+    assert sp_tsx_row == (1, 0)
+
+    equity_expansion = expand_impact_paths(
+        ["ades:sector:ca:canadian-equity-market"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=5,
+    )
+    equity_candidate_refs = {candidate.entity_ref for candidate in equity_expansion.candidates}
+    assert "finance-ca:sp-tsx-composite" in equity_candidate_refs
+    assert "ades:currency:CAD" not in equity_candidate_refs
+
+    contrecoeur_expansion = expand_impact_paths(
+        ["ades:project:ca:contrecoeur-port-terminal"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=3,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    contrecoeur_candidate_refs = {
+        candidate.entity_ref for candidate in contrecoeur_expansion.candidates
+    }
+    contrecoeur_passive_refs = {path.entity_ref for path in contrecoeur_expansion.passive_paths}
+    assert "ades:sector:ca:port-infrastructure" in contrecoeur_passive_refs
+    assert "ades:sector:ca:trade-logistics" in contrecoeur_passive_refs
+    assert "finance-ca-ticker:tsx:cnr" not in contrecoeur_candidate_refs
+    assert "finance-ca-ticker:tsx:cp" not in contrecoeur_candidate_refs
+    assert "finance-ca:sp-tsx-composite" not in contrecoeur_candidate_refs
+
+    osfi_expansion = expand_impact_paths(
+        ["ades:org:ca:osfi"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=4,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    osfi_candidate_refs = {candidate.entity_ref for candidate in osfi_expansion.candidates}
+    osfi_passive_refs = {path.entity_ref for path in osfi_expansion.passive_paths}
+    assert "ades:sector:ca:banking" in osfi_passive_refs
+    assert "ades:sector:ca:insurance" in osfi_passive_refs
+    assert "finance-ca-ticker:tsx:ry" not in osfi_candidate_refs
+    assert "finance-ca-ticker:tsx:td" not in osfi_candidate_refs
+    assert "ades:currency:CAD" not in osfi_candidate_refs
+
+
 def test_article_golden_set_evaluates_extraction_then_impact(tmp_path: Path):
     response = build_starter_market_graph_store(output_dir=tmp_path / "artifact")
     golden_set_path = tmp_path / "article_golden_set.json"
