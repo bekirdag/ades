@@ -34,6 +34,9 @@ from .api import build_issuer_exposure_source_lane as api_build_issuer_exposure_
 from .api import build_market_graph_store as api_build_market_graph_store
 from .api import build_medical_source_bundle as api_build_medical_source_bundle
 from .api import build_policy_sector_source_lane as api_build_policy_sector_source_lane
+from .api import (
+    build_program_org_relationship_source_lane as api_build_program_org_relationship_source_lane,
+)
 from .api import build_qid_graph_index as api_build_qid_graph_index
 from .api import build_qid_graph_index_from_store as api_build_qid_graph_index_from_store
 from .api import build_qid_graph_store as api_build_qid_graph_store
@@ -66,6 +69,7 @@ from .api import DEFAULT_FINANCE_COUNTRY_PROXY_SOURCE_OUTPUT_ROOT
 from .api import DEFAULT_FINANCE_COUNTRY_SOURCE_LANE_INPUT_OUTPUT_ROOT
 from .api import DEFAULT_ISSUER_EXPOSURE_SOURCE_OUTPUT_ROOT
 from .api import DEFAULT_POLICY_SECTOR_SOURCE_OUTPUT_ROOT
+from .api import DEFAULT_PROGRAM_ORG_RELATIONSHIP_SOURCE_OUTPUT_ROOT
 from .api import DEFAULT_PROPOSAL_PROMOTION_OUTPUT_ROOT
 from .api import (
     derive_finance_country_source_lane_inputs as api_derive_finance_country_source_lane_inputs,
@@ -2956,6 +2960,76 @@ def registry_build_policy_sector_source_lane(
         response = api_build_policy_sector_source_lane(
             policy_sector_tsv_paths=policy_sector_tsv_paths,
             issuer_sector_tsv_paths=issuer_sector_tsv_paths,
+            output_root=output_root,
+            run_id=run_id,
+            artifact_output_root=artifact_output_root,
+            build_artifact=build_artifact,
+            include_starter_graph=include_starter_graph,
+            extra_node_tsv_paths=extra_node_tsv_paths,
+            extra_edge_tsv_paths=extra_edge_tsv_paths,
+            namespace=namespace,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _exit_with_cli_error(exc)
+    _echo_json(response.to_json_dict())
+
+
+@registry_app.command("build-program-org-relationship-source-lane")
+def registry_build_program_org_relationship_source_lane(
+    relationship_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--relationship-tsv-path",
+        help=(
+            "Program/product/brand/org/ticker relationship TSV path. Repeat for "
+            "multiple source lanes."
+        ),
+    ),
+    output_root: Path = typer.Option(
+        DEFAULT_PROGRAM_ORG_RELATIONSHIP_SOURCE_OUTPUT_ROOT,
+        "--output-root",
+        help="Root directory where normalized program/org source lanes are written.",
+    ),
+    run_id: str | None = typer.Option(
+        None,
+        "--run-id",
+        help="Stable run id. Defaults to the current UTC timestamp.",
+    ),
+    build_artifact: bool = typer.Option(
+        False,
+        "--build-artifact",
+        help="Also build a market graph artifact from the generated source lane.",
+    ),
+    artifact_output_root: Path | None = typer.Option(
+        None,
+        "--artifact-output-root",
+        help="Optional artifact output root when --build-artifact is set.",
+    ),
+    include_starter_graph: bool = typer.Option(
+        True,
+        "--include-starter-graph/--no-starter-graph",
+        help="Include the packaged starter market graph while building an artifact.",
+    ),
+    extra_node_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--extra-node-tsv-path",
+        help="Additional normalized graph node TSV path for artifact build.",
+    ),
+    extra_edge_tsv_paths: list[Path] = typer.Option(
+        [],
+        "--extra-edge-tsv-path",
+        help="Additional normalized graph edge TSV path for artifact build.",
+    ),
+    namespace: str = typer.Option(
+        "program-org",
+        "--namespace",
+        help="Namespace used when generating missing entity refs.",
+    ),
+) -> None:
+    """Build normalized program/product/org relationship source lanes."""
+
+    try:
+        response = api_build_program_org_relationship_source_lane(
+            relationship_tsv_paths=relationship_tsv_paths,
             output_root=output_root,
             run_id=run_id,
             artifact_output_root=artifact_output_root,

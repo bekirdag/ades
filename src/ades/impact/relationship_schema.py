@@ -155,6 +155,14 @@ PERSON_TO_ISSUER_RELATIONS = {
 ORGANIZATION_CONTROL_RELATIONS = {
     "private_company_controls_public_issuer",
     "holding_company_controls_public_issuer",
+    "org_part_of_holding",
+    "org_subsidiary_of_org",
+    "holding_parent_is_issuer",
+}
+PROGRAM_ORG_RELATIONS = {
+    "program_operated_by_org",
+    "product_owned_by_org",
+    "brand_owned_by_org",
 }
 SUPPLY_CHAIN_RELATIONS = {
     "issuer_supplier_to_issuer",
@@ -167,6 +175,9 @@ IDENTITY_LISTING_RELATIONS = {
     "issuer_has_exchange_listing",
     "ticker_trades_on_exchange",
     "ticker_listed_on_exchange",
+    "issuer_has_security",
+    "security_has_identifier",
+    "security_listed_on_exchange",
 }
 SECTOR_EXPOSURE_RELATIONS = {
     "issuer_in_sector",
@@ -248,6 +259,8 @@ def relation_family_for_relation(relation: str) -> str:
         return "person_to_issuer"
     if relation.startswith("person_"):
         return "person_to_issuer"
+    if relation in PROGRAM_ORG_RELATIONS:
+        return "program_org_relationship"
     if relation in ORGANIZATION_CONTROL_RELATIONS:
         return "organization_control"
     if relation in SUPPLY_CHAIN_RELATIONS:
@@ -339,6 +352,7 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         or relation == "person_affects_employer_ticker"
         or relation in PERSON_TO_ISSUER_RELATIONS
         or relation in ORGANIZATION_CONTROL_RELATIONS
+        or relation in PROGRAM_ORG_RELATIONS
     ):
         return EQUITY_EVENT_TYPES
     return ()
@@ -383,10 +397,26 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
             "earnings_signal",
             "labor_disruption",
         )
+    if relation in {
+        "issuer_has_security",
+        "security_has_identifier",
+        "security_listed_on_exchange",
+    }:
+        return (
+            "direct_issuer_or_security_mention",
+            "direct_company_mention",
+            "corporate_action",
+        )
     if relation == "person_affects_employer_ticker":
         return ("strong_person_employer_event",)
     if relation in PERSON_TO_ISSUER_RELATIONS:
         return ("strong_key_person_or_ownership_event",)
+    if relation in PROGRAM_ORG_RELATIONS:
+        return (
+            "direct_program_product_or_brand_mention",
+            "source_backed_program_org_evidence",
+            "compatible_event_signal",
+        )
     if relation in SUPPLY_CHAIN_RELATIONS:
         return ("supply_chain_or_counterparty_event",)
     if relation in {"issuer_in_sector", "issuer_in_index"}:
@@ -444,7 +474,11 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
     if relation in CRYPTO_POLICY_RELATIONS:
         return ("approval", "legal_risk", "regulatory_restriction")
     if relation in ORGANIZATION_CONTROL_RELATIONS:
-        return ("strong_ownership_or_control_event",)
+        return (
+            "source_backed_ownership_or_affiliation_chain",
+            "strong_ownership_or_control_event",
+            "compatible_event_signal",
+        )
     return ()
 
 

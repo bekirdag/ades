@@ -31,6 +31,10 @@ from .policy_sector_proxy import (
     PolicySectorProxyBuildResult,
     build_policy_sector_source_lane,
 )
+from .program_org_relationship import (
+    ProgramOrgRelationshipBuildResult,
+    build_program_org_relationship_source_lane,
+)
 from .proposal_promoter import (
     ProposalPromotionResult,
     promote_reviewed_relationship_proposals,
@@ -77,6 +81,7 @@ __all__ = [
     "FinanceCountrySourceLaneInputDerivationResult",
     "IssuerExposureBuildResult",
     "PolicySectorProxyBuildResult",
+    "ProgramOrgRelationshipBuildResult",
     "ProposalPromotionResult",
     "RelationDefinition",
     "SourceAttribution",
@@ -84,6 +89,7 @@ __all__ = [
     "build_finance_country_proxy_source_lane",
     "build_issuer_exposure_source_lane",
     "build_policy_sector_source_lane",
+    "build_program_org_relationship_source_lane",
     "build_source_attribution",
     "build_starter_market_graph_store",
     "classify_source_tier",

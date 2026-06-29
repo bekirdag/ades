@@ -45,6 +45,31 @@ _OFFICIAL_HOST_FRAGMENTS = (
     "pancanal.com",
     "usgs.gov",
     "eia.gov",
+    "gleif.org",
+    "leidata.gleif.org",
+    "iso.org",
+    "iso20022.org",
+    "census.gov",
+    "unstats.un.org",
+    "ec.europa.eu",
+    "eurostat.ec.europa.eu",
+    "imf.org",
+    "bis.org",
+    "oecd.org",
+    "world-exchanges.org",
+    "wto.org",
+    "fao.org",
+    "ilo.org",
+    "ojk.go.id",
+    "setkab.go.id",
+    "kemenkeu.go.id",
+    "bumn.go.id",
+    "boletinoficial.gob.ar",
+    "datos.gob.ar",
+    "indec.gob.ar",
+    "rionegro.gov.ar",
+    "crear.rionegro.gov.ar",
+    "boletinoficial.rionegro.gov.ar",
 )
 _EXCHANGE_HOST_FRAGMENTS = (
     "nasdaq.com",
@@ -58,6 +83,17 @@ _EXCHANGE_HOST_FRAGMENTS = (
     "jpx.co.jp",
     "borsaistanbul.com",
     "cmegroup.com",
+    "idx.co.id",
+    "sgx.com",
+    "deutsche-boerse.com",
+    "boerse-frankfurt.de",
+    "six-group.com",
+    "bseindia.com",
+    "nseindia.com",
+    "krx.co.kr",
+    "twse.com.tw",
+    "byma.com.ar",
+    "open.bymadata.com.ar",
 )
 _REGULATOR_HOST_FRAGMENTS = (
     "fca.org.uk",
@@ -68,9 +104,27 @@ _REGULATOR_HOST_FRAGMENTS = (
     "ofcom.org.uk",
     "cma.gov.uk",
     "epa.gov",
+    "bankofengland.co.uk",
+    "federalreserve.gov",
+    "bis.org",
+    "esma.europa.eu",
+    "iosco.org",
+    "mas.gov.sg",
+    "sfc.hk",
+    "asic.gov.au",
+    "bcra.gob.ar",
+    "cnv.gov.ar",
+    "aif2.cnv.gov.ar",
 )
-_LICENSED_HOST_FRAGMENTS = ("msci.com",)
+_LICENSED_HOST_FRAGMENTS = ("msci.com", "openfigi.com")
 _INDUSTRY_ASSOCIATION_HOST_FRAGMENTS = ("semiconductors.org",)
+_ISSUER_DISCLOSED_HOST_FRAGMENTS = (
+    "pnm.co.id",
+    "bri.co.id",
+    "ir-bri.com",
+    "bancopatagonia.com.ar",
+    "bp.bancopatagonia.com.ar",
+)
 
 
 @dataclass(frozen=True)
@@ -129,6 +183,7 @@ def classify_source_tier(source_name: str | None, source_url: str | None) -> str
         or "annual report" in name
         or "/investor" in url_lower
         or host.startswith("ir.")
+        or _contains_any(host, _ISSUER_DISCLOSED_HOST_FRAGMENTS)
     ):
         return SOURCE_TIER_ISSUER_DISCLOSED
     return SOURCE_TIER_UNKNOWN

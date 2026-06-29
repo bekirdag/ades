@@ -12,6 +12,7 @@ from ades.impact.news_analysis_evaluation import (
     ImpactNewsAnalysisGoldenSetReport,
 )
 from ades.impact.policy_sector_proxy import PolicySectorProxyBuildResult
+from ades.impact.program_org_relationship import ProgramOrgRelationshipBuildResult
 from ades.impact.proposal_promoter import ProposalPromotionResult
 from ades.impact.source_lane_inputs import FinanceCountrySourceLaneInputDerivationResult
 from ades.impact.source_lane_validation import ImpactSourceLaneValidationResult
@@ -564,6 +565,104 @@ def test_cli_registry_build_policy_sector_source_lane_calls_public_api(
     assert captured["extra_node_tsv_paths"] == [extra_node_path]
     assert captured["extra_edge_tsv_paths"] == [extra_edge_path]
     assert captured["namespace"] == "custom-policy"
+
+
+def test_cli_registry_build_program_org_relationship_source_lane_calls_public_api(
+    tmp_path: Path, monkeypatch
+) -> None:
+    runner = CliRunner()
+    relationship_path = tmp_path / "program_org_relationships.tsv"
+    relationship_path.write_text("", encoding="utf-8")
+    output_root = tmp_path / "source_lanes"
+    artifact_root = tmp_path / "artifacts"
+    extra_node_path = tmp_path / "extra_nodes.tsv"
+    extra_node_path.write_text("", encoding="utf-8")
+    extra_edge_path = tmp_path / "extra_edges.tsv"
+    extra_edge_path.write_text("", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def _fake_build_program_org_relationship_source_lane(
+        *,
+        relationship_tsv_paths,
+        output_root,
+        run_id,
+        artifact_output_root,
+        build_artifact,
+        include_starter_graph,
+        extra_node_tsv_paths,
+        extra_edge_tsv_paths,
+        namespace,
+    ) -> ProgramOrgRelationshipBuildResult:
+        captured["relationship_tsv_paths"] = relationship_tsv_paths
+        captured["output_root"] = output_root
+        captured["run_id"] = run_id
+        captured["artifact_output_root"] = artifact_output_root
+        captured["build_artifact"] = build_artifact
+        captured["include_starter_graph"] = include_starter_graph
+        captured["extra_node_tsv_paths"] = extra_node_tsv_paths
+        captured["extra_edge_tsv_paths"] = extra_edge_tsv_paths
+        captured["namespace"] = namespace
+        output_dir = output_root / run_id
+        return ProgramOrgRelationshipBuildResult(
+            run_id=run_id,
+            output_dir=output_dir,
+            node_tsv_path=output_dir / "impact_nodes.tsv",
+            edge_tsv_path=output_dir / "impact_edges.tsv",
+            manifest_path=output_dir / "manifest.json",
+            artifact_path=artifact_output_root / run_id / "market_graph_store.sqlite",
+            artifact_node_count=7,
+            artifact_edge_count=6,
+            relationship_row_count=4,
+            node_count=5,
+            edge_count=4,
+            relation_counts={"program_operated_by_org": 1},
+            node_type_counts={"program": 1, "issuer": 1},
+        )
+
+    monkeypatch.setattr(
+        "ades.cli.api_build_program_org_relationship_source_lane",
+        _fake_build_program_org_relationship_source_lane,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "registry",
+            "build-program-org-relationship-source-lane",
+            "--relationship-tsv-path",
+            str(relationship_path),
+            "--output-root",
+            str(output_root),
+            "--run-id",
+            "program-org-run",
+            "--build-artifact",
+            "--artifact-output-root",
+            str(artifact_root),
+            "--no-starter-graph",
+            "--extra-node-tsv-path",
+            str(extra_node_path),
+            "--extra-edge-tsv-path",
+            str(extra_edge_path),
+            "--namespace",
+            "custom-program-org",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["run_id"] == "program-org-run"
+    assert payload["artifact_edge_count"] == 6
+    assert payload["artifact_path"] == str(
+        artifact_root / "program-org-run" / "market_graph_store.sqlite"
+    )
+    assert captured["relationship_tsv_paths"] == [relationship_path]
+    assert captured["output_root"] == output_root
+    assert captured["artifact_output_root"] == artifact_root
+    assert captured["build_artifact"] is True
+    assert captured["include_starter_graph"] is False
+    assert captured["extra_node_tsv_paths"] == [extra_node_path]
+    assert captured["extra_edge_tsv_paths"] == [extra_edge_path]
+    assert captured["namespace"] == "custom-program-org"
 
 
 def test_cli_registry_build_issuer_exposure_source_lane_calls_public_api(

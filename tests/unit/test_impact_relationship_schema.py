@@ -8,6 +8,7 @@ from ades.impact.relationship_schema import (
     validate_relation_metadata,
 )
 from ades.impact.source_catalog import (
+    SOURCE_TIER_EXCHANGE,
     SOURCE_TIER_GOVERNMENT,
     SOURCE_TIER_INDUSTRY_ASSOCIATION,
     SOURCE_TIER_ISSUER_DISCLOSED,
@@ -88,6 +89,31 @@ def test_relationship_schema_preserves_existing_finance_country_defaults() -> No
     assert "inflation_shock" in relation_event_types("food_commodity_affects_inflation")
     assert relation_family_for_relation("central_bank_affects_rates") == ("country_macro_policy")
     assert "policy_rate_hike" in relation_event_types("central_bank_affects_rates")
+
+
+def test_relationship_schema_covers_program_org_relationship_paths() -> None:
+    definition = relation_definition_for("program_operated_by_org")
+
+    assert definition.family == "program_org_relationship"
+    assert "sector_policy_change" in definition.compatible_event_types
+    assert "earnings_miss" in definition.compatible_event_types
+    assert definition.direction_preconditions == (
+        "direct_program_product_or_brand_mention",
+        "source_backed_program_org_evidence",
+        "compatible_event_signal",
+    )
+    assert relation_family_for_relation("org_part_of_holding") == "organization_control"
+    assert relation_direction_preconditions("org_part_of_holding") == (
+        "source_backed_ownership_or_affiliation_chain",
+        "strong_ownership_or_control_event",
+        "compatible_event_signal",
+    )
+    assert relation_family_for_relation("issuer_has_security") == "identity_listing"
+    assert relation_direction_preconditions("issuer_has_security") == (
+        "direct_issuer_or_security_mention",
+        "direct_company_mention",
+        "corporate_action",
+    )
 
 
 def test_relationship_schema_defaults_and_warnings_are_non_fatal() -> None:
@@ -187,6 +213,27 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     )
     assert (
         classify_source_tier(
+            "PNM company history",
+            "https://www.pnm.co.id/tentang/sejarah",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
+            "Cabinet Secretariat Ultra Micro Holding release",
+            "https://setkab.go.id/en/govt-establishes-ultra-micro-holding/",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "BRI investor relations corporate profile",
+            "https://www.ir-bri.com/corporate_profile.html",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
             "Intertek Group Overview",
             "https://www.intertek.com/investors/group-overview/",
         )
@@ -216,6 +263,66 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     assert (
         classify_source_tier("Wikidata", "https://www.wikidata.org/wiki/Q123")
         == SOURCE_TIER_WIKIDATA_BRIDGE
+    )
+    assert (
+        classify_source_tier("GLEIF LEI records", "https://www.gleif.org/en/lei-data")
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "OpenFIGI mapping values",
+            "https://www.openfigi.com/api/enumValues/v3",
+        )
+        == SOURCE_TIER_LICENSED
+    )
+    assert (
+        classify_source_tier(
+            "Indonesia Stock Exchange company profile",
+            "https://www.idx.co.id/en/listed-companies/company-profiles/BBRI",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "BCRA Sistema Financiero",
+            "https://www.bcra.gob.ar/sistema-financiero/",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "CNV AIF Banco Patagonia",
+            "https://aif2.cnv.gov.ar/presentations/publicview/d90593c7",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "BYMA Empresas Listadas",
+            "https://www.byma.com.ar/financiarse/para-emisoras/empresas-listadas",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "BYMADATA BPAT",
+            "https://open.bymadata.com.ar/#/technical-detail-equity?symbol=BPAT",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "Banco Patagonia investor relations",
+            "https://bp.bancopatagonia.com.ar/relacion-con-inversores/es/institucional",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
+            "Rio Negro program",
+            "https://rionegro.gov.ar/articulo/59571/abren-las-inscripciones-al-programa-emprendedores-rio-negro-2026",
+        )
+        == SOURCE_TIER_GOVERNMENT
     )
     assert classify_source_tier("unit test", "https://example.test/source") == (
         SOURCE_TIER_TEST_FIXTURE

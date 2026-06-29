@@ -266,6 +266,11 @@ from .impact.policy_sector_proxy import (
     PolicySectorProxyBuildResult,
     build_policy_sector_source_lane as run_build_policy_sector_source_lane,
 )
+from .impact.program_org_relationship import (
+    DEFAULT_SOURCE_OUTPUT_ROOT as DEFAULT_PROGRAM_ORG_RELATIONSHIP_SOURCE_OUTPUT_ROOT,
+    ProgramOrgRelationshipBuildResult,
+    build_program_org_relationship_source_lane as run_build_program_org_relationship_source_lane,
+)
 from .impact.proposal_promoter import (
     DEFAULT_OUTPUT_ROOT as DEFAULT_PROPOSAL_PROMOTION_OUTPUT_ROOT,
     ProposalPromotionResult,
@@ -3770,6 +3775,33 @@ def build_policy_sector_source_lane(
     return run_build_policy_sector_source_lane(
         policy_sector_tsv_paths=policy_sector_tsv_paths,
         issuer_sector_tsv_paths=issuer_sector_tsv_paths,
+        output_root=output_root,
+        run_id=run_id,
+        artifact_output_root=artifact_output_root,
+        build_artifact=build_artifact,
+        include_starter_graph=include_starter_graph,
+        extra_node_tsv_paths=extra_node_tsv_paths,
+        extra_edge_tsv_paths=extra_edge_tsv_paths,
+        namespace=namespace,
+    )
+
+
+def build_program_org_relationship_source_lane(
+    *,
+    relationship_tsv_paths: Iterable[str | Path],
+    output_root: str | Path = DEFAULT_PROGRAM_ORG_RELATIONSHIP_SOURCE_OUTPUT_ROOT,
+    run_id: str | None = None,
+    artifact_output_root: str | Path | None = None,
+    build_artifact: bool = False,
+    include_starter_graph: bool = True,
+    extra_node_tsv_paths: Iterable[str | Path] = (),
+    extra_edge_tsv_paths: Iterable[str | Path] = (),
+    namespace: str = "program-org",
+) -> ProgramOrgRelationshipBuildResult:
+    """Build normalized program/product/org relationship graph source lanes."""
+
+    return run_build_program_org_relationship_source_lane(
+        relationship_tsv_paths=relationship_tsv_paths,
         output_root=output_root,
         run_id=run_id,
         artifact_output_root=artifact_output_root,
