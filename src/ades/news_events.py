@@ -590,6 +590,11 @@ _BROAD_PROXY_TEXT_TOKENS = (
 )
 
 _DIRECT_LISTING_OPERATING_SIGNAL_TYPES = {
+    "sector_policy_change",
+    "regulatory_enforcement",
+    "tariff",
+    "export_control",
+    "sanctions",
     "supply_disruption",
     "production_decrease",
     "production_increase",

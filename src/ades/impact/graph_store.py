@@ -252,25 +252,124 @@ class MarketGraphStore:
                     entity_ref=entity_ref,
                     canonical_name=str(row["canonical_name"]),
                     entity_type=str(row["entity_type"]),
-                    library_id=(
-                        str(row["library_id"]) if row["library_id"] is not None else None
-                    ),
+                    library_id=(str(row["library_id"]) if row["library_id"] is not None else None),
                     is_tradable=bool(int(row["is_tradable"])),
                     is_seed_eligible=bool(int(row["is_seed_eligible"])),
                     seed_degree=int(row["seed_degree"]),
                     identifiers=_parse_json_dict(row["identifiers_json"]),
                     packs=_parse_json_string_tuple(row["packs_json"]),
                 )
-        return {
-            ref: self._node_cache[ref]
-            for ref in normalized_refs
-            if ref in self._node_cache
-        }
+        return {ref: self._node_cache[ref] for ref in normalized_refs if ref in self._node_cache}
 
     def node(self, entity_ref: str) -> MarketGraphNode | None:
         """Return one graph node by ADES entity ref."""
 
         return self.node_batch([entity_ref]).get(str(entity_ref).strip())
+
+    def search_seed_nodes(
+        self,
+        terms: Iterable[str],
+        *,
+        country_codes: Iterable[str] | None = None,
+        pack_ids: Iterable[str] | None = None,
+        entity_types: Iterable[str] | None = None,
+        limit_per_term: int = 12,
+    ) -> dict[str, tuple[MarketGraphNode, ...]]:
+        """Find bounded seed-eligible graph nodes whose names or refs match terms."""
+
+        if limit_per_term <= 0:
+            raise ValueError("limit_per_term must be positive.")
+        normalized_terms = tuple(
+            dict.fromkeys(str(term).strip().casefold() for term in terms if str(term).strip())
+        )
+        if not normalized_terms:
+            return {}
+        normalized_country_codes = tuple(
+            dict.fromkeys(
+                str(code).strip().casefold() for code in country_codes or () if str(code).strip()
+            )
+        )
+        normalized_pack_ids = _normalize_refs(pack_ids or ())
+        normalized_entity_types = tuple(
+            dict.fromkeys(
+                str(entity_type).strip().casefold()
+                for entity_type in entity_types or ()
+                if str(entity_type).strip()
+            )
+        )
+        results: dict[str, tuple[MarketGraphNode, ...]] = {}
+        for term in normalized_terms:
+            where_sql = [
+                "n.is_seed_eligible = 1",
+                "n.seed_degree > 0",
+                "(lower(n.canonical_name) LIKE ? OR lower(n.entity_ref) LIKE ?)",
+            ]
+            params: list[object] = [f"%{term}%", f"%{term}%"]
+            if normalized_country_codes:
+                country_sql = " OR ".join(
+                    "lower(n.entity_ref) LIKE ?" for _ in normalized_country_codes
+                )
+                where_sql.append(f"({country_sql})")
+                params.extend(f"finance-{code}-%" for code in normalized_country_codes)
+            if normalized_entity_types:
+                type_sql = ", ".join("?" for _ in normalized_entity_types)
+                where_sql.append(f"lower(n.entity_type) IN ({type_sql})")
+                params.extend(normalized_entity_types)
+            join_sql = ""
+            if normalized_pack_ids:
+                pack_sql = ", ".join("?" for _ in normalized_pack_ids)
+                join_sql = "JOIN json_each(n.packs_json) AS p"
+                where_sql.append(f"p.value IN ({pack_sql})")
+                params.extend(normalized_pack_ids)
+            params.append(limit_per_term)
+            rows = self._connection.execute(
+                f"""
+                SELECT DISTINCT
+                    n.entity_ref,
+                    n.canonical_name,
+                    n.entity_type,
+                    n.library_id,
+                    n.is_tradable,
+                    n.is_seed_eligible,
+                    n.seed_degree,
+                    n.identifiers_json,
+                    n.packs_json
+                FROM impact_nodes AS n
+                {join_sql}
+                WHERE {" AND ".join(where_sql)}
+                ORDER BY
+                    CASE
+                        WHEN lower(n.entity_type) = 'sector' THEN 0
+                        WHEN lower(n.entity_ref) LIKE '%-sector:%' THEN 1
+                        WHEN lower(n.entity_type) = 'organization' THEN 2
+                        ELSE 3
+                    END ASC,
+                    n.seed_degree DESC,
+                    n.is_tradable DESC,
+                    length(n.canonical_name) ASC,
+                    n.entity_ref ASC
+                LIMIT ?
+                """,
+                tuple(params),
+            ).fetchall()
+            nodes: list[MarketGraphNode] = []
+            for row in rows:
+                entity_ref = str(row["entity_ref"])
+                node = MarketGraphNode(
+                    entity_ref=entity_ref,
+                    canonical_name=str(row["canonical_name"]),
+                    entity_type=str(row["entity_type"]),
+                    library_id=(str(row["library_id"]) if row["library_id"] is not None else None),
+                    is_tradable=bool(int(row["is_tradable"])),
+                    is_seed_eligible=bool(int(row["is_seed_eligible"])),
+                    seed_degree=int(row["seed_degree"]),
+                    identifiers=_parse_json_dict(row["identifiers_json"]),
+                    packs=_parse_json_string_tuple(row["packs_json"]),
+                )
+                self._node_cache[entity_ref] = node
+                nodes.append(node)
+            results[term] = tuple(nodes)
+        return results
 
     def bridge_refs_batch(self, entity_refs: Iterable[str]) -> dict[str, tuple[str, ...]]:
         """Return graph node refs that share an identity with the requested refs."""
@@ -280,10 +379,7 @@ class MarketGraphStore:
         if not normalized_refs or not self._has_identity_refs_table:
             return results
 
-        lookup_by_requested = {
-            ref: _normalize_identity_lookup_ref(ref)
-            for ref in normalized_refs
-        }
+        lookup_by_requested = {ref: _normalize_identity_lookup_ref(ref) for ref in normalized_refs}
         grouped: dict[str, list[str]] = {}
         lookup_refs = _normalize_refs(lookup_by_requested.values())
         for ref_chunk in _chunked_values(lookup_refs):

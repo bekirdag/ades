@@ -372,6 +372,47 @@ def test_gate_terminal_candidates_keeps_direct_listing_with_operating_signal() -
     assert gated[0].compatible_event_types == ["production_increase"]
 
 
+def test_gate_terminal_candidates_keeps_direct_listing_with_sector_policy_signal() -> None:
+    candidate = ImpactCandidate(
+        entity_ref="finance-uk-ticker:bem",
+        name="BEM",
+        entity_type="ticker",
+        evidence_level="shallow",
+        confidence=0.86,
+        source_entity_refs=["finance-uk-issuer:beowulf-mining"],
+        relationship_paths=[
+            ImpactRelationshipPath(
+                path_depth=1,
+                edges=[
+                    ImpactPathEdge(
+                        source_ref="finance-uk-issuer:beowulf-mining",
+                        target_ref="finance-uk-ticker:bem",
+                        relation="issuer_has_listed_ticker",
+                        evidence_level="direct",
+                        confidence=0.96,
+                        direction_hint="listed_equity",
+                        source_name="London Stock Exchange",
+                        source_url="https://www.londonstockexchange.com/",
+                        source_snapshot="2026-06-29",
+                        compatible_event_types=["earnings_beat"],
+                        direction_preconditions=["listed_issuer"],
+                    )
+                ],
+            )
+        ],
+        compatible_event_types=["earnings_beat"],
+    )
+
+    signals = extract_news_event_signals(
+        "UK parliament passed a mining royalty reform affecting listed mining companies."
+    )
+    gated, warnings = gate_terminal_candidates_by_event_signals([candidate], signals)
+
+    assert warnings == []
+    assert gated[0].entity_ref == "finance-uk-ticker:bem"
+    assert gated[0].compatible_event_types == ["sector_policy_change"]
+
+
 def test_gate_terminal_candidates_rejects_unexplained_indirect_ticker() -> None:
     indirect_ticker = ImpactCandidate(
         entity_ref="finance-us-ticker:OTC",

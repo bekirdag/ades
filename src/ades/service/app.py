@@ -395,6 +395,85 @@ class _DirectMarketTerminalRecord:
     aliases: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class _MarketSectorSeedSpec:
+    search_terms: tuple[str, ...]
+    aliases: tuple[str, ...]
+
+
+_MARKET_SECTOR_SEED_SIGNAL_TYPES = {
+    "sector_policy_change",
+    "regulatory_enforcement",
+    "tariff",
+    "export_control",
+    "sanctions",
+    "supply_disruption",
+    "production_decrease",
+    "production_increase",
+}
+_MARKET_SECTOR_SEED_FAMILIES = {"equity", "ticker", "sector", "equity_index"}
+_MARKET_SECTOR_SEED_ENTITY_TYPES = ("sector", "organization")
+_MARKET_SECTOR_SEED_LIMIT_PER_TERM = 8
+_MARKET_SECTOR_SEED_MAX_REFS = 12
+_MARKET_SECTOR_SEED_SPECS: tuple[_MarketSectorSeedSpec, ...] = (
+    _MarketSectorSeedSpec(
+        search_terms=("mining", "minerals", "metals"),
+        aliases=(
+            "mining",
+            "miner",
+            "miners",
+            "mining company",
+            "mining companies",
+            "listed miners",
+            "mining sector",
+            "mining industry",
+            "metal miners",
+            "metals mining",
+        ),
+    ),
+    _MarketSectorSeedSpec(
+        search_terms=("bank", "banking", "lender"),
+        aliases=("bank", "banks", "banking", "lender", "lenders"),
+    ),
+    _MarketSectorSeedSpec(
+        search_terms=("oil", "gas", "energy"),
+        aliases=(
+            "oil",
+            "gas",
+            "oil and gas",
+            "energy company",
+            "energy companies",
+            "energy sector",
+            "power utilities",
+        ),
+    ),
+    _MarketSectorSeedSpec(
+        search_terms=("airline", "aviation", "airways"),
+        aliases=("airline", "airlines", "aviation", "airways", "carrier", "carriers"),
+    ),
+    _MarketSectorSeedSpec(
+        search_terms=("shipping", "freight", "logistics"),
+        aliases=("shipping", "freight", "logistics", "ports", "port operators"),
+    ),
+    _MarketSectorSeedSpec(
+        search_terms=("semiconductor", "chip"),
+        aliases=("semiconductor", "semiconductors", "chipmaker", "chipmakers", "chips"),
+    ),
+    _MarketSectorSeedSpec(
+        search_terms=("pharma", "pharmaceutical", "healthcare"),
+        aliases=("pharma", "pharmaceutical", "drugmaker", "drugmakers", "healthcare"),
+    ),
+    _MarketSectorSeedSpec(
+        search_terms=("telecom", "telecommunications"),
+        aliases=("telecom", "telecoms", "telecommunications"),
+    ),
+    _MarketSectorSeedSpec(
+        search_terms=("agriculture", "food"),
+        aliases=("agriculture", "farm", "farms", "food producer", "food producers"),
+    ),
+)
+
+
 def _dedupe_string_values(values: list[str | None]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -520,6 +599,94 @@ def _direct_market_terminal_seed_refs(
     for record in records:
         if any(_phrase_matches_text(alias, text) for alias in record.aliases):
             seed_refs.append(record.entity_ref)
+    return _dedupe_string_values(seed_refs)
+
+
+def _has_market_sector_seed_signal(event_signals: list[object]) -> bool:
+    for signal in event_signals:
+        event_type = str(getattr(signal, "event_type", "") or "").strip().casefold()
+        families = {
+            str(family).strip().casefold()
+            for family in getattr(signal, "compatible_asset_families", []) or []
+            if str(family).strip()
+        }
+        if event_type in _MARKET_SECTOR_SEED_SIGNAL_TYPES:
+            return True
+        if families & _MARKET_SECTOR_SEED_FAMILIES:
+            return True
+    return False
+
+
+def _market_sector_seed_terms_from_text(
+    *,
+    text: str,
+    event_signals: list[object],
+) -> list[str]:
+    if not _has_market_sector_seed_signal(event_signals):
+        return []
+    seed_terms: list[str] = []
+    for spec in _MARKET_SECTOR_SEED_SPECS:
+        if any(_phrase_matches_text(alias, text) for alias in spec.aliases):
+            seed_terms.extend(spec.search_terms)
+    return _dedupe_string_values(seed_terms)
+
+
+def _finance_graph_country_code(country_code: str | None) -> str | None:
+    normalized = (country_code or "").strip().casefold()
+    if not normalized:
+        return None
+    if normalized == "gb":
+        return "uk"
+    return normalized
+
+
+def _news_graph_enabled_packs(
+    *,
+    tag_responses: list[TagResponse],
+    pack_decisions: list[NewsAnalyzePackDecision],
+) -> list[str]:
+    graph_packs: list[str | None] = [response.pack for response in tag_responses]
+    for decision in pack_decisions:
+        if decision.selected or decision.country_code:
+            graph_packs.append(decision.pack_id)
+    return _dedupe_string_values(graph_packs)
+
+
+def _market_sector_seed_refs_from_graph(
+    *,
+    text: str,
+    event_signals: list[object],
+    country_codes: list[str],
+    graph_enabled_packs: list[str],
+    settings: Settings,
+    warnings: list[str],
+) -> list[str]:
+    terms = _market_sector_seed_terms_from_text(text=text, event_signals=event_signals)
+    artifact_path = settings.impact_expansion_artifact_path
+    if not terms or not settings.impact_expansion_enabled or artifact_path is None:
+        return []
+    graph_country_codes = _dedupe_string_values(
+        [_finance_graph_country_code(code) for code in country_codes]
+    )
+    try:
+        with MarketGraphStore(artifact_path) as store:
+            nodes_by_term = store.search_seed_nodes(
+                terms,
+                country_codes=graph_country_codes,
+                pack_ids=graph_enabled_packs,
+                entity_types=_MARKET_SECTOR_SEED_ENTITY_TYPES,
+                limit_per_term=_MARKET_SECTOR_SEED_LIMIT_PER_TERM,
+            )
+    except (FileNotFoundError, OSError, ValueError):
+        warnings.append("ADES_NEWS_ANALYZE_SECTOR_SEED_SEARCH_FAILED")
+        return []
+
+    seed_refs: list[str] = []
+    for term in terms:
+        for node in nodes_by_term.get(term.casefold(), ()):
+            seed_refs.append(node.entity_ref)
+            if len(seed_refs) >= _MARKET_SECTOR_SEED_MAX_REFS:
+                return _dedupe_string_values(seed_refs)
     return _dedupe_string_values(seed_refs)
 
 
@@ -669,13 +836,50 @@ def _merge_direct_terminal_candidates(
     expanded_candidates: list[ImpactCandidate],
 ) -> list[ImpactCandidate]:
     merged: list[ImpactCandidate] = []
-    seen_refs: set[str] = set()
+    by_ref: dict[str, ImpactCandidate] = {}
     for candidate in [*direct_candidates, *expanded_candidates]:
         ref = candidate.entity_ref.strip()
-        if not ref or ref in seen_refs:
+        if not ref:
             continue
-        seen_refs.add(ref)
-        merged.append(candidate)
+        existing = by_ref.get(ref)
+        if existing is None:
+            by_ref[ref] = candidate
+            merged.append(candidate)
+            continue
+        relationship_paths = [
+            *existing.relationship_paths,
+            *[
+                path
+                for path in candidate.relationship_paths
+                if path not in existing.relationship_paths
+            ],
+        ]
+        source_entity_refs = _dedupe_string_values(
+            [*existing.source_entity_refs, *candidate.source_entity_refs]
+        )
+        compatible_event_types = _dedupe_string_values(
+            [*existing.compatible_event_types, *candidate.compatible_event_types]
+        )
+        preferred_name = existing.name
+        if candidate.relationship_paths and not existing.relationship_paths:
+            preferred_name = candidate.name
+        merged_candidate = existing.model_copy(
+            update={
+                "name": preferred_name,
+                "evidence_level": "direct"
+                if "direct" in {existing.evidence_level, candidate.evidence_level}
+                else existing.evidence_level,
+                "confidence": max(existing.confidence, candidate.confidence),
+                "source_entity_refs": source_entity_refs,
+                "relationship_paths": relationship_paths,
+                "compatible_event_types": compatible_event_types,
+            }
+        )
+        by_ref[ref] = merged_candidate
+        for index, item in enumerate(merged):
+            if item.entity_ref == ref:
+                merged[index] = merged_candidate
+                break
     return merged
 
 
@@ -2717,12 +2921,33 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         entity_refs = _dedupe_string_values(
             [entity.link.entity_id if entity.link else None for entity in entities]
         )
+        graph_enabled_packs = _news_graph_enabled_packs(
+            tag_responses=tag_responses,
+            pack_decisions=pack_decisions,
+        )
         direct_terminal_seed_refs = _direct_market_terminal_seed_refs(
             text=analysis_text,
             request=request,
             event_signals=event_signals,
         )
-        entity_refs = _dedupe_string_values([*entity_refs, *direct_terminal_seed_refs])
+        sector_seed_refs = _market_sector_seed_refs_from_graph(
+            text=analysis_text,
+            event_signals=event_signals,
+            country_codes=[
+                code
+                for code, _reason in _country_code_candidates_for_pack_plan(
+                    request=request,
+                    text=analysis_text,
+                    entities=entities,
+                )
+            ],
+            graph_enabled_packs=graph_enabled_packs,
+            settings=settings,
+            warnings=warnings,
+        )
+        entity_refs = _dedupe_string_values(
+            [*entity_refs, *direct_terminal_seed_refs, *sector_seed_refs]
+        )
 
         impact_paths: ImpactExpansionResult | None = None
         include_relationships = (
@@ -2734,9 +2959,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             try:
                 impact_paths = expand_impact_paths(
                     entity_refs,
-                    enabled_packs=_dedupe_string_values(
-                        [response.pack for response in tag_responses]
-                    ),
+                    enabled_packs=graph_enabled_packs,
                     max_depth=request.options.impact_max_depth,
                     impact_expansion_seed_limit=request.options.impact_seed_limit,
                     max_candidates=(
