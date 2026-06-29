@@ -312,6 +312,93 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     )
     assert (
         classify_source_tier(
+            "ASX CBA company information",
+            "https://www.asx.com.au/markets/company/CBA",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert classify_source_tier("ASX Online", "https://www.asxonline.com/") == SOURCE_TIER_EXCHANGE
+    assert (
+        classify_source_tier("APRA registers", "https://www.apra.gov.au/registers")
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "ASIC registers",
+            "https://connectonline.asic.gov.au/RegistrySearch/faces/landing",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "TGA medicinal cannabis hub",
+            "https://www.tga.gov.au/products/medicinal-cannabis",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier("RBA statistics", "https://www.rba.gov.au/statistics/")
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Housing Australia",
+            "https://www.housingaustralia.gov.au/",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Fuel tax credits",
+            "https://business.gov.au/grants-and-programs/fuel-tax-credits",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "CEFC where we invest",
+            "https://www.cefc.com.au/where-we-invest/",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier("ARENA projects", "https://arena.gov.au/projects/")
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "NRFC priority areas",
+            "https://www.nrf.gov.au/priority-areas",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "NSW medicinal cannabis driving reform",
+            "https://www.nsw.gov.au/media-releases/medicinal-cannabis-driving-reform",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Transport for NSW registration",
+            "https://www.transport.nsw.gov.au/",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "Commonwealth Bank investor centre",
+            "https://www.commbank.com.au/about-us/investors.html",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier("BHP investors", "https://www.bhp.com/investors")
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
             "Banco Patagonia investor relations",
             "https://bp.bancopatagonia.com.ar/relacion-con-inversores/es/institucional",
         )

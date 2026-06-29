@@ -39,12 +39,14 @@ SUPPORTED_NODE_TYPES = {
     "legal_entity",
     "holding_company",
     "issuer",
+    "market_index",
     "regulator",
     "security",
     "sector",
     "ticker",
     "exchange",
 }
+TRADABLE_NODE_TYPES = {"market_index", "security", "ticker"}
 
 SUPPORTED_RELATIONS = {
     "program_operated_by_org",
@@ -273,8 +275,8 @@ def _add_node(
                 row=row,
                 prefix=prefix,
             ),
-            is_tradable=entity_type == "ticker",
-            is_seed_eligible=entity_type != "ticker",
+            is_tradable=entity_type in TRADABLE_NODE_TYPES,
+            is_seed_eligible=entity_type not in TRADABLE_NODE_TYPES,
         ),
     )
     return entity_ref, entity_type

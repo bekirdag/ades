@@ -70,6 +70,21 @@ _OFFICIAL_HOST_FRAGMENTS = (
     "rionegro.gov.ar",
     "crear.rionegro.gov.ar",
     "boletinoficial.rionegro.gov.ar",
+    "data.gov.au",
+    "rba.gov.au",
+    "abs.gov.au",
+    "ato.gov.au",
+    "business.gov.au",
+    "legislation.gov.au",
+    "grants.gov.au",
+    "firsthomebuyers.gov.au",
+    "housingaustralia.gov.au",
+    "cefc.com.au",
+    "finance.gov.au",
+    "arena.gov.au",
+    "nrf.gov.au",
+    "nsw.gov.au",
+    "transport.nsw.gov.au",
 )
 _EXCHANGE_HOST_FRAGMENTS = (
     "nasdaq.com",
@@ -94,6 +109,7 @@ _EXCHANGE_HOST_FRAGMENTS = (
     "twse.com.tw",
     "byma.com.ar",
     "open.bymadata.com.ar",
+    "asxonline.com",
 )
 _REGULATOR_HOST_FRAGMENTS = (
     "fca.org.uk",
@@ -112,6 +128,9 @@ _REGULATOR_HOST_FRAGMENTS = (
     "mas.gov.sg",
     "sfc.hk",
     "asic.gov.au",
+    "connectonline.asic.gov.au",
+    "apra.gov.au",
+    "tga.gov.au",
     "bcra.gob.ar",
     "cnv.gov.ar",
     "aif2.cnv.gov.ar",
@@ -124,6 +143,17 @@ _ISSUER_DISCLOSED_HOST_FRAGMENTS = (
     "ir-bri.com",
     "bancopatagonia.com.ar",
     "bp.bancopatagonia.com.ar",
+    "commbank.com.au",
+    "bhp.com",
+    "nab.com.au",
+    "westpac.com.au",
+    "anz.com.au",
+    "macquarie.com",
+    "woodside.com",
+    "riotinto.com",
+    "telstra.com.au",
+    "colesgroup.com.au",
+    "woolworthsgroup.com.au",
 )
 
 

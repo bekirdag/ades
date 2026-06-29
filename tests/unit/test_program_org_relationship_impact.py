@@ -21,6 +21,11 @@ REVIEWED_ARGENTINA_BPAT_RIO_NEGRO_FIXTURE = Path(
     "program_org_relationship/reviewed/2026-06-29/"
     "argentina_banco_patagonia_rio_negro_relationships.tsv"
 )
+REVIEWED_AUSTRALIA_ASX_REGULATOR_PROGRAM_FIXTURE = Path(
+    "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/"
+    "program_org_relationship/reviewed/2026-06-29/"
+    "australia_asx_regulator_program_relationships.tsv"
+)
 
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
@@ -435,3 +440,142 @@ def test_reviewed_argentina_fixture_expands_bpat_and_keeps_program_guardrails(
     assert "ades:sector:ar:sme-credit" in subsidy_passive_refs
     assert "ades:currency:ARS" not in subsidy_candidate_refs
     assert "finance-ar-ticker:BPAT" not in subsidy_candidate_refs
+
+
+def test_reviewed_australia_fixture_expands_asx_and_keeps_program_guardrails(
+    tmp_path: Path,
+) -> None:
+    if not REVIEWED_AUSTRALIA_ASX_REGULATOR_PROGRAM_FIXTURE.exists():
+        pytest.skip("reviewed Australia ASX/regulator/program fixture is not mounted")
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[REVIEWED_AUSTRALIA_ASX_REGULATOR_PROGRAM_FIXTURE],
+        output_root=tmp_path / "impact_relationships",
+        run_id="reviewed-australia-asx-regulator-programs",
+        build_artifact=True,
+        include_starter_graph=False,
+        artifact_output_root=tmp_path / "artifacts",
+    )
+
+    assert result.relationship_row_count == 30
+    assert result.relation_counts == {
+        "government_body_affects_sector": 12,
+        "issuer_has_listed_ticker": 2,
+        "issuer_in_sector": 2,
+        "program_operated_by_org": 3,
+        "regulator_affects_sector": 6,
+        "sector_affects_index": 1,
+        "sector_affects_issuer": 2,
+        "ticker_listed_on_exchange": 2,
+    }
+    assert result.node_type_counts["market_index"] == 1
+    assert result.node_type_counts["ticker"] == 2
+
+    validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
+    assert validation.invalid_row_count == 0
+    assert validation.source_warning_counts == {}
+    assert validation.relation_warning_counts == {}
+    assert validation.source_tier_counts == {
+        "exchange": 9,
+        "government": 15,
+        "regulator": 6,
+    }
+
+    assert result.artifact_path is not None
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    assert nodes["finance-au-ticker:CBA"]["is_tradable"] == "true"
+    assert nodes["finance-au-ticker:BHP"]["is_tradable"] == "true"
+    assert nodes["finance-au:asx-200"]["is_tradable"] == "true"
+    assert nodes["ades:program:au:fuel-tax-credits"]["is_seed_eligible"] == "true"
+    assert nodes["ades:sector:au:fuel-retail"]["is_tradable"] == "false"
+
+    with MarketGraphStore(result.artifact_path) as store:
+        cba_edges = store.outbound_edges_batch(["ades:issuer:au:commonwealth-bank-of-australia"])[
+            "ades:issuer:au:commonwealth-bank-of-australia"
+        ]
+        bhp_edges = store.outbound_edges_batch(["ades:issuer:au:bhp-group"])[
+            "ades:issuer:au:bhp-group"
+        ]
+        fuel_edges = store.outbound_edges_batch(["ades:program:au:fuel-tax-credits"])[
+            "ades:program:au:fuel-tax-credits"
+        ]
+
+    assert {edge.target_ref for edge in cba_edges} == {
+        "ades:sector:au:banking",
+        "finance-au-ticker:CBA",
+    }
+    assert {edge.target_ref for edge in bhp_edges} == {
+        "ades:sector:au:materials",
+        "finance-au-ticker:BHP",
+    }
+    assert [edge.target_ref for edge in fuel_edges] == ["ades:org:au:ato"]
+
+    cba_expansion = expand_impact_paths(
+        ["ades:issuer:au:commonwealth-bank-of-australia"],
+        artifact_path=result.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    cba_candidate_refs = {candidate.entity_ref for candidate in cba_expansion.candidates}
+    assert "finance-au-ticker:CBA" in cba_candidate_refs
+    assert "ades:currency:AUD" not in cba_candidate_refs
+
+    apra_expansion = expand_impact_paths(
+        ["ades:org:au:apra"],
+        artifact_path=result.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=4,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    apra_candidate_refs = {candidate.entity_ref for candidate in apra_expansion.candidates}
+    assert "finance-au-ticker:CBA" in apra_candidate_refs
+    assert "ades:currency:AUD" not in apra_candidate_refs
+
+    fuel_expansion = expand_impact_paths(
+        ["ades:program:au:fuel-tax-credits"],
+        artifact_path=result.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=3,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    fuel_passive_refs = {path.entity_ref for path in fuel_expansion.passive_paths}
+    fuel_candidate_refs = {candidate.entity_ref for candidate in fuel_expansion.candidates}
+    assert "ades:org:au:ato" in fuel_passive_refs
+    assert "ades:sector:au:fuel-retail" in fuel_passive_refs
+    assert "ades:sector:au:transport-logistics" in fuel_passive_refs
+    assert "finance-au-ticker:BHP" not in fuel_candidate_refs
+    assert "finance-au:asx-200" not in fuel_candidate_refs
+    assert "ades:currency:AUD" not in fuel_candidate_refs
+
+    housing_expansion = expand_impact_paths(
+        ["ades:program:au:five-percent-deposit-scheme"],
+        artifact_path=result.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=3,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    housing_passive_refs = {path.entity_ref for path in housing_expansion.passive_paths}
+    housing_candidate_refs = {candidate.entity_ref for candidate in housing_expansion.candidates}
+    assert "ades:org:au:housing-australia" in housing_passive_refs
+    assert "ades:sector:au:housing-credit" in housing_passive_refs
+    assert "finance-au-ticker:CBA" not in housing_candidate_refs
+    assert "ades:currency:AUD" not in housing_candidate_refs
+
+    equity_market_expansion = expand_impact_paths(
+        ["ades:sector:au:australian-equity-market"],
+        artifact_path=result.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    equity_candidate_refs = {
+        candidate.entity_ref for candidate in equity_market_expansion.candidates
+    }
+    assert "finance-au:asx-200" in equity_candidate_refs
+    assert "ades:currency:AUD" not in equity_candidate_refs
