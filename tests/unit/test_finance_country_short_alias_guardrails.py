@@ -6,17 +6,16 @@ def test_runtime_finance_country_short_alias_blocks_news_artifact_terms() -> Non
         assert not tagger._runtime_finance_country_short_alias_surface_allowed(surface)
 
 
+def test_runtime_finance_country_short_alias_blocks_generic_finance_surfaces() -> None:
+    assert not tagger._runtime_finance_country_short_alias_surface_allowed("Grupo Financiero")
+    assert not tagger._runtime_finance_country_short_alias_surface_allowed("Banorte")
+
+
 def test_runtime_finance_country_short_alias_blocks_geographic_surfaces() -> None:
-    assert not tagger._runtime_finance_country_short_alias_surface_allowed(
-        "United States"
-    )
+    assert not tagger._runtime_finance_country_short_alias_surface_allowed("United States")
     assert not tagger._runtime_finance_country_short_alias_surface_allowed("Turkey")
-    assert not tagger._runtime_finance_country_short_alias_surface_allowed(
-        "Silicon Valley"
-    )
-    assert not tagger._runtime_finance_country_short_alias_surface_allowed(
-        "Lost Coast"
-    )
+    assert not tagger._runtime_finance_country_short_alias_surface_allowed("Silicon Valley")
+    assert not tagger._runtime_finance_country_short_alias_surface_allowed("Lost Coast")
 
 
 def test_runtime_finance_country_short_alias_keeps_company_surfaces() -> None:

@@ -10,6 +10,16 @@
   ],
   "sources": [
     {
+      "source_name": "Mexico reviewed program/org relationship source lane",
+      "source_url": "https://www.bmv.com.mx/en/movil/JSONClaveCotizacion?idBusquedaCotizacion=2",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_mexico/2026-06-29/SOURCE_INVENTORY.md",
+      "source_year": 2026,
+      "refresh_policy": "refresh_on_country_source_lane_update",
+      "normalized_output_allowed": true,
+      "license_notes": "Reviewed source lane stores only normalized relationship metadata; source URLs and evidence snippets are retained under /mnt/githubActions/ades_big_data.",
+      "notes": "Production-promoted Mexico first slice covering BMV/BIVA issuer/ticker/security bridges, ADR separation for cross-listed issuers, Banxico/INEGI/SHCP macro rows, CNBV/CNE/CRT/CNA/COFEPRIS/AFAC/SADER/SENASICA/PROFECO regulator sector rows, USMCA trade rows, energy/telecom historical-regulator guardrails, and FIFA World Cup 2026 host-country and sector rows without direct ticker assertions."
+    },
+    {
       "source_name": "Germany reviewed program/org relationship source lane",
       "source_url": "https://www.boerse-frankfurt.de/equity/sap-se",
       "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_germany/2026-06-29/SOURCE_INVENTORY.md",

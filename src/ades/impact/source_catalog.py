@@ -196,6 +196,18 @@ _OFFICIAL_HOST_FRAGMENTS = (
     "acn.gov.it",
     "salute.gov.it",
     "adm.gov.it",
+    "banxico.org.mx",
+    "inegi.org.mx",
+    "hacienda.gob.mx",
+    "finanzaspublicas.hacienda.gob.mx",
+    "sat.gob.mx",
+    "dof.gob.mx",
+    "gob.mx",
+    "datos.gob.mx",
+    "cfe.mx",
+    "pemex.com",
+    "cenace.gob.mx",
+    "proyectosmexico.gob.mx",
 )
 _EXCHANGE_HOST_FRAGMENTS = (
     "nasdaq.com",
@@ -237,6 +249,9 @@ _EXCHANGE_HOST_FRAGMENTS = (
     "borsaitaliana.it",
     "euronext.com",
     "live.euronext.com",
+    "bmv.com.mx",
+    "grupo-bmv.com.mx",
+    "biva.mx",
 )
 _REGULATOR_HOST_FRAGMENTS = (
     "fca.org.uk",
@@ -312,9 +327,30 @@ _REGULATOR_HOST_FRAGMENTS = (
     "anticorruzione.it",
     "eba.europa.eu",
     "eiopa.europa.eu",
+    "cnbv.gob.mx",
+    "indeval.com.mx",
+    "cofece.mx",
+    "ift.org.mx",
+    "cofepris.gob.mx",
+    "cre.gob.mx",
+    "cne.gob.mx",
+    "antimonopolio.gob.mx",
+    "resoluciones.antimonopolio.gob.mx",
+)
+_REGULATOR_URL_FRAGMENTS = (
+    "gob.mx/cnbv",
+    "gob.mx/cne",
+    "gob.mx/cofepris",
+    "gob.mx/cre",
+    "gob.mx/ift",
+    "gob.mx/antimonopolio",
+    "gob.mx/crt",
+    "gob.mx/atdt",
+    "gob.mx/afac",
+    "gob.mx/asea",
 )
 _LICENSED_HOST_FRAGMENTS = ("msci.com", "openfigi.com")
-_INDUSTRY_ASSOCIATION_HOST_FRAGMENTS = ("semiconductors.org",)
+_INDUSTRY_ASSOCIATION_HOST_FRAGMENTS = ("semiconductors.org", "fifa.com")
 _ISSUER_DISCLOSED_HOST_FRAGMENTS = (
     "pnm.co.id",
     "bri.co.id",
@@ -415,6 +451,29 @@ _ISSUER_DISCLOSED_HOST_FRAGMENTS = (
     "nexigroup.com",
     "finecobank.com",
     "bper.it",
+    "femsa.com",
+    "femsa.com.mx",
+    "coca-colafemsa.com",
+    "arcacontal.com",
+    "arcaservices.com",
+    "becle.com.mx",
+    "cuervo.com.mx",
+    "grupobimbo.com",
+    "cemex.com",
+    "americamovil.com",
+    "gmexico.com",
+    "walmex.mx",
+    "walmex.com",
+    "banorte.com",
+    "inbursa.com",
+    "bb.com.mx",
+    "asur.com.mx",
+    "aeropuertosgap.com.mx",
+    "oma.aero",
+    "volaris.com",
+    "megacable.com.mx",
+    "genommalab.com",
+    "bmv.com.mx",
 )
 
 
@@ -458,7 +517,11 @@ def classify_source_tier(source_name: str | None, source_url: str | None) -> str
         return SOURCE_TIER_LICENSED
     if _contains_any(host, _INDUSTRY_ASSOCIATION_HOST_FRAGMENTS):
         return SOURCE_TIER_INDUSTRY_ASSOCIATION
-    if _contains_any(host, _REGULATOR_HOST_FRAGMENTS) or "regulator" in name:
+    if (
+        _contains_any(host, _REGULATOR_HOST_FRAGMENTS)
+        or _contains_any(url_lower, _REGULATOR_URL_FRAGMENTS)
+        or "regulator" in name
+    ):
         return SOURCE_TIER_REGULATOR
     if _contains_any(host, _EXCHANGE_HOST_FRAGMENTS) or "exchange" in name:
         return SOURCE_TIER_EXCHANGE

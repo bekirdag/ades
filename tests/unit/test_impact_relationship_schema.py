@@ -147,6 +147,16 @@ def test_relationship_schema_covers_program_org_relationship_paths() -> None:
     assert "source_backed_program_org_evidence" in relation_direction_preconditions(
         "program_loan_recipient_org"
     )
+    assert relation_family_for_relation("program_financed_by_org") == ("program_org_relationship")
+    assert "source_backed_program_org_evidence" in relation_direction_preconditions(
+        "program_financed_by_org"
+    )
+    assert relation_family_for_relation("program_host_country") == ("program_country_relationship")
+    assert relation_direction_preconditions("program_host_country") == (
+        "direct_program_or_event_mention",
+        "source_backed_host_country_evidence",
+        "compatible_event_signal",
+    )
     assert relation_family_for_relation("project_operated_by_org") == ("project_org_relationship")
     assert relation_direction_preconditions("project_operated_by_org") == (
         "direct_project_mention",
@@ -260,6 +270,14 @@ def test_relationship_schema_defaults_and_warnings_are_non_fatal() -> None:
     assert (
         validate_relation_metadata(
             relation="ticker_trades_on_exchange",
+            configured_event_types=(),
+            configured_preconditions=(),
+        )
+        == []
+    )
+    assert (
+        validate_relation_metadata(
+            relation="program_host_country",
             configured_event_types=(),
             configured_preconditions=(),
         )
@@ -853,6 +871,54 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
         classify_source_tier(
             "Airbus FCAS official page",
             "https://www.airbus.com/en/products-services/defence/future-combat-air-system-fcas",
+        )
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
+            "BMV mobile quote directory",
+            "https://www.bmv.com.mx/en/movil/JSONClaveCotizacion?idBusquedaCotizacion=2",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier(
+            "BIVA issuer spreadsheet",
+            "https://www.biva.mx/emisoras/empresas/xls",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert classify_source_tier("Banxico homepage", "https://www.banxico.org.mx/indexen.html") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("INEGI homepage", "https://www.inegi.org.mx/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("SHCP homepage", "https://www.gob.mx/shcp/en") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("CNBV homepage", "https://www.cnbv.gob.mx/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("CNE homepage", "https://www.gob.mx/cne") == (SOURCE_TIER_REGULATOR)
+    assert classify_source_tier("CRT homepage", "https://www.gob.mx/crt") == (SOURCE_TIER_REGULATOR)
+    assert classify_source_tier("CNA homepage", "https://www.gob.mx/antimonopolio") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("COFEPRIS homepage", "https://www.gob.mx/cofepris") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "FIFA World Cup 2026 tournament page",
+            "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+        )
+        == SOURCE_TIER_INDUSTRY_ASSOCIATION
+    )
+    assert (
+        classify_source_tier(
+            "America Movil investors",
+            "https://www.americamovil.com/English/investors/default.aspx",
         )
         == SOURCE_TIER_ISSUER_DISCLOSED
     )

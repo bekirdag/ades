@@ -67,6 +67,9 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
             _rx(
                 r"\b(?:policy\s+rate|interest\s+rate|benchmark\s+rate|key\s+rate|deposit\s+rate|lending\s+rate|rates?)\b.{0,80}\b(?:unchanged|steady|on\s+hold|held|maintained)\b"
             ),
+            _rx(
+                r"\b(?:kept|hold|holds|held|left|leave|leaves|maintained)\b.{0,80}\b(?:policy\s+rate|interest\s+rate|benchmark\s+rate|key\s+rate|deposit\s+rate|lending\s+rate|rates?)\b"
+            ),
         ),
         compatible_asset_families=("rates", "currency", "bonds", "equity_index", "banking"),
         confidence=0.86,

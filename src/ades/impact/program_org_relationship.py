@@ -55,8 +55,40 @@ SUPPORTED_NODE_TYPES = {
 }
 TRADABLE_NODE_TYPES = {"currency", "market_index", "rate", "security", "ticker"}
 
+PREFIX_IDENTIFIER_SCALAR_KEYS = (
+    "asset_ref",
+    "country_code",
+    "finance_issuer_ref",
+    "finance_ticker_ref",
+    "geonames_id",
+    "issuer_ref",
+    "sec_cik",
+    "security_ref",
+    "ticker_ref",
+    "wikidata_id",
+    "wikidata_qid",
+)
+PREFIX_IDENTIFIER_LIST_KEYS = (
+    "alias_refs",
+    "alternate_refs",
+    "entity_refs",
+    "equivalent_refs",
+    "finance_issuer_refs",
+    "finance_ticker_refs",
+    "geonames_ids",
+    "identity_refs",
+    "issuer_refs",
+    "same_as_refs",
+    "source_refs",
+    "ticker_refs",
+    "wikidata_ids",
+    "wikidata_qids",
+)
+
 SUPPORTED_RELATIONS = {
     "program_operated_by_org",
+    "program_financed_by_org",
+    "program_host_country",
     "program_loan_recipient_org",
     "policy_program_affects_sector",
     "public_facility_available_to_sector",
@@ -215,6 +247,61 @@ def _confidence(row: dict[str, str]) -> str:
     return f"{parsed:.4g}"
 
 
+def _identifier_list_values(value: object | None) -> list[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    if raw.startswith("["):
+        parsed = json.loads(raw)
+        if not isinstance(parsed, list):
+            raise ValueError(f"Invalid identifier list: {raw!r}")
+        values = [str(item).strip() for item in parsed]
+    else:
+        values = list(_parse_list(raw))
+    return [item for item in values if item]
+
+
+def _merge_identifier_list(
+    identifiers: dict[str, object],
+    key: str,
+    values: Iterable[str],
+) -> None:
+    normalized_values = [value for value in values if value]
+    if not normalized_values:
+        return
+    existing = identifiers.get(key)
+    merged: list[str] = []
+    if isinstance(existing, list):
+        merged.extend(str(item).strip() for item in existing if str(item).strip())
+    elif existing:
+        merged.append(str(existing).strip())
+    merged.extend(normalized_values)
+    identifiers[key] = list(dict.fromkeys(merged))
+
+
+def _merge_prefixed_identifier_columns(
+    identifiers: dict[str, object],
+    *,
+    row: dict[str, str],
+    prefix: str,
+) -> None:
+    raw_json = _coalesce(row, f"{prefix}_identifiers_json")
+    if raw_json:
+        parsed = json.loads(raw_json)
+        if not isinstance(parsed, dict):
+            raise ValueError(f"Invalid {prefix}_identifiers_json: {raw_json!r}")
+        for key, value in parsed.items():
+            identifiers[str(key)] = value
+    for key in PREFIX_IDENTIFIER_SCALAR_KEYS:
+        value = _coalesce(row, f"{prefix}_{key}")
+        if value:
+            identifiers[key] = value
+    for key in PREFIX_IDENTIFIER_LIST_KEYS:
+        value = _coalesce(row, f"{prefix}_{key}")
+        if value:
+            _merge_identifier_list(identifiers, key, _identifier_list_values(value))
+
+
 def _edge_input_row(row: dict[str, str]) -> dict[str, str]:
     normalized = dict(row)
     if not _coalesce(normalized, "source_name"):
@@ -272,6 +359,7 @@ def _identifiers(
         value = _coalesce(row, f"{prefix}_{key}", key)
         if value:
             identifiers[key] = value
+    _merge_prefixed_identifier_columns(identifiers, row=row, prefix=prefix)
     return identifiers
 
 

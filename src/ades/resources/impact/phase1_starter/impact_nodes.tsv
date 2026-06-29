@@ -1,65 +1,65 @@
 entity_ref	canonical_name	entity_type	library_id	is_tradable	is_seed_eligible	identifiers_json	packs
-ades:heuristic_structural_location:finance-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	{"same_as_refs":["ades:heuristic_structural_location:general-en:location:strait-of-hormuz","wikidata:Q79883"],"wikidata":"Q79883"}	finance-en
-ades:heuristic_structural_location:general-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	{"same_as_refs":["ades:heuristic_structural_location:finance-en:location:strait-of-hormuz","wikidata:Q79883"],"wikidata":"Q79883"}	general-en
-ades:impact:commodity:aluminum	Aluminum	commodity		1	1	{"commodity":"aluminum"}	general-en,finance-en
-ades:impact:commodity:cobalt	Cobalt	commodity		1	1	{"commodity":"cobalt"}	general-en,finance-en
-ades:impact:commodity:copper	Copper	commodity		1	1	{"commodity":"copper"}	general-en,finance-en
-ades:impact:commodity:corn	Corn	commodity		1	1	{"commodity":"corn"}	general-en,finance-en
-ades:impact:commodity:crude-oil	Crude oil	commodity		1	1	{"commodity":"crude-oil"}	general-en,finance-en
-ades:impact:commodity:gold	Gold	commodity		1	1	{"commodity":"gold"}	general-en,finance-en
-ades:impact:commodity:iron-ore	Iron ore	commodity		1	1	{"commodity":"iron-ore"}	general-en,finance-en
-ades:impact:commodity:lean-hogs	Lean hogs	commodity		1	1	{"commodity":"lean-hogs"}	general-en,finance-en
-ades:impact:commodity:lithium	Lithium	commodity		1	1	{"commodity":"lithium"}	general-en,finance-en
-ades:impact:commodity:live-cattle	Live cattle	commodity		1	1	{"commodity":"live-cattle"}	general-en,finance-en
-ades:impact:commodity:natural-gas	Natural gas	commodity		1	1	{"commodity":"natural-gas"}	general-en,finance-en
-ades:impact:commodity:rare-earths	Rare earths	commodity		1	1	{"commodity":"rare-earths"}	general-en,finance-en
-ades:impact:commodity:soybeans	Soybeans	commodity		1	1	{"commodity":"soybeans"}	general-en,finance-en
-ades:impact:commodity:tungsten	Tungsten	commodity		1	1	{"commodity":"tungsten"}	general-en,finance-en
-ades:impact:commodity:wheat	Wheat	commodity		1	1	{"commodity":"wheat"}	general-en,finance-en
-ades:impact:crypto:bitcoin	Bitcoin	crypto		1	1	{"symbol":"BTC"}	general-en,finance-en
-ades:impact:currency:eur	Euro	currency		1	1	{"iso4217":"EUR"}	general-en,finance-en
-ades:impact:currency:usd	US dollar	currency		1	1	{"iso4217":"USD"}	general-en,finance-en
-ades:impact:energy-policy:gas-reservation-policy	Gas reservation policy	policy		0	1	{"category":"energy_regulation"}	finance-en
-ades:impact:energy-sector:gas-producers	Gas producers	sector		0	1	{"category":"energy_supply"}	finance-en
-ades:impact:environment:pollution-crisis	Pollution crisis	environmental_risk		0	1	{"category":"environmental_supply_risk"}	general-en,finance-en
-ades:impact:index:global-equities	Global equities	market_index		1	0	{"category":"global_equity_proxy"}	general-en,finance-en
-ades:impact:indicator:dxy	DXY	currency_index		1	0	{"symbol":"DXY"}	general-en,finance-en
-ades:impact:macro:cpi	Consumer Price Index	macro_indicator		1	1	{"category":"inflation"}	general-en,finance-en
-ades:impact:policy:digital-asset-regulation	Digital asset regulation	policy		0	1	{"category":"digital_asset_regulation"}	general-en,finance-en
-ades:impact:rate:ecb-policy-rates	ECB policy rates	rate		1	1	{"rate":"ecb-policy-rates"}	general-en,finance-en
-ades:impact:rate:fed-funds	Federal funds rate	rate		1	1	{"rate":"fed-funds"}	general-en,finance-en
-ades:impact:risk:sanctions-risk	Sanctions risk	risk		1	1	{"category":"risk_indicator"}	general-en,finance-en
-ades:impact:risk:us-country-risk	US Country Risk	risk		1	0	{"country_code":"us","category":"country_risk"}	general-en,finance-en
-ades:impact:sanctions:ofac	Office of Foreign Assets Control	sanctions_body		0	1	{"homepage":"https://ofac.treasury.gov"}	general-en,finance-en
-ades:impact:sector:agriculture	Agriculture	sector		1	1	{"category":"sector"}	general-en,finance-en
-ades:impact:sector:airlines	Airlines	sector		1	1	{"category":"sector"}	general-en,finance-en
-ades:impact:sector:autos	Autos	sector		1	1	{"category":"sector"}	general-en,finance-en
-ades:impact:sector:defense	Defense	sector		1	1	{"category":"sector"}	general-en,finance-en
-ades:impact:sector:energy	Energy	sector		1	1	{"category":"sector"}	general-en,finance-en
-ades:impact:sector:semiconductors	Semiconductors	sector		1	1	{"category":"sector"}	general-en,finance-en
-ades:impact:sector:shipping	Shipping	sector		1	1	{"category":"sector"}	general-en,finance-en
-ades:impact:sector:utilities	Utilities	sector		1	1	{"category":"sector"}	general-en,finance-en
-ades:impact:shipping:tanker-sanctions	Oil tanker sanctions	shipping_risk		0	1	{"category":"energy_shipping_sanctions"}	general-en,finance-en
-ades:market-location:atacama	Atacama Desert	commodity_region		0	1	{"category":"lithium_copper_region"}	general-en,finance-en
-ades:market-location:copperbelt	Copperbelt	commodity_region		0	1	{"category":"copper_cobalt_region"}	general-en,finance-en
-ades:market-location:panama-canal	Panama Canal	chokepoint		0	1	{"same_as_refs":["wikidata:Q7350"],"wikidata":"Q7350"}	general-en,finance-en
-ades:market-location:pilbara	Pilbara	commodity_region		0	1	{"category":"iron_ore_region"}	general-en,finance-en
-ades:market-location:red-sea	Red Sea	chokepoint		0	1	{"same_as_refs":["wikidata:Q23406"],"wikidata":"Q23406"}	general-en,finance-en
-ades:market-location:taiwan-strait	Taiwan Strait	chokepoint		0	1	{"same_as_refs":["wikidata:Q37950"],"wikidata":"Q37950"}	general-en,finance-en
-finance-us-issuer:0001318605	Tesla Inc.	issuer	finance-us-en	0	1	{"same_as_refs":["wikidata:Q478214","FINANCE-US-ISSUER_0001318605"],"ticker_ref":"finance-us-ticker:TSLA"}	finance-us-en
-finance-us-ticker:TSLA	TSLA	ticker	finance-us-en	1	0	{"same_as_refs":["wikidata:Q478214","FINANCE-US-TICKER_TSLA","finance-us-issuer:0001318605"]}	finance-us-en
-finance-uk-issuer:04267576	Intertek Group Plc	issuer	finance-uk-en	0	1	{"same_as_refs":["wikidata:Q1136085"],"ticker_ref":"finance-uk-ticker:itrk"}	finance-uk-en
-finance-uk-ticker:itrk	ITRK	ticker	finance-uk-en	1	0	{"same_as_refs":["wikidata:Q1136085","finance-uk-issuer:04267576"],"issuer_ref":"finance-uk-issuer:04267576"}	finance-uk-en
-wikidata:Q1136085	Intertek Group Plc	organization	general-en	0	1	{"same_as_refs":["finance-uk-issuer:04267576"],"wikidata":"Q1136085"}	general-en,finance-uk-en
-wikidata:Q317521	Elon Musk	person	general-en	0	1	{"same_as_refs":["person:elon-musk"],"wikidata":"Q317521"}	general-en,finance-us-en
-geonames:6252001	United States	country		0	1	{"country_code":"us","geonames":"6252001","same_as_refs":["country:us","wikidata:Q30"],"wikidata":"Q30"}	general-en,finance-en
-wikidata:Q121826282	OPEC+	organization		0	1	{"wikidata":"Q121826282"}	general-en,finance-en
-wikidata:Q159	Russia	country		0	1	{"country_code":"ru","geonames_id":"2017370","same_as_refs":["country:ru","geonames:2017370"],"wikidata":"Q159"}	general-en,finance-en
-wikidata:Q458	European Union	bloc		0	1	{"wikidata":"Q458"}	general-en
-wikidata:Q53536	Federal Reserve System	central_bank		0	1	{"wikidata":"Q53536"}	general-en,finance-en
-wikidata:Q794	Iran	country		0	1	{"country_code":"ir","geonames_id":"130758","same_as_refs":["country:ir","geonames:130758"],"wikidata":"Q794"}	general-en,finance-en
-wikidata:Q8901	European Central Bank	central_bank		0	1	{"wikidata":"Q8901"}	general-en,finance-en
-wikidata:Q899	Suez Canal	chokepoint		0	1	{"wikidata":"Q899"}	general-en
+ades:heuristic_structural_location:finance-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	"{""same_as_refs"":[""ades:heuristic_structural_location:general-en:location:strait-of-hormuz"",""wikidata:Q79883""],""wikidata"":""Q79883""}"	finance-en
+ades:heuristic_structural_location:general-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	"{""same_as_refs"":[""ades:heuristic_structural_location:finance-en:location:strait-of-hormuz"",""wikidata:Q79883""],""wikidata"":""Q79883""}"	general-en
+ades:impact:commodity:aluminum	Aluminum	commodity		1	1	"{""commodity"":""aluminum""}"	general-en,finance-en
+ades:impact:commodity:cobalt	Cobalt	commodity		1	1	"{""commodity"":""cobalt""}"	general-en,finance-en
+ades:impact:commodity:copper	Copper	commodity		1	1	"{""commodity"":""copper""}"	general-en,finance-en
+ades:impact:commodity:corn	Corn	commodity		1	1	"{""commodity"":""corn""}"	general-en,finance-en
+ades:impact:commodity:crude-oil	Crude oil	commodity		1	1	"{""commodity"":""crude-oil""}"	general-en,finance-en
+ades:impact:commodity:gold	Gold	commodity		1	1	"{""commodity"":""gold""}"	general-en,finance-en
+ades:impact:commodity:iron-ore	Iron ore	commodity		1	1	"{""commodity"":""iron-ore""}"	general-en,finance-en
+ades:impact:commodity:lean-hogs	Lean hogs	commodity		1	1	"{""commodity"":""lean-hogs""}"	general-en,finance-en
+ades:impact:commodity:lithium	Lithium	commodity		1	1	"{""commodity"":""lithium""}"	general-en,finance-en
+ades:impact:commodity:live-cattle	Live cattle	commodity		1	1	"{""commodity"":""live-cattle""}"	general-en,finance-en
+ades:impact:commodity:natural-gas	Natural gas	commodity		1	1	"{""commodity"":""natural-gas""}"	general-en,finance-en
+ades:impact:commodity:rare-earths	Rare earths	commodity		1	1	"{""commodity"":""rare-earths""}"	general-en,finance-en
+ades:impact:commodity:soybeans	Soybeans	commodity		1	1	"{""commodity"":""soybeans""}"	general-en,finance-en
+ades:impact:commodity:tungsten	Tungsten	commodity		1	1	"{""commodity"":""tungsten""}"	general-en,finance-en
+ades:impact:commodity:wheat	Wheat	commodity		1	1	"{""commodity"":""wheat""}"	general-en,finance-en
+ades:impact:crypto:bitcoin	Bitcoin	crypto		1	1	"{""symbol"":""BTC""}"	general-en,finance-en
+ades:impact:currency:eur	Euro	currency		1	1	"{""iso4217"":""EUR""}"	general-en,finance-en
+ades:impact:currency:usd	US dollar	currency		1	1	"{""iso4217"":""USD""}"	general-en,finance-en
+ades:impact:energy-policy:gas-reservation-policy	Gas reservation policy	policy		0	1	"{""category"":""energy_regulation""}"	finance-en
+ades:impact:energy-sector:gas-producers	Gas producers	sector		0	1	"{""category"":""energy_supply""}"	finance-en
+ades:impact:environment:pollution-crisis	Pollution crisis	environmental_risk		0	1	"{""category"":""environmental_supply_risk""}"	general-en,finance-en
+ades:impact:index:global-equities	Global equities	market_index		1	0	"{""category"":""global_equity_proxy""}"	general-en,finance-en
+ades:impact:indicator:dxy	DXY	currency_index		1	0	"{""symbol"":""DXY""}"	general-en,finance-en
+ades:impact:macro:cpi	Consumer Price Index	macro_indicator		1	1	"{""category"":""inflation""}"	general-en,finance-en
+ades:impact:policy:digital-asset-regulation	Digital asset regulation	policy		0	1	"{""category"":""digital_asset_regulation""}"	general-en,finance-en
+ades:impact:rate:ecb-policy-rates	ECB policy rates	rate		1	1	"{""rate"":""ecb-policy-rates""}"	general-en,finance-en
+ades:impact:rate:fed-funds	Federal funds rate	rate		1	1	"{""rate"":""fed-funds""}"	general-en,finance-en
+ades:impact:risk:sanctions-risk	Sanctions risk	risk		1	1	"{""category"":""risk_indicator""}"	general-en,finance-en
+ades:impact:risk:us-country-risk	US Country Risk	risk		1	0	"{""country_code"":""us"",""category"":""country_risk""}"	general-en,finance-en
+ades:impact:sanctions:ofac	Office of Foreign Assets Control	sanctions_body		0	1	"{""homepage"":""https://ofac.treasury.gov""}"	general-en,finance-en
+ades:impact:sector:agriculture	Agriculture	sector		1	1	"{""category"":""sector""}"	general-en,finance-en
+ades:impact:sector:airlines	Airlines	sector		1	1	"{""category"":""sector""}"	general-en,finance-en
+ades:impact:sector:autos	Autos	sector		1	1	"{""category"":""sector""}"	general-en,finance-en
+ades:impact:sector:defense	Defense	sector		1	1	"{""category"":""sector""}"	general-en,finance-en
+ades:impact:sector:energy	Energy	sector		1	1	"{""category"":""sector""}"	general-en,finance-en
+ades:impact:sector:semiconductors	Semiconductors	sector		1	1	"{""category"":""sector""}"	general-en,finance-en
+ades:impact:sector:shipping	Shipping	sector		1	1	"{""category"":""sector""}"	general-en,finance-en
+ades:impact:sector:utilities	Utilities	sector		1	1	"{""category"":""sector""}"	general-en,finance-en
+ades:impact:shipping:tanker-sanctions	Oil tanker sanctions	shipping_risk		0	1	"{""category"":""energy_shipping_sanctions""}"	general-en,finance-en
+ades:market-location:atacama	Atacama Desert	commodity_region		0	1	"{""category"":""lithium_copper_region""}"	general-en,finance-en
+ades:market-location:copperbelt	Copperbelt	commodity_region		0	1	"{""category"":""copper_cobalt_region""}"	general-en,finance-en
+ades:market-location:panama-canal	Panama Canal	chokepoint		0	1	"{""same_as_refs"":[""wikidata:Q7350""],""wikidata"":""Q7350""}"	general-en,finance-en
+ades:market-location:pilbara	Pilbara	commodity_region		0	1	"{""category"":""iron_ore_region""}"	general-en,finance-en
+ades:market-location:red-sea	Red Sea	chokepoint		0	1	"{""same_as_refs"":[""wikidata:Q23406""],""wikidata"":""Q23406""}"	general-en,finance-en
+ades:market-location:taiwan-strait	Taiwan Strait	chokepoint		0	1	"{""same_as_refs"":[""wikidata:Q37950""],""wikidata"":""Q37950""}"	general-en,finance-en
+finance-us-issuer:0001318605	Tesla Inc.	issuer	finance-us-en	0	1	"{""same_as_refs"":[""wikidata:Q478214"",""FINANCE-US-ISSUER_0001318605""],""ticker_ref"":""finance-us-ticker:TSLA""}"	finance-us-en
+finance-us-ticker:TSLA	TSLA	ticker	finance-us-en	1	0	"{""same_as_refs"":[""wikidata:Q478214"",""FINANCE-US-TICKER_TSLA"",""finance-us-issuer:0001318605""]}"	finance-us-en
+finance-uk-issuer:04267576	Intertek Group Plc	issuer	finance-uk-en	0	1	"{""same_as_refs"":[""wikidata:Q1136085""],""ticker_ref"":""finance-uk-ticker:itrk""}"	finance-uk-en
+finance-uk-ticker:itrk	ITRK	ticker	finance-uk-en	1	0	"{""same_as_refs"":[""wikidata:Q1136085"",""finance-uk-issuer:04267576""],""issuer_ref"":""finance-uk-issuer:04267576""}"	finance-uk-en
+wikidata:Q1136085	Intertek Group Plc	organization	general-en	0	1	"{""same_as_refs"":[""finance-uk-issuer:04267576""],""wikidata"":""Q1136085""}"	general-en,finance-uk-en
+wikidata:Q317521	Elon Musk	person	general-en	0	1	"{""same_as_refs"":[""person:elon-musk""],""wikidata"":""Q317521""}"	general-en,finance-us-en
+geonames:6252001	United States	country		0	1	"{""country_code"":""us"",""geonames"":""6252001"",""same_as_refs"":[""country:us"",""wikidata:Q30""],""wikidata"":""Q30""}"	general-en,finance-en
+wikidata:Q121826282	OPEC+	organization		0	1	"{""wikidata"":""Q121826282""}"	general-en,finance-en
+wikidata:Q159	Russia	country		0	1	"{""country_code"":""ru"",""geonames_id"":""2017370"",""same_as_refs"":[""country:ru"",""geonames:2017370""],""wikidata"":""Q159""}"	general-en,finance-en
+wikidata:Q458	European Union	bloc		0	1	"{""wikidata"":""Q458""}"	general-en
+wikidata:Q53536	Federal Reserve System	central_bank		0	1	"{""wikidata"":""Q53536""}"	general-en,finance-en
+wikidata:Q794	Iran	country		0	1	"{""country_code"":""ir"",""geonames_id"":""130758"",""same_as_refs"":[""country:ir"",""geonames:130758""],""wikidata"":""Q794""}"	general-en,finance-en
+wikidata:Q8901	European Central Bank	central_bank		0	1	"{""wikidata"":""Q8901""}"	general-en,finance-en
+wikidata:Q899	Suez Canal	chokepoint		0	1	"{""wikidata"":""Q899""}"	general-en
 ades:exchange:au:asx	ASX	exchange	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:issuer:au:bhp-group	BHP Group	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:issuer:au:commonwealth-bank-of-australia	Commonwealth Bank of Australia	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
@@ -226,7 +226,6 @@ finance-ca-ticker:tsx:td	TD	ticker	finance-ca-en	true	false	"{""exchange"": ""TS
 finance-ca:sp-tsx-composite	S&P/TSX Composite Index	market_index	finance-ca-en	true	false	"{""jurisdiction"": ""CA""}"	finance-ca-en
 ades:brand:global:sams-club	Sam's Club	brand	finance-us-en	false	true	"{""jurisdiction"": ""US""}"	finance-us-en,general-en
 ades:exchange:hk:hkex	Hong Kong Exchanges and Clearing	exchange	finance-hk-en	false	true	"{""exchange"": ""HKEX"", ""isin"": ""CNE1000001Z5"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""03988""}"	finance-hk-en,finance-cn-en
-ades:exchange:us:nyse	New York Stock Exchange	exchange	finance-us-en	false	true	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""mic"": ""XNYS"", ""ticker_symbol"": ""WMT""}"	finance-us-en,general-en
 ades:impact:currency:cny	Chinese yuan	currency	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
 ades:impact:rate:cn-lpr	PBOC loan prime rate	rate	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
 ades:issuer:hk:alibaba-group-holding	Alibaba Group Holding Limited	issuer	finance-hk-en	false	true	"{""jurisdiction"": ""HK""}"	finance-hk-en,finance-cn-en
@@ -692,3 +691,178 @@ finance-it:bank-of-italy	Banca d'Italia	government_body	finance-it-en	false	true
 finance-it:borsa-italiana	Borsa Italiana	exchange	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
 finance-it:consob	CONSOB	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
 finance-it:ftse-mib	FTSE MIB	market_index	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:brand:mx:oxxo	OXXO	brand	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:brand:mx:volaris	Volaris	brand	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:country:CA	Canada	country	general-en	false	true	"{""jurisdiction"": ""CA""}"	general-en,finance-mx-en
+ades:country:MX	Mexico	country	general-en	false	true	"{""jurisdiction"": ""MX""}"	general-en,finance-mx-en
+ades:country:US	United States	country	general-en	false	true	"{""jurisdiction"": ""US""}"	general-en,finance-mx-en
+ades:currency:MXN	Mexican peso	currency	finance-mx-en	true	false	"{""jurisdiction"": ""MX"", ""same_as_refs"": [""currency:MXN"", ""iso4217:MXN""]}"	finance-mx-en,general-en
+ades:exchange:us:nasdaq	Nasdaq Stock Market	exchange	finance-mx-en	false	true	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:exchange:us:nyse	New York Stock Exchange	exchange	finance-mx-en	false	true	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:index:mx:ftse-biva	FTSE BIVA index family	market_index	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:macro:mx:cpi	Mexico CPI / inflation	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:macro:mx:employment	Mexico employment	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:macro:mx:gdp	Mexico GDP	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:macro:mx:industrial-production	Mexico industrial production	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:macro:mx:retail-sales	Mexico retail sales	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:macro:mx:trade-balance	Mexico trade balance	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:global:fifa	FIFA	organization	finance-mx-en	false	true	"{""jurisdiction"": ""GLOBAL""}"	finance-mx-en,general-en
+ades:org:mx:afac	AFAC	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:atdt	ATDT	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:banxico	Banco de Mexico	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX"", ""same_as_refs"": [""wikidata:Q106800402""], ""wikidata_id"": ""Q106800402""}"	finance-mx-en,general-en
+ades:org:mx:cenace	CENACE	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cfe	CFE	organization	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cna-antimonopolio	Comision Nacional Antimonopolio	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cnbv	CNBV	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cne	CNE	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cofece	Historical COFECE	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cofepris	COFEPRIS	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cre	Historical CRE	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:crt	CRT	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:ift	Historical IFT	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:inegi	INEGI	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:pemex	Pemex	organization	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:profeco	PROFECO	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:sader	SADER	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:secretaria-economia	Secretaria de Economia	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:senasica	SENASICA	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:sener	SENER	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:shcp	SHCP	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:sict	SICT	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:program:global:fifa-world-cup-2026	FIFA World Cup 2026	program	finance-mx-en	false	true	"{""jurisdiction"": ""GLOBAL"", ""same_as_refs"": [""wikidata:Q6431616""], ""wikidata_id"": ""Q6431616""}"	finance-mx-en,general-en
+ades:rates:mx:banxico-policy-rate	Banxico policy rate proxy	rate	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:rates:mx:mbono-10y	Mexico 10-year Mbono yield proxy	rate	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:agri-food-health	Agri-food health	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:agriculture	Agriculture	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:agriculture-and-food-trade	Agriculture and food trade	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:airlines-and-aviation	Airlines and aviation	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:airports-and-tourism	Airports and tourism	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:antitrust	Antitrust	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:autos-and-auto-parts	Autos and auto parts	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:aviation	Aviation	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:banking	Banking	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:beer-and-beverages	Beer and beverages	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:beer-spirits-and-beverages	Beer, spirits and beverages	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:beverages-and-consumer-staples	Beverages and consumer staples	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:beverages-retail-and-consumer-staples	Beverages, retail and consumer staples	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:biosecurity	Biosecurity	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:biva-equity-market	BIVA equity market	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:broadcasting	Broadcasting	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:brokerage	Brokerage	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:cement-and-construction-materials	Cement and construction materials	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:competition-policy	Competition policy	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:consumer-prices	Consumer prices	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:consumer-retail	Consumer retail	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:consumer-staples	Consumer staples	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:cosmetics	Cosmetics	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:digital-government	Digital government	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:digital-markets	Digital markets	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:electric-utilities	Electric utilities	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:electricity-and-gas	Electricity and gas	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:energy-permits	Energy permits	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:energy-security	Energy security	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:exchange-and-market-infrastructure	Exchange and market infrastructure	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:export-logistics	Export logistics	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:fintech	Fintech	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:fiscal-policy	Fiscal policy	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:food-import-export	Food import and export	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:food-safety	Food safety	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:food-security	Food security	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:fuel-and-refining	Fuel and refining	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:funds	Funds	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:grid-and-transmission	Grid and transmission	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:health-and-consumer-products	Health and consumer products	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:industrial-policy	Industrial policy	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:industrial-real-estate	Industrial real estate	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:livestock	Livestock	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:logistics	Logistics	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:logistics-and-border-trade	Logistics and border trade	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:manufacturing	Manufacturing	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:medical-devices	Medical devices	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:merger-review	Merger review	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:mexican-equity-market	Mexican equity market	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:mining-and-rail	Mining and rail	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:mobile-line-registration	Mobile-line registration	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:nearshoring	Nearshoring	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:oil-and-gas	Oil and gas	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:oil-gas-and-fuels	Oil, gas and fuels	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:packaged-food	Packaged food	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:pemex-cfe-public-finance	Pemex and CFE public finance	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:pharma	Pharma	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:ports	Ports	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:product-safety	Product safety	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:public-debt	Public debt	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:retail-and-consumer	Retail and consumer	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:roads	Roads	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:securities-market	Securities market	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:spectrum	Spectrum	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:tax-policy	Tax policy	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:telecom	Telecom	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:telecom-and-broadband	Telecom and broadband	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:tourism-and-hospitality	Tourism and hospitality	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:mx:transport-infrastructure	Transport infrastructure	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:security:mx:bmv:amx-b	America Movil BMV B share	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:security:mx:bmv:asur-b	ASUR BMV B share	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:security:mx:bmv:cemex-cpo	Cemex BMV CPO	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:security:mx:bmv:femsa-ubd	FEMSA BMV UBD unit	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:security:mx:bmv:gap-b	GAP BMV B share	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:security:mx:bmv:kof-ubl	Coca-Cola FEMSA BMV UBL unit	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:security:mx:bmv:oma-b	OMA BMV B share	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:security:mx:bmv:volar-a	Volaris BMV A share	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:security:us:nasdaq:omab-adr	OMA Nasdaq ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:security:us:nyse:amx-adr	America Movil NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:security:us:nyse:asr-adr	ASUR NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:security:us:nyse:cx-adr	Cemex NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:security:us:nyse:fmx-adr	FEMSA NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:security:us:nyse:kof-adr	Coca-Cola FEMSA NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:security:us:nyse:pac-adr	GAP NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:security:us:nyse:vlrs-adr	Volaris NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:trade-agreement:usmca	USMCA	trade_agreement	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:AC	Arca Continental, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:AMX	America Movil, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:ASUR	Grupo Aeroportuario Del Sureste, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:BBAJIO	Banco Del Bajío, S.A., Institución De Banca Múltiple	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:BIMBO	Grupo Bimbo, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:BOLSA	Bolsa Mexicana De Valores, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:CEMEX	Cemex, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:CUERVO	Becle, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:FEMSA	Fomento Económico Mexicano, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:GAP	Grupo Aeroportuario Del Pacifico, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:GFINBUR	Grupo Financiero Inbursa, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:GFNORTE	Grupo Financiero Banorte, S.A.B De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:GMEXICO	Grupo Mexico, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:KOF	Coca-Cola Femsa, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:LAB	Genomma Lab Internacional, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:MEGA	Megacable Holdings, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:OMA	Grupo Aeroportuario Del Centro Norte, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:VOLAR	Controladora Vuela Compañía De Aviación, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-issuer:WALMEX	Wal - Mart De Mexico, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx-ticker:AC:*	AC *	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""AC""}"	finance-mx-en,general-en
+finance-mx-ticker:AMX:b	AMX B	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""AMX""}"	finance-mx-en,general-en
+finance-mx-ticker:ASUR:b	ASUR B	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""ASUR""}"	finance-mx-en,general-en
+finance-mx-ticker:BBAJIO:o	BBAJIO O	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""BBAJIO""}"	finance-mx-en,general-en
+finance-mx-ticker:BIMBO:a	BIMBO A	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""BIMBO""}"	finance-mx-en,general-en
+finance-mx-ticker:BOLSA:a	BOLSA A	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""BOLSA""}"	finance-mx-en,general-en
+finance-mx-ticker:CEMEX:cpo	CEMEX CPO	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""CEMEX""}"	finance-mx-en,general-en
+finance-mx-ticker:CUERVO:*	CUERVO *	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""CUERVO""}"	finance-mx-en,general-en
+finance-mx-ticker:FEMSA:ub	FEMSA UB	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""FEMSA""}"	finance-mx-en,general-en
+finance-mx-ticker:GAP:b	GAP B	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""GAP""}"	finance-mx-en,general-en
+finance-mx-ticker:GFINBUR:o	GFINBUR O	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""GFINBUR""}"	finance-mx-en,general-en
+finance-mx-ticker:GFNORTE:o	GFNORTE O	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""GFNORTE""}"	finance-mx-en,general-en
+finance-mx-ticker:GMEXICO:b	GMEXICO B	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""GMEXICO""}"	finance-mx-en,general-en
+finance-mx-ticker:KOF:ubl	KOF UBL	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""KOF""}"	finance-mx-en,general-en
+finance-mx-ticker:LAB:b	LAB B	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""LAB""}"	finance-mx-en,general-en
+finance-mx-ticker:MEGA:cpo	MEGA CPO	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""MEGA""}"	finance-mx-en,general-en
+finance-mx-ticker:OMA:b	OMA B	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""OMA""}"	finance-mx-en,general-en
+finance-mx-ticker:VOLAR:a	VOLAR A	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""VOLAR""}"	finance-mx-en,general-en
+finance-mx-ticker:WALMEX:*	WALMEX *	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""WALMEX""}"	finance-mx-en,general-en
+finance-mx:bmv	Bolsa Mexicana de Valores	exchange	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-mx:ipc	S&P/BMV IPC	market_index	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-us-ticker:AMX	AMX	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""AMX""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:ASR	ASR	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""ASR""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:CX	CX	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""CX""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:FMX	FMX	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""FMX""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:KOF	KOF	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""KOF""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:OMAB	OMAB	ticker	finance-mx-en	true	false	"{""exchange"": ""NASDAQ"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""OMAB""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:PAC	PAC	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""PAC""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:VLRS	VLRS	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""VLRS""}"	finance-mx-en,finance-us-en,general-en

@@ -1,4 +1,5 @@
 import csv
+import json
 from pathlib import Path
 
 import pytest
@@ -56,6 +57,11 @@ REVIEWED_ITALY_EURONEXT_BANCADITALIA_POLICY_FIXTURE = Path(
     "program_org_relationship/reviewed/2026-06-29/"
     "italy_euronext_bancaditalia_policy_relationships.tsv"
 )
+REVIEWED_MEXICO_BMV_BANXICO_POLICY_FIXTURE = Path(
+    "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/"
+    "program_org_relationship/reviewed/2026-06-29/"
+    "mexico_bmv_banxico_policy_relationships.tsv"
+)
 
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
@@ -68,6 +74,72 @@ def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
 def _read_tsv(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle, delimiter="\t"))
+
+
+def test_program_org_relationship_accepts_prefixed_identity_columns(
+    tmp_path: Path,
+) -> None:
+    relationship_path = tmp_path / "program_org_relationships.tsv"
+    columns = [
+        "source_entity_ref",
+        "source_entity_name",
+        "source_entity_type",
+        "relation",
+        "target_entity_ref",
+        "target_entity_name",
+        "target_entity_type",
+        "jurisdiction",
+        "source_title",
+        "source_url",
+        "source_snapshot",
+        "source_tier",
+        "evidence_text",
+        "effective_from",
+        "confidence",
+        "pack_ids",
+        "source_wikidata_id",
+        "target_same_as_refs",
+    ]
+    _write_tsv(
+        relationship_path,
+        columns,
+        [
+            [
+                "ades:org:mx:banxico",
+                "Banco de Mexico",
+                "government_body",
+                "central_bank_affects_currency",
+                "ades:currency:MXN",
+                "Mexican peso",
+                "currency",
+                "MX",
+                "Banco de Mexico official site",
+                "https://www.banxico.org.mx/indexen.html",
+                "2026-06-29",
+                "government",
+                "Banco de Mexico official source supports Mexico central-bank routing.",
+                "2026-06-29",
+                "0.94",
+                "finance-mx-en,general-en",
+                "Q106800402",
+                "currency:MXN|iso4217:MXN",
+            ],
+        ],
+    )
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[relationship_path],
+        output_root=tmp_path / "out",
+        run_id="identity-cols",
+        build_artifact=False,
+    )
+
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    banxico_identifiers = json.loads(nodes["ades:org:mx:banxico"]["identifiers_json"])
+    mxn_identifiers = json.loads(nodes["ades:currency:MXN"]["identifiers_json"])
+
+    assert banxico_identifiers["wikidata_id"] == "Q106800402"
+    assert mxn_identifiers["same_as_refs"] == ["currency:MXN", "iso4217:MXN"]
 
 
 def test_program_org_relationship_builds_program_holding_issuer_ticker_path(
@@ -1729,3 +1801,220 @@ def test_reviewed_italy_fixture_expands_euronext_macro_and_policy_guardrails(
 
     equity_candidate_refs, _ = expanded_refs("ades:sector:it:italian-equity-market")
     assert equity_candidate_refs == {"finance-it:ftse-mib"}
+
+
+def test_reviewed_mexico_fixture_expands_bmv_banxico_world_cup_and_policy_guardrails(
+    tmp_path: Path,
+) -> None:
+    if not REVIEWED_MEXICO_BMV_BANXICO_POLICY_FIXTURE.exists():
+        pytest.skip("reviewed Mexico BMV/Banxico/policy fixture is not mounted")
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[REVIEWED_MEXICO_BMV_BANXICO_POLICY_FIXTURE],
+        output_root=tmp_path / "impact_relationships",
+        run_id="reviewed-mexico-bmv-banxico-policy",
+        build_artifact=True,
+        include_starter_graph=False,
+        artifact_output_root=tmp_path / "artifacts",
+    )
+
+    assert result.relationship_row_count == 199
+    assert result.node_count == 175
+    assert result.edge_count == 199
+    assert result.relation_counts == {
+        "brand_owned_by_org": 2,
+        "central_bank_affects_credit_sector": 1,
+        "central_bank_affects_currency": 1,
+        "central_bank_affects_rates": 2,
+        "government_body_affects_sector": 23,
+        "issuer_has_listed_ticker": 19,
+        "issuer_has_security": 16,
+        "issuer_in_sector": 19,
+        "org_in_sector": 2,
+        "policy_program_affects_sector": 6,
+        "program_host_country": 3,
+        "program_operated_by_org": 1,
+        "regulator_affects_sector": 36,
+        "sector_affects_index": 2,
+        "security_has_identifier": 16,
+        "security_listed_on_exchange": 16,
+        "statistics_body_reports_macro_indicator": 6,
+        "ticker_listed_on_exchange": 19,
+        "trade_agreement_affects_sector": 6,
+        "trade_agreement_counterparty_country": 3,
+    }
+    assert result.node_type_counts == {
+        "brand": 2,
+        "country": 3,
+        "currency": 1,
+        "exchange": 3,
+        "government_body": 9,
+        "issuer": 19,
+        "macro_indicator": 6,
+        "market_index": 2,
+        "organization": 3,
+        "program": 1,
+        "rate": 2,
+        "regulator": 11,
+        "sector": 69,
+        "security": 16,
+        "ticker": 27,
+        "trade_agreement": 1,
+    }
+
+    validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
+    assert validation.invalid_row_count == 0
+    assert validation.source_warning_counts == {}
+    assert validation.relation_warning_counts == {}
+    assert validation.source_tier_counts == {
+        "exchange": 83,
+        "government": 48,
+        "industry_association": 10,
+        "issuer_disclosed": 26,
+        "regulator": 32,
+    }
+
+    assert result.artifact_path is not None
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    for tradable_ref in [
+        "finance-mx-ticker:GFNORTE:o",
+        "finance-mx-ticker:AMX:b",
+        "finance-mx:ipc",
+        "ades:currency:MXN",
+        "ades:rates:mx:banxico-policy-rate",
+        "ades:security:mx:bmv:amx-b",
+        "finance-us-ticker:AMX",
+    ]:
+        assert nodes[tradable_ref]["is_tradable"] == "true"
+    for passive_ref in [
+        "ades:program:global:fifa-world-cup-2026",
+        "ades:country:US",
+        "ades:sector:mx:beer-and-beverages",
+        "ades:org:mx:cne",
+        "ades:org:mx:cre",
+    ]:
+        assert nodes[passive_ref]["is_tradable"] == "false"
+
+    with MarketGraphStore(result.artifact_path) as store:
+        gfnorte_edges = store.outbound_edges_batch(["finance-mx-issuer:GFNORTE"])[
+            "finance-mx-issuer:GFNORTE"
+        ]
+        world_cup_edges = store.outbound_edges_batch(["ades:program:global:fifa-world-cup-2026"])[
+            "ades:program:global:fifa-world-cup-2026"
+        ]
+        cne_edges = store.outbound_edges_batch(["ades:org:mx:cne"])["ades:org:mx:cne"]
+        cre_edges = store.outbound_edges_batch(["ades:org:mx:cre"])["ades:org:mx:cre"]
+
+    assert {edge.target_ref for edge in gfnorte_edges} == {
+        "ades:sector:mx:banking",
+        "finance-mx-ticker:GFNORTE:o",
+    }
+    assert {
+        "ades:country:CA",
+        "ades:country:MX",
+        "ades:country:US",
+        "ades:org:global:fifa",
+        "ades:sector:mx:beer-and-beverages",
+    }.issubset({edge.target_ref for edge in world_cup_edges})
+    assert {edge.target_ref for edge in cne_edges} == {
+        "ades:sector:mx:electricity-and-gas",
+        "ades:sector:mx:energy-permits",
+        "ades:sector:mx:fuel-and-refining",
+    }
+    assert {edge.target_ref for edge in cre_edges} == {
+        "ades:sector:mx:electricity-and-gas",
+        "ades:sector:mx:energy-permits",
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=result.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=120,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    gfnorte_candidate_refs, gfnorte_passive_refs = expanded_refs("finance-mx-issuer:GFNORTE")
+    assert gfnorte_candidate_refs == {"finance-mx-ticker:GFNORTE:o"}
+    assert "ades:sector:mx:banking" in gfnorte_passive_refs
+    assert "ades:currency:MXN" not in gfnorte_candidate_refs
+
+    banxico_candidate_refs, banxico_passive_refs = expanded_refs("ades:org:mx:banxico")
+    assert banxico_candidate_refs == {
+        "ades:currency:MXN",
+        "ades:rates:mx:banxico-policy-rate",
+        "ades:rates:mx:mbono-10y",
+    }
+    assert "ades:sector:mx:banking" in banxico_passive_refs
+    assert "finance-mx-ticker:GFNORTE:o" not in banxico_candidate_refs
+
+    usmca_candidate_refs, usmca_passive_refs = expanded_refs("ades:trade-agreement:usmca")
+    assert usmca_candidate_refs == set()
+    assert {
+        "ades:country:CA",
+        "ades:country:MX",
+        "ades:country:US",
+        "ades:sector:mx:logistics-and-border-trade",
+        "ades:sector:mx:manufacturing",
+    }.issubset(usmca_passive_refs)
+    assert "ades:currency:MXN" not in usmca_candidate_refs
+
+    world_cup_candidate_refs, world_cup_passive_refs = expanded_refs(
+        "ades:program:global:fifa-world-cup-2026"
+    )
+    assert world_cup_candidate_refs == set()
+    assert {
+        "ades:country:CA",
+        "ades:country:MX",
+        "ades:country:US",
+        "ades:org:global:fifa",
+        "ades:sector:mx:airports-and-tourism",
+        "ades:sector:mx:beer-and-beverages",
+        "ades:sector:mx:retail-and-consumer",
+    }.issubset(world_cup_passive_refs)
+    assert "finance-mx-issuer:FEMSA" not in world_cup_candidate_refs
+    assert "finance-mx-ticker:FEMSA:ubd" not in world_cup_candidate_refs
+
+    oxxo_candidate_refs, oxxo_passive_refs = expanded_refs("ades:brand:mx:oxxo")
+    assert {
+        "finance-mx-ticker:FEMSA:ub",
+        "finance-us-ticker:FMX",
+        "ades:security:mx:bmv:femsa-ubd",
+        "ades:security:us:nyse:fmx-adr",
+    }.issubset(oxxo_candidate_refs)
+    assert "finance-mx-issuer:FEMSA" in oxxo_passive_refs
+    assert "ades:currency:MXN" not in oxxo_candidate_refs
+
+    cne_candidate_refs, cne_passive_refs = expanded_refs("ades:org:mx:cne")
+    assert cne_candidate_refs == set()
+    assert {
+        "ades:sector:mx:electricity-and-gas",
+        "ades:sector:mx:energy-permits",
+        "ades:sector:mx:fuel-and-refining",
+    }.issubset(cne_passive_refs)
+
+    cre_candidate_refs, cre_passive_refs = expanded_refs("ades:org:mx:cre")
+    assert cre_candidate_refs == set()
+    assert {
+        "ades:sector:mx:electricity-and-gas",
+        "ades:sector:mx:energy-permits",
+    }.issubset(cre_passive_refs)
+
+    amx_candidate_refs, amx_passive_refs = expanded_refs("finance-mx-issuer:AMX")
+    assert {
+        "finance-mx-ticker:AMX:b",
+        "finance-us-ticker:AMX",
+        "ades:security:mx:bmv:amx-b",
+        "ades:security:us:nyse:amx-adr",
+    }.issubset(amx_candidate_refs)
+    assert "ades:sector:mx:telecom-and-broadband" in amx_passive_refs
+    assert "ades:currency:MXN" not in amx_candidate_refs
+
+    equity_candidate_refs, _ = expanded_refs("ades:sector:mx:mexican-equity-market")
+    assert equity_candidate_refs == {"finance-mx:ipc"}

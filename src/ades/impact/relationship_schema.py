@@ -161,10 +161,14 @@ ORGANIZATION_CONTROL_RELATIONS = {
 }
 PROGRAM_ORG_RELATIONS = {
     "program_operated_by_org",
+    "program_financed_by_org",
     "program_loan_recipient_org",
     "payment_network_operated_by_org",
     "product_owned_by_org",
     "brand_owned_by_org",
+}
+PROGRAM_COUNTRY_RELATIONS = {
+    "program_host_country",
 }
 POLICY_PROGRAM_RELATIONS = {
     "policy_program_affects_sector",
@@ -287,6 +291,8 @@ def relation_family_for_relation(relation: str) -> str:
         return "person_to_issuer"
     if relation in PROGRAM_ORG_RELATIONS:
         return "program_org_relationship"
+    if relation in PROGRAM_COUNTRY_RELATIONS:
+        return "program_country_relationship"
     if relation in PROJECT_ORG_RELATIONS:
         return "project_org_relationship"
     if relation in ORGANIZATION_CONTROL_RELATIONS:
@@ -360,6 +366,8 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         "index_affects_country_index_proxy",
     }:
         return GLOBAL_EQUITY_EVENT_TYPES
+    if relation in PROGRAM_COUNTRY_RELATIONS:
+        return tuple(dict.fromkeys((*POLICY_SECTOR_EVENT_TYPES, "supply_disruption")))
     if relation in POLICY_SECTOR_RELATIONS or relation in POLICY_PROGRAM_RELATIONS:
         return POLICY_SECTOR_EVENT_TYPES
     if relation in TRADE_AGREEMENT_RELATIONS:
@@ -469,6 +477,12 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
         return (
             "direct_program_product_or_brand_mention",
             "source_backed_program_org_evidence",
+            "compatible_event_signal",
+        )
+    if relation in PROGRAM_COUNTRY_RELATIONS:
+        return (
+            "direct_program_or_event_mention",
+            "source_backed_host_country_evidence",
             "compatible_event_signal",
         )
     if relation in PROJECT_ORG_RELATIONS:

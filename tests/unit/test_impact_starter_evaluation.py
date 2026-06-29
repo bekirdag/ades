@@ -749,6 +749,153 @@ def test_starter_graph_includes_promoted_italy_relationships(tmp_path: Path) -> 
     assert equity_candidate_refs == {"finance-it:ftse-mib"}
 
 
+def test_starter_graph_includes_promoted_mexico_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        mexico_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_mexico/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-mx-ticker:GFNORTE:o',
+                    'finance-mx:ipc',
+                    'ades:currency:MXN',
+                    'ades:rates:mx:banxico-policy-rate',
+                    'finance-us-ticker:AMX'
+                )
+                """
+            )
+        }
+        world_cup_targets = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT target_ref
+                FROM impact_edges
+                WHERE source_ref = 'ades:program:global:fifa-world-cup-2026'
+                """
+            )
+        }
+        cne_targets = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT target_ref
+                FROM impact_edges
+                WHERE source_ref = 'ades:org:mx:cne'
+                """
+            )
+        }
+
+    assert mexico_edge_count == 199
+    assert tradable_rows == {
+        "ades:currency:MXN": (1, 0),
+        "ades:rates:mx:banxico-policy-rate": (1, 0),
+        "finance-mx-ticker:GFNORTE:o": (1, 0),
+        "finance-mx:ipc": (1, 0),
+        "finance-us-ticker:AMX": (1, 0),
+    }
+    assert {
+        "ades:country:CA",
+        "ades:country:MX",
+        "ades:country:US",
+        "ades:org:global:fifa",
+        "ades:sector:mx:airports-and-tourism",
+        "ades:sector:mx:beer-and-beverages",
+        "ades:sector:mx:retail-and-consumer",
+    }.issubset(world_cup_targets)
+    assert cne_targets == {
+        "ades:sector:mx:electricity-and-gas",
+        "ades:sector:mx:energy-permits",
+        "ades:sector:mx:fuel-and-refining",
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=120,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    gfnorte_candidate_refs, gfnorte_passive_refs = expanded_refs("finance-mx-issuer:GFNORTE")
+    assert gfnorte_candidate_refs == {"finance-mx-ticker:GFNORTE:o"}
+    assert "ades:sector:mx:banking" in gfnorte_passive_refs
+    assert "ades:currency:MXN" not in gfnorte_candidate_refs
+
+    banxico_candidate_refs, banxico_passive_refs = expanded_refs("ades:org:mx:banxico")
+    assert banxico_candidate_refs == {
+        "ades:currency:MXN",
+        "ades:rates:mx:banxico-policy-rate",
+        "ades:rates:mx:mbono-10y",
+    }
+    assert "ades:sector:mx:banking" in banxico_passive_refs
+    assert "finance-mx-ticker:GFNORTE:o" not in banxico_candidate_refs
+
+    usmca_candidate_refs, usmca_passive_refs = expanded_refs("ades:trade-agreement:usmca")
+    assert usmca_candidate_refs == set()
+    assert {
+        "ades:country:CA",
+        "ades:country:MX",
+        "ades:country:US",
+        "ades:sector:mx:logistics-and-border-trade",
+        "ades:sector:mx:manufacturing",
+    }.issubset(usmca_passive_refs)
+
+    world_cup_candidate_refs, world_cup_passive_refs = expanded_refs(
+        "ades:program:global:fifa-world-cup-2026"
+    )
+    assert world_cup_candidate_refs == set()
+    assert {
+        "ades:country:CA",
+        "ades:country:MX",
+        "ades:country:US",
+        "ades:org:global:fifa",
+        "ades:sector:mx:beer-and-beverages",
+        "ades:sector:mx:retail-and-consumer",
+    }.issubset(world_cup_passive_refs)
+    assert "finance-mx-ticker:FEMSA:ubd" not in world_cup_candidate_refs
+
+    oxxo_candidate_refs, oxxo_passive_refs = expanded_refs("ades:brand:mx:oxxo")
+    assert {
+        "finance-mx-ticker:FEMSA:ub",
+        "finance-us-ticker:FMX",
+        "ades:security:mx:bmv:femsa-ubd",
+        "ades:security:us:nyse:fmx-adr",
+    }.issubset(oxxo_candidate_refs)
+    assert "finance-mx-issuer:FEMSA" in oxxo_passive_refs
+    assert "ades:currency:MXN" not in oxxo_candidate_refs
+
+    cne_candidate_refs, cne_passive_refs = expanded_refs("ades:org:mx:cne")
+    assert cne_candidate_refs == set()
+    assert "ades:sector:mx:fuel-and-refining" in cne_passive_refs
+
+    cre_candidate_refs, cre_passive_refs = expanded_refs("ades:org:mx:cre")
+    assert cre_candidate_refs == set()
+    assert "ades:sector:mx:energy-permits" in cre_passive_refs
+
+    equity_candidate_refs, _ = expanded_refs("ades:sector:mx:mexican-equity-market")
+    assert equity_candidate_refs == {"finance-mx:ipc"}
+
+
 def test_article_golden_set_evaluates_extraction_then_impact(tmp_path: Path):
     response = build_starter_market_graph_store(output_dir=tmp_path / "artifact")
     golden_set_path = tmp_path / "article_golden_set.json"

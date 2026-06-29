@@ -39,6 +39,19 @@ def test_extract_news_event_signals_returns_evidence_spans_and_asset_families() 
     )
 
 
+def test_extract_news_event_signals_covers_policy_rate_hold_without_unchanged_wording() -> None:
+    text = (
+        "Banxico held its benchmark policy rate and said inflation risks remain "
+        "elevated, pressuring the Mexican peso and local bond yields."
+    )
+
+    by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
+
+    assert "policy_rate_hold" in by_type
+    assert "rates" in by_type["policy_rate_hold"].compatible_asset_families
+    assert "currency" in by_type["policy_rate_hold"].compatible_asset_families
+
+
 def test_extract_news_event_signals_covers_trade_ma_default_and_conflict() -> None:
     text = (
         "Officials announced new export controls and tariffs. "

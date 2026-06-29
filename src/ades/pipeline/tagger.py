@@ -1785,11 +1785,14 @@ _COMMON_GEOPOLITICAL_ACRONYM_ALIAS_TEXTS = frozenset(
         "usa",
     }
 )
-_RUNTIME_G20_COUNTRY_ALIAS_TEXTS = frozenset(
-    normalize_lookup_text(alias.alias)
-    for alias in _RUNTIME_G20_COUNTRY_ALIASES
-    if normalize_lookup_text(alias.alias)
-) | _COMMON_GEOPOLITICAL_ACRONYM_ALIAS_TEXTS
+_RUNTIME_G20_COUNTRY_ALIAS_TEXTS = (
+    frozenset(
+        normalize_lookup_text(alias.alias)
+        for alias in _RUNTIME_G20_COUNTRY_ALIASES
+        if normalize_lookup_text(alias.alias)
+    )
+    | _COMMON_GEOPOLITICAL_ACRONYM_ALIAS_TEXTS
+)
 _FINANCE_COUNTRY_PACK_ID_RE = re.compile(r"^finance-[a-z]{2}-en$")
 _FINANCE_COUNTRY_SHORT_ALIAS_CACHE: dict[
     tuple[str, int, int],
@@ -1838,7 +1841,10 @@ _FINANCE_COUNTRY_SHORT_ALIAS_DESCRIPTOR_TOKENS = _FINANCE_COUNTRY_SHORT_ALIAS_BU
     "company",
     "energy",
     "finance",
+    "financiera",
+    "financiero",
     "financial",
+    "grupo",
     "group",
     "holding",
     "holdings",
@@ -1865,6 +1871,7 @@ _FINANCE_COUNTRY_SHORT_ALIAS_STOPLIST = (
     | _RUNTIME_GENERIC_SINGLE_TOKEN_ALIAS_TEXTS
     | _FINANCE_COUNTRY_SHORT_ALIAS_DESCRIPTOR_TOKENS
     | {
+        "banorte",
         "coast",
         "exchange",
         "fort",
