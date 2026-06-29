@@ -556,8 +556,9 @@ jobs:
           }
           /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --force-reinstall --no-deps "/mnt/ades/app/releases/$release_id/$wheel_name"
           /mnt/ades/app/shared/.venv/bin/python -m pip install --disable-pip-version-check --upgrade "psycopg[binary]>=3.2,<4.0"
-          mkdir -p "$HOME/.config/systemd/user/ades.service.d" /mnt/ades/storage/registry
-          cat > "$HOME/.config/systemd/user/ades.service.d/pack-health.conf" <<EOF
+          service_dropin_dir="$HOME/.config/systemd/user/ades.service.d"
+          mkdir -p "$service_dropin_dir" /mnt/ades/storage/registry
+          cat > "$service_dropin_dir/pack-health.conf" <<EOF
           [Service]
           Environment=ADES_PACK_HEALTH_DB_PATH=/mnt/ades/storage/registry/pack_health.sqlite3
           EOF
@@ -569,7 +570,7 @@ jobs:
             impact_current_root="$HOME/.local/share/ades-artifacts/market-graph/current"
           fi
           if [ -f "$impact_release_root/market_graph_store.sqlite" ]; then
-            mkdir -p "$impact_current_root" "$HOME/.config/systemd/user/ades.service.d"
+            mkdir -p "$impact_current_root" "$service_dropin_dir"
             switch_impact_current=1
             existing_impact_edges="$(impact_edge_count "$impact_current_root")"
             new_impact_edges="$(impact_edge_count "$impact_release_root")"
@@ -584,7 +585,8 @@ jobs:
                 cp "$impact_release_root/market_graph_store_manifest.json" "$impact_current_root/market_graph_store_manifest.json"
               fi
             fi
-            cat > "$HOME/.config/systemd/user/ades.service.d/impact-expansion.conf" <<EOF
+            rm -f "$service_dropin_dir/impact-expansion.conf" "$service_dropin_dir/news-analyze.conf"
+            cat > "$service_dropin_dir/zz-impact-expansion.conf" <<EOF
           [Service]
           Environment=ADES_IMPACT_EXPANSION_ENABLED=true
           Environment=ADES_IMPACT_EXPANSION_ARTIFACT_PATH=$impact_current_root/market_graph_store.sqlite
@@ -595,7 +597,7 @@ jobs:
           Environment=ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE=3
           Environment=ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED=false
           EOF
-            cat > "$HOME/.config/systemd/user/ades.service.d/news-analyze.conf" <<EOF
+            cat > "$service_dropin_dir/zz-news-analyze.conf" <<EOF
           [Service]
           Environment=ADES_NEWS_ANALYZE_ENABLED=true
           EOF
@@ -620,7 +622,42 @@ jobs:
           XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user daemon-reload
           XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user restart ades.service
           timeout 90s bash -c 'until curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/healthz >/dev/null; do sleep 2; done'
-          curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/v0/status >/dev/null
+          python3 - "$impact_current_root/market_graph_store.sqlite" <<'PY'
+          import json
+          import sys
+          import urllib.request
+          from pathlib import Path
+
+          expected_path = Path(sys.argv[1]).expanduser()
+          with urllib.request.urlopen("http://127.0.0.1:8734/v0/status", timeout=15) as response:
+              payload = json.load(response)
+          artifact = payload.get("impact_artifact") or {}
+          configured_path = Path(str(artifact.get("configured_path") or "")).expanduser()
+          if configured_path != expected_path:
+              raise SystemExit(
+                  f"active impact artifact mismatch: expected {expected_path}, got {configured_path}"
+              )
+          if not artifact.get("exists") or not artifact.get("readable"):
+              raise SystemExit(f"active impact artifact is not readable: {artifact}")
+          age_seconds = float(artifact.get("age_seconds") or 1_000_000_000)
+          if age_seconds > 7200:
+              raise SystemExit(f"active impact artifact is stale after deploy: {artifact}")
+          metadata = artifact.get("metadata") or {}
+          edge_count = int(metadata.get("edge_count") or 0)
+          if edge_count <= 0:
+              raise SystemExit(f"active impact artifact has no edges: {artifact}")
+          print(
+              json.dumps(
+                  {
+                      "configured_path": str(configured_path),
+                      "age_seconds": age_seconds,
+                      "edge_count": edge_count,
+                      "version": artifact.get("generated_at"),
+                  },
+                  sort_keys=True,
+              )
+          )
+          PY
           curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/v0/packs/available >/dev/null
           curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:6333/collections/ades-qids-current >/dev/null
           if command -v sudo >/dev/null 2>&1; then
@@ -685,3 +722,71 @@ jobs:
           curl --retry 10 --retry-all-errors --retry-delay 10 --connect-timeout 5 --max-time 15 -fsS https://adestool.com/v0/status >/dev/null
           curl --retry 10 --retry-all-errors --retry-delay 10 --connect-timeout 5 --max-time 15 -fsS https://adestool.com/v0/packs/available >/dev/null
           curl --retry 10 --retry-all-errors --retry-delay 10 --connect-timeout 5 --max-time 15 -fsS https://repo.adestool.com/index.json >/dev/null
+          python3 - <<'PY'
+          import json
+          import sys
+          import urllib.request
+
+          headers = {"content-type": "application/json", "user-agent": "ades-prod-smoke/1.0"}
+
+          def get_json(url: str) -> dict:
+              request = urllib.request.Request(url, headers={"user-agent": "ades-prod-smoke/1.0"})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          def post_json(url: str, payload: dict) -> dict:
+              request = urllib.request.Request(
+                  url,
+                  data=json.dumps(payload).encode("utf-8"),
+                  headers=headers,
+                  method="POST",
+              )
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return json.load(response)
+
+          status = get_json("https://api.adestool.com/v0/status")
+          artifact = status.get("impact_artifact") or {}
+          age_seconds = float(artifact.get("age_seconds") or 1_000_000_000)
+          if age_seconds > 7200:
+              raise SystemExit(f"public impact artifact is stale after deploy: {artifact}")
+
+          options = {
+              "include_passive_entities": True,
+              "include_relationship_paths": True,
+              "include_terminal_candidates": True,
+              "include_tag_responses": False,
+              "max_terminal_candidates": 16,
+          }
+          samples = {
+              "tesla": {
+                  "title": "Elon Musk says Tesla will expand battery production after new financing plan",
+                  "text": "Elon Musk said Tesla will expand battery production after announcing a new financing plan. Investors reacted to the comments as Tesla shares moved in US trading.",
+                  "packs": [],
+                  "options": options,
+                  "required_refs": {"finance-us-ticker:TSLA"},
+              },
+              "metals": {
+                  "title": "Gold and silver rise as the dollar weakens before Fed decision",
+                  "text": "Gold and silver prices rose as the US dollar weakened and traders prepared for the Federal Reserve rate decision.",
+                  "packs": [],
+                  "options": options,
+                  "required_refs": {
+                      "ades:impact:commodity:gold",
+                      "ades:impact:commodity:silver",
+                  },
+              },
+          }
+          for name, payload in samples.items():
+              required_refs = payload.pop("required_refs")
+              response = post_json("https://api.adestool.com/v0/news/analyze", payload)
+              refs = {
+                  str(candidate.get("entity_ref"))
+                  for candidate in response.get("terminal_impact_candidates") or []
+              }
+              missing = sorted(required_refs - refs)
+              if missing:
+                  raise SystemExit(
+                      f"news analyze smoke {name} missing {missing}; refs={sorted(refs)}"
+                  )
+          print(json.dumps({"impact_age_seconds": age_seconds, "news_analyze": "ok"}, sort_keys=True))
+          PY
