@@ -5,6 +5,51 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
+RELATIONSHIP_NODE_TYPE_SCHEMA_VERSION = "relationship-node-types-v1"
+RELATIONSHIP_NODE_TYPES = (
+    "program",
+    "policy",
+    "law",
+    "regulation",
+    "government_body",
+    "regulator",
+    "ministry",
+    "product",
+    "brand",
+    "organization",
+    "legal_entity",
+    "holding_company",
+    "issuer",
+    "security",
+    "ticker",
+    "exchange",
+    "sector",
+    "industry",
+    "index",
+    "currency",
+    "rates_proxy",
+    "commodity",
+    "country",
+)
+RELATIONSHIP_NODE_TYPE_ALIASES = {
+    "asset_manager": "organization",
+    "central_bank": "government_body",
+    "company_registry": "government_body",
+    "currency_index": "index",
+    "equity_index": "index",
+    "interest_rate": "rates_proxy",
+    "market_index": "index",
+    "ministry_body": "ministry",
+    "org": "organization",
+    "rate": "rates_proxy",
+    "sector_index": "index",
+    "sovereign_debt_office": "government_body",
+    "statistics_agency": "government_body",
+    "statistics_body": "government_body",
+    "tax_authority": "government_body",
+}
+RELATIONSHIP_NODE_TYPE_SET = frozenset(RELATIONSHIP_NODE_TYPES)
+
 DXY_EVENT_TYPES = (
     "policy_rate_cut",
     "policy_rate_hike",
@@ -474,6 +519,31 @@ class RelationDefinition:
     family: str
     compatible_event_types: tuple[str, ...] = ()
     direction_preconditions: tuple[str, ...] = ()
+
+
+def canonical_node_type_for(node_type: str | None) -> str | None:
+    """Return the canonical relationship-lane node type for a raw type."""
+
+    normalized = (node_type or "").strip().casefold().replace("-", "_")
+    if not normalized:
+        return None
+    if normalized in RELATIONSHIP_NODE_TYPE_SET:
+        return normalized
+    return RELATIONSHIP_NODE_TYPE_ALIASES.get(normalized)
+
+
+def validate_node_type_metadata(node_type: str | None) -> list[str]:
+    """Return non-fatal schema warnings for one source-lane node type."""
+
+    normalized = (node_type or "").strip().casefold().replace("-", "_")
+    if not normalized:
+        return ["missing_node_type"]
+    canonical = canonical_node_type_for(normalized)
+    if canonical is None:
+        return [f"unknown_node_type_schema:{normalized}"]
+    if canonical != normalized:
+        return [f"noncanonical_node_type:{normalized}:{canonical}"]
+    return []
 
 
 def relation_family_for_relation(relation: str) -> str:

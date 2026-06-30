@@ -1,10 +1,14 @@
 from ades.impact.relationship_schema import (
+    RELATIONSHIP_NODE_TYPE_SCHEMA_VERSION,
+    RELATIONSHIP_NODE_TYPES,
+    canonical_node_type_for,
     normalized_relation_direction_preconditions,
     normalized_relation_event_types,
     relation_definition_for,
     relation_direction_preconditions,
     relation_event_types,
     relation_family_for_relation,
+    validate_node_type_metadata,
     validate_relation_metadata,
 )
 from ades.impact.source_catalog import (
@@ -22,6 +26,49 @@ from ades.impact.source_catalog import (
     classify_source_tier,
     validate_source_attribution,
 )
+
+
+def test_relationship_node_type_schema_covers_required_news_story_types() -> None:
+    assert RELATIONSHIP_NODE_TYPE_SCHEMA_VERSION == "relationship-node-types-v1"
+    assert RELATIONSHIP_NODE_TYPES == (
+        "program",
+        "policy",
+        "law",
+        "regulation",
+        "government_body",
+        "regulator",
+        "ministry",
+        "product",
+        "brand",
+        "organization",
+        "legal_entity",
+        "holding_company",
+        "issuer",
+        "security",
+        "ticker",
+        "exchange",
+        "sector",
+        "industry",
+        "index",
+        "currency",
+        "rates_proxy",
+        "commodity",
+        "country",
+    )
+    assert len(RELATIONSHIP_NODE_TYPES) == len(set(RELATIONSHIP_NODE_TYPES))
+
+
+def test_relationship_node_type_schema_normalizes_legacy_lane_types() -> None:
+    assert canonical_node_type_for("market-index") == "index"
+    assert canonical_node_type_for("rate") == "rates_proxy"
+    assert canonical_node_type_for("central_bank") == "government_body"
+    assert canonical_node_type_for("issuer") == "issuer"
+    assert validate_node_type_metadata("issuer") == []
+    assert validate_node_type_metadata("market_index") == [
+        "noncanonical_node_type:market_index:index"
+    ]
+    assert validate_node_type_metadata("") == ["missing_node_type"]
+    assert validate_node_type_metadata("person") == ["unknown_node_type_schema:person"]
 
 
 def test_relationship_schema_covers_policy_sector_and_regulatory_paths() -> None:

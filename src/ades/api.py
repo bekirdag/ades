@@ -3862,12 +3862,14 @@ def import_bdya_gap_backlog(
 def validate_market_graph_source_lanes(
     *,
     edge_tsv_paths: Iterable[str | Path],
+    node_tsv_paths: Iterable[str | Path] = (),
     sample_limit: int = 50,
 ) -> ImpactSourceLaneValidationResult:
     """Validate source attribution and relation metadata for market graph lanes."""
 
     return run_validate_market_graph_source_lanes(
         edge_tsv_paths=edge_tsv_paths,
+        node_tsv_paths=node_tsv_paths,
         sample_limit=sample_limit,
     )
 

@@ -40,13 +40,17 @@ from .proposal_promoter import (
     promote_reviewed_relationship_proposals,
 )
 from .relationship_schema import (
+    RELATIONSHIP_NODE_TYPE_SCHEMA_VERSION,
+    RELATIONSHIP_NODE_TYPES,
     RelationDefinition,
+    canonical_node_type_for,
     normalized_relation_direction_preconditions,
     normalized_relation_event_types,
     relation_definition_for,
     relation_direction_preconditions,
     relation_event_types,
     relation_family_for_relation,
+    validate_node_type_metadata,
     validate_relation_metadata,
 )
 from .source_catalog import (
@@ -83,6 +87,8 @@ __all__ = [
     "PolicySectorProxyBuildResult",
     "ProgramOrgRelationshipBuildResult",
     "ProposalPromotionResult",
+    "RELATIONSHIP_NODE_TYPE_SCHEMA_VERSION",
+    "RELATIONSHIP_NODE_TYPES",
     "RelationDefinition",
     "SourceAttribution",
     "build_market_graph_store",
@@ -93,6 +99,7 @@ __all__ = [
     "build_source_attribution",
     "build_starter_market_graph_store",
     "classify_source_tier",
+    "canonical_node_type_for",
     "derive_finance_country_source_lane_inputs",
     "enrich_tag_response_with_impact_paths",
     "evaluate_impact_article_golden_set",
@@ -112,6 +119,7 @@ __all__ = [
     "relation_family_for_relation",
     "starter_golden_set_path",
     "starter_source_manifest_path",
+    "validate_node_type_metadata",
     "validate_relation_metadata",
     "validate_market_graph_source_lanes",
     "validate_source_attribution",

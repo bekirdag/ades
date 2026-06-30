@@ -854,18 +854,23 @@ def test_cli_registry_validate_market_graph_source_lanes_calls_public_api(
     def _fake_validate_market_graph_source_lanes(
         *,
         edge_tsv_paths,
+        node_tsv_paths,
         sample_limit,
     ) -> ImpactSourceLaneValidationResult:
         captured["edge_tsv_paths"] = edge_tsv_paths
+        captured["node_tsv_paths"] = node_tsv_paths
         captured["sample_limit"] = sample_limit
         return ImpactSourceLaneValidationResult(
             edge_tsv_paths=(edge_path,),
+            node_tsv_paths=(),
             row_count=2,
             invalid_row_count=1,
             relation_counts={"law_affects_sector": 1},
+            node_type_counts={},
             source_tier_counts={"government": 1},
             source_warning_counts={"missing_source_url": 1},
             relation_warning_counts={"unknown_relation_schema": 1},
+            node_warning_counts={},
             warning_samples=(
                 {
                     "line": 2,
@@ -901,6 +906,7 @@ def test_cli_registry_validate_market_graph_source_lanes_calls_public_api(
     assert payload["row_count"] == 2
     assert payload["relation_warning_counts"] == {"unknown_relation_schema": 1}
     assert captured["edge_tsv_paths"] == [edge_path]
+    assert captured["node_tsv_paths"] == ()
     assert captured["sample_limit"] == 7
 
 

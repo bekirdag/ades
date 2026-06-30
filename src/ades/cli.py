@@ -3164,6 +3164,11 @@ def registry_validate_market_graph_source_lanes(
         "--edge-tsv-path",
         help="Normalized market graph edge TSV path. Repeat for multiple lanes.",
     ),
+    node_tsv_paths: list[Path] | None = typer.Option(
+        None,
+        "--node-tsv-path",
+        help="Normalized market graph node TSV path. Repeat for multiple lanes.",
+    ),
     sample_limit: int = typer.Option(
         50,
         "--sample-limit",
@@ -3176,6 +3181,7 @@ def registry_validate_market_graph_source_lanes(
     try:
         response = api_validate_market_graph_source_lanes(
             edge_tsv_paths=edge_tsv_paths,
+            node_tsv_paths=node_tsv_paths or (),
             sample_limit=sample_limit,
         )
     except (FileNotFoundError, ValueError) as exc:
