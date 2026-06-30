@@ -1182,3 +1182,143 @@ def test_starter_graph_includes_promoted_saudi_relationships(tmp_path: Path) -> 
 
     equity_candidate_refs, _ = expanded_refs("ades:sector:sa:saudi-equity-market")
     assert equity_candidate_refs == {"finance-sa:tasi"}
+
+
+def test_starter_graph_includes_promoted_south_africa_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        south_africa_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_south_africa/%'
+                   OR source_snapshot LIKE '/mnt/githubActions/ades_big_data/pack_sources/raw/finance-country-en-za-stage-r2/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-za-ticker:NPN',
+                    'ades:security:za:jse:npn-ordinary-share',
+                    'finance-za:ftse-jse-all-share',
+                    'ades:impact:currency:zar',
+                    'ades:impact:rate:za-sarb-policy-rate',
+                    'ades:impact:commodity:gold',
+                    'ades:impact:commodity:platinum-group-metals'
+                )
+                """
+            )
+        }
+        alias_rows = {
+            str(row[0]): json.loads(str(row[1]))
+            for row in connection.execute(
+                """
+                SELECT entity_ref, identifiers_json
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-za:sarb',
+                    'ades:org:za:eskom',
+                    'finance-za-issuer:1925-001431-06'
+                )
+                """
+            )
+        }
+
+    assert south_africa_edge_count == 212
+    assert tradable_rows == {
+        "ades:impact:commodity:gold": (1, 1),
+        "ades:impact:commodity:platinum-group-metals": (1, 0),
+        "ades:impact:currency:zar": (1, 0),
+        "ades:impact:rate:za-sarb-policy-rate": (1, 0),
+        "ades:security:za:jse:npn-ordinary-share": (1, 0),
+        "finance-za-ticker:NPN": (1, 0),
+        "finance-za:ftse-jse-all-share": (1, 0),
+    }
+    assert alias_rows["finance-za:sarb"]["same_as_refs"] == ["wikidata:Q912920"]
+    assert alias_rows["ades:org:za:eskom"]["same_as_refs"] == ["wikidata:Q1367885"]
+    assert "wikidata:Q1965898" in alias_rows["finance-za-issuer:1925-001431-06"]["same_as_refs"]
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=80,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    sarb_candidate_refs, sarb_passive_refs = expanded_refs("finance-za:sarb")
+    assert sarb_candidate_refs == {
+        "ades:impact:currency:zar",
+        "ades:impact:rate:za-sarb-policy-rate",
+    }
+    assert {
+        "ades:sector:za:banking",
+        "ades:sector:za:credit",
+        "ades:sector:za:financial-stability",
+    }.issubset(sarb_passive_refs)
+    assert "finance-za-ticker:SBK" not in sarb_candidate_refs
+    assert "finance-za:ftse-jse-all-share" not in sarb_candidate_refs
+    wikidata_sarb_candidate_refs, wikidata_sarb_passive_refs = expanded_refs("wikidata:Q912920")
+    assert wikidata_sarb_candidate_refs == sarb_candidate_refs
+    assert {
+        "ades:sector:za:banking",
+        "ades:sector:za:credit",
+        "ades:sector:za:financial-stability",
+    }.issubset(wikidata_sarb_passive_refs)
+
+    eskom_candidate_refs, eskom_passive_refs = expanded_refs("ades:org:za:eskom")
+    assert eskom_candidate_refs == set()
+    assert {
+        "ades:grid:za:electricity-grid",
+        "ades:sector:za:electric-utilities",
+        "ades:sector:za:electricity-generation-transmission-distribution",
+    }.issubset(eskom_passive_refs)
+    assert "ades:impact:currency:zar" not in eskom_candidate_refs
+    assert "finance-za:ftse-jse-all-share" not in eskom_candidate_refs
+    wikidata_eskom_candidate_refs, wikidata_eskom_passive_refs = expanded_refs("wikidata:Q1367885")
+    assert wikidata_eskom_candidate_refs == set()
+    assert {
+        "ades:grid:za:electricity-grid",
+        "ades:sector:za:electric-utilities",
+        "ades:sector:za:electricity-generation-transmission-distribution",
+    }.issubset(wikidata_eskom_passive_refs)
+
+    naspers_candidate_refs, naspers_passive_refs = expanded_refs("finance-za-issuer:1925-001431-06")
+    assert naspers_candidate_refs == {
+        "ades:security:za:jse:npn-ordinary-share",
+        "finance-za-ticker:NPN",
+    }
+    assert "ades:sector:za:digital-consumer-internet" in naspers_passive_refs
+    assert "ades:impact:currency:zar" not in naspers_candidate_refs
+    assert "finance-za:ftse-jse-all-share" not in naspers_candidate_refs
+    wikidata_naspers_candidate_refs, wikidata_naspers_passive_refs = expanded_refs(
+        "wikidata:Q1965898"
+    )
+    assert wikidata_naspers_candidate_refs == naspers_candidate_refs
+    assert "ades:sector:za:digital-consumer-internet" in wikidata_naspers_passive_refs
+
+    gold_candidate_refs, gold_passive_refs = expanded_refs("finance-za-issuer:1968-004880-06")
+    assert {
+        "ades:impact:commodity:gold",
+        "ades:security:za:jse:gfie-ordinary-share",
+        "finance-za-ticker:GFIE",
+    }.issubset(gold_candidate_refs)
+    assert "ades:sector:za:gold-mining" in gold_passive_refs
+    assert "ades:impact:currency:zar" not in gold_candidate_refs
+    assert "finance-za:ftse-jse-all-share" not in gold_candidate_refs
+
+    equity_candidate_refs, _ = expanded_refs("ades:sector:za:south-african-equity-market")
+    assert equity_candidate_refs == {"finance-za:ftse-jse-all-share"}

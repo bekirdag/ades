@@ -244,9 +244,12 @@ MARKET_INFRASTRUCTURE_RELATIONS = {
     "regulator_supervises_exchange",
     "regulator_supervises_depository",
     "regulator_supervises_bank",
+    "prudential_authority_supervises_bank",
     "regulator_supervises_issuer",
     "regulator_supervises_insurer",
     "regulator_supervises_telecom",
+    "regulator_supervises_electricity",
+    "regulator_supervises_competition",
     "regulator_supervises_airline",
     "regulator_supervises_port",
     "depository_serves_security",
@@ -255,6 +258,7 @@ GOVERNMENT_POLICY_RELATIONS = {
     "government_body_sets_export_policy",
     "government_body_sets_fiscal_policy",
     "government_body_sets_energy_policy",
+    "government_body_sets_mining_policy",
     "government_body_sets_tourism_policy",
     "government_body_sets_industrial_policy",
 }
@@ -315,8 +319,11 @@ SANCTIONS_PROGRAM_RELATIONS = {
     "issuer_exposed_to_sanctions_program",
 }
 INFRASTRUCTURE_ASSET_RELATIONS = {
+    "state_owned_enterprise_operates_infrastructure",
     "org_operates_infrastructure_asset",
     "org_owns_infrastructure_asset",
+    "org_operates_grid",
+    "org_operates_rail",
     "org_operates_pipeline",
     "org_operates_port",
     "org_operates_field",
@@ -329,6 +336,7 @@ COMMODITY_FLOW_RELATIONS = {
     "commodity_flow_affects_sector",
     "port_handles_commodity",
     "pipeline_transports_commodity",
+    "rail_corridor_moves_commodity",
     "route_affects_commodity_flow",
     "airport_serves_route",
 }

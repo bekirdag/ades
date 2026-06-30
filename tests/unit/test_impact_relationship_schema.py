@@ -216,6 +216,35 @@ def test_relationship_schema_covers_program_org_relationship_paths() -> None:
     assert "bilateral_counterparty_context" in relation_direction_preconditions(
         "trade_agreement_counterparty_country"
     )
+    assert relation_family_for_relation("prudential_authority_supervises_bank") == (
+        "policy_sector_exposure"
+    )
+    assert "market_infrastructure_or_regulator_context" in relation_direction_preconditions(
+        "prudential_authority_supervises_bank"
+    )
+    assert relation_family_for_relation("regulator_supervises_electricity") == (
+        "policy_sector_exposure"
+    )
+    assert relation_family_for_relation("regulator_supervises_competition") == (
+        "policy_sector_exposure"
+    )
+    assert "regulatory_enforcement" in relation_event_types("regulator_supervises_electricity")
+    assert relation_family_for_relation("government_body_sets_mining_policy") == (
+        "policy_sector_exposure"
+    )
+    assert "policy_rate_hike" in relation_event_types("government_body_sets_mining_policy")
+    assert relation_family_for_relation("state_owned_enterprise_operates_infrastructure") == (
+        "infrastructure_asset"
+    )
+    assert relation_family_for_relation("org_operates_grid") == "infrastructure_asset"
+    assert relation_family_for_relation("org_operates_rail") == "infrastructure_asset"
+    assert "direct_asset_or_operator_mention" in relation_direction_preconditions(
+        "org_operates_grid"
+    )
+    assert relation_family_for_relation("rail_corridor_moves_commodity") == "commodity_flow"
+    assert "source_backed_flow_evidence" in relation_direction_preconditions(
+        "rail_corridor_moves_commodity"
+    )
 
 
 def test_relationship_schema_covers_russia_market_access_sanctions_and_flow_paths() -> None:
@@ -1097,6 +1126,27 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
         SOURCE_TIER_GOVERNMENT
     )
     assert classify_source_tier("SABIC investors", "https://www.sabic.com/en/investors") == (
+        SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert classify_source_tier("JSE issuer directory", "https://clientportal.jse.co.za/") == (
+        SOURCE_TIER_EXCHANGE
+    )
+    assert classify_source_tier("SARB Prudential Authority", "https://www.resbank.co.za/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("FSCA official site", "https://www.fsca.co.za/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("NERSA official site", "https://www.nersa.org.za/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("National Treasury", "https://www.treasury.gov.za/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("Eskom company information", "https://www.eskom.co.za/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("Sasol investors", "https://www.sasol.com/") == (
         SOURCE_TIER_ISSUER_DISCLOSED
     )
     assert classify_source_tier("unit test", "https://example.test/source") == (
