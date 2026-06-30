@@ -643,6 +643,109 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
     assert {"ades:org:in:npci", "ades:sector:in:digital-payments"}.issubset(upi_passive_refs)
 
 
+def test_starter_graph_includes_promoted_argentina_relationships(
+    tmp_path: Path,
+) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        argentina_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_argentina/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-ar-ticker:BPAT',
+                    'ades:security:ar:banco-patagonia-common-share',
+                    'ades:exchange:ar:byma',
+                    'ades:product:ar:patagonia-emprendimiento',
+                    'ades:program:ar:subsidio-tasas-mujeres-emprendedoras-rio-negro',
+                    'ades:org:ar:bcra',
+                    'ades:org:ar:agencia-crear-rio-negro'
+                )
+                """
+            )
+        }
+        issuer_targets = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT target_ref
+                FROM impact_edges
+                WHERE source_ref = 'ades:issuer:ar:banco-patagonia'
+                """
+            )
+        }
+
+    assert argentina_edge_count == 10
+    assert tradable_rows == {
+        "finance-ar-ticker:BPAT": (1, 0),
+        "ades:security:ar:banco-patagonia-common-share": (0, 1),
+        "ades:exchange:ar:byma": (0, 1),
+        "ades:product:ar:patagonia-emprendimiento": (0, 1),
+        "ades:program:ar:subsidio-tasas-mujeres-emprendedoras-rio-negro": (0, 1),
+        "ades:org:ar:bcra": (0, 1),
+        "ades:org:ar:agencia-crear-rio-negro": (0, 1),
+    }
+    assert issuer_targets == {
+        "ades:sector:ar:financial-services",
+        "ades:security:ar:banco-patagonia-common-share",
+        "finance-ar-ticker:BPAT",
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=20,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    product_candidate_refs, product_passive_refs = expanded_refs(
+        "ades:product:ar:patagonia-emprendimiento"
+    )
+    assert product_candidate_refs == {"finance-ar-ticker:BPAT"}
+    assert "ades:issuer:ar:banco-patagonia" in product_passive_refs
+    assert "ades:currency:ARS" not in product_candidate_refs
+
+    issuer_candidate_refs, issuer_passive_refs = expanded_refs(
+        "ades:issuer:ar:banco-patagonia"
+    )
+    assert issuer_candidate_refs == {"finance-ar-ticker:BPAT"}
+    assert "ades:security:ar:banco-patagonia-common-share" in issuer_passive_refs
+    assert "ades:sector:ar:financial-services" in issuer_passive_refs
+
+    bcra_candidate_refs, bcra_passive_refs = expanded_refs("ades:org:ar:bcra")
+    assert bcra_candidate_refs == set()
+    assert "ades:sector:ar:banking" in bcra_passive_refs
+    assert "finance-ar-ticker:BPAT" not in bcra_candidate_refs
+
+    subsidy_candidate_refs, subsidy_passive_refs = expanded_refs(
+        "ades:program:ar:subsidio-tasas-mujeres-emprendedoras-rio-negro"
+    )
+    assert subsidy_candidate_refs == set()
+    assert "ades:org:ar:agencia-crear-rio-negro" in subsidy_passive_refs
+    assert "ades:sector:ar:sme-credit" in subsidy_passive_refs
+    assert "finance-ar-ticker:BPAT" not in subsidy_candidate_refs
+    assert "ades:currency:ARS" not in subsidy_candidate_refs
+
+
 def test_starter_graph_includes_promoted_italy_relationships(tmp_path: Path) -> None:
     response = build_starter_market_graph_store(output_dir=tmp_path)
 

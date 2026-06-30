@@ -1845,3 +1845,15 @@ sec:cik:0001045810	CIK 0001045810	legal_entity	program-org-relationship-us-revie
 sec:cik:0001141391	CIK 0001141391	legal_entity	program-org-relationship-us-reviewed-20260629	false	true	"{""cik"": ""0001141391"", ""jurisdiction"": ""US"", ""sec_cik"": ""0001141391""}"	program-org-relationship-us-reviewed-20260629
 sec:cik:0001318605	CIK 0001318605	legal_entity	program-org-relationship-us-reviewed-20260629	false	true	"{""cik"": ""0001318605"", ""jurisdiction"": ""US"", ""sec_cik"": ""0001318605""}"	program-org-relationship-us-reviewed-20260629
 sec:cik:0001403161	CIK 0001403161	legal_entity	program-org-relationship-us-reviewed-20260629	false	true	"{""cik"": ""0001403161"", ""jurisdiction"": ""US"", ""sec_cik"": ""0001403161""}"	program-org-relationship-us-reviewed-20260629
+ades:exchange:ar:byma	Bolsas y Mercados Argentinos	exchange	finance-ar-en	false	true	"{""jurisdiction"": ""AR""}"	finance-ar-en,program-org-relationship-ar
+ades:issuer:ar:banco-patagonia	Banco Patagonia S.A.	issuer	finance-ar-en	false	true	"{""jurisdiction"": ""AR""}"	finance-ar-en,program-org-relationship-ar
+ades:org:ar:agencia-crear-rio-negro	Agencia CREAR	government_body	program-org-relationship-ar	false	true	"{""jurisdiction"": ""AR""}"	program-org-relationship-ar
+ades:org:ar:bcra	Banco Central de la Republica Argentina	regulator	finance-ar-en	false	true	"{""jurisdiction"": ""AR""}"	finance-ar-en,program-org-relationship-ar
+ades:product:ar:patagonia-emprendimiento	Patagonia Emprendimiento	product	finance-ar-en	false	true	"{""jurisdiction"": ""AR""}"	finance-ar-en,program-org-relationship-ar
+ades:program:ar:subsidio-tasas-mujeres-emprendedoras-rio-negro	Subsidio de tasas para Mujeres Emprendedoras	program	program-org-relationship-ar	false	true	"{""jurisdiction"": ""AR""}"	program-org-relationship-ar
+ades:sector:ar:banking	Banking	sector	finance-ar-en	false	true	"{""jurisdiction"": ""AR""}"	finance-ar-en,program-org-relationship-ar
+ades:sector:ar:entrepreneurship-finance	Entrepreneurship finance	sector	program-org-relationship-ar	false	true	"{""jurisdiction"": ""AR""}"	program-org-relationship-ar
+ades:sector:ar:financial-services	Financial services	sector	finance-ar-en	false	true	"{""jurisdiction"": ""AR""}"	finance-ar-en,program-org-relationship-ar
+ades:sector:ar:sme-credit	SME credit	sector	program-org-relationship-ar	false	true	"{""jurisdiction"": ""AR""}"	program-org-relationship-ar
+ades:security:ar:banco-patagonia-common-share	Banco Patagonia common share	security	finance-ar-en	false	true	"{""figi"": ""BBG000FC9YC9"", ""isin"": ""ARMERI013163"", ""jurisdiction"": ""AR"", ""ticker_symbol"": ""BPAT""}"	finance-ar-en,program-org-relationship-ar
+finance-ar-ticker:BPAT	BPAT	ticker	finance-ar-en	true	false	"{""isin"": ""ARMERI013163"", ""jurisdiction"": ""AR"", ""ticker_symbol"": ""BPAT""}"	finance-ar-en,program-org-relationship-ar
