@@ -86,8 +86,8 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
         )
 
     assert report.warnings == []
-    assert report.case_count == 22
-    assert report.empty_path_rate == 0.0455
+    assert report.case_count == 23
+    assert report.empty_path_rate == 0.0435
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -213,9 +213,7 @@ def test_starter_graph_includes_promoted_brazil_relationships(tmp_path: Path) ->
         max_candidates=5,
     )
     bcb_candidate_refs = {candidate.entity_ref for candidate in bcb_expansion.candidates}
-    assert {"ades:impact:currency:brl", "ades:impact:rate:br-selic"}.issubset(
-        bcb_candidate_refs
-    )
+    assert {"ades:impact:currency:brl", "ades:impact:rate:br-selic"}.issubset(bcb_candidate_refs)
 
     equity_expansion = expand_impact_paths(
         ["ades:sector:br:brazilian-equity-market"],
@@ -466,6 +464,115 @@ def test_starter_graph_includes_promoted_china_relationships(tmp_path: Path) -> 
                 "ades:sector:cn:semiconductors",
                 "ades:sector:cn:telecom",
             },
+        ),
+    ]:
+        candidate_refs, passive_refs = expanded_refs(source_ref)
+        assert expected_passive_refs.issubset(passive_refs)
+        assert candidate_refs.isdisjoint(no_policy_candidate_refs)
+
+
+def test_starter_graph_includes_promoted_france_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        france_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_france/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-fr:cac-40',
+                    'ades:impact:currency:eur',
+                    'ades:impact:rate:ecb-deposit-rate',
+                    'finance-fr-ticker:MC'
+                )
+                """
+            )
+        }
+        lvmh_targets = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT target_ref
+                FROM impact_edges
+                WHERE source_ref = 'finance-fr-issuer:FR0000121014'
+                """
+            )
+        }
+
+    assert france_edge_count == 49
+    assert tradable_rows == {
+        "ades:impact:currency:eur": (1, 1),
+        "ades:impact:rate:ecb-deposit-rate": (1, 0),
+        "finance-fr:cac-40": (1, 0),
+        "finance-fr-ticker:MC": (1, 0),
+    }
+    assert lvmh_targets == {
+        "ades:sector:fr:luxury-consumer",
+        "ades:security:fr:euronext:fr0000121014-ordinary",
+        "finance-fr-ticker:MC",
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=40,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    lvmh_candidate_refs, lvmh_passive_refs = expanded_refs("finance-fr-issuer:FR0000121014")
+    assert lvmh_candidate_refs == {"finance-fr-ticker:MC"}
+    assert {
+        "ades:sector:fr:luxury-consumer",
+        "ades:security:fr:euronext:fr0000121014-ordinary",
+        "finance-fr:euronext-paris",
+    }.issubset(lvmh_passive_refs)
+    assert "ades:impact:currency:eur" not in lvmh_candidate_refs
+
+    banque_candidate_refs, _ = expanded_refs("finance-fr:banque-de-france")
+    assert banque_candidate_refs == {
+        "ades:impact:currency:eur",
+        "ades:impact:rate:ecb-deposit-rate",
+    }
+
+    no_policy_candidate_refs = {
+        "finance-fr:cac-40",
+        "finance-fr-ticker:AI",
+        "finance-fr-ticker:BNP",
+        "finance-fr-ticker:CS",
+        "finance-fr-ticker:MC",
+        "finance-fr-ticker:ORA",
+        "finance-fr-ticker:SAN",
+        "finance-fr-ticker:SU",
+        "finance-fr-ticker:TTE",
+    }
+    for source_ref, expected_passive_refs in [
+        ("finance-fr:amf", {"ades:sector:fr:securities-market"}),
+        ("finance-fr:acpr", {"ades:sector:fr:banking", "ades:sector:fr:insurance"}),
+        (
+            "ades:org:fr:ministere-economie-finances",
+            {"ades:sector:fr:industrial-policy"},
+        ),
+        (
+            "ades:org:eu:european-commission",
+            {"ades:sector:fr:energy-transition", "ades:sector:fr:industrial-policy"},
         ),
     ]:
         candidate_refs, passive_refs = expanded_refs(source_ref)
@@ -771,9 +878,7 @@ def test_starter_graph_includes_promoted_argentina_relationships(
     assert "ades:issuer:ar:banco-patagonia" in product_passive_refs
     assert "ades:currency:ARS" not in product_candidate_refs
 
-    issuer_candidate_refs, issuer_passive_refs = expanded_refs(
-        "ades:issuer:ar:banco-patagonia"
-    )
+    issuer_candidate_refs, issuer_passive_refs = expanded_refs("ades:issuer:ar:banco-patagonia")
     assert issuer_candidate_refs == {"finance-ar-ticker:BPAT"}
     assert "ades:security:ar:banco-patagonia-common-share" in issuer_passive_refs
     assert "ades:sector:ar:financial-services" in issuer_passive_refs

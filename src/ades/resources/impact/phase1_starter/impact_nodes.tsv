@@ -1866,3 +1866,49 @@ ades:sector:ar:financial-services	Financial services	sector	finance-ar-en	false	
 ades:sector:ar:sme-credit	SME credit	sector	program-org-relationship-ar	false	true	"{""jurisdiction"": ""AR""}"	program-org-relationship-ar
 ades:security:ar:banco-patagonia-common-share	Banco Patagonia common share	security	finance-ar-en	false	true	"{""figi"": ""BBG000FC9YC9"", ""isin"": ""ARMERI013163"", ""jurisdiction"": ""AR"", ""ticker_symbol"": ""BPAT""}"	finance-ar-en,program-org-relationship-ar
 finance-ar-ticker:BPAT	BPAT	ticker	finance-ar-en	true	false	"{""isin"": ""ARMERI013163"", ""jurisdiction"": ""AR"", ""ticker_symbol"": ""BPAT""}"	finance-ar-en,program-org-relationship-ar
+ades:org:eu:european-commission	European Commission	government_body	finance-fr-en	false	true	"{""jurisdiction"": ""EU""}"	finance-fr-en,general-en
+ades:org:fr:ministere-economie-finances	Ministry of Economy, Finance and Industrial and Digital Sovereignty	government_body	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:org:fr:ministere-transition-ecologique	Ministry for Ecological Transition	government_body	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:banking	France banking	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:energy-transition	France energy transition	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:french-equity-market	France equity market	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:healthcare	France healthcare	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:industrial-gases	France industrial gases	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:industrial-policy	France industrial policy	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:industrials-electrical	France electrical equipment and automation	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:insurance	France insurance	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:luxury-consumer	France luxury and consumer goods	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:oil-gas	France oil and gas	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:securities-market	France securities market	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:sector:fr:telecommunications	France telecommunications	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
+ades:security:fr:euronext:fr0000120073-ordinary	Air Liquide ordinary share	security	finance-fr-en	false	true	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000120073"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""AI""}"	finance-fr-en
+ades:security:fr:euronext:fr0000120271-ordinary	TotalEnergies ordinary share	security	finance-fr-en	false	true	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000120271"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""TTE""}"	finance-fr-en
+ades:security:fr:euronext:fr0000120578-ordinary	Sanofi ordinary share	security	finance-fr-en	false	true	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000120578"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""SAN""}"	finance-fr-en
+ades:security:fr:euronext:fr0000120628-ordinary	AXA ordinary share	security	finance-fr-en	false	true	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000120628"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""CS""}"	finance-fr-en
+ades:security:fr:euronext:fr0000121014-ordinary	LVMH ordinary share	security	finance-fr-en	false	true	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000121014"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""MC""}"	finance-fr-en
+ades:security:fr:euronext:fr0000121972-ordinary	Schneider Electric ordinary share	security	finance-fr-en	false	true	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000121972"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""SU""}"	finance-fr-en
+ades:security:fr:euronext:fr0000131104-ordinary	BNP Paribas ordinary share	security	finance-fr-en	false	true	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000131104"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""BNP""}"	finance-fr-en
+ades:security:fr:euronext:fr0000133308-ordinary	Orange ordinary share	security	finance-fr-en	false	true	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000133308"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""ORA""}"	finance-fr-en
+finance-fr-issuer:FR0000120073	Air Liquide	issuer	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en
+finance-fr-issuer:FR0000120271	TotalEnergies	issuer	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en
+finance-fr-issuer:FR0000120578	Sanofi	issuer	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en
+finance-fr-issuer:FR0000120628	AXA	issuer	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en
+finance-fr-issuer:FR0000121014	LVMH Moet Hennessy Louis Vuitton	issuer	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en
+finance-fr-issuer:FR0000121972	Schneider Electric	issuer	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en
+finance-fr-issuer:FR0000131104	BNP Paribas	issuer	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en
+finance-fr-issuer:FR0000133308	Orange	issuer	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en
+finance-fr-ticker:AI	AI	ticker	finance-fr-en	true	false	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000120073"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""AI""}"	finance-fr-en
+finance-fr-ticker:BNP	BNP	ticker	finance-fr-en	true	false	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000131104"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""BNP""}"	finance-fr-en
+finance-fr-ticker:CS	CS	ticker	finance-fr-en	true	false	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000120628"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""CS""}"	finance-fr-en
+finance-fr-ticker:MC	MC	ticker	finance-fr-en	true	false	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000121014"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""MC""}"	finance-fr-en
+finance-fr-ticker:ORA	ORA	ticker	finance-fr-en	true	false	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000133308"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""ORA""}"	finance-fr-en
+finance-fr-ticker:SAN	SAN	ticker	finance-fr-en	true	false	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000120578"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""SAN""}"	finance-fr-en
+finance-fr-ticker:SU	SU	ticker	finance-fr-en	true	false	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000121972"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""SU""}"	finance-fr-en
+finance-fr-ticker:TTE	TTE	ticker	finance-fr-en	true	false	"{""exchange"": ""Euronext Paris"", ""isin"": ""FR0000120271"", ""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""ticker_symbol"": ""TTE""}"	finance-fr-en
+finance-fr:acpr	Autorite de controle prudentiel et de resolution	regulator	finance-fr-en	false	true	"{""jurisdiction"": ""FR"", ""same_as_refs"": [""wikidata:Q2872781""]}"	finance-fr-en,general-en
+finance-fr:amf	Autorite des marches financiers	regulator	finance-fr-en	false	true	"{""jurisdiction"": ""FR"", ""same_as_refs"": [""wikidata:Q788606""]}"	finance-fr-en,general-en
+finance-fr:banque-de-france	Banque de France	central_bank	finance-fr-en	false	true	"{""jurisdiction"": ""FR"", ""same_as_refs"": [""wikidata:Q806950""]}"	finance-fr-en,general-en
+finance-fr:cac-40	CAC 40	market_index	finance-fr-en	true	false	"{""jurisdiction"": ""FR"", ""same_as_refs"": [""wikidata:Q648828""]}"	finance-fr-en,general-en
+finance-fr:euronext-access-paris	Euronext Access Paris	exchange	finance-fr-en	false	true	"{""jurisdiction"": ""FR"", ""mic"": ""XMLI"", ""same_as_refs"": [""wikidata:Q107190270""]}"	finance-fr-en,general-en
+finance-fr:euronext-growth-paris	Euronext Growth Paris	exchange	finance-fr-en	false	true	"{""jurisdiction"": ""FR"", ""mic"": ""ALXP"", ""same_as_refs"": [""wikidata:Q107188657""]}"	finance-fr-en,general-en
+finance-fr:euronext-paris	Euronext Paris	exchange	finance-fr-en	false	true	"{""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""same_as_refs"": [""wikidata:Q2385849""]}"	finance-fr-en,general-en

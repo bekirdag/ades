@@ -287,6 +287,28 @@
       ]
     },
     {
+      "name": "france_lvmh_euronext_bridge",
+      "entity_refs": [
+        "finance-fr-issuer:FR0000121014"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-fr-en"
+      ],
+      "expected_candidate_refs": [
+        "finance-fr-ticker:MC"
+      ],
+      "expected_passive_refs": [
+        "ades:sector:fr:luxury-consumer",
+        "ades:security:fr:euronext:fr0000121014-ordinary"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker",
+        "issuer_has_security",
+        "issuer_in_sector"
+      ]
+    },
+    {
       "name": "negative_empty_refs",
       "entity_refs": [
         "ades:impact:unknown:not-in-graph"
