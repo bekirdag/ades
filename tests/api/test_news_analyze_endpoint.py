@@ -1550,6 +1550,208 @@ def test_news_analyze_maps_product_and_brand_mentions_to_owner_security_paths(
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 
+def test_news_analyze_maps_program_mentions_to_operator_holding_security_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-program-terminal-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+    article_text = (
+        "The Ultra Micro program beat earnings estimates as it expanded lending "
+        "for small businesses."
+    )
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        start = article_text.index("Ultra Micro program")
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Ultra Micro program",
+                    label="program",
+                    start=start,
+                    end=start + len("Ultra Micro program"),
+                    confidence=0.94,
+                    relevance=0.95,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack_id,
+                        source_domain="finance",
+                    ),
+                    link=EntityLink(
+                        entity_id="ades:program:id:ultra-micro-program",
+                        canonical_text="Ultra Micro Program",
+                        provider="ades",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="finance", score=0.91, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _edge(
+        source_ref: str,
+        target_ref: str,
+        relation: str,
+        *,
+        confidence: float,
+        source_name: str,
+    ) -> ImpactPathEdge:
+        return ImpactPathEdge(
+            source_ref=source_ref,
+            target_ref=target_ref,
+            relation=relation,
+            evidence_level="direct",
+            confidence=confidence,
+            direction_hint="source_backed_program_terminal_path",
+            source_name=source_name,
+            source_url="https://example.test/program-terminal-path",
+            source_snapshot="2026-06-30",
+            source_year=2026,
+            source_tier="issuer_disclosed",
+            effective_from="2024-01-01",
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert "ades:program:id:ultra-micro-program" in set(entity_refs)
+        program_path = ImpactRelationshipPath(
+            path_depth=4,
+            edges=[
+                _edge(
+                    "ades:program:id:ultra-micro-program",
+                    "finance-id-org:permodalan-nasional-madani",
+                    "program_operated_by_org",
+                    confidence=0.94,
+                    source_name="PNM annual report",
+                ),
+                _edge(
+                    "finance-id-org:permodalan-nasional-madani",
+                    "ades:holding:id:ultra-micro-holding",
+                    "org_part_of_holding",
+                    confidence=0.93,
+                    source_name="PNM holding disclosure",
+                ),
+                _edge(
+                    "ades:holding:id:ultra-micro-holding",
+                    "finance-id-issuer:bank-rakyat-indonesia",
+                    "holding_parent_is_issuer",
+                    confidence=0.92,
+                    source_name="BRI annual report",
+                ),
+                _edge(
+                    "finance-id-issuer:bank-rakyat-indonesia",
+                    "ades:security:id:idx:bbri",
+                    "issuer_has_security",
+                    confidence=0.97,
+                    source_name="Indonesia Stock Exchange issuer directory",
+                ),
+            ],
+        )
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-06-30",
+            artifact_hash="sha256:program-terminals",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="ades:program:id:ultra-micro-program",
+                    name="Ultra Micro Program",
+                    entity_type="program",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=False,
+                )
+            ],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref="ades:security:id:idx:bbri",
+                    name="Bank Rakyat Indonesia listed share",
+                    entity_type="security",
+                    evidence_level="direct",
+                    confidence=0.9,
+                    source_entity_refs=["ades:program:id:ultra-micro-program"],
+                    relationship_paths=[program_path],
+                    compatible_event_types=["earnings_beat"],
+                )
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Ultra Micro program beat earnings estimates",
+            "text": article_text,
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [candidate["entity_ref"] for candidate in payload["terminal_impact_candidates"]] == [
+        "ades:security:id:idx:bbri"
+    ]
+    candidate = payload["terminal_impact_candidates"][0]
+    assert candidate["source_entity_refs"] == ["ades:program:id:ultra-micro-program"]
+    assert candidate["compatible_event_types"] == ["earnings_beat"]
+
+    assert len(payload["candidate_paths"]) == 1
+    path = payload["candidate_paths"][0]
+    assert path["terminal_ref"] == "ades:security:id:idx:bbri"
+    assert path["terminal_type"] == "security"
+    assert path["terminal_name"] == "Bank Rakyat Indonesia listed share"
+    assert path["jurisdiction"] == "id"
+    assert path["exchange"] == "idx"
+    assert path["security_ids"] == {
+        "ades_ref": "ades:security:id:idx:bbri",
+        "local_security_id": "bbri",
+    }
+    assert path["source_entity_refs"] == ["ades:program:id:ultra-micro-program"]
+    assert path["source_tiers"] == ["issuer_disclosed"]
+    assert path["effective_from"] == "2024-01-01"
+    assert path["path_confidence"] == 0.9
+    assert path["weakest_edge_ref"] == (
+        "ades:holding:id:ultra-micro-holding"
+        "->holding_parent_is_issuer->finance-id-issuer:bank-rakyat-indonesia"
+    )
+    assert path["weakest_edge_confidence"] == 0.92
+    assert [edge["relation"] for edge in path["relationship_path"]["edges"]] == [
+        "program_operated_by_org",
+        "org_part_of_holding",
+        "holding_parent_is_issuer",
+        "issuer_has_security",
+    ]
+    for edge in path["relationship_path"]["edges"]:
+        assert edge["evidence_level"] == "direct"
+        assert edge["source_tier"] == "issuer_disclosed"
+        assert edge["source_url"] == "https://example.test/program-terminal-path"
+        assert edge["effective_from"] == "2024-01-01"
+    assert path["artifact_ref"] == "sha256:program-terminals"
+    assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
 def test_news_analyze_promotes_only_ades_confirmed_direct_tradable_mentions(
     tmp_path: Path,
     monkeypatch,
