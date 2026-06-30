@@ -1322,3 +1322,92 @@ def test_starter_graph_includes_promoted_south_africa_relationships(tmp_path: Pa
 
     equity_candidate_refs, _ = expanded_refs("ades:sector:za:south-african-equity-market")
     assert equity_candidate_refs == {"finance-za:ftse-jse-all-share"}
+
+
+def test_starter_graph_includes_promoted_south_korea_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        south_korea_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_south_korea/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-kr-ticker:1:000660',
+                    'ades:security:kr:krx:000660-common-share',
+                    'ades:impact:index:kospi',
+                    'ades:impact:currency:krw',
+                    'ades:impact:rate:kr-base-rate',
+                    'ades:sector:kr:semiconductors'
+                )
+                """
+            )
+        }
+
+    assert south_korea_edge_count == 172
+    assert tradable_rows == {
+        "ades:impact:currency:krw": (1, 0),
+        "ades:impact:index:kospi": (1, 0),
+        "ades:impact:rate:kr-base-rate": (1, 0),
+        "ades:sector:kr:semiconductors": (0, 1),
+        "ades:security:kr:krx:000660-common-share": (1, 0),
+        "finance-kr-ticker:1:000660": (1, 0),
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=80,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    bok_candidate_refs, bok_passive_refs = expanded_refs("ades:policy-body:kr:bank-of-korea")
+    assert bok_candidate_refs == {
+        "ades:impact:currency:krw",
+        "ades:impact:rate:kr-base-rate",
+    }
+    assert "ades:sector:kr:banking" in bok_passive_refs
+    assert "ades:impact:index:kospi" not in bok_candidate_refs
+
+    sk_hynix_candidate_refs, sk_hynix_passive_refs = expanded_refs("finance-kr-issuer:1:000660")
+    assert {
+        "ades:security:kr:krx:000660-common-share",
+        "finance-kr-ticker:1:000660",
+    }.issubset(sk_hynix_candidate_refs)
+    assert {
+        "ades:sector:kr:semiconductors",
+        "ades:supply-chain-stage:kr:memory-semiconductors",
+    }.issubset(sk_hynix_passive_refs)
+    assert "ades:impact:currency:krw" not in sk_hynix_candidate_refs
+
+    motir_candidate_refs, motir_passive_refs = expanded_refs("ades:government-body:kr:motir")
+    assert motir_candidate_refs == set()
+    assert {"ades:sector:kr:batteries", "ades:sector:kr:semiconductors"}.issubset(
+        motir_passive_refs
+    )
+
+    krx_candidate_refs, krx_passive_refs = expanded_refs("ades:exchange:kr:krx")
+    assert krx_candidate_refs == {"ades:impact:index:kospi"}
+    assert "ades:sector:kr:exchange-market-structure" in krx_passive_refs
+
+    sector_candidate_refs, sector_passive_refs = expanded_refs("ades:sector:kr:semiconductors")
+    assert sector_candidate_refs == set()
+    assert sector_passive_refs == set()

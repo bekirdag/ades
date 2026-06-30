@@ -233,11 +233,32 @@ def test_relationship_schema_covers_program_org_relationship_paths() -> None:
         "policy_sector_exposure"
     )
     assert "policy_rate_hike" in relation_event_types("government_body_sets_mining_policy")
+    assert relation_family_for_relation("government_body_sets_technology_policy") == (
+        "policy_sector_exposure"
+    )
+    assert relation_family_for_relation("government_body_sets_trade_policy") == (
+        "policy_sector_exposure"
+    )
+    assert "sector_policy_change" in relation_event_types("industrial_policy_affects_sector")
+    assert relation_direction_preconditions("industrial_policy_affects_sector") == (
+        "sector_policy_event_signal",
+        "industrial_policy_or_subsidy_context",
+    )
+    assert relation_family_for_relation("regulator_supervises_financial_group") == (
+        "policy_sector_exposure"
+    )
+    assert relation_family_for_relation("issuer_exposed_to_semiconductor_cycle") == (
+        "issuer_exposure"
+    )
+    assert "source_backed_issuer_exposure" in relation_direction_preconditions(
+        "issuer_exposed_to_semiconductor_cycle"
+    )
     assert relation_family_for_relation("state_owned_enterprise_operates_infrastructure") == (
         "infrastructure_asset"
     )
     assert relation_family_for_relation("org_operates_grid") == "infrastructure_asset"
     assert relation_family_for_relation("org_operates_rail") == "infrastructure_asset"
+    assert relation_family_for_relation("org_operates_telecom_network") == ("infrastructure_asset")
     assert "direct_asset_or_operator_mention" in relation_direction_preconditions(
         "org_operates_grid"
     )
@@ -1147,6 +1168,22 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
         SOURCE_TIER_GOVERNMENT
     )
     assert classify_source_tier("Sasol investors", "https://www.sasol.com/") == (
+        SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert classify_source_tier("KRX listed companies", "https://global.krx.co.kr/") == (
+        SOURCE_TIER_EXCHANGE
+    )
+    assert classify_source_tier("BOK monetary policy", "https://www.bok.or.kr/eng/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("FSC official site", "https://www.fsc.go.kr/eng/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("FSS DART", "https://dart.fss.or.kr/") == (SOURCE_TIER_REGULATOR)
+    assert classify_source_tier("MOTIR policy page", "https://english.motir.go.kr/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("Samsung semiconductor", "https://semiconductor.samsung.com/") == (
         SOURCE_TIER_ISSUER_DISCLOSED
     )
     assert classify_source_tier("unit test", "https://example.test/source") == (

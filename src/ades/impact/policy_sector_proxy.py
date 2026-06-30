@@ -244,7 +244,13 @@ def _write_tsv(path: Path, *, columns: list[str], rows: Iterable[dict[str, str]]
     path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns, delimiter="\t", extrasaction="ignore")
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=columns,
+            delimiter="\t",
+            extrasaction="ignore",
+            lineterminator="\n",
+        )
         writer.writeheader()
         for row in rows:
             writer.writerow(row)

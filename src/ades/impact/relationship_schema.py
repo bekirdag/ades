@@ -246,21 +246,32 @@ MARKET_INFRASTRUCTURE_RELATIONS = {
     "regulator_supervises_bank",
     "prudential_authority_supervises_bank",
     "regulator_supervises_issuer",
+    "regulator_supervises_financial_group",
     "regulator_supervises_insurer",
     "regulator_supervises_telecom",
     "regulator_supervises_electricity",
     "regulator_supervises_competition",
     "regulator_supervises_airline",
     "regulator_supervises_port",
+    "competition_authority_reviews_transaction",
     "depository_serves_security",
 }
 GOVERNMENT_POLICY_RELATIONS = {
     "government_body_sets_export_policy",
+    "government_body_sets_trade_policy",
     "government_body_sets_fiscal_policy",
     "government_body_sets_energy_policy",
     "government_body_sets_mining_policy",
     "government_body_sets_tourism_policy",
     "government_body_sets_industrial_policy",
+    "government_body_sets_technology_policy",
+    "government_body_sets_telecom_policy",
+    "government_body_sets_competition_policy",
+}
+INDUSTRIAL_POLICY_RELATIONS = {
+    "industrial_policy_affects_sector",
+    "subsidy_affects_sector",
+    "export_control_affects_sector",
 }
 ISSUER_EXPOSURE_RELATIONS = {
     "issuer_exposed_to_commodity",
@@ -271,6 +282,14 @@ ISSUER_EXPOSURE_RELATIONS = {
     "issuer_exposed_to_supply_chain",
     "issuer_exposed_to_project",
     "issuer_exposed_to_oil_policy",
+    "issuer_exposed_to_commodity_input",
+    "issuer_exposed_to_export_market",
+    "issuer_exposed_to_semiconductor_cycle",
+    "issuer_exposed_to_battery_supply_chain",
+    "issuer_exposed_to_auto_cycle",
+    "issuer_exposed_to_shipbuilding_cycle",
+    "issuer_exposed_to_energy_import_cost",
+    "product_exposed_to_commodity_input",
 }
 GEOGRAPHY_COMMODITY_RELATIONS = {
     "location_affects_commodity_route",
@@ -329,6 +348,9 @@ INFRASTRUCTURE_ASSET_RELATIONS = {
     "org_operates_field",
     "org_operates_mine",
     "org_operates_refinery",
+    "org_operates_shipyard",
+    "org_operates_power_utility",
+    "org_operates_telecom_network",
 }
 COMMODITY_FLOW_RELATIONS = {
     "infrastructure_asset_supports_commodity_flow",
@@ -407,6 +429,7 @@ def relation_family_for_relation(relation: str) -> str:
         or relation in TRADE_AGREEMENT_RELATIONS
         or relation in MARKET_INFRASTRUCTURE_RELATIONS
         or relation in GOVERNMENT_POLICY_RELATIONS
+        or relation in INDUSTRIAL_POLICY_RELATIONS
         or relation in FISCAL_COMMODITY_RELATIONS
     ):
         return "policy_sector_exposure"
@@ -490,6 +513,8 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         return POLICY_SECTOR_EVENT_TYPES
     if relation in GOVERNMENT_POLICY_RELATIONS:
         return tuple(dict.fromkeys((*POLICY_SECTOR_EVENT_TYPES, *POLICY_RATE_EVENT_TYPES)))
+    if relation in INDUSTRIAL_POLICY_RELATIONS:
+        return POLICY_SECTOR_EVENT_TYPES
     if relation in FISCAL_COMMODITY_RELATIONS:
         return tuple(dict.fromkeys((*POLICY_SECTOR_EVENT_TYPES, *POLICY_RATE_EVENT_TYPES)))
     if relation in ORG_SECTOR_RELATIONS:
@@ -656,6 +681,8 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
         return ("market_infrastructure_or_regulator_context", "sector_policy_event_signal")
     if relation in GOVERNMENT_POLICY_RELATIONS:
         return ("sector_policy_event_signal", "jurisdiction_or_regulator_context")
+    if relation in INDUSTRIAL_POLICY_RELATIONS:
+        return ("sector_policy_event_signal", "industrial_policy_or_subsidy_context")
     if relation in FISCAL_COMMODITY_RELATIONS:
         return (
             "fiscal_or_oil_revenue_signal",
