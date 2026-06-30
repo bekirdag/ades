@@ -50,17 +50,25 @@ CANONICAL_SOURCE_ROW_FIELDS = (
     SourceRowField("confidence", True, "Decimal confidence score from 0.0 through 1.0."),
     SourceRowField("notes", False, "Operator notes that do not belong in evidence."),
     SourceRowField("fetched_at", True, "UTC fetch timestamp for the source material."),
-    SourceRowField("content_hash", True, "Stable hash of the fetched or normalized source content."),
+    SourceRowField(
+        "content_hash", True, "Stable hash of the fetched or normalized source content."
+    ),
     SourceRowField("review_status", True, "Review state for promotion gates."),
     SourceRowField("license_notes", False, "License, reuse, or redistribution notes."),
     SourceRowField("confidence_basis", True, "Short reason supporting the confidence score."),
 )
 
-CANONICAL_SOURCE_ROW_COLUMNS = tuple(
-    field.name for field in CANONICAL_SOURCE_ROW_FIELDS
-)
+CANONICAL_SOURCE_ROW_COLUMNS = tuple(field.name for field in CANONICAL_SOURCE_ROW_FIELDS)
 CANONICAL_SOURCE_ROW_REQUIRED_VALUE_COLUMNS = tuple(
     field.name for field in CANONICAL_SOURCE_ROW_FIELDS if field.required_value
+)
+PRODUCTION_REQUIRED_SOURCE_ROW_COLUMNS = (
+    "source_url",
+    "source_tier",
+    "evidence",
+    "jurisdiction",
+    "confidence",
+    "effective_start_date",
 )
 LEGACY_EDGE_SHARED_COLUMNS = {
     "source_ref",
@@ -71,9 +79,7 @@ LEGACY_EDGE_SHARED_COLUMNS = {
     "source_url",
 }
 CANONICAL_SOURCE_ROW_DETECTOR_COLUMNS = tuple(
-    column
-    for column in CANONICAL_SOURCE_ROW_COLUMNS
-    if column not in LEGACY_EDGE_SHARED_COLUMNS
+    column for column in CANONICAL_SOURCE_ROW_COLUMNS if column not in LEGACY_EDGE_SHARED_COLUMNS
 )
 
 
@@ -84,6 +90,7 @@ def canonical_source_row_schema() -> dict[str, object]:
         "formats": list(CANONICAL_SOURCE_ROW_FORMATS),
         "columns": list(CANONICAL_SOURCE_ROW_COLUMNS),
         "required_value_columns": list(CANONICAL_SOURCE_ROW_REQUIRED_VALUE_COLUMNS),
+        "production_required_columns": list(PRODUCTION_REQUIRED_SOURCE_ROW_COLUMNS),
         "fields": [field.to_json_dict() for field in CANONICAL_SOURCE_ROW_FIELDS],
         "review_status_values": list(REVIEW_STATUS_VALUES),
     }
@@ -124,4 +131,16 @@ def validate_canonical_source_row(row: Mapping[str, object]) -> tuple[str, ...]:
     if review_status and review_status not in REVIEW_STATUS_VALUES:
         warnings.append("invalid_review_status")
 
+    return tuple(warnings)
+
+
+def validate_production_required_source_row(row: Mapping[str, object]) -> tuple[str, ...]:
+    """Return warnings that block a canonical source row from production promotion."""
+    warnings: list[str] = []
+    for column in PRODUCTION_REQUIRED_SOURCE_ROW_COLUMNS:
+        if column not in row:
+            warnings.append(f"missing_column:{column}")
+        value = str(row.get(column) or "").strip()
+        if not value:
+            warnings.append(f"missing_value:{column}")
     return tuple(warnings)

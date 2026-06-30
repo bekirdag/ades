@@ -10,6 +10,7 @@ from typing import Iterable
 
 from .relationship_schema import validate_node_type_metadata, validate_relation_metadata
 from .source_catalog import (
+    SOURCE_TIER_UNKNOWN,
     classify_source_tier,
     is_source_tier_production_eligible,
     source_tier_policy_label,
@@ -18,6 +19,7 @@ from .source_catalog import (
 from .source_row_schema import (
     row_uses_canonical_source_schema,
     validate_canonical_source_row,
+    validate_production_required_source_row,
 )
 
 
@@ -151,13 +153,14 @@ def validate_market_graph_source_lanes(
     for path in resolved_paths:
         with path.open("r", encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle, delimiter="\t")
-            has_canonical_source_schema = row_uses_canonical_source_schema(
-                reader.fieldnames
-            )
+            has_canonical_source_schema = row_uses_canonical_source_schema(reader.fieldnames)
             for row_index, row in enumerate(reader, start=2):
                 row_count += 1
+                production_required_warnings: tuple[str, ...] = ()
                 if has_canonical_source_schema:
-                    for warning in validate_canonical_source_row(row):
+                    canonical_warnings = validate_canonical_source_row(row)
+                    production_required_warnings = validate_production_required_source_row(row)
+                    for warning in canonical_warnings:
                         _add_count(canonical_schema_warning_counts, warning)
                         if len(warning_samples) < sample_limit:
                             warning_samples.append(
@@ -184,14 +187,16 @@ def validate_market_graph_source_lanes(
                 if has_canonical_source_schema:
                     source_name = source_name or _read_string(row, "source_title")
                     source_snapshot = source_snapshot or _read_string(row, "fetched_at")
-                    source_tier = _read_string(row, "source_tier")
+                    source_tier = _read_string(row, "source_tier") or SOURCE_TIER_UNKNOWN
                 else:
-                    source_tier = ""
-                source_tier = source_tier or classify_source_tier(source_name, source_url)
+                    source_tier = classify_source_tier(source_name, source_url)
                 _add_count(source_tier_counts, source_tier)
                 source_policy = source_tier_policy_label(source_tier)
                 _add_count(source_policy_counts, source_policy)
-                if is_source_tier_production_eligible(source_tier):
+                if (
+                    is_source_tier_production_eligible(source_tier)
+                    and not production_required_warnings
+                ):
                     production_eligible_row_count += 1
                 else:
                     proposal_only_row_count += 1
@@ -247,8 +252,6 @@ def validate_market_graph_source_lanes(
         source_warning_counts=_sorted_counts(source_warning_counts),
         relation_warning_counts=_sorted_counts(relation_warning_counts),
         node_warning_counts=_sorted_counts(node_warning_counts),
-        canonical_schema_warning_counts=_sorted_counts(
-            canonical_schema_warning_counts
-        ),
+        canonical_schema_warning_counts=_sorted_counts(canonical_schema_warning_counts),
         warning_samples=tuple(warning_samples),
     )

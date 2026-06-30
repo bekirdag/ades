@@ -6,9 +6,11 @@ from ades.impact.source_row_schema import (
     CANONICAL_SOURCE_ROW_COLUMNS,
     CANONICAL_SOURCE_ROW_FORMATS,
     CANONICAL_SOURCE_ROW_REQUIRED_VALUE_COLUMNS,
+    PRODUCTION_REQUIRED_SOURCE_ROW_COLUMNS,
     canonical_source_row_schema,
     row_uses_canonical_source_schema,
     validate_canonical_source_row,
+    validate_production_required_source_row,
 )
 
 
@@ -78,6 +80,15 @@ def test_canonical_source_row_schema_defines_shared_tsv_jsonl_columns() -> None:
     )
     assert "effective_end_date" not in CANONICAL_SOURCE_ROW_REQUIRED_VALUE_COLUMNS
     assert "license_notes" not in CANONICAL_SOURCE_ROW_REQUIRED_VALUE_COLUMNS
+    assert PRODUCTION_REQUIRED_SOURCE_ROW_COLUMNS == (
+        "source_url",
+        "source_tier",
+        "evidence",
+        "jurisdiction",
+        "confidence",
+        "effective_start_date",
+    )
+    assert tuple(schema["production_required_columns"]) == PRODUCTION_REQUIRED_SOURCE_ROW_COLUMNS
 
 
 def test_validate_canonical_source_row_accepts_complete_row() -> None:
@@ -101,6 +112,34 @@ def test_validate_canonical_source_row_reports_missing_and_invalid_values() -> N
         "missing_value:content_hash",
         "invalid_confidence",
         "invalid_review_status",
+    )
+
+
+def test_validate_canonical_source_row_reports_missing_production_required_values() -> None:
+    row = _canonical_row(
+        source_url="",
+        source_tier="",
+        evidence="",
+        jurisdiction="",
+        confidence="",
+        effective_start_date="",
+    )
+
+    assert validate_canonical_source_row(row) == (
+        "missing_value:jurisdiction",
+        "missing_value:source_url",
+        "missing_value:source_tier",
+        "missing_value:evidence",
+        "missing_value:effective_start_date",
+        "missing_value:confidence",
+    )
+    assert validate_production_required_source_row(row) == (
+        "missing_value:source_url",
+        "missing_value:source_tier",
+        "missing_value:evidence",
+        "missing_value:jurisdiction",
+        "missing_value:confidence",
+        "missing_value:effective_start_date",
     )
 
 

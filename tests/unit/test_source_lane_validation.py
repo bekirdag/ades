@@ -208,6 +208,128 @@ def test_validate_market_graph_source_lanes_counts_source_and_schema_warnings(
     assert len(result.warning_samples) == 4
 
 
+def test_validate_market_graph_source_lanes_keeps_missing_canonical_tier_proposal_only(
+    tmp_path: Path,
+) -> None:
+    edge_path = tmp_path / "canonical_edges.tsv"
+    columns = [
+        "source_ref",
+        "source_type",
+        "target_ref",
+        "target_type",
+        "relation",
+        "jurisdiction",
+        "source_url",
+        "source_title",
+        "source_tier",
+        "evidence",
+        "effective_start_date",
+        "effective_end_date",
+        "confidence",
+        "notes",
+        "fetched_at",
+        "content_hash",
+        "review_status",
+        "license_notes",
+        "confidence_basis",
+    ]
+    with edge_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, delimiter="\t", fieldnames=columns)
+        writer.writeheader()
+        writer.writerow(
+            {
+                "source_ref": "ades:uk-law:mining-royalties",
+                "source_type": "law",
+                "target_ref": "ades:sector:mining",
+                "target_type": "sector",
+                "relation": "law_affects_sector",
+                "jurisdiction": "GB",
+                "source_url": "https://bills.parliament.uk/bills/example",
+                "source_title": "UK Parliament bill",
+                "source_tier": "",
+                "evidence": "Bill text affects mining royalties.",
+                "effective_start_date": "2026-06-28",
+                "effective_end_date": "",
+                "confidence": "0.9",
+                "notes": "",
+                "fetched_at": "2026-06-28T00:00:00Z",
+                "content_hash": "sha256:abc123",
+                "review_status": "accepted",
+                "license_notes": "public sector source",
+                "confidence_basis": "official legislation page",
+            }
+        )
+
+    result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
+
+    assert result.canonical_schema_warning_counts == {"missing_value:source_tier": 1}
+    assert result.source_tier_counts == {"unknown": 1}
+    assert result.source_policy_counts == {"low_trust_proposal_only": 1}
+    assert result.production_eligible_row_count == 0
+    assert result.proposal_only_row_count == 1
+
+
+def test_validate_market_graph_source_lanes_blocks_incomplete_canonical_production_row(
+    tmp_path: Path,
+) -> None:
+    edge_path = tmp_path / "canonical_edges.tsv"
+    columns = [
+        "source_ref",
+        "source_type",
+        "target_ref",
+        "target_type",
+        "relation",
+        "jurisdiction",
+        "source_url",
+        "source_title",
+        "source_tier",
+        "evidence",
+        "effective_start_date",
+        "effective_end_date",
+        "confidence",
+        "notes",
+        "fetched_at",
+        "content_hash",
+        "review_status",
+        "license_notes",
+        "confidence_basis",
+    ]
+    with edge_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, delimiter="\t", fieldnames=columns)
+        writer.writeheader()
+        writer.writerow(
+            {
+                "source_ref": "ades:uk-law:mining-royalties",
+                "source_type": "law",
+                "target_ref": "ades:sector:mining",
+                "target_type": "sector",
+                "relation": "law_affects_sector",
+                "jurisdiction": "GB",
+                "source_url": "https://bills.parliament.uk/bills/example",
+                "source_title": "UK Parliament bill",
+                "source_tier": "government",
+                "evidence": "",
+                "effective_start_date": "2026-06-28",
+                "effective_end_date": "",
+                "confidence": "0.9",
+                "notes": "",
+                "fetched_at": "2026-06-28T00:00:00Z",
+                "content_hash": "sha256:abc123",
+                "review_status": "accepted",
+                "license_notes": "public sector source",
+                "confidence_basis": "official legislation page",
+            }
+        )
+
+    result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
+
+    assert result.canonical_schema_warning_counts == {"missing_value:evidence": 1}
+    assert result.source_tier_counts == {"government": 1}
+    assert result.source_policy_counts == {"official_high_trust": 1}
+    assert result.production_eligible_row_count == 0
+    assert result.proposal_only_row_count == 1
+
+
 def test_validate_market_graph_source_lanes_counts_node_type_warnings(
     tmp_path: Path,
 ) -> None:
