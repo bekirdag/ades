@@ -1615,3 +1615,139 @@ def test_starter_graph_includes_promoted_united_kingdom_relationships(
     equity_candidate_refs, equity_passive_refs = expanded_refs("ades:sector:gb:uk-equity-market")
     assert equity_candidate_refs == {"finance-uk:ftse-100"}
     assert equity_passive_refs == set()
+
+
+def test_starter_graph_includes_promoted_united_states_relationships(
+    tmp_path: Path,
+) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        united_states_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_united_states/%'
+                """
+            ).fetchone()[0]
+        )
+        exchange_fanout_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_united_states/%'
+                  AND relation = 'exchange_lists_security'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'ades:impact:currency:usd',
+                    'ades:interest-rate:us:fed-funds-target-range',
+                    'ades:interest-rate:us:sofr',
+                    'ades:treasury-security:us:treasury-bill',
+                    'ades:security:us:nvda:common-stock',
+                    'finance-us-ticker:NVDA',
+                    'ades:security:us:jpm:common-stock',
+                    'finance-us-ticker:JPM'
+                )
+                """
+            )
+        }
+
+    assert united_states_edge_count == 200
+    assert exchange_fanout_count == 0
+    assert tradable_rows == {
+        "ades:impact:currency:usd": (1, 1),
+        "ades:interest-rate:us:fed-funds-target-range": (1, 0),
+        "ades:interest-rate:us:sofr": (1, 0),
+        "ades:security:us:jpm:common-stock": (1, 0),
+        "ades:security:us:nvda:common-stock": (1, 0),
+        "ades:treasury-security:us:treasury-bill": (1, 0),
+        "finance-us-ticker:JPM": (1, 0),
+        "finance-us-ticker:NVDA": (1, 0),
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=120,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    fed_candidate_refs, fed_passive_refs = expanded_refs("ades:central-bank:us:federal-reserve")
+    assert fed_candidate_refs == {
+        "ades:impact:currency:usd",
+        "ades:interest-rate:us:fed-funds-target-range",
+        "ades:interest-rate:us:sofr",
+    }
+    assert {
+        "ades:policy:us:fed-balance-sheet-policy",
+        "ades:program:us:discount-window",
+        "ades:sector:us:banking-credit",
+    }.issubset(fed_passive_refs)
+    assert "finance-us-ticker:JPM" not in fed_candidate_refs
+    assert "finance-us:sp-500" not in fed_candidate_refs
+
+    treasury_candidate_refs, treasury_passive_refs = expanded_refs(
+        "ades:government-body:us:treasury"
+    )
+    assert treasury_candidate_refs == {
+        "ades:treasury-security:us:treasury-bill",
+        "ades:treasury-security:us:treasury-bond",
+        "ades:treasury-security:us:treasury-note",
+    }
+    assert treasury_passive_refs == {"ades:sector:us:fiscal-policy-sensitive"}
+    assert "ades:impact:currency:usd" not in treasury_candidate_refs
+    assert "finance-us:sp-500" not in treasury_candidate_refs
+
+    sec_candidate_refs, sec_passive_refs = expanded_refs("ades:regulator:us:sec")
+    assert sec_candidate_refs == set()
+    assert {
+        "ades:exchange:us:cboe",
+        "ades:sector:us:broker-dealers",
+        "ades:sector:us:listed-issuers",
+        "finance-us:nasdaq",
+        "finance-us:nyse",
+    }.issubset(sec_passive_refs)
+
+    nvda_candidate_refs, nvda_passive_refs = expanded_refs("finance-us-issuer:0001045810")
+    assert nvda_candidate_refs == {
+        "ades:security:us:nvda:common-stock",
+        "finance-us-ticker:NVDA",
+    }
+    assert {
+        "ades:sector:us:semiconductors",
+        "finance-us:nasdaq",
+        "sec:cik:0001045810",
+    }.issubset(nvda_passive_refs)
+    assert "finance-us-ticker:AAPL" not in nvda_candidate_refs
+    assert "finance-us-ticker:JPM" not in nvda_candidate_refs
+    assert "ades:impact:currency:usd" not in nvda_candidate_refs
+
+    jpm_candidate_refs, jpm_passive_refs = expanded_refs("finance-us-issuer:0000019617")
+    assert jpm_candidate_refs == {
+        "ades:security:us:jpm:common-stock",
+        "finance-us-ticker:JPM",
+    }
+    assert {
+        "ades:sector:us:major-banks",
+        "finance-us:nyse",
+        "sec:cik:0000019617",
+    }.issubset(jpm_passive_refs)
+    assert "finance-us-ticker:BAC" not in jpm_candidate_refs
+    assert "ades:impact:currency:usd" not in jpm_candidate_refs

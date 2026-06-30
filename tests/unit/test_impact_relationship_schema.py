@@ -476,6 +476,65 @@ def test_relationship_schema_covers_united_kingdom_macro_regulatory_and_exposure
     )
 
 
+def test_relationship_schema_covers_united_states_macro_regulatory_and_identity_paths() -> None:
+    assert relation_family_for_relation("central_bank_sets_balance_sheet_policy") == (
+        "country_macro_policy"
+    )
+    assert relation_family_for_relation("central_bank_operates_liquidity_facility") == (
+        "country_macro_policy"
+    )
+    assert "policy_rate_hike" in relation_event_types("central_bank_sets_balance_sheet_policy")
+    assert "liquidity_or_policy_rate_signal" in relation_direction_preconditions(
+        "central_bank_operates_liquidity_facility"
+    )
+
+    assert relation_family_for_relation("treasury_issues_security") == ("country_macro_policy")
+    assert "gilt_or_sovereign_debt_signal" in relation_direction_preconditions(
+        "treasury_issues_security"
+    )
+
+    for relation in [
+        "issuer_has_cik",
+        "security_has_ticker",
+        "security_has_figi",
+        "security_has_cusip",
+        "legal_entity_has_lei",
+    ]:
+        assert relation_family_for_relation(relation) == "identity_listing"
+        assert "source_backed_identifier_evidence" in relation_direction_preconditions(relation)
+
+    for relation in [
+        "regulator_supervises_broker_dealer",
+        "regulator_supervises_consumer_finance",
+        "regulator_supervises_derivatives_market",
+        "regulator_supervises_health_product",
+        "regulator_supervises_transport",
+        "government_body_sets_transport_policy",
+        "tariff_affects_sector",
+        "product_reimbursed_by_program",
+    ]:
+        assert relation_family_for_relation(relation) == "policy_sector_exposure"
+        assert "sector_policy_change" in relation_event_types(relation)
+
+    for relation in [
+        "issuer_exposed_to_treasury_yields",
+        "issuer_exposed_to_energy_price",
+        "issuer_exposed_to_fda_regulation",
+        "issuer_exposed_to_transport_cycle",
+    ]:
+        assert relation_family_for_relation(relation) == "issuer_exposure"
+        assert "source_backed_issuer_exposure" in relation_direction_preconditions(relation)
+
+    assert (
+        validate_relation_metadata(
+            relation="central_bank_operates_liquidity_facility",
+            configured_event_types=(),
+            configured_preconditions=(),
+        )
+        == []
+    )
+
+
 def test_relationship_schema_defaults_and_warnings_are_non_fatal() -> None:
     assert normalized_relation_event_types("regulator_affects_sector", ()) == (
         "sector_policy_change",
@@ -560,6 +619,40 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     assert (
         classify_source_tier("SEC filing", "https://www.sec.gov/Archives/edgar/data/1")
         == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "Federal Reserve Discount Window",
+            "https://www.frbdiscountwindow.org/",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "Nasdaq Trader symbol directory",
+            "https://www.nasdaqtrader.com/trader.aspx?id=symboldirdefs",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier("Cboe U.S. equities", "https://www.cboe.com/us/equities/")
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert classify_source_tier("OCC About", "https://www.occ.gov/about/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("FDIC About", "https://www.fdic.gov/about/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("FDA What We Do", "https://www.fda.gov/about-fda") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "Treasury Marketable Securities",
+            "https://treasurydirect.gov/marketable-securities/",
+        )
+        == SOURCE_TIER_GOVERNMENT
     )
     assert (
         classify_source_tier("UK legislation", "https://www.legislation.gov.uk/ukpga")

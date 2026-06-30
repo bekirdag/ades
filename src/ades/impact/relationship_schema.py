@@ -210,14 +210,24 @@ SUPPLY_CHAIN_RELATIONS = {
     "issuer_partner_of_issuer",
 }
 IDENTITY_LISTING_RELATIONS = {
+    "cross_listing_same_issuer",
+    "etf_holds_security",
     "exchange_lists_security",
+    "index_contains_security",
+    "issuer_files_with_regulator",
+    "issuer_has_cik",
     "issuer_has_listed_ticker",
     "ticker_represents_issuer",
     "issuer_has_exchange_listing",
     "ticker_trades_on_exchange",
     "ticker_listed_on_exchange",
     "issuer_has_security",
+    "legal_entity_has_lei",
+    "legal_entity_registered_in_jurisdiction",
+    "security_has_cusip",
+    "security_has_figi",
     "security_has_identifier",
+    "security_has_ticker",
     "security_listed_on_exchange",
     "security_trades_on_exchange",
     "sukuk_issued_by_issuer",
@@ -243,9 +253,12 @@ POLICY_SECTOR_RELATIONS = {
 MARKET_INFRASTRUCTURE_RELATIONS = {
     "regulator_supervises_exchange",
     "regulator_supervises_depository",
+    "regulator_supervises_broker_dealer",
     "regulator_supervises_bank",
     "prudential_authority_supervises_bank",
     "regulator_supervises_issuer",
+    "regulator_supervises_derivatives_market",
+    "regulator_supervises_consumer_finance",
     "regulator_supervises_financial_group",
     "regulator_supervises_insurer",
     "regulator_supervises_asset_manager",
@@ -254,6 +267,8 @@ MARKET_INFRASTRUCTURE_RELATIONS = {
     "regulator_supervises_energy_utility",
     "regulator_supervises_capital_market",
     "regulator_supervises_telecom",
+    "regulator_supervises_transport",
+    "regulator_supervises_health_product",
     "regulator_supervises_electricity",
     "regulator_supervises_competition",
     "regulator_supervises_airline",
@@ -272,6 +287,7 @@ GOVERNMENT_POLICY_RELATIONS = {
     "government_body_sets_water_policy",
     "government_body_sets_health_policy",
     "government_body_sets_defense_procurement",
+    "government_body_sets_transport_policy",
     "government_body_sets_mining_policy",
     "government_body_sets_tourism_policy",
     "government_body_sets_industrial_policy",
@@ -282,7 +298,12 @@ GOVERNMENT_POLICY_RELATIONS = {
 INDUSTRIAL_POLICY_RELATIONS = {
     "industrial_policy_affects_sector",
     "subsidy_affects_sector",
+    "subsidy_affects_issuer",
     "export_control_affects_sector",
+    "export_control_affects_issuer",
+    "tariff_affects_sector",
+    "tariff_affects_issuer",
+    "procurement_program_affects_sector",
 }
 ISSUER_EXPOSURE_RELATIONS = {
     "issuer_exposed_to_commodity",
@@ -303,15 +324,23 @@ ISSUER_EXPOSURE_RELATIONS = {
     "issuer_exposed_to_fx_pass_through",
     "issuer_exposed_to_rate_cycle",
     "issuer_exposed_to_gilt_yields",
+    "issuer_exposed_to_treasury_yields",
+    "issuer_exposed_to_usd_funding",
     "issuer_exposed_to_mortgage_rates",
+    "issuer_exposed_to_housing_cycle",
     "issuer_exposed_to_consumer_demand",
+    "issuer_exposed_to_ai_capex",
     "issuer_exposed_to_energy_cost",
+    "issuer_exposed_to_energy_price",
     "issuer_exposed_to_water_regulation",
+    "issuer_exposed_to_fda_regulation",
+    "issuer_exposed_to_antitrust_action",
     "issuer_exposed_to_oil_gas_price",
     "issuer_exposed_to_fx",
     "issuer_exposed_to_tourism_cycle",
     "issuer_exposed_to_defense_procurement",
     "issuer_exposed_to_air_travel_cycle",
+    "issuer_exposed_to_transport_cycle",
     "issuer_exposed_to_construction_cycle",
     "product_exposed_to_commodity_input",
 }
@@ -350,6 +379,8 @@ COMMODITY_MARKET_RELATIONS = {
 SANCTIONS_RELATIONS = {
     "sanction_affects_commodity",
     "sanction_affects_country",
+    "sanction_affects_sector",
+    "sanction_affects_issuer",
     "sanctions_body_affects_risk_proxy",
     "tanker_sanctions_affects_commodity",
 }
@@ -382,6 +413,7 @@ INFRASTRUCTURE_ASSET_RELATIONS = {
     "org_operates_water_network",
     "org_operates_oil_gas_asset",
     "org_operates_telecom_network",
+    "org_operates_cloud_platform",
     "org_operates_airport",
     "org_operates_airline",
 }
@@ -403,6 +435,8 @@ CENTRAL_BANK_RELATIONS = {
     "central_bank_sets_qe_policy",
     "central_bank_sets_qt_policy",
     "central_bank_sets_reserve_requirement",
+    "central_bank_sets_balance_sheet_policy",
+    "central_bank_operates_liquidity_facility",
     "central_bank_maintains_currency_peg",
 }
 STATISTICS_RELATIONS = {
@@ -417,9 +451,11 @@ COMPANY_REGISTRY_RELATIONS = {
 }
 SOVEREIGN_DEBT_RELATIONS = {
     "sovereign_debt_office_issues_bond",
+    "treasury_issues_security",
 }
 PRODUCT_REGULATORY_RELATIONS = {
     "product_authorized_by_regulator",
+    "product_reimbursed_by_program",
 }
 FISCAL_COMMODITY_RELATIONS = {
     "oil_revenue_affects_fiscal_balance",
@@ -610,6 +646,8 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         "central_bank_sets_qe_policy",
         "central_bank_sets_qt_policy",
         "central_bank_sets_reserve_requirement",
+        "central_bank_sets_balance_sheet_policy",
+        "central_bank_operates_liquidity_facility",
     }:
         return POLICY_RATE_EVENT_TYPES
     if relation in STATISTICS_RELATIONS:
@@ -677,6 +715,25 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
             "direct_company_mention",
             "earnings_signal",
             "labor_disruption",
+        )
+    if relation in {
+        "issuer_files_with_regulator",
+        "issuer_has_cik",
+        "legal_entity_has_lei",
+        "legal_entity_registered_in_jurisdiction",
+        "security_has_cusip",
+        "security_has_figi",
+        "security_has_ticker",
+    }:
+        return (
+            "direct_issuer_or_security_mention",
+            "source_backed_identifier_evidence",
+        )
+    if relation in {"cross_listing_same_issuer", "index_contains_security", "etf_holds_security"}:
+        return (
+            "direct_issuer_or_security_mention",
+            "direct_listing_evidence",
+            "source_backed_membership_evidence",
         )
     if relation in {"ticker_listed_on_exchange", "ticker_trades_on_exchange"}:
         return ("direct_issuer_or_security_mention", "direct_listing_evidence")
@@ -889,6 +946,8 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
         "central_bank_sets_qe_policy",
         "central_bank_sets_qt_policy",
         "central_bank_sets_reserve_requirement",
+        "central_bank_sets_balance_sheet_policy",
+        "central_bank_operates_liquidity_facility",
     }:
         return (
             "rate_inflation_central_bank_or_fiscal_signal",

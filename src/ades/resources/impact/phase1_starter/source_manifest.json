@@ -478,6 +478,16 @@
       "normalized_output_allowed": true,
       "license_notes": "Official exchange, regulator, central bank, government, market-infrastructure, and reviewed issuer evidence; blocked ADR/cross-listing or ambiguous rows are kept in the review queue.",
       "notes": "Promotes reviewed United Kingdom program/org/policy/market identity relationships for BDYA impact extraction guardrails."
+    },
+    {
+      "source_name": "United States reviewed NYSE/Nasdaq/Cboe/SEC/Fed/Treasury relationship source lane",
+      "source_url": "https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/program_org_relationship/generated/20260629Tprogram-org-us-reviewed-nasdaq-nyse-cboe-sec-fed-treasury/manifest.json",
+      "source_year": "2026",
+      "refresh_policy": "manual reviewed source-lane refresh after official United States source collection",
+      "normalized_output_allowed": true,
+      "license_notes": "Official SEC, exchange, regulator, Federal Reserve, Treasury, statistics-agency, government, and reviewed SEC issuer evidence; blocked ETF/index/ADR/CUSIP/FIGI or broad fan-out rows are kept in the review queue.",
+      "notes": "Promotes reviewed United States program/org/policy/market identity relationships for BDYA impact extraction guardrails."
     }
   ]
 }

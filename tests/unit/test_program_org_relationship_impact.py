@@ -92,6 +92,11 @@ REVIEWED_UNITED_KINGDOM_LSE_BOE_FCA_PRA_GILT_FIXTURE = Path(
     "program_org_relationship/reviewed/2026-06-29/"
     "united_kingdom_lse_boe_fca_pra_gilt_policy_relationships.tsv"
 )
+REVIEWED_UNITED_STATES_NYSE_NASDAQ_CBOE_SEC_FED_TREASURY_FIXTURE = Path(
+    "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/"
+    "program_org_relationship/reviewed/2026-06-29/"
+    "united_states_nyse_nasdaq_cboe_sec_fed_treasury_policy_relationships.tsv"
+)
 
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
@@ -3237,3 +3242,187 @@ def test_reviewed_united_kingdom_fixture_expands_lse_boe_gilt_guardrails(
     equity_candidate_refs, equity_passive_refs = expanded_refs("ades:sector:gb:uk-equity-market")
     assert equity_candidate_refs == {"finance-uk:ftse-100"}
     assert equity_passive_refs == set()
+
+
+def test_reviewed_united_states_fixture_expands_sec_fed_treasury_guardrails(
+    tmp_path: Path,
+) -> None:
+    if not REVIEWED_UNITED_STATES_NYSE_NASDAQ_CBOE_SEC_FED_TREASURY_FIXTURE.exists():
+        pytest.skip("reviewed United States SEC/Fed/Treasury fixture is not mounted")
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[REVIEWED_UNITED_STATES_NYSE_NASDAQ_CBOE_SEC_FED_TREASURY_FIXTURE],
+        output_root=tmp_path / "impact_relationships",
+        run_id="reviewed-united-states-sec-fed-treasury",
+        build_artifact=True,
+        include_starter_graph=False,
+        artifact_output_root=tmp_path / "artifacts",
+    )
+
+    assert result.relationship_row_count == 200
+    assert result.relation_counts["issuer_has_cik"] == 22
+    assert result.relation_counts["issuer_has_listed_ticker"] == 22
+    assert result.relation_counts["issuer_has_security"] == 22
+    assert result.relation_counts["security_has_ticker"] == 22
+    assert result.relation_counts["security_listed_on_exchange"] == 22
+    assert "exchange_lists_security" not in result.relation_counts
+    assert result.relation_counts["treasury_issues_security"] == 3
+    assert result.relation_counts["statistics_agency_publishes_indicator"] == 9
+    assert result.node_type_counts["interest_rate"] == 2
+    assert result.node_type_counts["treasury_security"] == 3
+
+    validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
+    assert validation.invalid_row_count == 0
+    assert validation.source_warning_counts == {}
+    assert validation.relation_warning_counts == {}
+    assert validation.source_tier_counts == {
+        "government": 20,
+        "regulator": 180,
+    }
+
+    assert result.artifact_path is not None
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    for tradable_ref in [
+        "ades:impact:currency:usd",
+        "ades:interest-rate:us:fed-funds-target-range",
+        "ades:interest-rate:us:sofr",
+        "ades:treasury-security:us:treasury-bill",
+        "ades:security:us:nvda:common-stock",
+        "finance-us-ticker:NVDA",
+    ]:
+        assert nodes[tradable_ref]["is_tradable"] == "true"
+    for passive_ref in [
+        "ades:central-bank:us:federal-reserve",
+        "ades:regulator:us:sec",
+        "finance-us:nyse",
+        "finance-us:nasdaq",
+        "ades:sector:us:semiconductors",
+    ]:
+        assert nodes[passive_ref]["is_tradable"] == "false"
+
+    edges = _read_tsv(result.edge_tsv_path)
+    edge_refs = {ref for row in edges for ref in (row["source_ref"], row["target_ref"])}
+    assert "finance-us:sp-500" not in edge_refs
+    assert "finance-us-ticker:SPY" not in edge_refs
+    assert "finance-us-ticker:QQQ" not in edge_refs
+    assert "finance-us-ticker:IWM" not in edge_refs
+    assert not any(row["relation"] == "exchange_lists_security" for row in edges)
+
+    with MarketGraphStore(result.artifact_path) as store:
+        fed_edges = store.outbound_edges_batch(["ades:central-bank:us:federal-reserve"])[
+            "ades:central-bank:us:federal-reserve"
+        ]
+        treasury_edges = store.outbound_edges_batch(["ades:government-body:us:treasury"])[
+            "ades:government-body:us:treasury"
+        ]
+        nvda_edges = store.outbound_edges_batch(["finance-us-issuer:0001045810"])[
+            "finance-us-issuer:0001045810"
+        ]
+        jpm_edges = store.outbound_edges_batch(["finance-us-issuer:0000019617"])[
+            "finance-us-issuer:0000019617"
+        ]
+
+    assert {edge.target_ref for edge in fed_edges} == {
+        "ades:impact:currency:usd",
+        "ades:interest-rate:us:fed-funds-target-range",
+        "ades:interest-rate:us:sofr",
+        "ades:policy:us:fed-balance-sheet-policy",
+        "ades:program:us:discount-window",
+        "ades:sector:us:banking-credit",
+    }
+    assert {edge.target_ref for edge in treasury_edges} == {
+        "ades:sector:us:fiscal-policy-sensitive",
+        "ades:treasury-security:us:treasury-bill",
+        "ades:treasury-security:us:treasury-bond",
+        "ades:treasury-security:us:treasury-note",
+    }
+    assert {edge.target_ref for edge in nvda_edges} == {
+        "ades:sector:us:semiconductors",
+        "ades:security:us:nvda:common-stock",
+        "finance-us-ticker:NVDA",
+        "sec:cik:0001045810",
+    }
+    assert {edge.target_ref for edge in jpm_edges} == {
+        "ades:sector:us:major-banks",
+        "ades:security:us:jpm:common-stock",
+        "finance-us-ticker:JPM",
+        "sec:cik:0000019617",
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=result.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=120,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    fed_candidate_refs, fed_passive_refs = expanded_refs("ades:central-bank:us:federal-reserve")
+    assert fed_candidate_refs == {
+        "ades:impact:currency:usd",
+        "ades:interest-rate:us:fed-funds-target-range",
+        "ades:interest-rate:us:sofr",
+    }
+    assert {
+        "ades:policy:us:fed-balance-sheet-policy",
+        "ades:program:us:discount-window",
+        "ades:sector:us:banking-credit",
+    }.issubset(fed_passive_refs)
+    assert "finance-us-ticker:JPM" not in fed_candidate_refs
+    assert "finance-us:sp-500" not in fed_candidate_refs
+
+    treasury_candidate_refs, treasury_passive_refs = expanded_refs(
+        "ades:government-body:us:treasury"
+    )
+    assert treasury_candidate_refs == {
+        "ades:treasury-security:us:treasury-bill",
+        "ades:treasury-security:us:treasury-bond",
+        "ades:treasury-security:us:treasury-note",
+    }
+    assert treasury_passive_refs == {"ades:sector:us:fiscal-policy-sensitive"}
+    assert "ades:impact:currency:usd" not in treasury_candidate_refs
+    assert "finance-us:sp-500" not in treasury_candidate_refs
+
+    sec_candidate_refs, sec_passive_refs = expanded_refs("ades:regulator:us:sec")
+    assert sec_candidate_refs == set()
+    assert {
+        "ades:exchange:us:cboe",
+        "ades:sector:us:broker-dealers",
+        "ades:sector:us:listed-issuers",
+        "finance-us:nasdaq",
+        "finance-us:nyse",
+    }.issubset(sec_passive_refs)
+    assert "finance-us-ticker:NVDA" not in sec_candidate_refs
+
+    nvda_candidate_refs, nvda_passive_refs = expanded_refs("finance-us-issuer:0001045810")
+    assert nvda_candidate_refs == {
+        "ades:security:us:nvda:common-stock",
+        "finance-us-ticker:NVDA",
+    }
+    assert {
+        "ades:sector:us:semiconductors",
+        "finance-us:nasdaq",
+        "sec:cik:0001045810",
+    }.issubset(nvda_passive_refs)
+    assert "finance-us-ticker:AAPL" not in nvda_candidate_refs
+    assert "finance-us-ticker:JPM" not in nvda_candidate_refs
+    assert "ades:impact:currency:usd" not in nvda_candidate_refs
+
+    jpm_candidate_refs, jpm_passive_refs = expanded_refs("finance-us-issuer:0000019617")
+    assert jpm_candidate_refs == {
+        "ades:security:us:jpm:common-stock",
+        "finance-us-ticker:JPM",
+    }
+    assert {
+        "ades:sector:us:major-banks",
+        "finance-us:nyse",
+        "sec:cik:0000019617",
+    }.issubset(jpm_passive_refs)
+    assert "finance-us-ticker:BAC" not in jpm_candidate_refs
+    assert "ades:impact:currency:usd" not in jpm_candidate_refs
