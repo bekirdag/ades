@@ -39,6 +39,13 @@ from .proposal_promoter import (
     ProposalPromotionResult,
     promote_reviewed_relationship_proposals,
 )
+from .structured_source_parser import (
+    StructuredSourceParseResult,
+    StructuredSourceRejectedRow,
+    StructuredSourceSpec,
+    parse_structured_official_source,
+    write_canonical_source_rows_tsv,
+)
 from .relationship_schema import (
     RELATIONSHIP_RELATION_SCHEMA_VERSION,
     RELATIONSHIP_NODE_TYPE_SCHEMA_VERSION,
@@ -112,6 +119,9 @@ __all__ = [
     "RelationDefinition",
     "SourceAttribution",
     "SourceRowField",
+    "StructuredSourceParseResult",
+    "StructuredSourceRejectedRow",
+    "StructuredSourceSpec",
     "CANONICAL_SOURCE_ROW_COLUMNS",
     "CANONICAL_SOURCE_ROW_FORMATS",
     "CANONICAL_SOURCE_ROW_SCHEMA_ID",
@@ -136,6 +146,7 @@ __all__ = [
     "load_impact_article_golden_set",
     "load_impact_golden_set",
     "load_impact_news_analysis_golden_cases",
+    "parse_structured_official_source",
     "promote_reviewed_relationship_proposals",
     "normalized_relation_direction_preconditions",
     "normalized_relation_event_types",
@@ -157,4 +168,5 @@ __all__ = [
     "validate_canonical_source_row",
     "validate_market_graph_source_lanes",
     "validate_source_attribution",
+    "write_canonical_source_rows_tsv",
 ]
