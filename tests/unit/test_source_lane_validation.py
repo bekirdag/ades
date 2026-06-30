@@ -82,6 +82,87 @@ def test_validate_market_graph_source_lanes_accepts_source_backed_row(
     assert result.source_warning_counts == {}
     assert result.relation_warning_counts == {}
     assert result.source_tier_counts == {"government": 1}
+    assert result.source_policy_counts == {"official_high_trust": 1}
+    assert result.production_eligible_row_count == 1
+    assert result.proposal_only_row_count == 0
+
+
+def test_validate_market_graph_source_lanes_distinguishes_source_tier_policy(
+    tmp_path: Path,
+) -> None:
+    edge_path = tmp_path / "edges.tsv"
+    _write_edges(
+        edge_path,
+        [
+            {
+                "source_ref": "ades:issuer:tesla",
+                "target_ref": "NASDAQ:TSLA",
+                "relation": "issuer_has_security",
+                "evidence_level": "official",
+                "confidence": "0.95",
+                "direction_hint": "issuer_security",
+                "source_name": "SEC EDGAR Tesla filing",
+                "source_url": "https://www.sec.gov/Archives/edgar/data/example",
+                "source_snapshot": "2026-06-28",
+                "source_year": "2026",
+                "refresh_policy": "monthly",
+                "pack_ids": "finance-us-en",
+                "notes": "",
+                "compatible_event_types": "company_specific",
+                "direction_preconditions": "direct_issuer_or_security_match",
+            },
+            {
+                "source_ref": "ades:issuer:sample",
+                "target_ref": "FIGI:BBG000000001",
+                "relation": "issuer_has_security",
+                "evidence_level": "licensed",
+                "confidence": "0.85",
+                "direction_hint": "issuer_security",
+                "source_name": "OpenFIGI licensed mapping",
+                "source_url": "https://api.openfigi.com/v3/mapping",
+                "source_snapshot": "2026-06-28",
+                "source_year": "2026",
+                "refresh_policy": "monthly",
+                "pack_ids": "finance-us-en",
+                "notes": "",
+                "compatible_event_types": "company_specific",
+                "direction_preconditions": "direct_issuer_or_security_match",
+            },
+            {
+                "source_ref": "ades:proposal:program",
+                "target_ref": "ades:issuer:sample",
+                "relation": "program_operated_by_org",
+                "evidence_level": "reviewed_proposal",
+                "confidence": "0.65",
+                "direction_hint": "program_org",
+                "source_name": "Reviewed Proposal Source",
+                "source_url": "https://review-queue.internal/proposals/program.jsonl",
+                "source_snapshot": "2026-06-28",
+                "source_year": "2026",
+                "refresh_policy": "manual_review",
+                "pack_ids": "reviewed-proposals-en",
+                "notes": "",
+                "compatible_event_types": "program_funding",
+                "direction_preconditions": "program_entity_match",
+            },
+        ],
+    )
+
+    result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
+
+    assert result.source_tier_counts == {
+        "licensed": 1,
+        "regulator": 1,
+        "reviewed_proposal": 1,
+    }
+    assert result.source_policy_counts == {
+        "official_high_trust": 1,
+        "eligible_medium_trust": 1,
+        "low_trust_proposal_only": 1,
+    }
+    assert result.production_eligible_row_count == 2
+    assert result.proposal_only_row_count == 1
+    assert result.source_warning_counts == {"low_trust_source_proposal_only": 1}
 
 
 def test_validate_market_graph_source_lanes_counts_source_and_schema_warnings(
@@ -120,6 +201,9 @@ def test_validate_market_graph_source_lanes_counts_source_and_schema_warnings(
         "missing_source_snapshot": 1,
         "missing_source_url": 1,
     }
+    assert result.source_policy_counts == {"low_trust_proposal_only": 1}
+    assert result.production_eligible_row_count == 0
+    assert result.proposal_only_row_count == 1
     assert result.relation_warning_counts == {"unknown_relation_schema": 1}
     assert len(result.warning_samples) == 4
 

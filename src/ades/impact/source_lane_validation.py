@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import re
 from typing import Iterable
 
 from .relationship_schema import validate_node_type_metadata, validate_relation_metadata
-from .source_catalog import classify_source_tier, validate_source_attribution
+from .source_catalog import (
+    classify_source_tier,
+    is_source_tier_production_eligible,
+    source_tier_policy_label,
+    validate_source_attribution,
+)
 
 
 @dataclass(frozen=True)
@@ -25,6 +30,9 @@ class ImpactSourceLaneValidationResult:
     relation_warning_counts: dict[str, int]
     node_warning_counts: dict[str, int]
     warning_samples: tuple[dict[str, object], ...]
+    source_policy_counts: dict[str, int] = field(default_factory=dict)
+    production_eligible_row_count: int = 0
+    proposal_only_row_count: int = 0
 
     def to_json_dict(self) -> dict[str, object]:
         return {
@@ -35,6 +43,9 @@ class ImpactSourceLaneValidationResult:
             "relation_counts": self.relation_counts,
             "node_type_counts": self.node_type_counts,
             "source_tier_counts": self.source_tier_counts,
+            "source_policy_counts": self.source_policy_counts,
+            "production_eligible_row_count": self.production_eligible_row_count,
+            "proposal_only_row_count": self.proposal_only_row_count,
             "source_warning_counts": self.source_warning_counts,
             "relation_warning_counts": self.relation_warning_counts,
             "node_warning_counts": self.node_warning_counts,
@@ -98,10 +109,13 @@ def validate_market_graph_source_lanes(
     relation_counts: dict[str, int] = {}
     node_type_counts: dict[str, int] = {}
     source_tier_counts: dict[str, int] = {}
+    source_policy_counts: dict[str, int] = {}
     source_warning_counts: dict[str, int] = {}
     relation_warning_counts: dict[str, int] = {}
     node_warning_counts: dict[str, int] = {}
     warning_samples: list[dict[str, object]] = []
+    production_eligible_row_count = 0
+    proposal_only_row_count = 0
 
     for path in resolved_node_paths:
         with path.open("r", encoding="utf-8", newline="") as handle:
@@ -145,6 +159,12 @@ def validate_market_graph_source_lanes(
                 source_snapshot = _read_string(row, "source_snapshot")
                 source_tier = classify_source_tier(source_name, source_url)
                 _add_count(source_tier_counts, source_tier)
+                source_policy = source_tier_policy_label(source_tier)
+                _add_count(source_policy_counts, source_policy)
+                if is_source_tier_production_eligible(source_tier):
+                    production_eligible_row_count += 1
+                else:
+                    proposal_only_row_count += 1
                 for warning in validate_source_attribution(
                     source_name=source_name or None,
                     source_url=source_url or None,
@@ -191,6 +211,9 @@ def validate_market_graph_source_lanes(
         relation_counts=_sorted_counts(relation_counts),
         node_type_counts=_sorted_counts(node_type_counts),
         source_tier_counts=_sorted_counts(source_tier_counts),
+        source_policy_counts=_sorted_counts(source_policy_counts),
+        production_eligible_row_count=production_eligible_row_count,
+        proposal_only_row_count=proposal_only_row_count,
         source_warning_counts=_sorted_counts(source_warning_counts),
         relation_warning_counts=_sorted_counts(relation_warning_counts),
         node_warning_counts=_sorted_counts(node_warning_counts),

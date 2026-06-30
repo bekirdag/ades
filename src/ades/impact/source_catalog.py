@@ -26,8 +26,31 @@ PROMOTION_ELIGIBLE_SOURCE_TIERS = {
     SOURCE_TIER_GOVERNMENT,
     SOURCE_TIER_LICENSED,
     SOURCE_TIER_INDUSTRY_ASSOCIATION,
+}
+
+SOURCE_TIER_POLICY_OFFICIAL_HIGH_TRUST = "official_high_trust"
+SOURCE_TIER_POLICY_ELIGIBLE_MEDIUM_TRUST = "eligible_medium_trust"
+SOURCE_TIER_POLICY_LOW_TRUST_PROPOSAL_ONLY = "low_trust_proposal_only"
+
+OFFICIAL_HIGH_TRUST_SOURCE_TIERS = {
+    SOURCE_TIER_OFFICIAL,
+    SOURCE_TIER_ISSUER_DISCLOSED,
+    SOURCE_TIER_EXCHANGE,
+    SOURCE_TIER_REGULATOR,
+    SOURCE_TIER_GOVERNMENT,
+}
+
+ELIGIBLE_MEDIUM_TRUST_SOURCE_TIERS = {
+    SOURCE_TIER_LICENSED,
+    SOURCE_TIER_INDUSTRY_ASSOCIATION,
+}
+
+LOW_TRUST_PROPOSAL_ONLY_SOURCE_TIERS = {
+    SOURCE_TIER_WIKIDATA_BRIDGE,
     SOURCE_TIER_REVIEWED_PROPOSAL,
     SOURCE_TIER_LOCAL_PACK_METADATA,
+    SOURCE_TIER_TEST_FIXTURE,
+    SOURCE_TIER_UNKNOWN,
 }
 
 _OFFICIAL_HOST_FRAGMENTS = (
@@ -841,14 +864,14 @@ def classify_source_tier(source_name: str | None, source_url: str | None) -> str
 
     if not url:
         return SOURCE_TIER_UNKNOWN
-    if url_lower.startswith("file://"):
-        return SOURCE_TIER_LOCAL_PACK_METADATA
     if host.endswith(".test") or "example.com" in host or "example.test" in host:
         return SOURCE_TIER_TEST_FIXTURE
     if "wikidata" in host or "wikidata" in name:
         return SOURCE_TIER_WIKIDATA_BRIDGE
     if "reviewed proposal" in name or "reviewed-proposal" in name:
         return SOURCE_TIER_REVIEWED_PROPOSAL
+    if url_lower.startswith("file://"):
+        return SOURCE_TIER_LOCAL_PACK_METADATA
     if "licensed" in name or "openfigi" in name or _contains_any(host, _LICENSED_HOST_FRAGMENTS):
         return SOURCE_TIER_LICENSED
     if _contains_any(host, _INDUSTRY_ASSOCIATION_HOST_FRAGMENTS):
@@ -882,6 +905,22 @@ def classify_source_tier(source_name: str | None, source_url: str | None) -> str
     return SOURCE_TIER_UNKNOWN
 
 
+def source_tier_policy_label(source_tier: str) -> str:
+    """Return the production policy bucket for a classified source tier."""
+
+    if source_tier in OFFICIAL_HIGH_TRUST_SOURCE_TIERS:
+        return SOURCE_TIER_POLICY_OFFICIAL_HIGH_TRUST
+    if source_tier in ELIGIBLE_MEDIUM_TRUST_SOURCE_TIERS:
+        return SOURCE_TIER_POLICY_ELIGIBLE_MEDIUM_TRUST
+    if source_tier in LOW_TRUST_PROPOSAL_ONLY_SOURCE_TIERS:
+        return SOURCE_TIER_POLICY_LOW_TRUST_PROPOSAL_ONLY
+    return SOURCE_TIER_POLICY_LOW_TRUST_PROPOSAL_ONLY
+
+
+def is_source_tier_production_eligible(source_tier: str) -> bool:
+    return source_tier in PROMOTION_ELIGIBLE_SOURCE_TIERS
+
+
 def build_source_attribution(
     *,
     source_name: str,
@@ -894,7 +933,7 @@ def build_source_attribution(
         source_url=source_url,
         source_snapshot=source_snapshot,
         source_tier=source_tier,
-        promotion_eligible=source_tier in PROMOTION_ELIGIBLE_SOURCE_TIERS,
+        promotion_eligible=is_source_tier_production_eligible(source_tier),
     )
 
 
@@ -920,4 +959,6 @@ def validate_source_attribution(
         warnings.append("bridge_source_requires_supporting_source_before_promotion")
     if source_tier == SOURCE_TIER_TEST_FIXTURE:
         warnings.append("test_fixture_source_not_promotable")
+    if not is_source_tier_production_eligible(source_tier):
+        warnings.append("low_trust_source_proposal_only")
     return warnings

@@ -151,8 +151,8 @@ def test_promote_reviewed_relationship_proposals_routes_unknown_relation_to_revi
                     "source_ref": "ades:test:source",
                     "target_ref": "ades:test:target",
                     "relation": "unknown_relation",
-                    "source_name": "Reviewed Proposal Source",
-                    "source_url": "file:///tmp/reviewed-proposal.jsonl",
+                    "source_name": "UK Parliament",
+                    "source_url": "https://bills.parliament.uk/bills/example",
                     "source_snapshot": "2026-06-28",
                 },
             }
@@ -170,3 +170,39 @@ def test_promote_reviewed_relationship_proposals_routes_unknown_relation_to_revi
     assert result.accepted_edge_count == 0
     assert result.needs_review_count == 1
     assert result.needs_review_counts == {"unknown_relation_schema": 1}
+
+
+def test_promote_reviewed_relationship_proposals_rejects_low_trust_proposal_only_source(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "relationship_proposals.jsonl"
+    input_path.write_text(
+        json.dumps(
+            {
+                "promotion_state": "accepted",
+                "raw_item": {
+                    "source_ref": "ades:uk-law:mining-royalties",
+                    "target_ref": "ades:sector:mining",
+                    "relation": "law_affects_sector",
+                    "source_name": "Reviewed Proposal Source",
+                    "source_url": "https://review-queue.internal/proposals/program.jsonl",
+                    "source_snapshot": "2026-06-28",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = promote_reviewed_relationship_proposals(
+        input_paths=[input_path],
+        output_root=tmp_path / "promoted",
+        run_id="run-1",
+    )
+
+    assert result.accepted_edge_count == 0
+    assert result.rejected_proposal_count == 1
+    assert result.rejection_counts == {"low_trust_source_proposal_only": 1}
+    rejected = _read_jsonl(result.rejected_proposals_path)
+    assert rejected[0]["reason"] == "source_or_edge_validation_failed"
+    assert rejected[0]["warnings"] == ["low_trust_source_proposal_only"]
