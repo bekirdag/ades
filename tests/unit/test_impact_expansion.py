@@ -108,7 +108,10 @@ def test_market_graph_builder_merges_edges_and_computes_seed_degree(tmp_path: Pa
         "geography_commodity": 2,
     }
     assert response.source_tier_counts == {"test_fixture": 3}
-    assert response.source_warning_counts == {"test_fixture_source_not_promotable": 4}
+    assert response.source_warning_counts == {
+        "low_trust_source_proposal_only": 4,
+        "test_fixture_source_not_promotable": 4,
+    }
     assert response.relation_warning_counts == {}
     assert any(warning.startswith("duplicate_edge_merged") for warning in response.warnings)
 
@@ -468,6 +471,109 @@ def test_expand_impact_paths_bridges_identity_refs_before_traversal(tmp_path: Pa
             "ades:heuristic_structural_location:finance-en:location:strait-of-hormuz"
         ].same_as_refs
     )
+
+
+def test_tag_impact_enrichment_maps_legal_entity_to_source_backed_terminals(
+    tmp_path: Path,
+) -> None:
+    node_path, edge_path = _write_market_graph_tsvs(tmp_path)
+    node_path.write_text(
+        node_path.read_text(encoding="utf-8")
+        + "\n".join(
+            [
+                (
+                    "finance-us-issuer:000EXM\tExample Holdings PLC\tissuer\tfinance-us-en\t"
+                    '0\t1\t{"same_as_refs":["wikidata:Q123456"]}\tfinance-us-en'
+                ),
+                (
+                    "ades:security:us:nasdaq:exm-ordinary-share\tExample Holdings ordinary "
+                    "share\tsecurity\tfinance-us-en\t1\t0\t{}\tfinance-us-en"
+                ),
+                "finance-us-ticker:EXM\tEXM\tticker\tfinance-us-en\t1\t0\t{}\tfinance-us-en",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    edge_path.write_text(
+        edge_path.read_text(encoding="utf-8")
+        + "\n".join(
+            [
+                (
+                    "finance-us-issuer:000EXM\tades:security:us:nasdaq:exm-ordinary-share"
+                    "\tissuer_has_security\tdirect\t0.94\tdirect_listing\tNasdaq"
+                    "\thttps://www.nasdaq.com/market-activity/stocks/exm\t2026-06-30"
+                    "\t2026\tannual\tfinance-us-en\tlisted security bridge"
+                    "\tearnings_beat,earnings_miss\tdirect_issuer_or_security_mention"
+                ),
+                (
+                    "finance-us-issuer:000EXM\tfinance-us-ticker:EXM"
+                    "\tissuer_has_listed_ticker\tdirect\t0.93\tdirect_listing\tNasdaq"
+                    "\thttps://www.nasdaq.com/market-activity/stocks/exm\t2026-06-30"
+                    "\t2026\tannual\tfinance-us-en\tlisted ticker bridge"
+                    "\tearnings_beat,earnings_miss\tdirect_issuer_or_security_mention"
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    build_response = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact",
+        artifact_version="2026-06-30T00:00:00Z",
+    )
+    response = TagResponse(
+        version="0.3.1",
+        pack="finance-us-en",
+        language="en",
+        content_type="text/plain",
+        entities=[
+            EntityMatch(
+                text="Example Holdings",
+                label="legal_entity",
+                start=0,
+                end=16,
+                confidence=0.97,
+                link=EntityLink(
+                    entity_id="wikidata:Q123456",
+                    canonical_text="Example Holdings PLC",
+                    provider="ades",
+                ),
+            )
+        ],
+        timing_ms=1,
+    )
+
+    enriched = enrich_tag_response_with_impact_paths(
+        response,
+        settings=_settings(Path(build_response.artifact_path)),
+        include_impact_paths=True,
+        max_depth=1,
+        max_candidates=5,
+    )
+
+    assert enriched.impact_paths is not None
+    candidate_by_ref = {
+        candidate.entity_ref: candidate for candidate in enriched.impact_paths.candidates
+    }
+    assert {
+        "ades:security:us:nasdaq:exm-ordinary-share",
+        "finance-us-ticker:EXM",
+    }.issubset(candidate_by_ref)
+    ticker_candidate = candidate_by_ref["finance-us-ticker:EXM"]
+    assert ticker_candidate.source_entity_refs == ["wikidata:Q123456"]
+    assert ticker_candidate.relationship_paths[0].edges[0].relation == "issuer_has_listed_ticker"
+    assert ticker_candidate.relationship_paths[0].edges[0].source_tier == "exchange"
+    assert ticker_candidate.relationship_paths[0].edges[0].source_url == (
+        "https://www.nasdaq.com/market-activity/stocks/exm"
+    )
+    source_entities = {
+        source.entity_ref: source for source in enriched.impact_paths.source_entities
+    }
+    assert source_entities["wikidata:Q123456"].entity_type == "legal_entity"
+    assert "finance-us-issuer:000EXM" in source_entities["wikidata:Q123456"].same_as_refs
 
 
 def test_expand_impact_paths_bridges_public_person_to_employer_ticker(

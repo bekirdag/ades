@@ -50,9 +50,7 @@ def _install_named_pack(storage_root: Path, pack_id: str, domain: str = "general
 
 
 def test_news_candidate_path_terminal_identity_supports_legacy_finance_refs() -> None:
-    jurisdiction, exchange, ticker, security_ids = _terminal_identity_parts(
-        "finance-us:equity:EXM"
-    )
+    jurisdiction, exchange, ticker, security_ids = _terminal_identity_parts("finance-us:equity:EXM")
 
     assert jurisdiction == "us"
     assert exchange is None
@@ -395,9 +393,7 @@ def test_news_analyze_endpoint_returns_normalized_contract(
     assert payload["candidate_paths"][0]["jurisdiction"] is None
     assert payload["candidate_paths"][0]["exchange"] is None
     assert payload["candidate_paths"][0]["ticker"] is None
-    assert payload["candidate_paths"][0]["security_ids"] == {
-        "ades_ref": "entity_crude_oil"
-    }
+    assert payload["candidate_paths"][0]["security_ids"] == {"ades_ref": "entity_crude_oil"}
     assert payload["candidate_paths"][0]["path_confidence"] == 0.92
     assert (
         payload["candidate_paths"][0]["weakest_edge_ref"]
@@ -1134,6 +1130,159 @@ def test_news_analyze_promotes_tradable_source_entities_to_terminals(
         "wikidata:QEXM",
         "finance-us-ticker:EXA",
     ]
+    assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
+def test_news_analyze_maps_legal_entity_to_terminal_ticker_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-legal-entity-terminal-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+    article_text = "Example Holdings beat earnings estimates and its shares rallied."
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        start = text.index("Example Holdings")
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Example Holdings",
+                    label="legal_entity",
+                    start=start,
+                    end=start + len("Example Holdings"),
+                    confidence=0.95,
+                    relevance=0.96,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="finance",
+                    ),
+                    link=EntityLink(
+                        entity_id="wikidata:Q123456",
+                        canonical_text="Example Holdings PLC",
+                        provider="ades",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="finance", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert "wikidata:Q123456" in set(entity_refs)
+        relationship_path = ImpactRelationshipPath(
+            path_depth=1,
+            edges=[
+                ImpactPathEdge(
+                    source_ref="wikidata:Q123456",
+                    target_ref="finance-us-ticker:EXM",
+                    relation="issuer_has_listed_ticker",
+                    evidence_level="direct",
+                    confidence=0.91,
+                    direction_hint="issuer_to_ticker",
+                    source_name="Example Exchange issuer directory",
+                    source_url="https://exchange.example/listings/exm",
+                    source_snapshot="2026-06-30",
+                    source_year=2026,
+                    source_tier="exchange",
+                    effective_from="2024-01-01",
+                )
+            ],
+        )
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-06-30",
+            artifact_hash="sha256:legal-entity-terminal",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="wikidata:Q123456",
+                    name="Example Holdings PLC",
+                    entity_type="legal_entity",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=False,
+                )
+            ],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref="finance-us-ticker:EXM",
+                    name="Example Holdings PLC",
+                    entity_type="ticker",
+                    evidence_level="shallow",
+                    confidence=0.88,
+                    source_entity_refs=["wikidata:Q123456"],
+                    relationship_paths=[relationship_path],
+                )
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Example Holdings beat earnings estimates",
+            "text": article_text,
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [candidate["entity_ref"] for candidate in payload["terminal_impact_candidates"]] == [
+        "finance-us-ticker:EXM"
+    ]
+    candidate = payload["terminal_impact_candidates"][0]
+    assert candidate["source_entity_refs"] == ["wikidata:Q123456"]
+    assert candidate["compatible_event_types"] == ["earnings_beat"]
+
+    candidate_paths = payload["candidate_paths"]
+    assert len(candidate_paths) == 1
+    path = candidate_paths[0]
+    assert path["terminal_ref"] == "finance-us-ticker:EXM"
+    assert path["terminal_type"] == "ticker"
+    assert path["terminal_name"] == "Example Holdings PLC"
+    assert path["jurisdiction"] == "us"
+    assert path["ticker"] == "EXM"
+    assert path["security_ids"] == {
+        "ades_ref": "finance-us-ticker:EXM",
+        "ticker": "EXM",
+    }
+    assert path["source_entity_refs"] == ["wikidata:Q123456"]
+    assert path["source_tiers"] == ["exchange"]
+    assert path["effective_from"] == "2024-01-01"
+    assert path["path_confidence"] == 0.88
+    assert path["weakest_edge_ref"] == (
+        "wikidata:Q123456->issuer_has_listed_ticker->finance-us-ticker:EXM"
+    )
+    assert path["weakest_edge_confidence"] == 0.91
+    assert path["weakest_edge"]["source_tier"] == "exchange"
+    assert path["weakest_edge"]["source_url"] == "https://exchange.example/listings/exm"
+    assert path["relationship_path"]["edges"][0]["relation"] == "issuer_has_listed_ticker"
+    assert path["artifact_ref"] == "sha256:legal-entity-terminal"
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 
