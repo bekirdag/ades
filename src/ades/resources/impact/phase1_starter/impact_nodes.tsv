@@ -1866,7 +1866,7 @@ ades:sector:ar:financial-services	Financial services	sector	finance-ar-en	false	
 ades:sector:ar:sme-credit	SME credit	sector	program-org-relationship-ar	false	true	"{""jurisdiction"": ""AR""}"	program-org-relationship-ar
 ades:security:ar:banco-patagonia-common-share	Banco Patagonia common share	security	finance-ar-en	false	true	"{""figi"": ""BBG000FC9YC9"", ""isin"": ""ARMERI013163"", ""jurisdiction"": ""AR"", ""ticker_symbol"": ""BPAT""}"	finance-ar-en,program-org-relationship-ar
 finance-ar-ticker:BPAT	BPAT	ticker	finance-ar-en	true	false	"{""isin"": ""ARMERI013163"", ""jurisdiction"": ""AR"", ""ticker_symbol"": ""BPAT""}"	finance-ar-en,program-org-relationship-ar
-ades:org:eu:european-commission	European Commission	government_body	finance-fr-en	false	true	"{""jurisdiction"": ""EU""}"	finance-fr-en,general-en
+ades:org:eu:european-commission	European Commission	government_body	finance-fr-en	false	true	"{""jurisdiction"": ""EU""}"	finance-de-en,finance-fr-en,general-en
 ades:org:fr:ministere-economie-finances	Ministry of Economy, Finance and Industrial and Digital Sovereignty	government_body	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
 ades:org:fr:ministere-transition-ecologique	Ministry for Ecological Transition	government_body	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en
 ades:sector:fr:banking	France banking	sector	finance-fr-en	false	true	"{""jurisdiction"": ""FR""}"	finance-fr-en,general-en

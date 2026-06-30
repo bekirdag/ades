@@ -86,8 +86,8 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
         )
 
     assert report.warnings == []
-    assert report.case_count == 23
-    assert report.empty_path_rate == 0.0435
+    assert report.case_count == 24
+    assert report.empty_path_rate == 0.0417
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -619,7 +619,7 @@ def test_starter_graph_includes_promoted_germany_relationships(tmp_path: Path) -
             )
         }
 
-    assert germany_edge_count == 89
+    assert germany_edge_count == 91
     assert tradable_rows == {
         "ades:impact:currency:eur": (1, 1),
         "ades:impact:rate:ecb-deposit-rate": (1, 0),
@@ -695,6 +695,13 @@ def test_starter_graph_includes_promoted_germany_relationships(tmp_path: Path) -
                 "ades:org:eu:airbus",
                 "ades:sector:de:aerospace",
                 "ades:sector:de:defense",
+            },
+        ),
+        (
+            "ades:org:eu:european-commission",
+            {
+                "ades:sector:de:climate-policy",
+                "ades:sector:de:industrial-policy",
             },
         ),
     ]:

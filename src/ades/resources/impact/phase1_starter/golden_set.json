@@ -309,6 +309,28 @@
       ]
     },
     {
+      "name": "germany_sap_boerse_bridge",
+      "entity_refs": [
+        "finance-de-issuer:DE0007164600"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-de-en"
+      ],
+      "expected_candidate_refs": [
+        "finance-de-ticker:SAP"
+      ],
+      "expected_passive_refs": [
+        "ades:sector:de:industrial-software",
+        "finance-de:boerse-frankfurt"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker",
+        "issuer_in_sector",
+        "ticker_listed_on_exchange"
+      ]
+    },
+    {
       "name": "negative_empty_refs",
       "entity_refs": [
         "ades:impact:unknown:not-in-graph"
