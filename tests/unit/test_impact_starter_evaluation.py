@@ -2064,12 +2064,16 @@ def test_starter_graph_includes_promoted_united_kingdom_relationships(
                 FROM impact_nodes
                 WHERE entity_ref IN (
                     'finance-uk-ticker:rr',
+                    'finance-uk-ticker:tw',
+                    'ades:legal-entity:gb:registered-company',
                     'ades:security:gb:lse:rr-ordinary-share',
+                    'ades:security:gb:lse:tw-ordinary-share',
                     'ades:impact:currency:gbp',
                     'ades:impact:rate:gb-bank-rate',
                     'ades:sovereign-bond:gb:gilt',
                     'ades:yield-curve:gb:gilt-yield-curve',
                     'finance-uk:ftse-100',
+                    'ades:sector:gb:homebuilders',
                     'ades:sector:gb:water-utilities'
                 )
                 """
@@ -2080,12 +2084,16 @@ def test_starter_graph_includes_promoted_united_kingdom_relationships(
     assert tradable_rows == {
         "ades:impact:currency:gbp": (1, 0),
         "ades:impact:rate:gb-bank-rate": (1, 0),
+        "ades:legal-entity:gb:registered-company": (0, 1),
+        "ades:sector:gb:homebuilders": (0, 1),
         "ades:sector:gb:water-utilities": (0, 1),
         "ades:security:gb:lse:rr-ordinary-share": (1, 0),
+        "ades:security:gb:lse:tw-ordinary-share": (1, 0),
         "ades:sovereign-bond:gb:gilt": (1, 0),
         "ades:yield-curve:gb:gilt-yield-curve": (1, 0),
         "finance-uk:ftse-100": (1, 0),
         "finance-uk-ticker:rr": (1, 0),
+        "finance-uk-ticker:tw": (1, 0),
     }
 
     def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
@@ -2141,6 +2149,27 @@ def test_starter_graph_includes_promoted_united_kingdom_relationships(
     assert ofwat_candidate_refs == set()
     assert "ades:sector:gb:water-utilities" in ofwat_passive_refs
     assert "finance-uk-ticker:svt" not in ofwat_candidate_refs
+
+    companies_house_candidate_refs, companies_house_passive_refs = expanded_refs(
+        "ades:registry:gb:companies-house"
+    )
+    assert companies_house_candidate_refs == set()
+    assert "ades:legal-entity:gb:registered-company" in companies_house_passive_refs
+    assert "finance-uk-ticker:rr" not in companies_house_candidate_refs
+
+    homebuilder_candidate_refs, homebuilder_passive_refs = expanded_refs(
+        "finance-uk-issuer:00296805"
+    )
+    assert homebuilder_candidate_refs == {
+        "ades:security:gb:lse:tw-ordinary-share",
+        "finance-uk-ticker:tw",
+    }
+    assert {
+        "ades:sector:gb:homebuilders",
+        "ades:sector:gb:mortgage-rates",
+        "finance-uk:lse",
+    }.issubset(homebuilder_passive_refs)
+    assert "finance-uk:ftse-100" not in homebuilder_candidate_refs
 
     equity_candidate_refs, equity_passive_refs = expanded_refs("ades:sector:gb:uk-equity-market")
     assert equity_candidate_refs == {"finance-uk:ftse-100"}
