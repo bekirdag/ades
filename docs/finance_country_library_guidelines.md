@@ -266,6 +266,141 @@ The parser should be country-aware where needed, especially for local role title
 
 If a source needs headless rendering, treat that as an operational dependency and document it in the upkeep instructions for the specific pack.
 
+## Reusable Country-Pack Source-Lane Template
+
+Use this template for every new `finance-<country>-en` source lane and for material source-lane rewrites. Copy the headings into the country-specific upkeep guide or planning note, fill in the concrete paths and commands, and keep the rows aligned with the canonical source-row schema rather than inventing country-specific columns.
+
+### 1. Lane Identity
+
+- country pack: `finance-<country>-en`
+- lane name: `<country>-<source-family>-<entity-or-relation-family>`
+- owned relation families: issuer-security, issuer-exposure, holding, product-org, brand-org, program-org, policy-sector, legal-regulatory-sector, country-sector-index, commodity-supply-chain, government-body-sector, or macro-currency-rates
+- source tier target: official, high-trust, medium-trust proposal, or low-trust proposal
+- promotion target: production graph, reviewed proposal queue, or research-only snapshot
+
+### 2. Source Row Location
+
+Record the durable location before writing parser code.
+
+- raw snapshot: `/mnt/githubActions/ades_big_data/pack_sources/raw/finance-country-en/<snapshot>/<country>/<lane>/`
+- reviewed source rows: `/mnt/githubActions/ades_big_data/pack_sources/source_rows/finance-country-en/<country>/<lane>/<snapshot>.tsv`
+- bundle output: `/mnt/githubActions/ades_big_data/pack_sources/bundles/finance-<country>-en-bundle`
+- generated runtime pack: `/mnt/githubActions/ades_big_data/generated_runtime_packs/finance-<country>-en`
+- manifest: `/mnt/githubActions/ades_big_data/manifests/finance-country-en/<country>/<lane>/<snapshot>.json`
+- repo fixture path, when a narrow fixture is needed: `tests/fixtures/finance_country/<country>/<lane>/`
+
+The manifest must point to every raw input file, reviewed source-row file, parser module, validation report, generated artifact, smoke output, replay input, replay output, and coverage report used for the lane.
+
+### 3. Source Row Contract
+
+Each production-candidate row must keep the canonical row fields intact: source and target refs, source and target types, relation, jurisdiction, source URL, source title, source tier, evidence, effective start and end dates, confidence, notes, fetched-at timestamp, content hash, review status, license status, license notes, and confidence basis.
+
+Rows are not production-ready until they also carry:
+
+- source row file path and row number in the validation report
+- normalized source and target refs that match the shared node-type schema
+- relation allowed by the shared relation schema
+- source-tier host recognition result
+- license decision and promotion decision
+- stale-date audit result for ownership, issuer, security, and other time-sensitive relations
+- fixture coverage and golden coverage markers when the row is intended for production
+
+### 4. Parser Hooks
+
+Define parser hooks before populating rows.
+
+- fetch hook: command or function that creates the raw snapshot and manifest entry
+- parse hook: deterministic parser module/function that maps raw input to canonical source rows
+- source-family hook: one of governance table, definition list, list item, exchange profile table, register information, bulk official dataset, or explicitly documented country-specific structured parser
+- normalization hook: shared ref builder for issuers, securities, tickers, organizations, people, regulators, government bodies, sectors, indexes, commodities, currencies, and rates proxies
+- validation hook: `validate_market_graph_source_lanes` or the lane-specific wrapper that calls it
+- build hook: bundle and graph-artifact command that consumes the reviewed rows
+- report hook: deterministic coverage report command that writes counts and gaps
+
+Do not use LLM-only extraction as a parser hook. LLM or search output may seed a proposal queue, but production parser hooks must be deterministic and backed by durable source files.
+
+### 5. Validation Gates
+
+Every lane must run validation before artifact build. The validation output must include row location, parser identity, source-tier policy, license policy, relation-schema status, node-type status, normalized-ref status, effective-date policy, stale audit status, conflict checks, promotion status, and warning samples.
+
+At minimum, validation must fail or block promotion for:
+
+- missing URL, source title, source tier, evidence, jurisdiction, confidence, fetched-at, content hash, review status, or license status
+- unrecognized source host or source tier that is not production-eligible
+- unclear or blocked licensing
+- invalid source or target node type for the relation
+- active parent conflicts, ticker/security conflicts, wrong exchange/country links, direct program-to-ticker shortcuts, sector-to-currency shortcuts, and expired edges
+- missing fixture or golden coverage for rows marked production-ready
+
+### 6. Artifact Build Gates
+
+A lane is not complete until the source rows are materialized into a generated artifact. Record the exact commands used for:
+
+```bash
+ades registry fetch-finance-country-sources \
+  --output-dir /mnt/githubActions/ades_big_data/pack_sources/raw/finance-country-en \
+  --snapshot YYYY-MM-DD \
+  --country-code <country>
+
+ades registry build-finance-country-bundles \
+  --snapshot-dir /mnt/githubActions/ades_big_data/pack_sources/raw/finance-country-en/YYYY-MM-DD \
+  --output-dir /mnt/githubActions/ades_big_data/pack_sources/bundles \
+  --country-code <country> \
+  --version <pack-version>
+
+ades registry generate-pack \
+  /mnt/githubActions/ades_big_data/pack_sources/bundles/finance-<country>-en-bundle \
+  --output-dir /mnt/githubActions/ades_big_data/generated_runtime_packs
+```
+
+The artifact report must record artifact ID, artifact version, artifact hash, build timestamp, git SHA when available, source-lane list, lane hashes, row counts, edge counts, node counts, validation summary, golden summary, warning counts, and promotion status.
+
+### 7. Tests
+
+Each source lane must add or update deterministic tests for:
+
+- parser input normalization and source-row output
+- source-row schema validation and promotion blocking
+- relation and node-type compatibility
+- conflict checks and stale relationship audit behavior when the lane emits time-sensitive edges
+- fixture coverage for representative rows
+- golden coverage proving at least one expected country-specific path reaches the intended terminal family
+- artifact-build coverage that proves the reviewed rows affect the derived bundle or graph
+
+### 8. Smoke
+
+Each source lane must define smoke checks against the generated artifact, not only against raw rows or parser output.
+
+- local `/v0/news/analyze` or equivalent CLI smoke for at least one article-shaped input
+- direct lookup smoke for a representative source entity and terminal entity
+- clean static-registry install or pull smoke when a static registry surface is part of the task
+- stale-artifact smoke that verifies the observed artifact hash or manifest timestamp matches the newly built artifact
+
+### 9. Replay
+
+If the lane is meant to improve BDYA no-terminal failures, attach a replay plan.
+
+- replay input: durable BDYA diagnostic IDs or a local unresolved-terminal replay fixture
+- expected path family before the fix: missing country pack, missing relation, missing terminal security, event incompatible, low tier, stale, conflicted, or macro gated
+- expected path family after the fix: accepted terminal candidate or a more specific rejection reason
+- replay command: local-only command; do not deploy or run production apply commands as part of the template
+- replay output: JSON or TSV saved next to the lane manifest
+
+### 10. Coverage Report
+
+Write a coverage report for every lane build. It must include:
+
+- source row counts by relation, source tier, review status, license status, promotion status, and source host
+- node and edge counts by type
+- fixture, golden, smoke, and replay coverage counts
+- source-row warning counts and relation-warning counts
+- blocked row counts with reason codes
+- stale or expired relationship counts
+- artifact ID, artifact hash, and generated pack path
+- known country-pack gaps and the next lane that should close each gap
+
+Do not promote a country lane if the report is missing, cannot be regenerated deterministically, or shows that the generated artifact is still older than the reviewed source rows.
+
 ## Build Order
 
 Recommended change order for a new country pack or a major enhancement:
