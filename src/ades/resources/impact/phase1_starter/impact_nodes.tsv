@@ -1953,3 +1953,17 @@ finance-jp-ticker:7203	7203	ticker	finance-jp-en	true	false	"{""exchange"": ""To
 finance-jp-ticker:8035	8035	ticker	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3571400005"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""8035""}"	finance-jp-en
 finance-jp-ticker:8306	8306	ticker	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3902900004"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""8306""}"	finance-jp-en
 finance-jp-ticker:9984	9984	ticker	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3436100006"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""9984""}"	finance-jp-en
+ades:org:eu:european-parliament	European Parliament	government_body	finance-eu-en	false	true	"{""jurisdiction"":""EU"",""same_as_refs"":[""wikidata:Q8889""]}"	finance-eu-en,general-en
+ades:regulator:eu:esma	European Securities and Markets Authority	regulator	finance-eu-en	false	true	"{""jurisdiction"":""EU"",""same_as_refs"":[""wikidata:Q1171967""]}"	finance-eu-en,general-en
+ades:law:eu:digital-markets-act	Digital Markets Act	law	finance-eu-en	false	true	"{""category"":""digital_platform_regulation"",""jurisdiction"":""EU""}"	finance-eu-en,general-en
+ades:law:eu:artificial-intelligence-act	Artificial Intelligence Act	law	finance-eu-en	false	true	"{""category"":""technology_regulation"",""jurisdiction"":""EU""}"	finance-eu-en,general-en
+ades:directive:eu:corporate-sustainability-reporting	Corporate Sustainability Reporting Directive	law	finance-eu-en	false	true	"{""category"":""directive"",""jurisdiction"":""EU""}"	finance-eu-en,general-en
+ades:directive:eu:emissions-trading-system	EU Emissions Trading System Directive	law	finance-eu-en	false	true	"{""category"":""directive"",""jurisdiction"":""EU""}"	finance-eu-en,general-en
+ades:regulation:eu:markets-in-crypto-assets	Markets in Crypto-Assets Regulation	regulation	finance-eu-en	false	true	"{""category"":""financial_market_regulation"",""jurisdiction"":""EU""}"	finance-eu-en,general-en
+ades:regulation:eu:carbon-border-adjustment-mechanism	Carbon Border Adjustment Mechanism	regulation	finance-eu-en	false	true	"{""category"":""climate_trade_regulation"",""jurisdiction"":""EU""}"	finance-eu-en,general-en
+ades:sector:eu:digital-platforms	EU digital platforms	sector	finance-eu-en	false	true	"{""jurisdiction"":""EU""}"	finance-eu-en,general-en
+ades:sector:eu:crypto-assets	EU crypto assets	sector	finance-eu-en	false	true	"{""jurisdiction"":""EU""}"	finance-eu-en,general-en
+ades:sector:eu:carbon-intensive-imports	EU carbon-intensive imports	sector	finance-eu-en	false	true	"{""jurisdiction"":""EU""}"	finance-eu-en,general-en
+ades:sector:eu:sustainability-reporting	EU sustainability reporting	sector	finance-eu-en	false	true	"{""jurisdiction"":""EU""}"	finance-eu-en,general-en
+ades:sector:eu:eu-equity-market	EU equity market	sector	finance-eu-en	false	true	"{""jurisdiction"":""EU""}"	finance-eu-en,general-en
+finance-eu:euro-stoxx-50	EURO STOXX 50	market_index	finance-eu-en	true	false	"{""jurisdiction"":""EU"",""ticker_symbol"":""SX5E""}"	finance-eu-en,general-en

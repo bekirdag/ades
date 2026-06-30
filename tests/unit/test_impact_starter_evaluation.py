@@ -126,6 +126,21 @@ def test_starter_source_manifest_has_required_fields():
     )
     assert payload["normalized_files"] == ["impact_nodes.tsv", "impact_edges.tsv"]
     assert len(payload["sources"]) >= 8
+    eu_overlay_source = next(
+        source
+        for source in payload["sources"]
+        if source["source_name"] == "European Union reviewed policy overlay source lane"
+    )
+    assert "European Commission" in eu_overlay_source["notes"]
+    assert "European Parliament" in eu_overlay_source["notes"]
+    assert "ESMA" in eu_overlay_source["notes"]
+    assert "DMA" in eu_overlay_source["notes"]
+    assert "CSRD" in eu_overlay_source["notes"]
+    assert "MiCA" in eu_overlay_source["notes"]
+    assert "CBAM" in eu_overlay_source["notes"]
+    assert "preserving country-specific exchange, issuer, security, ticker" in (
+        eu_overlay_source["notes"]
+    )
     russia_source = next(
         source
         for source in payload["sources"]
@@ -177,6 +192,110 @@ def test_starter_source_manifest_has_required_fields():
         assert source["normalized_output_allowed"] is True
         assert source["license_notes"]
         assert source["notes"]
+
+
+def test_starter_graph_includes_european_union_policy_overlay(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+    assert response.warnings == []
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        eu_nodes = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT entity_ref
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                  'ades:org:eu:european-parliament',
+                  'ades:regulator:eu:esma',
+                  'ades:law:eu:digital-markets-act',
+                  'ades:law:eu:artificial-intelligence-act',
+                  'ades:directive:eu:corporate-sustainability-reporting',
+                  'ades:directive:eu:emissions-trading-system',
+                  'ades:regulation:eu:markets-in-crypto-assets',
+                  'ades:regulation:eu:carbon-border-adjustment-mechanism',
+                  'ades:sector:eu:eu-equity-market',
+                  'finance-eu:euro-stoxx-50'
+                )
+                """
+            )
+        }
+        eu_overlay_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_eu_overlay/%'
+                """
+            ).fetchone()[0]
+        )
+
+    assert eu_nodes == {
+        "ades:org:eu:european-parliament",
+        "ades:regulator:eu:esma",
+        "ades:law:eu:digital-markets-act",
+        "ades:law:eu:artificial-intelligence-act",
+        "ades:directive:eu:corporate-sustainability-reporting",
+        "ades:directive:eu:emissions-trading-system",
+        "ades:regulation:eu:markets-in-crypto-assets",
+        "ades:regulation:eu:carbon-border-adjustment-mechanism",
+        "ades:sector:eu:eu-equity-market",
+        "finance-eu:euro-stoxx-50",
+    }
+    assert eu_overlay_edge_count >= 15
+
+    eu_index_expansion = expand_impact_paths(
+        ["ades:sector:eu:eu-equity-market"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=10,
+    )
+    assert {candidate.entity_ref for candidate in eu_index_expansion.candidates} == {
+        "finance-eu:euro-stoxx-50"
+    }
+
+    csrd_expansion = expand_impact_paths(
+        ["ades:directive:eu:corporate-sustainability-reporting"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=3,
+        max_candidates=10,
+    )
+    csrd_candidates = {candidate.entity_ref: candidate for candidate in csrd_expansion.candidates}
+    assert "finance-fr-ticker:CS" in csrd_candidates
+    csrd_path_relations = [
+        edge.relation
+        for edge in csrd_candidates["finance-fr-ticker:CS"].relationship_paths[0].edges
+    ]
+    assert csrd_path_relations == [
+        "issuer_exposed_to_policy_sector",
+        "issuer_has_listed_ticker",
+    ]
+
+    ai_act_expansion = expand_impact_paths(
+        ["ades:law:eu:artificial-intelligence-act"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=3,
+        max_candidates=10,
+    )
+    assert "finance-de-ticker:SAP" in {
+        candidate.entity_ref for candidate in ai_act_expansion.candidates
+    }
+
+    dma_expansion = expand_impact_paths(
+        ["ades:law:eu:digital-markets-act"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=3,
+        max_candidates=10,
+    )
+    assert not dma_expansion.candidates
+    assert {
+        "ades:sector:de:digital-platforms",
+        "ades:sector:it:digital-platforms",
+    }.issubset({path.entity_ref for path in dma_expansion.passive_paths})
 
 
 def test_starter_graph_includes_promoted_australia_relationships(tmp_path: Path) -> None:

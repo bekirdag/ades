@@ -10,6 +10,16 @@
   ],
   "sources": [
     {
+      "source_name": "European Union reviewed policy overlay source lane",
+      "source_url": "https://finance.ec.europa.eu/capital-markets-union-and-financial-markets_en",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_eu_overlay/2026-06-29/SOURCE_INVENTORY.md",
+      "source_year": 2026,
+      "refresh_policy": "refresh_on_eu_policy_overlay_update",
+      "normalized_output_allowed": true,
+      "license_notes": "Reviewed EU overlay stores only normalized relationship metadata; source URLs and evidence snippets are retained under /mnt/githubActions/ades_big_data.",
+      "notes": "Production-promoted EU policy overlay covering European Commission, European Parliament, ESMA, DMA, AI Act, CSRD, EU ETS, MiCA, and CBAM mappings to EU and member-state sectors, representative issuer-exposure paths, and Euro Stoxx/CAC/DAX/FTSE MIB index paths while preserving country-specific exchange, issuer, security, ticker, and sector evidence as authoritative."
+    },
+    {
       "source_name": "Russia reviewed program/org relationship source lane",
       "source_url": "https://iss.moex.com/iss/securities/SBER.json?iss.meta=off&iss.only=description",
       "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_russia/2026-06-29/build_summary_repaired.json",
