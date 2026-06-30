@@ -500,14 +500,14 @@
       "notes": "Promotes reviewed Saudi Arabia program/org/policy/market identity relationships for BDYA impact extraction guardrails."
     },
     {
-      "source_name": "Turkiye reviewed BIST/TCMB/BDDK/SPK/energy relationship source lane",
+      "source_name": "Turkiye reviewed BIST/CBRT-TCMB/CMB-SPK/BDDK/government relationship source lane",
       "source_url": "https://www.kap.org.tr/en/bist-sirketler",
       "source_snapshot": "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/program_org_relationship/generated/20260629Tprogram-org-tr-reviewed-bist-tcmb-banking-energy/manifest.json",
       "source_year": "2026",
       "refresh_policy": "manual reviewed source-lane refresh after official Turkiye source collection",
       "normalized_output_allowed": true,
-      "license_notes": "Official exchange, regulator, central bank, ministry, market-infrastructure, and issuer-disclosed evidence; blocked or ambiguous rows are kept in the review queue.",
-      "notes": "Promotes reviewed Turkiye program/org/policy/market identity relationships for BDYA impact extraction guardrails."
+      "license_notes": "Official Borsa Istanbul, CBRT/TCMB, CMB/SPK, BDDK, government ministry, market-infrastructure, and issuer-disclosed evidence; blocked or ambiguous rows are kept in the review queue.",
+      "notes": "Promotes reviewed Turkiye bank, industrial, telecom, government, macro-policy, and market-identity relationships for BDYA impact extraction guardrails without direct regulator-to-ticker or currency fanout."
     },
     {
       "source_name": "United Kingdom reviewed LSE/BoE/FCA/PRA/gilt relationship source lane",

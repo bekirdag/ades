@@ -93,9 +93,10 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert "saudi_sama_sar_repo_rate_bridge" in case_names
     assert "south_africa_sarb_zar_policy_rate_bridge" in case_names
     assert "south_korea_sk_hynix_krx_bok_bridge" in case_names
+    assert "turkiye_turk_telekom_bist_security_bridge" in case_names
     assert report.warnings == []
-    assert report.case_count == 32
-    assert report.empty_path_rate == 0.0312
+    assert report.case_count == 33
+    assert report.empty_path_rate == 0.0303
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -1935,7 +1936,9 @@ def test_starter_graph_includes_promoted_turkiye_relationships(tmp_path: Path) -
                     'ades:impact:index:bist-100',
                     'ades:impact:currency:try',
                     'ades:impact:rate:tr-policy-rate',
-                    'ades:sector:tr:aviation'
+                    'ades:sector:tr:aviation',
+                    'ades:security:tr:bist:ttkom-ordinary-share',
+                    'finance-tr-ticker:TTKOM'
                 )
                 """
             )
@@ -1948,7 +1951,9 @@ def test_starter_graph_includes_promoted_turkiye_relationships(tmp_path: Path) -
         "ades:impact:rate:tr-policy-rate": (1, 0),
         "ades:sector:tr:aviation": (0, 1),
         "ades:security:tr:bist:thyao-ordinary-share": (1, 0),
+        "ades:security:tr:bist:ttkom-ordinary-share": (1, 0),
         "finance-tr-ticker:THYAO": (1, 0),
+        "finance-tr-ticker:TTKOM": (1, 0),
     }
 
     def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
@@ -1983,6 +1988,14 @@ def test_starter_graph_includes_promoted_turkiye_relationships(tmp_path: Path) -
     assert "finance-tr-ticker:AKBNK" not in bddk_candidate_refs
     assert "ades:impact:currency:try" not in bddk_candidate_refs
 
+    cmb_candidate_refs, cmb_passive_refs = expanded_refs("ades:regulator:tr:spk")
+    assert cmb_candidate_refs == set()
+    assert {"ades:exchange:tr:bist", "ades:sector:tr:capital-markets"}.issubset(
+        cmb_passive_refs
+    )
+    assert "ades:impact:index:bist-100" not in cmb_candidate_refs
+    assert "finance-tr-ticker:THYAO" not in cmb_candidate_refs
+
     thyao_candidate_refs, thyao_passive_refs = expanded_refs("finance-tr-issuer:1107")
     assert thyao_candidate_refs == {
         "ades:security:tr:bist:thyao-ordinary-share",
@@ -2002,6 +2015,26 @@ def test_starter_graph_includes_promoted_turkiye_relationships(tmp_path: Path) -
     assert energy_candidate_refs == set()
     assert "ades:sector:tr:energy" in energy_passive_refs
     assert "ades:impact:currency:try" not in energy_candidate_refs
+
+    industry_candidate_refs, industry_passive_refs = expanded_refs(
+        "ades:government-body:tr:industry-ministry"
+    )
+    assert industry_candidate_refs == set()
+    assert "ades:sector:tr:industrial-manufacturing" in industry_passive_refs
+    assert "finance-tr-ticker:FROTO" not in industry_candidate_refs
+    assert "ades:impact:currency:try" not in industry_candidate_refs
+
+    ttkom_candidate_refs, ttkom_passive_refs = expanded_refs("finance-tr-issuer:1473")
+    assert ttkom_candidate_refs == {
+        "ades:security:tr:bist:ttkom-ordinary-share",
+        "finance-tr-ticker:TTKOM",
+    }
+    assert {
+        "ades:sector:tr:telecommunications",
+        "ades:telecom-network:tr:integrated-telecom-network",
+    }.issubset(ttkom_passive_refs)
+    assert "ades:impact:currency:try" not in ttkom_candidate_refs
+    assert "ades:impact:index:bist-100" not in ttkom_candidate_refs
 
     equity_candidate_refs, equity_passive_refs = expanded_refs("ades:sector:tr:bist-equity-market")
     assert equity_candidate_refs == {"ades:impact:index:bist-100"}
