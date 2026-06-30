@@ -96,6 +96,9 @@ class ImpactSourceLaneValidationResult:
     production_eligible_row_count: int = 0
     proposal_only_row_count: int = 0
     canonical_schema_warning_counts: dict[str, int] = field(default_factory=dict)
+    promotion_ready_row_count: int = 0
+    promotion_blocked_row_count: int = 0
+    production_promotion_warning_counts: dict[str, int] = field(default_factory=dict)
 
     def to_json_dict(self) -> dict[str, object]:
         return {
@@ -109,10 +112,13 @@ class ImpactSourceLaneValidationResult:
             "source_policy_counts": self.source_policy_counts,
             "production_eligible_row_count": self.production_eligible_row_count,
             "proposal_only_row_count": self.proposal_only_row_count,
+            "promotion_ready_row_count": self.promotion_ready_row_count,
+            "promotion_blocked_row_count": self.promotion_blocked_row_count,
             "source_warning_counts": self.source_warning_counts,
             "relation_warning_counts": self.relation_warning_counts,
             "node_warning_counts": self.node_warning_counts,
             "canonical_schema_warning_counts": self.canonical_schema_warning_counts,
+            "production_promotion_warning_counts": (self.production_promotion_warning_counts),
             "warning_samples": list(self.warning_samples),
         }
 
@@ -123,6 +129,10 @@ def _read_string(row: dict[str, str], key: str) -> str:
 
 def _parse_items(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in re.split(r"[,|]", value) if item.strip())
+
+
+def _has_value(row: dict[str, str], *keys: str) -> bool:
+    return any(_read_string(row, key) for key in keys)
 
 
 def _add_count(counts: dict[str, int], key: str) -> None:
@@ -160,6 +170,86 @@ def _read_first_string(row: dict[str, str], *keys: str) -> str:
         if value:
             return value
     return ""
+
+
+def _notes(row: dict[str, str]) -> str:
+    return _read_string(row, "notes").casefold()
+
+
+def _has_normalized_ref(ref: str) -> bool:
+    if not ref or any(ch.isspace() for ch in ref):
+        return False
+    return bool(re.match(r"^[A-Za-z][A-Za-z0-9+._-]*:[^:]+", ref))
+
+
+def _has_evidence_text(row: dict[str, str]) -> bool:
+    if _has_value(row, "evidence", "evidence_text", "evidence_span"):
+        return True
+    notes = _notes(row)
+    return "evidence=" in notes or "evidence:" in notes
+
+
+def _has_effective_date_policy(row: dict[str, str]) -> bool:
+    if _has_value(
+        row,
+        "effective_start_date",
+        "effective_from",
+        "effective_date",
+        "effective_as_of",
+    ):
+        return True
+    notes = _notes(row)
+    return any(
+        marker in notes
+        for marker in (
+            "effective_from=",
+            "effective_start_date=",
+            "effective_date=",
+            "open_ended",
+            "open-ended",
+        )
+    )
+
+
+def _is_high_priority_row(row: dict[str, str]) -> bool:
+    priority = _read_first_string(
+        row,
+        "priority",
+        "use_case_priority",
+        "promotion_priority",
+        "review_priority",
+    ).casefold()
+    if priority in {"p0", "p1", "high", "critical"}:
+        return True
+    notes = _notes(row)
+    return any(
+        marker in notes
+        for marker in (
+            "p0",
+            "p1",
+            "high priority",
+            "high-priority",
+            "golden_required",
+            "fixture_required",
+        )
+    )
+
+
+def _has_fixture_or_golden_coverage(row: dict[str, str]) -> bool:
+    coverage = _read_first_string(
+        row,
+        "fixture_coverage",
+        "fixture_path",
+        "golden_coverage",
+        "golden_path",
+        "golden_set",
+        "promotion_coverage",
+        "test_coverage",
+    ).casefold()
+    if coverage and coverage not in {"0", "false", "none", "no", "n/a"}:
+        return True
+    notes = _notes(row)
+    return "fixture=" in notes or "golden=" in notes or "coverage=" in notes
 
 
 def _canonical_country(value: str) -> str:
@@ -212,6 +302,25 @@ def _has_dual_class_explanation(row: dict[str, str]) -> bool:
             "dual-class",
             "share class",
             "multiple share classes",
+        )
+    )
+
+
+def _has_active_parent_resolution(row: dict[str, str]) -> bool:
+    text = " ".join(
+        _read_string(row, key)
+        for key in ("notes", "evidence", "confidence_basis", "conflict_group")
+        if _read_string(row, key)
+    ).casefold()
+    return any(
+        marker in text
+        for marker in (
+            "conflict resolved",
+            "explicitly resolved",
+            "resolved conflict",
+            "retained alongside",
+            "alongside holding edge",
+            "direct and indirect control",
         )
     )
 
@@ -301,6 +410,68 @@ def _append_relation_warning(
         )
 
 
+def _append_promotion_warning(
+    *,
+    warning: str,
+    path: Path,
+    line_number: int,
+    row: dict[str, str],
+    promotion_warning_counts: dict[str, int],
+    warning_samples: list[dict[str, object]],
+    sample_limit: int,
+) -> None:
+    _add_count(promotion_warning_counts, warning)
+    if len(warning_samples) < sample_limit:
+        warning_samples.append(
+            _warning_sample(
+                path=path,
+                line_number=line_number,
+                row=row,
+                scope="production_promotion",
+                warning=warning,
+            )
+        )
+
+
+def _production_promotion_warnings(
+    *,
+    row: dict[str, str],
+    source_ref: str,
+    target_ref: str,
+    relation: str,
+    source_tier: str,
+    production_required_warnings: Iterable[str],
+    canonical_warnings: Iterable[str],
+    source_warnings: Iterable[str],
+    relation_warnings: Iterable[str],
+) -> tuple[str, ...]:
+    warnings: list[str] = []
+    if not (source_ref and target_ref and relation):
+        warnings.append("missing_required_relationship_ref")
+    else:
+        if not _has_normalized_ref(source_ref):
+            warnings.append("unnormalized_source_ref")
+        if not _has_normalized_ref(target_ref):
+            warnings.append("unnormalized_target_ref")
+    if not is_source_tier_production_eligible(source_tier):
+        warnings.append("source_tier_not_production_eligible")
+    if tuple(canonical_warnings):
+        warnings.append("canonical_schema_warnings_present")
+    if tuple(production_required_warnings):
+        warnings.append("production_required_fields_missing")
+    if tuple(source_warnings):
+        warnings.append("source_warnings_present")
+    if tuple(relation_warnings):
+        warnings.append("relation_or_conflict_warnings_present")
+    if not _has_evidence_text(row):
+        warnings.append("missing_evidence_text")
+    if not _has_effective_date_policy(row):
+        warnings.append("missing_effective_date_policy")
+    if _is_high_priority_row(row) and not _has_fixture_or_golden_coverage(row):
+        warnings.append("missing_fixture_or_golden_coverage")
+    return tuple(dict.fromkeys(warnings))
+
+
 def _conflicting_active_mapping_warning(
     mapping: dict[str, str],
     *,
@@ -317,6 +488,21 @@ def _conflicting_active_mapping_warning(
     if existing != value:
         return warning
     return None
+
+
+def _active_parent_mapping_refs(
+    relation: str,
+    *,
+    source_ref: str,
+    target_ref: str,
+) -> tuple[str, str]:
+    if relation in {
+        "org_part_of_holding",
+        "org_subsidiary_of_org",
+        "holding_parent_is_issuer",
+    }:
+        return source_ref, target_ref
+    return target_ref, source_ref
 
 
 def _relationship_conflict_warnings(
@@ -350,13 +536,18 @@ def _relationship_conflict_warnings(
         return tuple(warnings)
 
     if relation_conflict_policy(relation) == _ACTIVE_PARENT_CONFLICT_POLICY:
+        child_ref, parent_ref = _active_parent_mapping_refs(
+            relation,
+            source_ref=source_ref,
+            target_ref=target_ref,
+        )
         warning = _conflicting_active_mapping_warning(
             active_parent_by_child,
-            key=target_ref,
-            value=source_ref,
-            warning=f"active_parent_conflict:{target_ref}",
+            key=child_ref,
+            value=parent_ref,
+            warning=f"active_parent_conflict:{child_ref}",
         )
-        if warning:
+        if warning and not _has_active_parent_resolution(row):
             warnings.append(warning)
 
     if relation not in _TICKER_SECURITY_CONFLICT_RELATIONS:
@@ -438,9 +629,12 @@ def validate_market_graph_source_lanes(
     relation_warning_counts: dict[str, int] = {}
     node_warning_counts: dict[str, int] = {}
     canonical_schema_warning_counts: dict[str, int] = {}
+    production_promotion_warning_counts: dict[str, int] = {}
     warning_samples: list[dict[str, object]] = []
     production_eligible_row_count = 0
     proposal_only_row_count = 0
+    promotion_ready_row_count = 0
+    promotion_blocked_row_count = 0
     today = date.today()
     active_parent_by_child: dict[str, str] = {}
     issuer_by_ticker: dict[str, str] = {}
@@ -480,6 +674,7 @@ def validate_market_graph_source_lanes(
             for row_index, row in enumerate(reader, start=2):
                 row_count += 1
                 production_required_warnings: tuple[str, ...] = ()
+                canonical_warnings: tuple[str, ...] = ()
                 if has_canonical_source_schema:
                     canonical_warnings = validate_canonical_source_row(row)
                     production_required_warnings = validate_production_required_source_row(row)
@@ -529,11 +724,14 @@ def validate_market_graph_source_lanes(
                     production_eligible_row_count += 1
                 else:
                     proposal_only_row_count += 1
-                for warning in validate_source_attribution(
-                    source_name=source_name or None,
-                    source_url=source_url or None,
-                    source_snapshot=source_snapshot or None,
-                ):
+                source_warnings = tuple(
+                    validate_source_attribution(
+                        source_name=source_name or None,
+                        source_url=source_url or None,
+                        source_snapshot=source_snapshot or None,
+                    )
+                )
+                for warning in source_warnings:
                     _add_count(source_warning_counts, warning)
                     if len(warning_samples) < sample_limit:
                         warning_samples.append(
@@ -547,6 +745,7 @@ def validate_market_graph_source_lanes(
                         )
                 if classified_source_tier == SOURCE_TIER_UNKNOWN and _host(source_url):
                     warning = "unrecognized_source_host"
+                    source_warnings = (*source_warnings, warning)
                     _add_count(source_warning_counts, warning)
                     if len(warning_samples) < sample_limit:
                         warning_samples.append(
@@ -559,6 +758,7 @@ def validate_market_graph_source_lanes(
                             )
                         )
 
+                relation_warnings: list[str] = []
                 for warning in validate_relation_metadata(
                     relation=relation,
                     configured_event_types=_parse_items(
@@ -570,6 +770,7 @@ def validate_market_graph_source_lanes(
                     source_node_type=source_type or None,
                     target_node_type=target_type or None,
                 ):
+                    relation_warnings.append(warning)
                     _append_relation_warning(
                         warning=warning,
                         path=path,
@@ -595,6 +796,7 @@ def validate_market_graph_source_lanes(
                     ticker_by_security=ticker_by_security,
                     tickers_by_security=tickers_by_security,
                 ):
+                    relation_warnings.append(warning)
                     _append_relation_warning(
                         warning=warning,
                         path=path,
@@ -604,6 +806,32 @@ def validate_market_graph_source_lanes(
                         warning_samples=warning_samples,
                         sample_limit=sample_limit,
                     )
+
+                promotion_warnings = _production_promotion_warnings(
+                    row=row,
+                    source_ref=source_ref,
+                    target_ref=target_ref,
+                    relation=relation,
+                    source_tier=source_tier,
+                    production_required_warnings=production_required_warnings,
+                    canonical_warnings=canonical_warnings,
+                    source_warnings=source_warnings,
+                    relation_warnings=relation_warnings,
+                )
+                if promotion_warnings:
+                    promotion_blocked_row_count += 1
+                    for warning in promotion_warnings:
+                        _append_promotion_warning(
+                            warning=warning,
+                            path=path,
+                            line_number=row_index,
+                            row=row,
+                            promotion_warning_counts=production_promotion_warning_counts,
+                            warning_samples=warning_samples,
+                            sample_limit=sample_limit,
+                        )
+                else:
+                    promotion_ready_row_count += 1
 
     return ImpactSourceLaneValidationResult(
         edge_tsv_paths=resolved_paths,
@@ -616,9 +844,12 @@ def validate_market_graph_source_lanes(
         source_policy_counts=_sorted_counts(source_policy_counts),
         production_eligible_row_count=production_eligible_row_count,
         proposal_only_row_count=proposal_only_row_count,
+        promotion_ready_row_count=promotion_ready_row_count,
+        promotion_blocked_row_count=promotion_blocked_row_count,
         source_warning_counts=_sorted_counts(source_warning_counts),
         relation_warning_counts=_sorted_counts(relation_warning_counts),
         node_warning_counts=_sorted_counts(node_warning_counts),
         canonical_schema_warning_counts=_sorted_counts(canonical_schema_warning_counts),
+        production_promotion_warning_counts=_sorted_counts(production_promotion_warning_counts),
         warning_samples=tuple(warning_samples),
     )

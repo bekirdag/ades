@@ -53,6 +53,9 @@ CANONICAL_EDGE_COLUMNS = [
     "confidence_basis",
     "exchange_ref",
     "exchange_country",
+    "priority",
+    "fixture_coverage",
+    "golden_coverage",
 ]
 
 
@@ -101,6 +104,9 @@ def _canonical_edge(overrides: dict[str, str]) -> dict[str, str]:
         "confidence_basis": "official source page",
         "exchange_ref": "",
         "exchange_country": "",
+        "priority": "",
+        "fixture_coverage": "",
+        "golden_coverage": "",
     }
     row.update(overrides)
     return row
@@ -126,7 +132,10 @@ def test_validate_market_graph_source_lanes_accepts_source_backed_row(
                 "source_year": "2026",
                 "refresh_policy": "monthly",
                 "pack_ids": "finance-uk-en",
-                "notes": "",
+                "notes": (
+                    "evidence=UK Parliament source backs the relationship. | "
+                    "effective_from=2026-01-01 | golden=starter-policy-sector"
+                ),
                 "compatible_event_types": "sector_policy_change",
                 "direction_preconditions": "sector_policy_event_signal",
             }
@@ -144,6 +153,9 @@ def test_validate_market_graph_source_lanes_accepts_source_backed_row(
     assert result.source_policy_counts == {"official_high_trust": 1}
     assert result.production_eligible_row_count == 1
     assert result.proposal_only_row_count == 0
+    assert result.promotion_ready_row_count == 1
+    assert result.promotion_blocked_row_count == 0
+    assert result.production_promotion_warning_counts == {}
 
 
 def test_validate_market_graph_source_lanes_distinguishes_source_tier_policy(
@@ -264,7 +276,14 @@ def test_validate_market_graph_source_lanes_counts_source_and_schema_warnings(
     assert result.production_eligible_row_count == 0
     assert result.proposal_only_row_count == 1
     assert result.relation_warning_counts == {"unknown_relation_schema": 1}
-    assert len(result.warning_samples) == 4
+    assert result.production_promotion_warning_counts == {
+        "missing_effective_date_policy": 1,
+        "missing_evidence_text": 1,
+        "relation_or_conflict_warnings_present": 1,
+        "source_tier_not_production_eligible": 1,
+        "source_warnings_present": 1,
+    }
+    assert len(result.warning_samples) == 9
 
 
 def test_validate_market_graph_source_lanes_keeps_missing_canonical_tier_proposal_only(
@@ -327,6 +346,12 @@ def test_validate_market_graph_source_lanes_keeps_missing_canonical_tier_proposa
     assert result.production_eligible_row_count == 0
     assert result.proposal_only_row_count == 1
     assert result.source_warning_counts == {}
+    assert result.promotion_blocked_row_count == 1
+    assert result.production_promotion_warning_counts == {
+        "canonical_schema_warnings_present": 1,
+        "production_required_fields_missing": 1,
+        "source_tier_not_production_eligible": 1,
+    }
 
 
 def test_validate_market_graph_source_lanes_blocks_incomplete_canonical_production_row(
@@ -388,6 +413,52 @@ def test_validate_market_graph_source_lanes_blocks_incomplete_canonical_producti
     assert result.source_policy_counts == {"official_high_trust": 1}
     assert result.production_eligible_row_count == 0
     assert result.proposal_only_row_count == 1
+    assert result.promotion_blocked_row_count == 1
+    assert result.production_promotion_warning_counts == {
+        "canonical_schema_warnings_present": 1,
+        "missing_evidence_text": 1,
+        "production_required_fields_missing": 1,
+    }
+
+
+def test_validate_market_graph_source_lanes_enforces_production_promotion_rules(
+    tmp_path: Path,
+) -> None:
+    edge_path = tmp_path / "canonical_edges.tsv"
+    _write_canonical_edges(
+        edge_path,
+        [
+            _canonical_edge(
+                {
+                    "priority": "P0",
+                    "golden_coverage": "tests/golden/policy_sector.jsonl",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "missing scheme",
+                    "source_tier": "reviewed_proposal",
+                    "evidence": "",
+                    "effective_start_date": "",
+                    "priority": "P0",
+                }
+            ),
+        ],
+    )
+
+    result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
+
+    assert result.promotion_ready_row_count == 1
+    assert result.promotion_blocked_row_count == 1
+    assert result.production_promotion_warning_counts == {
+        "canonical_schema_warnings_present": 1,
+        "missing_effective_date_policy": 1,
+        "missing_evidence_text": 1,
+        "missing_fixture_or_golden_coverage": 1,
+        "production_required_fields_missing": 1,
+        "source_tier_not_production_eligible": 1,
+        "unnormalized_source_ref": 1,
+    }
 
 
 def test_validate_market_graph_source_lanes_counts_node_type_warnings(
@@ -411,7 +482,10 @@ def test_validate_market_graph_source_lanes_counts_node_type_warnings(
                 "source_year": "2026",
                 "refresh_policy": "monthly",
                 "pack_ids": "finance-uk-en",
-                "notes": "",
+                "notes": (
+                    "evidence=UK Government source backs the relationship. | "
+                    "effective_from=2026-06-28"
+                ),
                 "compatible_event_types": "",
                 "direction_preconditions": "",
             }
@@ -477,19 +551,19 @@ def test_validate_market_graph_source_lanes_detects_relationship_conflicts(
         [
             _canonical_edge(
                 {
-                    "source_ref": "ades:holding:alpha",
-                    "source_type": "holding_company",
-                    "target_ref": "ades:org:operating-company",
-                    "target_type": "organization",
+                    "source_ref": "ades:org:operating-company",
+                    "source_type": "organization",
+                    "target_ref": "ades:holding:alpha",
+                    "target_type": "holding_company",
                     "relation": "org_part_of_holding",
                 }
             ),
             _canonical_edge(
                 {
-                    "source_ref": "ades:holding:beta",
-                    "source_type": "holding_company",
-                    "target_ref": "ades:org:operating-company",
-                    "target_type": "organization",
+                    "source_ref": "ades:org:operating-company",
+                    "source_type": "organization",
+                    "target_ref": "ades:holding:beta",
+                    "target_type": "holding_company",
                     "relation": "org_part_of_holding",
                 }
             ),
@@ -631,6 +705,40 @@ def test_validate_market_graph_source_lanes_ignores_expired_parent_conflicts(
     result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
 
     assert result.relation_warning_counts == {"expired_edge": 1}
+
+
+def test_validate_market_graph_source_lanes_allows_resolved_active_parent_conflict(
+    tmp_path: Path,
+) -> None:
+    edge_path = tmp_path / "canonical_edges.tsv"
+    _write_canonical_edges(
+        edge_path,
+        [
+            _canonical_edge(
+                {
+                    "source_ref": "ades:org:operating-company",
+                    "source_type": "organization",
+                    "target_ref": "ades:holding:alpha",
+                    "target_type": "holding_company",
+                    "relation": "org_part_of_holding",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:org:operating-company",
+                    "source_type": "organization",
+                    "target_ref": "ades:issuer:alpha",
+                    "target_type": "issuer",
+                    "relation": "org_subsidiary_of_org",
+                    "notes": "Conflict resolved: direct subsidiary edge retained alongside holding edge.",
+                }
+            ),
+        ],
+    )
+
+    result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
+
+    assert result.relation_warning_counts == {}
 
 
 def test_validate_market_graph_source_lanes_detects_security_ticker_exchange_conflicts(
