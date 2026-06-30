@@ -229,6 +229,26 @@
       ]
     },
     {
+      "name": "canada_royal_bank_tsx_bridge",
+      "entity_refs": [
+        "ades:issuer:ca:royal-bank-of-canada"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-ca-en"
+      ],
+      "expected_candidate_refs": [
+        "finance-ca-ticker:tsx:ry"
+      ],
+      "expected_passive_refs": [
+        "ades:exchange:ca:tsx"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker",
+        "ticker_listed_on_exchange"
+      ]
+    },
+    {
       "name": "brazil_bcb_brl_selic_bridge",
       "entity_refs": [
         "ades:org:br:bcb"
