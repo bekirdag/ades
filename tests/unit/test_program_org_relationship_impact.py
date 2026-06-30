@@ -2128,9 +2128,9 @@ def test_reviewed_russia_fixture_expands_moex_cbr_sanctions_and_flow_guardrails(
     assert validation.relation_warning_counts == {}
     assert validation.source_tier_counts == {
         "exchange": 98,
-        "government": 19,
+        "government": 20,
         "issuer_disclosed": 33,
-        "regulator": 15,
+        "regulator": 14,
     }
 
     assert result.artifact_path is not None

@@ -70,6 +70,17 @@ from .source_lane_validation import (
     ImpactSourceLaneValidationResult,
     validate_market_graph_source_lanes,
 )
+from .source_row_schema import (
+    CANONICAL_SOURCE_ROW_COLUMNS,
+    CANONICAL_SOURCE_ROW_FORMATS,
+    CANONICAL_SOURCE_ROW_SCHEMA_ID,
+    CANONICAL_SOURCE_ROW_FIELDS,
+    CANONICAL_SOURCE_ROW_REQUIRED_VALUE_COLUMNS,
+    SourceRowField,
+    canonical_source_row_schema,
+    row_uses_canonical_source_schema,
+    validate_canonical_source_row,
+)
 from .source_lane_inputs import (
     FinanceCountrySourceLaneInputDerivationResult,
     derive_finance_country_source_lane_inputs,
@@ -100,6 +111,12 @@ __all__ = [
     "REQUIRED_NEWS_STORY_RELATIONS",
     "RelationDefinition",
     "SourceAttribution",
+    "SourceRowField",
+    "CANONICAL_SOURCE_ROW_COLUMNS",
+    "CANONICAL_SOURCE_ROW_FORMATS",
+    "CANONICAL_SOURCE_ROW_SCHEMA_ID",
+    "CANONICAL_SOURCE_ROW_FIELDS",
+    "CANONICAL_SOURCE_ROW_REQUIRED_VALUE_COLUMNS",
     "build_market_graph_store",
     "build_finance_country_proxy_source_lane",
     "build_issuer_exposure_source_lane",
@@ -135,6 +152,9 @@ __all__ = [
     "starter_source_manifest_path",
     "validate_node_type_metadata",
     "validate_relation_metadata",
+    "canonical_source_row_schema",
+    "row_uses_canonical_source_schema",
+    "validate_canonical_source_row",
     "validate_market_graph_source_lanes",
     "validate_source_attribution",
 ]

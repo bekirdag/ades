@@ -15,6 +15,10 @@ from .source_catalog import (
     source_tier_policy_label,
     validate_source_attribution,
 )
+from .source_row_schema import (
+    row_uses_canonical_source_schema,
+    validate_canonical_source_row,
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +37,7 @@ class ImpactSourceLaneValidationResult:
     source_policy_counts: dict[str, int] = field(default_factory=dict)
     production_eligible_row_count: int = 0
     proposal_only_row_count: int = 0
+    canonical_schema_warning_counts: dict[str, int] = field(default_factory=dict)
 
     def to_json_dict(self) -> dict[str, object]:
         return {
@@ -49,6 +54,7 @@ class ImpactSourceLaneValidationResult:
             "source_warning_counts": self.source_warning_counts,
             "relation_warning_counts": self.relation_warning_counts,
             "node_warning_counts": self.node_warning_counts,
+            "canonical_schema_warning_counts": self.canonical_schema_warning_counts,
             "warning_samples": list(self.warning_samples),
         }
 
@@ -113,6 +119,7 @@ def validate_market_graph_source_lanes(
     source_warning_counts: dict[str, int] = {}
     relation_warning_counts: dict[str, int] = {}
     node_warning_counts: dict[str, int] = {}
+    canonical_schema_warning_counts: dict[str, int] = {}
     warning_samples: list[dict[str, object]] = []
     production_eligible_row_count = 0
     proposal_only_row_count = 0
@@ -144,8 +151,25 @@ def validate_market_graph_source_lanes(
     for path in resolved_paths:
         with path.open("r", encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle, delimiter="\t")
+            has_canonical_source_schema = row_uses_canonical_source_schema(
+                reader.fieldnames
+            )
             for row_index, row in enumerate(reader, start=2):
                 row_count += 1
+                if has_canonical_source_schema:
+                    for warning in validate_canonical_source_row(row):
+                        _add_count(canonical_schema_warning_counts, warning)
+                        if len(warning_samples) < sample_limit:
+                            warning_samples.append(
+                                _warning_sample(
+                                    path=path,
+                                    line_number=row_index,
+                                    row=row,
+                                    scope="canonical_schema",
+                                    warning=warning,
+                                )
+                            )
+
                 source_ref = _read_string(row, "source_ref")
                 target_ref = _read_string(row, "target_ref")
                 relation = _read_string(row, "relation")
@@ -157,7 +181,13 @@ def validate_market_graph_source_lanes(
                 source_name = _read_string(row, "source_name")
                 source_url = _read_string(row, "source_url")
                 source_snapshot = _read_string(row, "source_snapshot")
-                source_tier = classify_source_tier(source_name, source_url)
+                if has_canonical_source_schema:
+                    source_name = source_name or _read_string(row, "source_title")
+                    source_snapshot = source_snapshot or _read_string(row, "fetched_at")
+                    source_tier = _read_string(row, "source_tier")
+                else:
+                    source_tier = ""
+                source_tier = source_tier or classify_source_tier(source_name, source_url)
                 _add_count(source_tier_counts, source_tier)
                 source_policy = source_tier_policy_label(source_tier)
                 _add_count(source_policy_counts, source_policy)
@@ -217,5 +247,8 @@ def validate_market_graph_source_lanes(
         source_warning_counts=_sorted_counts(source_warning_counts),
         relation_warning_counts=_sorted_counts(relation_warning_counts),
         node_warning_counts=_sorted_counts(node_warning_counts),
+        canonical_schema_warning_counts=_sorted_counts(
+            canonical_schema_warning_counts
+        ),
         warning_samples=tuple(warning_samples),
     )
