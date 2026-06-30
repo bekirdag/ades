@@ -6,6 +6,7 @@ from ades.impact.source_row_schema import (
     CANONICAL_SOURCE_ROW_COLUMNS,
     CANONICAL_SOURCE_ROW_FORMATS,
     CANONICAL_SOURCE_ROW_REQUIRED_VALUE_COLUMNS,
+    LICENSE_STATUS_VALUES,
     PRODUCTION_REQUIRED_SOURCE_ROW_COLUMNS,
     canonical_source_row_schema,
     row_uses_canonical_source_schema,
@@ -33,6 +34,7 @@ def _canonical_row(**overrides: str) -> dict[str, str]:
         "fetched_at": "2026-06-30T09:00:00Z",
         "content_hash": "sha256:abc123",
         "review_status": "accepted",
+        "license_status": "allowed",
         "license_notes": "public sector source",
         "confidence_basis": "official government program page",
     }
@@ -75,11 +77,13 @@ def test_canonical_source_row_schema_defines_shared_tsv_jsonl_columns() -> None:
         "fetched_at",
         "content_hash",
         "review_status",
+        "license_status",
         "license_notes",
         "confidence_basis",
     )
     assert "effective_end_date" not in CANONICAL_SOURCE_ROW_REQUIRED_VALUE_COLUMNS
     assert "license_notes" not in CANONICAL_SOURCE_ROW_REQUIRED_VALUE_COLUMNS
+    assert "license_status" in CANONICAL_SOURCE_ROW_REQUIRED_VALUE_COLUMNS
     assert PRODUCTION_REQUIRED_SOURCE_ROW_COLUMNS == (
         "source_url",
         "source_tier",
@@ -87,8 +91,10 @@ def test_canonical_source_row_schema_defines_shared_tsv_jsonl_columns() -> None:
         "jurisdiction",
         "confidence",
         "effective_start_date",
+        "license_status",
     )
     assert tuple(schema["production_required_columns"]) == PRODUCTION_REQUIRED_SOURCE_ROW_COLUMNS
+    assert tuple(schema["license_status_values"]) == LICENSE_STATUS_VALUES
 
 
 def test_validate_canonical_source_row_accepts_complete_row() -> None:
@@ -103,6 +109,7 @@ def test_validate_canonical_source_row_reports_missing_and_invalid_values() -> N
         source_type="",
         confidence="1.5",
         review_status="pending",
+        license_status="maybe",
     )
     del row["content_hash"]
 
@@ -112,6 +119,7 @@ def test_validate_canonical_source_row_reports_missing_and_invalid_values() -> N
         "missing_value:content_hash",
         "invalid_confidence",
         "invalid_review_status",
+        "invalid_license_status",
     )
 
 
@@ -123,6 +131,7 @@ def test_validate_canonical_source_row_reports_missing_production_required_value
         jurisdiction="",
         confidence="",
         effective_start_date="",
+        license_status="",
     )
 
     assert validate_canonical_source_row(row) == (
@@ -132,6 +141,7 @@ def test_validate_canonical_source_row_reports_missing_production_required_value
         "missing_value:evidence",
         "missing_value:effective_start_date",
         "missing_value:confidence",
+        "missing_value:license_status",
     )
     assert validate_production_required_source_row(row) == (
         "missing_value:source_url",
@@ -140,6 +150,7 @@ def test_validate_canonical_source_row_reports_missing_production_required_value
         "missing_value:jurisdiction",
         "missing_value:confidence",
         "missing_value:effective_start_date",
+        "missing_value:license_status",
     )
 
 

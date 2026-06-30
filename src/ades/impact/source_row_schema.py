@@ -18,6 +18,15 @@ REVIEW_STATUS_VALUES = (
     REVIEW_STATUS_REJECTED,
     REVIEW_STATUS_OBSERVED,
 )
+LICENSE_STATUS_ALLOWED = "allowed"
+LICENSE_STATUS_UNCLEAR = "unclear"
+LICENSE_STATUS_RESTRICTED = "restricted"
+LICENSE_STATUS_VALUES = (
+    LICENSE_STATUS_ALLOWED,
+    LICENSE_STATUS_UNCLEAR,
+    LICENSE_STATUS_RESTRICTED,
+)
+PRODUCTION_ELIGIBLE_LICENSE_STATUSES = (LICENSE_STATUS_ALLOWED,)
 
 
 @dataclass(frozen=True)
@@ -54,6 +63,11 @@ CANONICAL_SOURCE_ROW_FIELDS = (
         "content_hash", True, "Stable hash of the fetched or normalized source content."
     ),
     SourceRowField("review_status", True, "Review state for promotion gates."),
+    SourceRowField(
+        "license_status",
+        True,
+        "Reviewed license state for production artifact eligibility.",
+    ),
     SourceRowField("license_notes", False, "License, reuse, or redistribution notes."),
     SourceRowField("confidence_basis", True, "Short reason supporting the confidence score."),
 )
@@ -69,6 +83,7 @@ PRODUCTION_REQUIRED_SOURCE_ROW_COLUMNS = (
     "jurisdiction",
     "confidence",
     "effective_start_date",
+    "license_status",
 )
 LEGACY_EDGE_SHARED_COLUMNS = {
     "source_ref",
@@ -93,6 +108,8 @@ def canonical_source_row_schema() -> dict[str, object]:
         "production_required_columns": list(PRODUCTION_REQUIRED_SOURCE_ROW_COLUMNS),
         "fields": [field.to_json_dict() for field in CANONICAL_SOURCE_ROW_FIELDS],
         "review_status_values": list(REVIEW_STATUS_VALUES),
+        "license_status_values": list(LICENSE_STATUS_VALUES),
+        "production_eligible_license_statuses": list(PRODUCTION_ELIGIBLE_LICENSE_STATUSES),
     }
 
 
@@ -131,6 +148,10 @@ def validate_canonical_source_row(row: Mapping[str, object]) -> tuple[str, ...]:
     if review_status and review_status not in REVIEW_STATUS_VALUES:
         warnings.append("invalid_review_status")
 
+    license_status = str(row.get("license_status") or "").strip().casefold()
+    if license_status and license_status not in LICENSE_STATUS_VALUES:
+        warnings.append("invalid_license_status")
+
     return tuple(warnings)
 
 
@@ -144,3 +165,24 @@ def validate_production_required_source_row(row: Mapping[str, object]) -> tuple[
         if not value:
             warnings.append(f"missing_value:{column}")
     return tuple(warnings)
+
+
+def normalize_license_status(value: object | None) -> str:
+    return str(value or "").strip().casefold().replace("-", "_").replace(" ", "_")
+
+
+def is_license_status_production_eligible(value: object | None) -> bool:
+    return normalize_license_status(value) in PRODUCTION_ELIGIBLE_LICENSE_STATUSES
+
+
+def production_license_warning(value: object | None) -> str | None:
+    license_status = normalize_license_status(value)
+    if not license_status or license_status == LICENSE_STATUS_UNCLEAR:
+        return "source_license_unclear"
+    if license_status == LICENSE_STATUS_RESTRICTED:
+        return "source_license_restricted"
+    if license_status not in LICENSE_STATUS_VALUES:
+        return "source_license_invalid"
+    if license_status not in PRODUCTION_ELIGIBLE_LICENSE_STATUSES:
+        return "source_license_not_production_eligible"
+    return None

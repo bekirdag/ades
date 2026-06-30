@@ -23,6 +23,9 @@ from .source_catalog import (
     validate_source_attribution,
 )
 from .source_row_schema import (
+    is_license_status_production_eligible,
+    normalize_license_status,
+    production_license_warning,
     row_uses_canonical_source_schema,
     validate_canonical_source_row,
     validate_production_required_source_row,
@@ -88,6 +91,7 @@ class ImpactSourceLaneValidationResult:
     relation_counts: dict[str, int]
     node_type_counts: dict[str, int]
     source_tier_counts: dict[str, int]
+    license_status_counts: dict[str, int]
     source_warning_counts: dict[str, int]
     relation_warning_counts: dict[str, int]
     node_warning_counts: dict[str, int]
@@ -109,6 +113,7 @@ class ImpactSourceLaneValidationResult:
             "relation_counts": self.relation_counts,
             "node_type_counts": self.node_type_counts,
             "source_tier_counts": self.source_tier_counts,
+            "license_status_counts": self.license_status_counts,
             "source_policy_counts": self.source_policy_counts,
             "production_eligible_row_count": self.production_eligible_row_count,
             "proposal_only_row_count": self.proposal_only_row_count,
@@ -440,6 +445,8 @@ def _production_promotion_warnings(
     target_ref: str,
     relation: str,
     source_tier: str,
+    license_status: str,
+    requires_license_status: bool,
     production_required_warnings: Iterable[str],
     canonical_warnings: Iterable[str],
     source_warnings: Iterable[str],
@@ -455,6 +462,9 @@ def _production_promotion_warnings(
             warnings.append("unnormalized_target_ref")
     if not is_source_tier_production_eligible(source_tier):
         warnings.append("source_tier_not_production_eligible")
+    license_warning = production_license_warning(license_status)
+    if requires_license_status and license_warning:
+        warnings.append(license_warning)
     if tuple(canonical_warnings):
         warnings.append("canonical_schema_warnings_present")
     if tuple(production_required_warnings):
@@ -624,6 +634,7 @@ def validate_market_graph_source_lanes(
     relation_counts: dict[str, int] = {}
     node_type_counts: dict[str, int] = {}
     source_tier_counts: dict[str, int] = {}
+    license_status_counts: dict[str, int] = {}
     source_policy_counts: dict[str, int] = {}
     source_warning_counts: dict[str, int] = {}
     relation_warning_counts: dict[str, int] = {}
@@ -715,10 +726,20 @@ def validate_market_graph_source_lanes(
                     source_tier = classify_source_tier(source_name, source_url)
                     classified_source_tier = source_tier
                 _add_count(source_tier_counts, source_tier)
+                license_status = _read_string(row, "license_status")
+                if has_canonical_source_schema:
+                    _add_count(
+                        license_status_counts,
+                        normalize_license_status(license_status) or "missing",
+                    )
                 source_policy = source_tier_policy_label(source_tier)
                 _add_count(source_policy_counts, source_policy)
                 if (
                     is_source_tier_production_eligible(source_tier)
+                    and (
+                        not has_canonical_source_schema
+                        or is_license_status_production_eligible(license_status)
+                    )
                     and not production_required_warnings
                 ):
                     production_eligible_row_count += 1
@@ -813,6 +834,8 @@ def validate_market_graph_source_lanes(
                     target_ref=target_ref,
                     relation=relation,
                     source_tier=source_tier,
+                    license_status=license_status,
+                    requires_license_status=has_canonical_source_schema,
                     production_required_warnings=production_required_warnings,
                     canonical_warnings=canonical_warnings,
                     source_warnings=source_warnings,
@@ -841,6 +864,7 @@ def validate_market_graph_source_lanes(
         relation_counts=_sorted_counts(relation_counts),
         node_type_counts=_sorted_counts(node_type_counts),
         source_tier_counts=_sorted_counts(source_tier_counts),
+        license_status_counts=_sorted_counts(license_status_counts),
         source_policy_counts=_sorted_counts(source_policy_counts),
         production_eligible_row_count=production_eligible_row_count,
         proposal_only_row_count=proposal_only_row_count,

@@ -49,6 +49,7 @@ CANONICAL_EDGE_COLUMNS = [
     "fetched_at",
     "content_hash",
     "review_status",
+    "license_status",
     "license_notes",
     "confidence_basis",
     "exchange_ref",
@@ -100,6 +101,7 @@ def _canonical_edge(overrides: dict[str, str]) -> dict[str, str]:
         "fetched_at": "2026-06-28T00:00:00Z",
         "content_hash": "sha256:abc123",
         "review_status": "accepted",
+        "license_status": "allowed",
         "license_notes": "public sector source",
         "confidence_basis": "official source page",
         "exchange_ref": "",
@@ -150,6 +152,7 @@ def test_validate_market_graph_source_lanes_accepts_source_backed_row(
     assert result.source_warning_counts == {}
     assert result.relation_warning_counts == {}
     assert result.source_tier_counts == {"government": 1}
+    assert result.license_status_counts == {}
     assert result.source_policy_counts == {"official_high_trust": 1}
     assert result.production_eligible_row_count == 1
     assert result.proposal_only_row_count == 0
@@ -308,6 +311,7 @@ def test_validate_market_graph_source_lanes_keeps_missing_canonical_tier_proposa
         "fetched_at",
         "content_hash",
         "review_status",
+        "license_status",
         "license_notes",
         "confidence_basis",
     ]
@@ -333,6 +337,7 @@ def test_validate_market_graph_source_lanes_keeps_missing_canonical_tier_proposa
                 "fetched_at": "2026-06-28T00:00:00Z",
                 "content_hash": "sha256:abc123",
                 "review_status": "accepted",
+                "license_status": "allowed",
                 "license_notes": "public sector source",
                 "confidence_basis": "official legislation page",
             }
@@ -376,6 +381,7 @@ def test_validate_market_graph_source_lanes_blocks_incomplete_canonical_producti
         "fetched_at",
         "content_hash",
         "review_status",
+        "license_status",
         "license_notes",
         "confidence_basis",
     ]
@@ -401,6 +407,7 @@ def test_validate_market_graph_source_lanes_blocks_incomplete_canonical_producti
                 "fetched_at": "2026-06-28T00:00:00Z",
                 "content_hash": "sha256:abc123",
                 "review_status": "accepted",
+                "license_status": "allowed",
                 "license_notes": "public sector source",
                 "confidence_basis": "official legislation page",
             }
@@ -419,6 +426,33 @@ def test_validate_market_graph_source_lanes_blocks_incomplete_canonical_producti
         "missing_evidence_text": 1,
         "production_required_fields_missing": 1,
     }
+
+
+def test_validate_market_graph_source_lanes_blocks_unclear_license_status(
+    tmp_path: Path,
+) -> None:
+    edge_path = tmp_path / "canonical_edges.tsv"
+    _write_canonical_edges(
+        edge_path,
+        [
+            _canonical_edge(
+                {
+                    "license_status": "unclear",
+                    "license_notes": "Terms require legal review before redistribution.",
+                }
+            ),
+        ],
+    )
+
+    result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
+
+    assert result.source_tier_counts == {"government": 1}
+    assert result.license_status_counts == {"unclear": 1}
+    assert result.production_eligible_row_count == 0
+    assert result.proposal_only_row_count == 1
+    assert result.promotion_ready_row_count == 0
+    assert result.promotion_blocked_row_count == 1
+    assert result.production_promotion_warning_counts == {"source_license_unclear": 1}
 
 
 def test_validate_market_graph_source_lanes_enforces_production_promotion_rules(

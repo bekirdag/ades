@@ -868,6 +868,7 @@ def test_cli_registry_validate_market_graph_source_lanes_calls_public_api(
             relation_counts={"law_affects_sector": 1},
             node_type_counts={},
             source_tier_counts={"government": 1},
+            license_status_counts={"allowed": 1},
             source_warning_counts={"missing_source_url": 1},
             relation_warning_counts={"unknown_relation_schema": 1},
             node_warning_counts={},
