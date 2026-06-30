@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 import re
 from typing import Iterable
@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 from .relationship_schema import (
     relation_conflict_policy,
+    relation_family_for_relation,
     validate_node_type_metadata,
     validate_relation_metadata,
 )
@@ -37,6 +38,7 @@ _TICKER_SECURITY_CONFLICT_RELATIONS = {
     "issuer_has_security",
     "security_has_ticker",
 }
+_STALE_RELATIONSHIP_MAX_AGE_DAYS = 730
 _EXCHANGE_RELATIONS = {
     "exchange_lists_security",
     "issuer_has_exchange_listing",
@@ -103,6 +105,8 @@ class ImpactSourceLaneValidationResult:
     promotion_ready_row_count: int = 0
     promotion_blocked_row_count: int = 0
     production_promotion_warning_counts: dict[str, int] = field(default_factory=dict)
+    stale_relationship_warning_counts: dict[str, int] = field(default_factory=dict)
+    stale_relationship_samples: tuple[dict[str, object], ...] = ()
 
     def to_json_dict(self) -> dict[str, object]:
         return {
@@ -124,6 +128,8 @@ class ImpactSourceLaneValidationResult:
             "node_warning_counts": self.node_warning_counts,
             "canonical_schema_warning_counts": self.canonical_schema_warning_counts,
             "production_promotion_warning_counts": (self.production_promotion_warning_counts),
+            "stale_relationship_warning_counts": self.stale_relationship_warning_counts,
+            "stale_relationship_samples": list(self.stale_relationship_samples),
             "warning_samples": list(self.warning_samples),
         }
 
@@ -213,6 +219,51 @@ def _has_effective_date_policy(row: dict[str, str]) -> bool:
             "open_ended",
             "open-ended",
         )
+    )
+
+
+def _extract_date_marker_from_notes(row: dict[str, str], markers: tuple[str, ...]) -> str:
+    notes = _read_string(row, "notes")
+    if not notes:
+        return ""
+    marker_pattern = "|".join(re.escape(marker) for marker in markers)
+    match = re.search(
+        rf"(?:{marker_pattern})\s*[:=]\s*(\d{{4}}-\d{{2}}-\d{{2}})",
+        notes,
+        flags=re.IGNORECASE,
+    )
+    return match.group(1) if match else ""
+
+
+def _effective_start_value(row: dict[str, str]) -> str:
+    return _read_first_string(
+        row,
+        "effective_start_date",
+        "effective_from",
+        "effective_date",
+        "effective_as_of",
+        "start_date",
+    ) or _extract_date_marker_from_notes(
+        row,
+        (
+            "effective_start_date",
+            "effective_from",
+            "effective_date",
+            "effective_as_of",
+            "start_date",
+        ),
+    )
+
+
+def _effective_end_value(row: dict[str, str]) -> str:
+    return _read_first_string(
+        row,
+        "effective_end_date",
+        "effective_to",
+        "end_date",
+    ) or _extract_date_marker_from_notes(
+        row,
+        ("effective_end_date", "effective_to", "end_date"),
     )
 
 
@@ -354,6 +405,95 @@ def _active_edge_warning(row: dict[str, str], *, today: date) -> str | None:
     return None
 
 
+def _stale_relationship_category(
+    *,
+    relation: str,
+    source_type: str,
+    target_type: str,
+) -> str:
+    family = relation_family_for_relation(relation)
+    if (
+        family in {"organization_control", "person_to_issuer"}
+        or "owned" in relation
+        or "ownership" in relation
+        or "holding" in relation
+        or "subsidiary" in relation
+    ):
+        return "ownership"
+    if (
+        source_type == "security"
+        or target_type == "security"
+        or "security" in relation
+        or "ticker" in relation
+        or "listing" in relation
+    ):
+        return "security"
+    if (
+        source_type == "issuer"
+        or target_type == "issuer"
+        or relation.startswith("issuer_")
+        or "_issuer" in relation
+    ):
+        return "issuer"
+    return ""
+
+
+def _stale_relationship_warnings(
+    *,
+    row: dict[str, str],
+    relation: str,
+    source_type: str,
+    target_type: str,
+    today: date,
+) -> tuple[str, ...]:
+    category = _stale_relationship_category(
+        relation=relation,
+        source_type=source_type,
+        target_type=target_type,
+    )
+    if not category:
+        return ()
+
+    warnings: list[str] = []
+    effective_end = _parse_iso_date(_effective_end_value(row))
+    if effective_end is not None and effective_end < today:
+        warnings.append(f"expired_{category}_relationship")
+
+    effective_start = _parse_iso_date(_effective_start_value(row))
+    if (
+        effective_start is not None
+        and effective_end is None
+        and effective_start < today - timedelta(days=_STALE_RELATIONSHIP_MAX_AGE_DAYS)
+    ):
+        warnings.append(f"suspiciously_old_{category}_relationship")
+    if effective_start is None and effective_end is None and category == "ownership":
+        warnings.append("missing_effective_date_policy_ownership_relationship")
+    return tuple(dict.fromkeys(warnings))
+
+
+def _stale_relationship_sample(
+    *,
+    path: Path,
+    line_number: int,
+    row: dict[str, str],
+    warning: str,
+) -> dict[str, object]:
+    sample = _warning_sample(
+        path=path,
+        line_number=line_number,
+        row=row,
+        scope="stale_relationship",
+        warning=warning,
+    )
+    sample.update(
+        {
+            "effective_start": _effective_start_value(row) or None,
+            "effective_end": _effective_end_value(row) or None,
+        }
+    )
+    return sample
+
+
 def _wrong_exchange_country_warning(row: dict[str, str], relation: str) -> str | None:
     if relation not in _EXCHANGE_RELATIONS and "ticker" not in relation:
         return None
@@ -451,6 +591,7 @@ def _production_promotion_warnings(
     canonical_warnings: Iterable[str],
     source_warnings: Iterable[str],
     relation_warnings: Iterable[str],
+    stale_relationship_warnings: Iterable[str],
 ) -> tuple[str, ...]:
     warnings: list[str] = []
     if not (source_ref and target_ref and relation):
@@ -473,6 +614,8 @@ def _production_promotion_warnings(
         warnings.append("source_warnings_present")
     if tuple(relation_warnings):
         warnings.append("relation_or_conflict_warnings_present")
+    if tuple(stale_relationship_warnings):
+        warnings.append("stale_relationship_warnings_present")
     if not _has_evidence_text(row):
         warnings.append("missing_evidence_text")
     if not _has_effective_date_policy(row):
@@ -641,7 +784,9 @@ def validate_market_graph_source_lanes(
     node_warning_counts: dict[str, int] = {}
     canonical_schema_warning_counts: dict[str, int] = {}
     production_promotion_warning_counts: dict[str, int] = {}
+    stale_relationship_warning_counts: dict[str, int] = {}
     warning_samples: list[dict[str, object]] = []
+    stale_relationship_samples: list[dict[str, object]] = []
     production_eligible_row_count = 0
     proposal_only_row_count = 0
     promotion_ready_row_count = 0
@@ -828,6 +973,25 @@ def validate_market_graph_source_lanes(
                         sample_limit=sample_limit,
                     )
 
+                stale_relationship_warnings = _stale_relationship_warnings(
+                    row=row,
+                    relation=relation,
+                    source_type=canonical_source_type,
+                    target_type=canonical_target_type,
+                    today=today,
+                )
+                for warning in stale_relationship_warnings:
+                    _add_count(stale_relationship_warning_counts, warning)
+                    if len(stale_relationship_samples) < sample_limit:
+                        stale_relationship_samples.append(
+                            _stale_relationship_sample(
+                                path=path,
+                                line_number=row_index,
+                                row=row,
+                                warning=warning,
+                            )
+                        )
+
                 promotion_warnings = _production_promotion_warnings(
                     row=row,
                     source_ref=source_ref,
@@ -840,6 +1004,7 @@ def validate_market_graph_source_lanes(
                     canonical_warnings=canonical_warnings,
                     source_warnings=source_warnings,
                     relation_warnings=relation_warnings,
+                    stale_relationship_warnings=stale_relationship_warnings,
                 )
                 if promotion_warnings:
                     promotion_blocked_row_count += 1
@@ -875,5 +1040,7 @@ def validate_market_graph_source_lanes(
         node_warning_counts=_sorted_counts(node_warning_counts),
         canonical_schema_warning_counts=_sorted_counts(canonical_schema_warning_counts),
         production_promotion_warning_counts=_sorted_counts(production_promotion_warning_counts),
+        stale_relationship_warning_counts=_sorted_counts(stale_relationship_warning_counts),
+        stale_relationship_samples=tuple(stale_relationship_samples),
         warning_samples=tuple(warning_samples),
     )

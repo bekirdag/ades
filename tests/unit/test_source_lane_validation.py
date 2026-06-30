@@ -741,6 +741,135 @@ def test_validate_market_graph_source_lanes_ignores_expired_parent_conflicts(
     assert result.relation_warning_counts == {"expired_edge": 1}
 
 
+def test_validate_market_graph_source_lanes_reports_stale_relationship_audit(
+    tmp_path: Path,
+) -> None:
+    edge_path = tmp_path / "canonical_edges.tsv"
+    _write_canonical_edges(
+        edge_path,
+        [
+            _canonical_edge(
+                {
+                    "source_ref": "ades:org:operating-alpha",
+                    "source_type": "organization",
+                    "target_ref": "ades:holding:alpha",
+                    "target_type": "holding_company",
+                    "relation": "org_part_of_holding",
+                    "effective_start_date": "2000-01-01",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:org:operating-beta",
+                    "source_type": "organization",
+                    "target_ref": "ades:holding:beta",
+                    "target_type": "holding_company",
+                    "relation": "org_part_of_holding",
+                    "effective_end_date": "2020-01-01",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:org:operating-gamma",
+                    "source_type": "organization",
+                    "target_ref": "ades:holding:gamma",
+                    "target_type": "holding_company",
+                    "relation": "org_part_of_holding",
+                    "effective_start_date": "",
+                    "effective_end_date": "",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:issuer:alpha",
+                    "source_type": "issuer",
+                    "target_ref": "ades:security:alpha-common",
+                    "target_type": "security",
+                    "relation": "issuer_has_security",
+                    "effective_start_date": "2000-01-01",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:issuer:bravo",
+                    "source_type": "issuer",
+                    "target_ref": "ades:security:bravo-common",
+                    "target_type": "security",
+                    "relation": "issuer_has_security",
+                    "effective_end_date": "2020-01-01",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:issuer:beta",
+                    "source_type": "issuer",
+                    "target_ref": "ades:sector:mining",
+                    "target_type": "sector",
+                    "relation": "issuer_in_sector",
+                    "effective_start_date": "2001-01-01",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:issuer:delta",
+                    "source_type": "issuer",
+                    "target_ref": "ades:sector:banking",
+                    "target_type": "sector",
+                    "relation": "issuer_in_sector",
+                    "effective_end_date": "2020-01-01",
+                }
+            ),
+        ],
+    )
+
+    result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
+    payload = result.to_json_dict()
+
+    assert result.stale_relationship_warning_counts == {
+        "expired_issuer_relationship": 1,
+        "expired_ownership_relationship": 1,
+        "expired_security_relationship": 1,
+        "missing_effective_date_policy_ownership_relationship": 1,
+        "suspiciously_old_issuer_relationship": 1,
+        "suspiciously_old_ownership_relationship": 1,
+        "suspiciously_old_security_relationship": 1,
+    }
+    assert result.production_promotion_warning_counts == {
+        "canonical_schema_warnings_present": 1,
+        "missing_effective_date_policy": 1,
+        "production_required_fields_missing": 1,
+        "relation_or_conflict_warnings_present": 3,
+        "stale_relationship_warnings_present": 7,
+    }
+    assert payload["stale_relationship_warning_counts"] == (
+        result.stale_relationship_warning_counts
+    )
+    stale_samples = {sample["warning"]: sample for sample in payload["stale_relationship_samples"]}
+    assert sorted(stale_samples) == sorted(result.stale_relationship_warning_counts)
+    assert stale_samples["suspiciously_old_ownership_relationship"] == {
+        "path": str(edge_path.resolve()),
+        "line": 2,
+        "scope": "stale_relationship",
+        "warning": "suspiciously_old_ownership_relationship",
+        "source_ref": "ades:org:operating-alpha",
+        "target_ref": "ades:holding:alpha",
+        "entity_ref": None,
+        "entity_type": None,
+        "relation": "org_part_of_holding",
+        "effective_start": "2000-01-01",
+        "effective_end": None,
+    }
+    assert stale_samples["expired_security_relationship"]["effective_end"] == "2020-01-01"
+    assert stale_samples["suspiciously_old_security_relationship"]["effective_start"] == (
+        "2000-01-01"
+    )
+    assert stale_samples["expired_issuer_relationship"]["relation"] == "issuer_in_sector"
+    assert (
+        stale_samples["missing_effective_date_policy_ownership_relationship"]["effective_start"]
+        is None
+    )
+
+
 def test_validate_market_graph_source_lanes_allows_resolved_active_parent_conflict(
     tmp_path: Path,
 ) -> None:
