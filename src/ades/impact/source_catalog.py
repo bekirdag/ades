@@ -593,6 +593,7 @@ _ISSUER_DISCLOSED_HOST_FRAGMENTS = (
     "westpac.com.au",
     "anz.com.au",
     "macquarie.com",
+    "tesla.com",
     "woodside.com",
     "riotinto.com",
     "telstra.com.au",

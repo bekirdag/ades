@@ -93,10 +93,11 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert "saudi_sama_sar_repo_rate_bridge" in case_names
     assert "south_africa_sarb_zar_policy_rate_bridge" in case_names
     assert "south_korea_sk_hynix_krx_bok_bridge" in case_names
+    assert "tesla_supercharger_product_org_bridge" in case_names
     assert "turkiye_turk_telekom_bist_security_bridge" in case_names
     assert report.warnings == []
-    assert report.case_count == 33
-    assert report.empty_path_rate == 0.0303
+    assert report.case_count == 34
+    assert report.empty_path_rate == 0.0294
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -2201,6 +2202,23 @@ def test_starter_graph_includes_promoted_united_states_relationships(
                 """
             ).fetchone()[0]
         )
+        source_backed_counts = {
+            str(row[0]): int(row[1])
+            for row in connection.execute(
+                """
+                SELECT relation, COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_united_states/%'
+                  AND relation IN (
+                    'issuer_has_security',
+                    'product_owned_by_org',
+                    'security_has_figi',
+                    'security_listed_on_exchange'
+                  )
+                GROUP BY relation
+                """
+            )
+        }
         tradable_rows = {
             str(row[0]): tuple(row[1:])
             for row in connection.execute(
@@ -2212,27 +2230,51 @@ def test_starter_graph_includes_promoted_united_states_relationships(
                     'ades:interest-rate:us:fed-funds-target-range',
                     'ades:interest-rate:us:sofr',
                     'ades:treasury-security:us:treasury-bill',
+                    'ades:product:us:tesla-supercharger',
                     'ades:security:us:nvda:common-stock',
                     'finance-us-ticker:NVDA',
                     'ades:security:us:jpm:common-stock',
-                    'finance-us-ticker:JPM'
+                    'finance-us-ticker:JPM',
+                    'ades:security:us:tsla:common-stock',
+                    'finance-us-ticker:TSLA'
                 )
                 """
             )
         }
+        tsla_security_identifiers = json.loads(
+            str(
+                connection.execute(
+                    """
+                    SELECT identifiers_json
+                    FROM impact_nodes
+                    WHERE entity_ref = 'ades:security:us:tsla:common-stock'
+                    """
+                ).fetchone()[0]
+            )
+        )
 
-    assert united_states_edge_count == 200
+    assert united_states_edge_count == 202
     assert exchange_fanout_count == 0
+    assert source_backed_counts == {
+        "issuer_has_security": 22,
+        "product_owned_by_org": 1,
+        "security_has_figi": 1,
+        "security_listed_on_exchange": 22,
+    }
     assert tradable_rows == {
         "ades:impact:currency:usd": (1, 1),
         "ades:interest-rate:us:fed-funds-target-range": (1, 0),
         "ades:interest-rate:us:sofr": (1, 0),
+        "ades:product:us:tesla-supercharger": (0, 1),
         "ades:security:us:jpm:common-stock": (1, 0),
         "ades:security:us:nvda:common-stock": (1, 0),
+        "ades:security:us:tsla:common-stock": (1, 0),
         "ades:treasury-security:us:treasury-bill": (1, 0),
         "finance-us-ticker:JPM": (1, 0),
         "finance-us-ticker:NVDA": (1, 0),
+        "finance-us-ticker:TSLA": (1, 0),
     }
+    assert tsla_security_identifiers["openfigi_composite_figi"] == "BBG000N9MNX3"
 
     def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
         expansion = expand_impact_paths(
@@ -2310,3 +2352,18 @@ def test_starter_graph_includes_promoted_united_states_relationships(
     }.issubset(jpm_passive_refs)
     assert "finance-us-ticker:BAC" not in jpm_candidate_refs
     assert "ades:impact:currency:usd" not in jpm_candidate_refs
+
+    tsla_product_candidate_refs, tsla_product_passive_refs = expanded_refs(
+        "ades:product:us:tesla-supercharger"
+    )
+    assert tsla_product_candidate_refs == {
+        "ades:security:us:tsla:common-stock",
+        "finance-us-ticker:TSLA",
+    }
+    assert {
+        "ades:sector:us:autos",
+        "finance-us-issuer:0001318605",
+        "finance-us:nasdaq",
+        "sec:cik:0001318605",
+    }.issubset(tsla_product_passive_refs)
+    assert "ades:impact:currency:usd" not in tsla_product_candidate_refs

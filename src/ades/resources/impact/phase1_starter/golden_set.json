@@ -575,6 +575,29 @@
       ]
     },
     {
+      "name": "tesla_supercharger_product_org_bridge",
+      "entity_refs": [
+        "ades:product:us:tesla-supercharger"
+      ],
+      "enabled_packs": [
+        "finance-us-en",
+        "program-org-relationship-us-reviewed-20260629"
+      ],
+      "expected_candidate_refs": [
+        "ades:security:us:tsla:common-stock",
+        "finance-us-ticker:TSLA"
+      ],
+      "expected_passive_refs": [
+        "finance-us-issuer:0001318605",
+        "sec:cik:0001318605"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker",
+        "issuer_has_security",
+        "product_owned_by_org"
+      ]
+    },
+    {
       "name": "toyota_jpx_issuer_ticker_security_bridge",
       "entity_refs": [
         "finance-jp-issuer:7203",

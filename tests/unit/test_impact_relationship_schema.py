@@ -1576,6 +1576,10 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
         "https://investor.turkishairlines.com/en",
     ) == (SOURCE_TIER_ISSUER_DISCLOSED)
     assert classify_source_tier(
+        "Tesla official Supercharger product page",
+        "https://www.tesla.com/supercharger",
+    ) == (SOURCE_TIER_ISSUER_DISCLOSED)
+    assert classify_source_tier(
         "Bank of England monetary policy",
         "https://www.bankofengland.co.uk/monetary-policy",
     ) == (SOURCE_TIER_REGULATOR)
@@ -1614,6 +1618,9 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
         SOURCE_TIER_UNKNOWN
     )
     assert classify_source_tier("OpenFIGI mirror", "https://openfigi.com.evil.invalid/api") == (
+        SOURCE_TIER_UNKNOWN
+    )
+    assert classify_source_tier("Tesla mirror", "https://tesla.com.evil.invalid/supercharger") == (
         SOURCE_TIER_UNKNOWN
     )
     assert classify_source_tier("blog", "https://unknown.example/source") == (SOURCE_TIER_UNKNOWN)
