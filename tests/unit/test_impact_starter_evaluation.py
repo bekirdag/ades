@@ -86,8 +86,8 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
         )
 
     assert report.warnings == []
-    assert report.case_count == 21
-    assert report.empty_path_rate == 0.0476
+    assert report.case_count == 22
+    assert report.empty_path_rate == 0.0455
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -98,9 +98,11 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert report.per_relation_family_recall["sanction_affects_commodity"] == 1.0
     assert report.per_relation_family_recall["tanker_sanctions_affects_commodity"] == 1.0
     assert report.per_relation_family_recall["chokepoint_affects_sector"] == 1.0
+    assert report.per_relation_family_recall["holding_company_controls_public_issuer"] == 1.0
     assert report.per_relation_family_recall["industrial_metal_affects_sector"] == 1.0
     assert report.per_relation_family_recall["issuer_has_listed_ticker"] == 1.0
     assert report.per_relation_family_recall["person_affects_employer_ticker"] == 1.0
+    assert report.per_relation_family_recall["state_body_holds_ownership_stake"] == 1.0
 
 
 def test_starter_source_manifest_has_required_fields():
@@ -377,7 +379,7 @@ def test_starter_graph_includes_promoted_china_relationships(tmp_path: Path) -> 
             )
         }
 
-    assert china_edge_count == 81
+    assert china_edge_count == 83
     assert tradable_rows == {
         "finance-cn:csi-300": (1, 0),
         "ades:impact:currency:cny": (1, 0),
@@ -414,6 +416,19 @@ def test_starter_graph_includes_promoted_china_relationships(tmp_path: Path) -> 
 
     equity_candidate_refs, _ = expanded_refs("ades:sector:cn:mainland-equity-market")
     assert equity_candidate_refs == {"finance-cn:csi-300"}
+
+    sasac_candidate_refs, sasac_passive_refs = expanded_refs(
+        "ades:org:cn:state-owned-assets-supervision-and-administration-commission"
+    )
+    assert {
+        "ades:security:cn:sse:600941-ashare",
+        "ades:security:hk:hkex:00941-hshare",
+        "finance-cn-ticker:600941",
+        "finance-hk-ticker:hkex:00941",
+    }.issubset(sasac_candidate_refs)
+    assert "ades:holding:cn:china-mobile-communications-group" in sasac_passive_refs
+    assert "finance-cn-issuer:600941" in sasac_passive_refs
+    assert "finance-cn-ticker:601988" not in sasac_candidate_refs
 
     no_policy_candidate_refs = {
         "ades:impact:currency:cny",

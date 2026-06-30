@@ -267,6 +267,26 @@
       ]
     },
     {
+      "name": "china_mobile_sasac_holding_to_mainland_hk_tickers",
+      "entity_refs": [
+        "ades:org:cn:state-owned-assets-supervision-and-administration-commission"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-cn-en",
+        "finance-hk-en"
+      ],
+      "expected_candidate_refs": [],
+      "expected_passive_refs": [
+        "ades:holding:cn:china-mobile-communications-group",
+        "finance-cn-issuer:600941"
+      ],
+      "expected_relation_families": [
+        "holding_company_controls_public_issuer",
+        "state_body_holds_ownership_stake"
+      ]
+    },
+    {
       "name": "negative_empty_refs",
       "entity_refs": [
         "ades:impact:unknown:not-in-graph"

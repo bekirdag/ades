@@ -827,6 +827,7 @@ finance-cn-ticker:601398	601398	ticker	finance-cn-en	true	false	"{""exchange"": 
 finance-cn-ticker:601628	601628	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601628""}"	finance-cn-en
 finance-cn-ticker:601988	601988	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601988""}"	finance-cn-en
 finance-cn-ticker:920185	920185	ticker	finance-cn-en	true	false	"{""exchange"": ""BSE"", ""isin"": ""CNE100003YM4"", ""jurisdiction"": ""CN"", ""mic"": ""XBSE"", ""ticker_symbol"": ""920185""}"	finance-cn-en
+ades:holding:cn:china-mobile-communications-group	China Mobile Communications Group Co., Ltd.	holding_company	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
 finance-cn:bse	Beijing Stock Exchange	exchange	finance-cn-en	false	true	"{""exchange"": ""BSE"", ""jurisdiction"": ""CN"", ""mic"": ""XBSE"", ""ticker_symbol"": ""920185""}"	finance-cn-en
 finance-cn:csi-300	CSI 300	market_index	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en
 finance-cn:csrc	China Securities Regulatory Commission	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
