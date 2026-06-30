@@ -1,23 +1,53 @@
 entity_ref	canonical_name	entity_type	library_id	is_tradable	is_seed_eligible	identifiers_json	packs
+ades:brand:global:sams-club	Sam's Club	brand	finance-us-en	false	true	"{""jurisdiction"": ""US""}"	finance-us-en,general-en
+ades:brand:mx:oxxo	OXXO	brand	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:brand:mx:volaris	Volaris	brand	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:commodity-flow:ru:crude-oil-exports	Russia crude oil exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:commodity-flow:ru:fertilizer-exports	Russia fertilizer exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:commodity-flow:ru:natural-gas-exports	Russia natural gas exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:commodity-flow:ru:wheat-exports	Russia wheat exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:country:CA	Canada	country	general-en	false	true	"{""jurisdiction"": ""CA""}"	general-en,finance-mx-en
+ades:country:IN	India	country	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:country:MX	Mexico	country	general-en	false	true	"{""jurisdiction"": ""MX""}"	general-en,finance-mx-en
+ades:country:OM	Oman	country	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:country:SA	Saudi Arabia	country	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""same_as_refs"": [""wikidata:Q794""]}"	finance-sa-en,general-en,finance-en
+ades:country:US	United States	country	general-en	false	true	"{""jurisdiction"": ""US""}"	general-en,finance-mx-en
+ades:currency:MXN	Mexican peso	currency	finance-mx-en	true	false	"{""jurisdiction"": ""MX"", ""same_as_refs"": [""currency:MXN"", ""iso4217:MXN""]}"	finance-mx-en,general-en
+ades:exchange:au:asx	ASX	exchange	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:exchange:br:b3	B3	exchange	finance-br-en	false	true	"{""exchange"": ""B3"", ""isin"": ""BRPETRACNOR9"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""PETR3""}"	finance-br-en
+ades:exchange:ca:tsx	Toronto Stock Exchange	exchange	finance-ca-en	false	true	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE""}"	finance-ca-en
+ades:exchange:hk:hkex	Hong Kong Exchanges and Clearing	exchange	finance-hk-en	false	true	"{""exchange"": ""HKEX"", ""isin"": ""CNE1000001Z5"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""03988""}"	finance-hk-en,finance-cn-en
+ades:exchange:us:nasdaq	Nasdaq Stock Market	exchange	finance-mx-en	false	true	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:exchange:us:nyse	New York Stock Exchange	exchange	finance-mx-en	false	true	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
 ades:heuristic_structural_location:finance-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	"{""same_as_refs"":[""ades:heuristic_structural_location:general-en:location:strait-of-hormuz"",""wikidata:Q79883""],""wikidata"":""Q79883""}"	finance-en
 ades:heuristic_structural_location:general-en:location:strait-of-hormuz	Strait of Hormuz	chokepoint		0	1	"{""same_as_refs"":[""ades:heuristic_structural_location:finance-en:location:strait-of-hormuz"",""wikidata:Q79883""],""wikidata"":""Q79883""}"	general-en
 ades:impact:commodity:aluminum	Aluminum	commodity		1	1	"{""commodity"":""aluminum""}"	general-en,finance-en
+ades:impact:commodity:coal	Coal	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 ades:impact:commodity:cobalt	Cobalt	commodity		1	1	"{""commodity"":""cobalt""}"	general-en,finance-en
 ades:impact:commodity:copper	Copper	commodity		1	1	"{""commodity"":""copper""}"	general-en,finance-en
 ades:impact:commodity:corn	Corn	commodity		1	1	"{""commodity"":""corn""}"	general-en,finance-en
 ades:impact:commodity:crude-oil	Crude oil	commodity		1	1	"{""commodity"":""crude-oil""}"	general-en,finance-en
+ades:impact:commodity:fertilizer	Fertilizer	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 ades:impact:commodity:gold	Gold	commodity		1	1	"{""commodity"":""gold""}"	general-en,finance-en
 ades:impact:commodity:iron-ore	Iron ore	commodity		1	1	"{""commodity"":""iron-ore""}"	general-en,finance-en
 ades:impact:commodity:lean-hogs	Lean hogs	commodity		1	1	"{""commodity"":""lean-hogs""}"	general-en,finance-en
 ades:impact:commodity:lithium	Lithium	commodity		1	1	"{""commodity"":""lithium""}"	general-en,finance-en
 ades:impact:commodity:live-cattle	Live cattle	commodity		1	1	"{""commodity"":""live-cattle""}"	general-en,finance-en
 ades:impact:commodity:natural-gas	Natural gas	commodity		1	1	"{""commodity"":""natural-gas""}"	general-en,finance-en
+ades:impact:commodity:nickel	Nickel	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:commodity:palladium	Palladium	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:commodity:petrochemicals	Petrochemicals	commodity	finance-sa-en	true	false	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
 ades:impact:commodity:rare-earths	Rare earths	commodity		1	1	"{""commodity"":""rare-earths""}"	general-en,finance-en
 ades:impact:commodity:soybeans	Soybeans	commodity		1	1	"{""commodity"":""soybeans""}"	general-en,finance-en
+ades:impact:commodity:steel	Steel	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 ades:impact:commodity:tungsten	Tungsten	commodity		1	1	"{""commodity"":""tungsten""}"	general-en,finance-en
 ades:impact:commodity:wheat	Wheat	commodity		1	1	"{""commodity"":""wheat""}"	general-en,finance-en
 ades:impact:crypto:bitcoin	Bitcoin	crypto		1	1	"{""symbol"":""BTC""}"	general-en,finance-en
+ades:impact:currency:cny	Chinese yuan	currency	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
 ades:impact:currency:eur	Euro	currency		1	1	"{""iso4217"":""EUR""}"	general-en,finance-en
+ades:impact:currency:inr	Indian rupee	currency	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:impact:currency:rub	Russian ruble	currency	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:currency:sar	Saudi riyal	currency	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""same_as_refs"": [""currency:SAR"", ""iso4217:SAR""]}"	finance-sa-en,general-en,finance-en
 ades:impact:currency:usd	US dollar	currency		1	1	"{""iso4217"":""USD""}"	general-en,finance-en
 ades:impact:energy-policy:gas-reservation-policy	Gas reservation policy	policy		0	1	"{""category"":""energy_regulation""}"	finance-en
 ades:impact:energy-sector:gas-producers	Gas producers	sector		0	1	"{""category"":""energy_supply""}"	finance-en
@@ -25,9 +55,24 @@ ades:impact:environment:pollution-crisis	Pollution crisis	environmental_risk		0	
 ades:impact:index:global-equities	Global equities	market_index		1	0	"{""category"":""global_equity_proxy""}"	general-en,finance-en
 ades:impact:indicator:dxy	DXY	currency_index		1	0	"{""symbol"":""DXY""}"	general-en,finance-en
 ades:impact:macro:cpi	Consumer Price Index	macro_indicator		1	1	"{""category"":""inflation""}"	general-en,finance-en
+ades:impact:macro:de-cpi	Germany CPI	macro_indicator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:impact:macro:de-gdp	Germany GDP	macro_indicator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:impact:macro:de-industrial-production	Germany industrial production	macro_indicator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:impact:macro:ru-cpi	Russia CPI	macro_indicator	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:macro:ru-gdp	Russia GDP	macro_indicator	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 ades:impact:policy:digital-asset-regulation	Digital asset regulation	policy		0	1	"{""category"":""digital_asset_regulation""}"	general-en,finance-en
+ades:impact:rate:cn-lpr	PBOC loan prime rate	rate	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:impact:rate:ecb-deposit-rate	ECB deposit facility rate	rate	finance-de-en	true	false	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
 ades:impact:rate:ecb-policy-rates	ECB policy rates	rate		1	1	"{""rate"":""ecb-policy-rates""}"	general-en,finance-en
 ades:impact:rate:fed-funds	Federal funds rate	rate		1	1	"{""rate"":""fed-funds""}"	general-en,finance-en
+ades:impact:rate:in-crr	India cash reserve ratio	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:impact:rate:in-gsec-10y	India 10-year government security yield proxy	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:impact:rate:in-repo-rate	RBI repo rate	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:impact:rate:in-slr	India statutory liquidity ratio	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:impact:rate:it-btp-10y	Italy 10-year BTP yield	rate	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:impact:rate:it-btp-bund-spread	Italy BTP-Bund spread	rate	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:impact:rate:ru-cbr-key-rate	Bank of Russia key rate	rate	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:rate:sa-repo-rate	Saudi repo rate	rate	finance-sa-en	true	false	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
 ades:impact:risk:sanctions-risk	Sanctions risk	risk		1	1	"{""category"":""risk_indicator""}"	general-en,finance-en
 ades:impact:risk:us-country-risk	US Country Risk	risk		1	0	"{""country_code"":""us"",""category"":""country_risk""}"	general-en,finance-en
 ades:impact:sanctions:ofac	Office of Foreign Assets Control	sanctions_body		0	1	"{""homepage"":""https://ofac.treasury.gov""}"	general-en,finance-en
@@ -40,29 +85,51 @@ ades:impact:sector:semiconductors	Semiconductors	sector		1	1	"{""category"":""se
 ades:impact:sector:shipping	Shipping	sector		1	1	"{""category"":""sector""}"	general-en,finance-en
 ades:impact:sector:utilities	Utilities	sector		1	1	"{""category"":""sector""}"	general-en,finance-en
 ades:impact:shipping:tanker-sanctions	Oil tanker sanctions	shipping_risk		0	1	"{""category"":""energy_shipping_sanctions""}"	general-en,finance-en
+ades:index:in:nifty-bank	NIFTY Bank	market_index	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:index:mx:ftse-biva	FTSE BIVA index family	market_index	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:issuer:au:bhp-group	BHP Group	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:issuer:au:commonwealth-bank-of-australia	Commonwealth Bank of Australia	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:issuer:br:b3	B3 S.A. - Brasil, Bolsa, Balcão	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:issuer:br:banco-do-brasil	Banco do Brasil S.A.	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:issuer:br:petrobras	Petróleo Brasileiro S.A. - Petrobras	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:issuer:br:rumo	Rumo S.A.	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:issuer:br:vale	Vale S.A.	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:issuer:ca:bce	BCE Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:canadian-national-railway	Canadian National Railway Company	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:canadian-natural-resources	Canadian Natural Resources Limited	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:canadian-pacific-kansas-city	Canadian Pacific Kansas City Limited	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:enbridge	Enbridge Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:rogers-communications	Rogers Communications Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:royal-bank-of-canada	Royal Bank of Canada	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:shopify	Shopify Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:telus	TELUS Corporation	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:ca:toronto-dominion-bank	Toronto-Dominion Bank (The)	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:issuer:hk:alibaba-group-holding	Alibaba Group Holding Limited	issuer	finance-hk-en	false	true	"{""jurisdiction"": ""HK""}"	finance-hk-en,finance-cn-en
+ades:issuer:hk:tencent-holdings	Tencent Holdings Limited	issuer	finance-hk-en	false	true	"{""jurisdiction"": ""HK""}"	finance-hk-en,finance-cn-en
+ades:macro:cn:cpi	China CPI	macro_indicator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:macro:cn:gdp	China GDP	macro_indicator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:macro:cn:ppi	China PPI	macro_indicator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:macro:in:cpi	India CPI	macro_indicator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:macro:in:gdp	India GDP	macro_indicator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:macro:in:iip	India Index of Industrial Production	macro_indicator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:macro:it:consumer-prices	Italy Consumer prices	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:macro:it:employment	Italy Employment	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:macro:it:foreign-trade	Italy Foreign trade	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:macro:it:gdp	Italy GDP	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:macro:it:industrial-production	Italy Industrial production	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:macro:mx:cpi	Mexico CPI / inflation	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:macro:mx:employment	Mexico employment	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:macro:mx:gdp	Mexico GDP	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:macro:mx:industrial-production	Mexico industrial production	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:macro:mx:retail-sales	Mexico retail sales	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:macro:mx:trade-balance	Mexico trade balance	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:market-access-status:ru:moex-active-status-a	MOEX active trading status A	market_access_status	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 ades:market-location:atacama	Atacama Desert	commodity_region		0	1	"{""category"":""lithium_copper_region""}"	general-en,finance-en
 ades:market-location:copperbelt	Copperbelt	commodity_region		0	1	"{""category"":""copper_cobalt_region""}"	general-en,finance-en
 ades:market-location:panama-canal	Panama Canal	chokepoint		0	1	"{""same_as_refs"":[""wikidata:Q7350""],""wikidata"":""Q7350""}"	general-en,finance-en
 ades:market-location:pilbara	Pilbara	commodity_region		0	1	"{""category"":""iron_ore_region""}"	general-en,finance-en
 ades:market-location:red-sea	Red Sea	chokepoint		0	1	"{""same_as_refs"":[""wikidata:Q23406""],""wikidata"":""Q23406""}"	general-en,finance-en
 ades:market-location:taiwan-strait	Taiwan Strait	chokepoint		0	1	"{""same_as_refs"":[""wikidata:Q37950""],""wikidata"":""Q37950""}"	general-en,finance-en
-finance-us-issuer:0001318605	Tesla Inc.	issuer	finance-us-en	0	1	"{""same_as_refs"":[""wikidata:Q478214"",""FINANCE-US-ISSUER_0001318605""],""ticker_ref"":""finance-us-ticker:TSLA""}"	finance-us-en
-finance-us-ticker:TSLA	TSLA	ticker	finance-us-en	1	0	"{""same_as_refs"":[""wikidata:Q478214"",""FINANCE-US-TICKER_TSLA"",""finance-us-issuer:0001318605""]}"	finance-us-en
-finance-uk-issuer:04267576	Intertek Group Plc	issuer	finance-uk-en	0	1	"{""same_as_refs"":[""wikidata:Q1136085""],""ticker_ref"":""finance-uk-ticker:itrk""}"	finance-uk-en
-finance-uk-ticker:itrk	ITRK	ticker	finance-uk-en	1	0	"{""same_as_refs"":[""wikidata:Q1136085"",""finance-uk-issuer:04267576""],""issuer_ref"":""finance-uk-issuer:04267576""}"	finance-uk-en
-wikidata:Q1136085	Intertek Group Plc	organization	general-en	0	1	"{""same_as_refs"":[""finance-uk-issuer:04267576""],""wikidata"":""Q1136085""}"	general-en,finance-uk-en
-wikidata:Q317521	Elon Musk	person	general-en	0	1	"{""same_as_refs"":[""person:elon-musk""],""wikidata"":""Q317521""}"	general-en,finance-us-en
-geonames:6252001	United States	country		0	1	"{""country_code"":""us"",""geonames"":""6252001"",""same_as_refs"":[""country:us"",""wikidata:Q30""],""wikidata"":""Q30""}"	general-en,finance-en
-wikidata:Q121826282	OPEC+	organization		0	1	"{""wikidata"":""Q121826282""}"	general-en,finance-en
-wikidata:Q159	Russia	country		0	1	"{""country_code"":""ru"",""geonames_id"":""2017370"",""same_as_refs"":[""country:ru"",""geonames:2017370""],""wikidata"":""Q159""}"	general-en,finance-en
-wikidata:Q458	European Union	bloc		0	1	"{""wikidata"":""Q458""}"	general-en
-wikidata:Q53536	Federal Reserve System	central_bank		0	1	"{""wikidata"":""Q53536""}"	general-en,finance-en
-wikidata:Q794	Iran	country		0	1	"{""country_code"":""ir"",""geonames_id"":""130758"",""same_as_refs"":[""country:ir"",""geonames:130758""],""wikidata"":""Q794""}"	general-en,finance-en
-wikidata:Q8901	European Central Bank	central_bank		0	1	"{""wikidata"":""Q8901""}"	general-en,finance-en
-wikidata:Q899	Suez Canal	chokepoint		0	1	"{""wikidata"":""Q899""}"	general-en
-ades:exchange:au:asx	ASX	exchange	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
-ades:issuer:au:bhp-group	BHP Group	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
-ades:issuer:au:commonwealth-bank-of-australia	Commonwealth Bank of Australia	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:org:au:apra	Australian Prudential Regulation Authority	regulator	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:org:au:arena	Australian Renewable Energy Agency	government_body	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:org:au:asic	Australian Securities and Investments Commission	regulator	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
@@ -72,9 +139,173 @@ ades:org:au:housing-australia	Housing Australia	government_body	finance-au-en	fa
 ades:org:au:nrfc	National Reconstruction Fund Corporation	government_body	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:org:au:tga	Therapeutic Goods Administration	regulator	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:org:au:transport-for-nsw	Transport for NSW	government_body	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:org:br:anatel	Agência Nacional de Telecomunicações	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:aneel	Agência Nacional de Energia Elétrica	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:anp	Agência Nacional do Petróleo, Gás Natural e Biocombustíveis	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:antt	Agência Nacional de Transportes Terrestres	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:bndes	Banco Nacional de Desenvolvimento Econômico e Social	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:cvm	Comissão de Valores Mobiliários	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:mapa	Ministério da Agricultura e Pecuária	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:mdic	Ministério do Desenvolvimento, Indústria, Comércio e Serviços	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:ministerio-transportes	Ministério dos Transportes	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:zilia-technologies	Zilia Technologies	organization	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:ca:aafc	Agriculture and Agri-Food Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:bank-of-canada	Bank of Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:canada-energy-regulator	Canada Energy Regulator	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:canada-infrastructure-bank	Canada Infrastructure Bank	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:canadian-securities-administrators	Canadian Securities Administrators	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:cmhc	Canada Mortgage and Housing Corporation	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:crtc	Canadian Radio-television and Telecommunications Commission	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:farm-credit-canada	Farm Credit Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:global-affairs-canada	Global Affairs Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:ised	Innovation, Science and Economic Development Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:osfi	Office of the Superintendent of Financial Institutions	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:ca:sedar-plus	SEDAR+	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:org:cn:cyberspace-administration-of-china	Cyberspace Administration of China	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:ministry-of-industry-and-information-technology	Ministry of Industry and Information Technology	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:national-bureau-of-statistics	National Bureau of Statistics of China	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:national-development-and-reform-commission	National Development and Reform Commission	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:national-energy-administration	National Energy Administration	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:national-medical-products-administration	National Medical Products Administration	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:state-administration-for-market-regulation	State Administration for Market Regulation	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:state-administration-of-foreign-exchange	State Administration of Foreign Exchange	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:cn:state-owned-assets-supervision-and-administration-commission	State-owned Assets Supervision and Administration Commission	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+ades:org:de:bafin	BaFin	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:bfarm	BfArM	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:bmwk	Federal Ministry for Economic Affairs and Climate Action	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:bsi	Federal Office for Information Security	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:bundeskartellamt	Bundeskartellamt	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:bundesnetzagentur	Bundesnetzagentur	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:destatis	Destatis	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:deutsche-bundesbank	Deutsche Bundesbank	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:pei	Paul-Ehrlich-Institut	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:de:uba	German Environment Agency	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:org:eu:airbus	Airbus	organization	finance-de-en	false	true	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
+ades:org:eu:ecb	European Central Bank	government_body	finance-de-en	false	true	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
+ades:org:global:fifa	FIFA	organization	finance-mx-en	false	true	"{""jurisdiction"": ""GLOBAL""}"	finance-mx-en,general-en
+ades:org:in:cci	Competition Commission of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:cdsco	Central Drugs Standard Control Organisation	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:cea	Central Electricity Authority	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:cerc	Central Electricity Regulatory Commission	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:commerce	Ministry of Commerce and Industry	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dfs	Department of Financial Services	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dgca	Directorate General of Civil Aviation	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dgft	Directorate General of Foreign Trade	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dipam	Department of Investment and Public Asset Management	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dot	Department of Telecommunications	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:dpiit	Department for Promotion of Industry and Internal Trade	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:irdai	Insurance Regulatory and Development Authority of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:ism	India Semiconductor Mission	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:meity	Ministry of Electronics and Information Technology	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:mhi	Ministry of Heavy Industries	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:mnre	Ministry of New and Renewable Energy	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:morth	Ministry of Road Transport and Highways	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:mospi	Ministry of Statistics and Programme Implementation	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:mpeda	Marine Products Export Development Authority	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:nhai	National Highways Authority of India	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:npci	National Payments Corporation of India	organization	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:pfrda	Pension Fund Regulatory and Development Authority	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:pngrb	Petroleum and Natural Gas Regulatory Board	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:power-ministry	Ministry of Power	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:rbi	Reserve Bank of India	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:in:trai	Telecom Regulatory Authority of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:org:it:agcm	AGCM	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:agcom	AGCOM	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:aifa	AIFA	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:anac	ANAC	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:arera	ARERA	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:art	Transport Regulation Authority	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:cdp	Cassa Depositi e Prestiti	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:covip	COVIP	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:enac	ENAC	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:gme	Gestore dei Mercati Energetici	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:gse	Gestore dei Servizi Energetici	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:invitalia	Invitalia	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:istat	ISTAT	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:ivass	IVASS	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:mase	Ministry of Environment and Energy Security	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:mef	Ministry of Economy and Finance	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:mimit	Ministry of Enterprises and Made in Italy	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:mit	Ministry of Infrastructure and Transport	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:pagopa	PagoPA	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:sace	SACE	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:it:simest	SIMEST	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:org:mx:afac	AFAC	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:atdt	ATDT	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:banxico	Banco de Mexico	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX"", ""same_as_refs"": [""wikidata:Q106800402""], ""wikidata_id"": ""Q106800402""}"	finance-mx-en,general-en
+ades:org:mx:cenace	CENACE	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cfe	CFE	organization	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cna-antimonopolio	Comision Nacional Antimonopolio	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cnbv	CNBV	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cne	CNE	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cofece	Historical COFECE	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cofepris	COFEPRIS	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:cre	Historical CRE	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:crt	CRT	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:ift	Historical IFT	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:inegi	INEGI	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:pemex	Pemex	organization	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:profeco	PROFECO	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:sader	SADER	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:secretaria-economia	Secretaria de Economia	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:senasica	SENASICA	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:sener	SENER	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:shcp	SHCP	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:mx:sict	SICT	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:org:ru:minenergy	Ministry of Energy of the Russian Federation	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:org:ru:minfin	Ministry of Finance of the Russian Federation	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:org:ru:mintrans	Ministry of Transport of the Russian Federation	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:org:ru:rosstat	Rosstat	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:org:ru:transneft	Transneft	organization	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:org:sa:cma	Capital Market Authority	regulator	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:org:sa:ministry-of-hajj-and-umrah	Ministry of Hajj and Umrah	government_body	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:org:sa:pif	Public Investment Fund	sovereign_wealth_fund	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""same_as_refs"": [""wikidata:Q2044197""]}"	finance-sa-en,general-en,finance-en
+ades:org:sa:sama	Saudi Central Bank	central_bank	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""same_as_refs"": [""wikidata:Q1565279""]}"	finance-sa-en,general-en,finance-en
+ades:payment-network:in:upi	Unified Payments Interface	payment_network	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:payment-network:it:pagopa	PagoPA payment network	payment_network	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:payment-system:ru:cross-border-payments	Russian cross-border payments	payment_system	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:pipeline:ru:gas-export-pipelines	Russia gas export pipelines	pipeline	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:pipeline:ru:oil-pipeline-system	Russia oil pipeline system	pipeline	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 ades:program:au:five-percent-deposit-scheme	Australian Government 5% Deposit Scheme	program	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:program:au:fuel-tax-credits	Fuel Tax Credits	program	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:program:au:help-to-buy-scheme	Australian Government Help to Buy Scheme	program	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:program:br:bndes-mais-inovacao	BNDES Mais Inovação	program	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:program:br:plano-safra-2025-2026	Plano Safra 2025/2026	program	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:program:ca:agriinvest	AgriInvest	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:program:ca:agristability	AgriStability	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:program:ca:cmhc-mortgage-loan-insurance	CMHC mortgage loan insurance	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:program:ca:net-zero-accelerator	Net Zero Accelerator Initiative	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:program:ca:strategic-innovation-fund	Strategic Innovation Fund / Strategic Response Fund	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:program:de:kraftwerksstrategie	Kraftwerksstrategie	program	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+ades:program:global:fifa-world-cup-2026	FIFA World Cup 2026	program	finance-mx-en	false	true	"{""jurisdiction"": ""GLOBAL"", ""same_as_refs"": [""wikidata:Q6431616""], ""wikidata_id"": ""Q6431616""}"	finance-mx-en,general-en
+ades:program:in:production-linked-incentive	Production Linked Incentive scheme	program	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:program:in:rbi-forex-facility	RBI forex facility	program	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:program:it:garanzia-italia	Garanzia Italia	program	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:program:it:pnrr	Italy National Recovery and Resilience Plan	program	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:program:it:simest-394-fund	SIMEST 394 Fund	program	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:program:sa:nidlp	National Industrial Development and Logistics Program	program	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:program:sa:pif-program	Public Investment Fund Program	program	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:program:sa:vision-2030	Saudi Vision 2030	vision_program	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:project:br:ferrograo	Ferrogrão EF-170	project	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:project:br:fico-railway	FICO railway	project	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:project:ca:contrecoeur-port-terminal	Contrecoeur Port Terminal	project	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:project:ca:oneida-energy-storage	Oneida Energy Storage	project	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
+ades:project:eu:fcas-scaf	Future Combat Air System / SCAF	project	finance-de-en	false	true	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
+ades:project:sa:neom	NEOM	giga_project	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:rates:mx:banxico-policy-rate	Banxico policy rate proxy	rate	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:rates:mx:mbono-10y	Mexico 10-year Mbono yield proxy	rate	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sanctions-authority:ca:gac	Global Affairs Canada	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-authority:ch:seco	Swiss SECO	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-authority:eu:council	Council of the European Union	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-authority:jp:mof	Japan Ministry of Finance	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-authority:uk:ofsi	UK OFSI	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-authority:us:ofac	U.S. Treasury OFAC	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:ca:russia	Canada Russia sanctions	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:ch:russia	Swiss Russia sanctions and embargoes	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:eu:russia-restrictive-measures	EU restrictive measures against Russia	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:jp:russia	Japan economic sanctions program	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:uk:russia	UK Russia sanctions regime	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:us-ofac:russia-related	OFAC Russia-related sanctions program	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 ades:sector:au:australian-equity-market	Australian equity market	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:sector:au:banking	Australian banking sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:sector:au:clean-technology	Australian clean technology sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
@@ -93,29 +324,6 @@ ades:sector:au:securities-market	Australian securities and markets sector	sector
 ades:sector:au:superannuation	Australian superannuation sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:sector:au:transport-logistics	Australian transport and logistics sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:sector:au:transport-policy	Australian transport policy sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
-finance-au-ticker:BHP	BHP	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
-finance-au-ticker:CBA	CBA	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
-finance-au:asx-200	S&P/ASX 200	market_index	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
-ades:exchange:br:b3	B3	exchange	finance-br-en	false	true	"{""exchange"": ""B3"", ""isin"": ""BRPETRACNOR9"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""PETR3""}"	finance-br-en
-ades:issuer:br:b3	B3 S.A. - Brasil, Bolsa, Balcão	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:issuer:br:banco-do-brasil	Banco do Brasil S.A.	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:issuer:br:petrobras	Petróleo Brasileiro S.A. - Petrobras	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:issuer:br:rumo	Rumo S.A.	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:issuer:br:vale	Vale S.A.	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:org:br:anatel	Agência Nacional de Telecomunicações	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:org:br:aneel	Agência Nacional de Energia Elétrica	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:org:br:anp	Agência Nacional do Petróleo, Gás Natural e Biocombustíveis	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:org:br:antt	Agência Nacional de Transportes Terrestres	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:org:br:bndes	Banco Nacional de Desenvolvimento Econômico e Social	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:org:br:cvm	Comissão de Valores Mobiliários	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:org:br:mapa	Ministério da Agricultura e Pecuária	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:org:br:mdic	Ministério do Desenvolvimento, Indústria, Comércio e Serviços	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:org:br:ministerio-transportes	Ministério dos Transportes	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:org:br:zilia-technologies	Zilia Technologies	organization	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:program:br:bndes-mais-inovacao	BNDES Mais Inovação	program	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:program:br:plano-safra-2025-2026	Plano Safra 2025/2026	program	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:project:br:ferrograo	Ferrogrão EF-170	project	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:project:br:fico-railway	FICO railway	project	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
 ades:sector:br:agribusiness	Brazil agribusiness	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
 ades:sector:br:agriculture-export-logistics	Brazil agriculture export logistics	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
 ades:sector:br:banking	Brazil banking	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
@@ -132,43 +340,6 @@ ades:sector:br:securities-market	Brazil securities market	sector	finance-br-en	f
 ades:sector:br:semiconductors	Brazil semiconductors	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
 ades:sector:br:telecommunications	Brazil telecommunications	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
 ades:sector:br:transport-logistics	Brazil transport and logistics	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
-finance-br-ticker:B3SA3	B3SA3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRB3SAACNOR6"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""B3SA3""}"	finance-br-en
-finance-br-ticker:BBAS3	BBAS3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRBBASACNOR3"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""BBAS3""}"	finance-br-en
-finance-br-ticker:PETR3	PETR3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRPETRACNOR9"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""PETR3""}"	finance-br-en
-finance-br-ticker:PETR4	PETR4	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRPETRACNPR6"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""PETR4""}"	finance-br-en
-finance-br-ticker:RAIL3	RAIL3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRRAILACNOR9"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""RAIL3""}"	finance-br-en
-finance-br-ticker:VALE3	VALE3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRVALEACNOR0"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""VALE3""}"	finance-br-en
-finance-br:ibovespa	Ibovespa	market_index	finance-br-en	true	false	"{""jurisdiction"": ""BR""}"	finance-br-en
-ades:exchange:ca:tsx	Toronto Stock Exchange	exchange	finance-ca-en	false	true	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE""}"	finance-ca-en
-ades:issuer:ca:bce	BCE Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:issuer:ca:canadian-national-railway	Canadian National Railway Company	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:issuer:ca:canadian-natural-resources	Canadian Natural Resources Limited	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:issuer:ca:canadian-pacific-kansas-city	Canadian Pacific Kansas City Limited	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:issuer:ca:enbridge	Enbridge Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:issuer:ca:rogers-communications	Rogers Communications Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:issuer:ca:royal-bank-of-canada	Royal Bank of Canada	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:issuer:ca:shopify	Shopify Inc.	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:issuer:ca:telus	TELUS Corporation	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:issuer:ca:toronto-dominion-bank	Toronto-Dominion Bank (The)	issuer	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:aafc	Agriculture and Agri-Food Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:bank-of-canada	Bank of Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:canada-energy-regulator	Canada Energy Regulator	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:canada-infrastructure-bank	Canada Infrastructure Bank	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:canadian-securities-administrators	Canadian Securities Administrators	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:cmhc	Canada Mortgage and Housing Corporation	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:crtc	Canadian Radio-television and Telecommunications Commission	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:farm-credit-canada	Farm Credit Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:global-affairs-canada	Global Affairs Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:ised	Innovation, Science and Economic Development Canada	government_body	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:osfi	Office of the Superintendent of Financial Institutions	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:org:ca:sedar-plus	SEDAR+	regulator	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:program:ca:agriinvest	AgriInvest	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:program:ca:agristability	AgriStability	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:program:ca:cmhc-mortgage-loan-insurance	CMHC mortgage loan insurance	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:program:ca:net-zero-accelerator	Net Zero Accelerator Initiative	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:program:ca:strategic-innovation-fund	Strategic Innovation Fund / Strategic Response Fund	program	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:project:ca:contrecoeur-port-terminal	Contrecoeur Port Terminal	project	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:project:ca:oneida-energy-storage	Oneida Energy Storage	project	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
 ades:sector:ca:agriculture	Canada agriculture	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
 ades:sector:ca:agriculture-export	Canada agriculture export	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
 ades:sector:ca:agriculture-finance	Canada agriculture finance	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
@@ -213,35 +384,6 @@ ades:sector:ca:telecommunications	Canada telecommunications	sector	finance-ca-en
 ades:sector:ca:trade-logistics	Canada trade logistics	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
 ades:sector:ca:trade-transport	Canada trade and transportation infrastructure	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
 ades:sector:ca:transportation	Canada transportation	sector	finance-ca-en	false	true	"{""jurisdiction"": ""CA""}"	finance-ca-en
-finance-ca-ticker:tsx:bce	BCE	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""BCE""}"	finance-ca-en
-finance-ca-ticker:tsx:cnq	CNQ	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""CNQ""}"	finance-ca-en
-finance-ca-ticker:tsx:cnr	CNR	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""CNR""}"	finance-ca-en
-finance-ca-ticker:tsx:cp	CP	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""CP""}"	finance-ca-en
-finance-ca-ticker:tsx:enb	ENB	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""ENB""}"	finance-ca-en
-finance-ca-ticker:tsx:rci.b	RCI.B	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""RCI.B""}"	finance-ca-en
-finance-ca-ticker:tsx:ry	RY	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""RY""}"	finance-ca-en
-finance-ca-ticker:tsx:shop	SHOP	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""SHOP""}"	finance-ca-en
-finance-ca-ticker:tsx:t	T	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""T""}"	finance-ca-en
-finance-ca-ticker:tsx:td	TD	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""TD""}"	finance-ca-en
-finance-ca:sp-tsx-composite	S&P/TSX Composite Index	market_index	finance-ca-en	true	false	"{""jurisdiction"": ""CA""}"	finance-ca-en
-ades:brand:global:sams-club	Sam's Club	brand	finance-us-en	false	true	"{""jurisdiction"": ""US""}"	finance-us-en,general-en
-ades:exchange:hk:hkex	Hong Kong Exchanges and Clearing	exchange	finance-hk-en	false	true	"{""exchange"": ""HKEX"", ""isin"": ""CNE1000001Z5"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""03988""}"	finance-hk-en,finance-cn-en
-ades:impact:currency:cny	Chinese yuan	currency	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:impact:rate:cn-lpr	PBOC loan prime rate	rate	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:issuer:hk:alibaba-group-holding	Alibaba Group Holding Limited	issuer	finance-hk-en	false	true	"{""jurisdiction"": ""HK""}"	finance-hk-en,finance-cn-en
-ades:issuer:hk:tencent-holdings	Tencent Holdings Limited	issuer	finance-hk-en	false	true	"{""jurisdiction"": ""HK""}"	finance-hk-en,finance-cn-en
-ades:macro:cn:cpi	China CPI	macro_indicator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:macro:cn:gdp	China GDP	macro_indicator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:macro:cn:ppi	China PPI	macro_indicator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:org:cn:cyberspace-administration-of-china	Cyberspace Administration of China	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:org:cn:ministry-of-industry-and-information-technology	Ministry of Industry and Information Technology	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:org:cn:national-bureau-of-statistics	National Bureau of Statistics of China	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:org:cn:national-development-and-reform-commission	National Development and Reform Commission	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:org:cn:national-energy-administration	National Energy Administration	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:org:cn:national-medical-products-administration	National Medical Products Administration	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:org:cn:state-administration-for-market-regulation	State Administration for Market Regulation	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:org:cn:state-administration-of-foreign-exchange	State Administration of Foreign Exchange	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-ades:org:cn:state-owned-assets-supervision-and-administration-commission	State-owned Assets Supervision and Administration Commission	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
 ades:sector:cn:banking	Banking	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
 ades:sector:cn:batteries	Batteries	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
 ades:sector:cn:coal	Coal	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
@@ -270,58 +412,6 @@ ades:sector:cn:securities	Securities	sector	finance-cn-en	false	true	"{""jurisdi
 ades:sector:cn:semiconductors	Semiconductors	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
 ades:sector:cn:state-owned-enterprise-reform	State-owned enterprise reform	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
 ades:sector:cn:telecom	Telecommunications	sector	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
-ades:security:cn:sse:600941-ashare	China Mobile Limited A-share 600941	security	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600941""}"	finance-cn-en
-ades:security:cn:sse:601988-ashare	Bank of China Limited A-share 601988	security	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601988""}"	finance-cn-en
-ades:security:hk:hkex:00941-hshare	China Mobile Limited H-share 00941	security	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""HK0941009539"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""00941""}"	finance-hk-en,finance-cn-en
-ades:security:hk:hkex:03988-hshare	Bank of China Limited H-share 03988	security	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""CNE1000001Z5"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""03988""}"	finance-hk-en,finance-cn-en
-finance-cn-issuer:002594	BYD Company Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
-finance-cn-issuer:300750	Contemporary Amperex Technology Co., Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
-finance-cn-issuer:600028	China Petroleum & Chemical Corporation	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
-finance-cn-issuer:600519	Kweichow Moutai Co.,Ltd.	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
-finance-cn-issuer:600941	China Mobile Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
-finance-cn-issuer:601398	Industrial and Commercial Bank of China Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
-finance-cn-issuer:601628	China Life Insurance Company Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
-finance-cn-issuer:601988	Bank of China Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
-finance-cn-issuer:920185	BTR New Material Group Co., Ltd.	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
-finance-cn-ticker:002594	002594	ticker	finance-cn-en	true	false	"{""exchange"": ""SZSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHE"", ""ticker_symbol"": ""002594""}"	finance-cn-en
-finance-cn-ticker:300750	300750	ticker	finance-cn-en	true	false	"{""exchange"": ""SZSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHE"", ""ticker_symbol"": ""300750""}"	finance-cn-en
-finance-cn-ticker:600028	600028	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600028""}"	finance-cn-en
-finance-cn-ticker:600519	600519	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""isin"": ""CNE0000018R8"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600519""}"	finance-cn-en
-finance-cn-ticker:600941	600941	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600941""}"	finance-cn-en
-finance-cn-ticker:601398	601398	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601398""}"	finance-cn-en
-finance-cn-ticker:601628	601628	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601628""}"	finance-cn-en
-finance-cn-ticker:601988	601988	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601988""}"	finance-cn-en
-finance-cn-ticker:920185	920185	ticker	finance-cn-en	true	false	"{""exchange"": ""BSE"", ""isin"": ""CNE100003YM4"", ""jurisdiction"": ""CN"", ""mic"": ""XBSE"", ""ticker_symbol"": ""920185""}"	finance-cn-en
-finance-cn:bse	Beijing Stock Exchange	exchange	finance-cn-en	false	true	"{""exchange"": ""BSE"", ""jurisdiction"": ""CN"", ""mic"": ""XBSE"", ""ticker_symbol"": ""920185""}"	finance-cn-en
-finance-cn:csi-300	CSI 300	market_index	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en
-finance-cn:csrc	China Securities Regulatory Commission	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-finance-cn:pboc	People's Bank of China	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
-finance-cn:sse	Shanghai Stock Exchange	exchange	finance-cn-en	false	true	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600519""}"	finance-cn-en
-finance-cn:szse	Shenzhen Stock Exchange	exchange	finance-cn-en	false	true	"{""exchange"": ""SZSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHE"", ""ticker_symbol"": ""300750""}"	finance-cn-en
-finance-hk-ticker:hkex:00700	00700	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""KYG875721634"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""00700""}"	finance-hk-en,finance-cn-en
-finance-hk-ticker:hkex:00941	00941	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""HK0941009539"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""00941""}"	finance-hk-en,finance-cn-en
-finance-hk-ticker:hkex:03988	03988	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""CNE1000001Z5"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""03988""}"	finance-hk-en,finance-cn-en
-finance-hk-ticker:hkex:09988	09988	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""KYG017191142"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""09988""}"	finance-hk-en,finance-cn-en
-finance-us-issuer:0000104169	Walmart Inc.	issuer	finance-us-en	false	true	"{""jurisdiction"": ""US""}"	finance-us-en,general-en
-finance-us-ticker:WMT	WMT	ticker	finance-us-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""mic"": ""XNYS"", ""ticker_symbol"": ""WMT""}"	finance-us-en,general-en
-ades:impact:macro:de-cpi	Germany CPI	macro_indicator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:impact:macro:de-gdp	Germany GDP	macro_indicator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:impact:macro:de-industrial-production	Germany industrial production	macro_indicator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:impact:rate:ecb-deposit-rate	ECB deposit facility rate	rate	finance-de-en	true	false	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
-ades:org:de:bafin	BaFin	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:org:de:bfarm	BfArM	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:org:de:bmwk	Federal Ministry for Economic Affairs and Climate Action	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:org:de:bsi	Federal Office for Information Security	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:org:de:bundeskartellamt	Bundeskartellamt	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:org:de:bundesnetzagentur	Bundesnetzagentur	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:org:de:destatis	Destatis	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:org:de:deutsche-bundesbank	Deutsche Bundesbank	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:org:de:pei	Paul-Ehrlich-Institut	regulator	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:org:de:uba	German Environment Agency	government_body	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:org:eu:airbus	Airbus	organization	finance-de-en	false	true	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
-ades:org:eu:ecb	European Central Bank	government_body	finance-de-en	false	true	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
-ades:program:de:kraftwerksstrategie	Kraftwerksstrategie	program	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:project:eu:fcas-scaf	Future Combat Air System / SCAF	project	finance-de-en	false	true	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
 ades:sector:de:aerospace	Aerospace	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
 ades:sector:de:asset-management	Asset management	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
 ades:sector:de:autos	Automobiles	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
@@ -360,78 +450,6 @@ ades:sector:de:semiconductors	Semiconductors	sector	finance-de-en	false	true	"{"
 ades:sector:de:telecom	Telecommunications	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
 ades:sector:de:utilities	Utilities	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
 ades:sector:de:vaccines	Vaccines	sector	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE0005140008	Deutsche Bank AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE0005190003	BMW AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE0005557508	Deutsche Telekom AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE0005810055	Deutsche Boerse AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE0006231004	Infineon Technologies AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE0007030009	Rheinmetall AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE0007037129	RWE AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE0007100000	Mercedes-Benz Group AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE0007164600	SAP SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE0007236101	Siemens AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE0008404005	Allianz SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE000A0D9PT0	MTU Aero Engines AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE000BASF111	BASF SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE000ENAG999	E.ON SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-issuer:DE000ENER6Y0	Siemens Energy AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:ALV	ALV	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:BAS	BAS	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:BMW	BMW	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:DB1	DB1	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:DBK	DBK	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:DTE	DTE	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:ENR	ENR	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:EOAN	EOAN	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:IFX	IFX	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:MBG	MBG	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:MTX	MTX	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:RHM	RHM	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:RWE	RWE	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:SAP	SAP	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de-ticker:SIE	SIE	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de:boerse-frankfurt	Boerse Frankfurt	exchange	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-finance-de:dax	DAX	market_index	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
-ades:country:IN	India	country	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:country:OM	Oman	country	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:impact:currency:inr	Indian rupee	currency	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:impact:rate:in-crr	India cash reserve ratio	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:impact:rate:in-gsec-10y	India 10-year government security yield proxy	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:impact:rate:in-repo-rate	RBI repo rate	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:impact:rate:in-slr	India statutory liquidity ratio	rate	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:index:in:nifty-bank	NIFTY Bank	market_index	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:macro:in:cpi	India CPI	macro_indicator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:macro:in:gdp	India GDP	macro_indicator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:macro:in:iip	India Index of Industrial Production	macro_indicator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:cci	Competition Commission of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:cdsco	Central Drugs Standard Control Organisation	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:cea	Central Electricity Authority	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:cerc	Central Electricity Regulatory Commission	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:commerce	Ministry of Commerce and Industry	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:dfs	Department of Financial Services	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:dgca	Directorate General of Civil Aviation	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:dgft	Directorate General of Foreign Trade	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:dipam	Department of Investment and Public Asset Management	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:dot	Department of Telecommunications	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:dpiit	Department for Promotion of Industry and Internal Trade	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:irdai	Insurance Regulatory and Development Authority of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:ism	India Semiconductor Mission	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:meity	Ministry of Electronics and Information Technology	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:mhi	Ministry of Heavy Industries	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:mnre	Ministry of New and Renewable Energy	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:morth	Ministry of Road Transport and Highways	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:mospi	Ministry of Statistics and Programme Implementation	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:mpeda	Marine Products Export Development Authority	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:nhai	National Highways Authority of India	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:npci	National Payments Corporation of India	organization	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:pfrda	Pension Fund Regulatory and Development Authority	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:pngrb	Petroleum and Natural Gas Regulatory Board	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:power-ministry	Ministry of Power	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:rbi	Reserve Bank of India	government_body	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:org:in:trai	Telecom Regulatory Authority of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:payment-network:in:upi	Unified Payments Interface	payment_network	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:program:in:production-linked-incentive	Production Linked Incentive scheme	program	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:program:in:rbi-forex-facility	RBI forex facility	program	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:sector:in:autos	Automobiles	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:sector:in:aviation	Aviation	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:sector:in:banking	Banking	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
@@ -493,74 +511,6 @@ ades:sector:in:startups	Startups	sector	finance-in-en	false	true	"{""jurisdictio
 ades:sector:in:telecom	Telecommunications	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:sector:in:toll-roads	Toll roads	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:sector:in:transport-infrastructure	Transport infrastructure	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:trade-agreement:in-om:cepa	India-Oman CEPA	trade_agreement	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:ADANIPORTS	Adani Ports and Special Economic Zone Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:AXISBANK	Axis Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:BAJFINANCE	Bajaj Finance Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:BHARTIARTL	Bharti Airtel Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:HDFCBANK	HDFC Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:HUDCO	Housing & Urban Development Corporation Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:ICICIBANK	ICICI Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:INFY	Infosys Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:ITC	ITC Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:KOTAKBANK	Kotak Mahindra Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:LT	Larsen & Toubro Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:MARUTI	Maruti Suzuki India Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:RELIANCE	Reliance Industries Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:SBIN	State Bank of India	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:SUNPHARMA	Sun Pharmaceutical Industries Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-issuer:TCS	Tata Consultancy Services Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:ADANIPORTS	ADANIPORTS	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:AXISBANK	AXISBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:BAJFINANCE	BAJFINANCE	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:BHARTIARTL	BHARTIARTL	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:HDFCBANK	HDFCBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:HUDCO	HUDCO	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:ICICIBANK	ICICIBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:INFY	INFY	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:ITC	ITC	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:KOTAKBANK	KOTAKBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:LT	LT	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:MARUTI	MARUTI	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:RELIANCE	RELIANCE	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:SBIN	SBIN	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:SUNPHARMA	SUNPHARMA	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in-ticker:TCS	TCS	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in:nifty-50	NIFTY 50	market_index	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in:nse	National Stock Exchange of India	exchange	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-finance-in:sebi	Securities and Exchange Board of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
-ades:impact:rate:it-btp-10y	Italy 10-year BTP yield	rate	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:impact:rate:it-btp-bund-spread	Italy BTP-Bund spread	rate	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:macro:it:consumer-prices	Italy Consumer prices	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:macro:it:employment	Italy Employment	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:macro:it:foreign-trade	Italy Foreign trade	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:macro:it:gdp	Italy GDP	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:macro:it:industrial-production	Italy Industrial production	macro_indicator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:agcm	AGCM	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:agcom	AGCOM	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:aifa	AIFA	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:anac	ANAC	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:arera	ARERA	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:art	Transport Regulation Authority	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:cdp	Cassa Depositi e Prestiti	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:covip	COVIP	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:enac	ENAC	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:gme	Gestore dei Mercati Energetici	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:gse	Gestore dei Servizi Energetici	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:invitalia	Invitalia	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:istat	ISTAT	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:ivass	IVASS	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:mase	Ministry of Environment and Energy Security	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:mef	Ministry of Economy and Finance	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:mimit	Ministry of Enterprises and Made in Italy	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:mit	Ministry of Infrastructure and Transport	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:pagopa	PagoPA	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:sace	SACE	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:org:it:simest	SIMEST	organization	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:payment-network:it:pagopa	PagoPA payment network	payment_network	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:program:it:garanzia-italia	Garanzia Italia	program	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:program:it:pnrr	Italy National Recovery and Resilience Plan	program	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:program:it:simest-394-fund	SIMEST 394 Fund	program	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
 ades:sector:it:aerospace-defense	Aerospace Defense	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
 ades:sector:it:airports	Airports	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
 ades:sector:it:asset-management	Asset Management	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
@@ -633,105 +583,6 @@ ades:sector:it:toll-roads	Toll Roads	sector	finance-it-en	false	true	"{""jurisdi
 ades:sector:it:transport-infrastructure	Transport Infrastructure	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
 ades:sector:it:water	Water	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
 ades:sector:it:wealth-management	Wealth Management	sector	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0000062072-ordinary	Generali ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0000062957-ordinary	Mediobanca ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0000066123-ordinary	BPER Banca ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0000072170-ordinary	FinecoBank ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0000072618-ordinary	Intesa Sanpaolo ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0003132476-ordinary	Eni ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0003153415-ordinary	Snam ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0003242622-ordinary	Terna ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0003497168-ordinary	Telecom Italia ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0003796171-ordinary	Poste Italiane ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0003856405-ordinary	Leonardo ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0004776628-ordinary	Banca Mediolanum ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0005211237-ordinary	Italgas ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0005218380-ordinary	Banco BPM ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0005239360-ordinary	UniCredit ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0005366767-ordinary	Nexi ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:it0005508921-ordinary	Banca Monte dei Paschi di Siena ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:security:it:borsa:nl0011585146-ordinary	Ferrari ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0000062072	Generali	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0000062957	Mediobanca	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0000066123	BPER Banca	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0000072170	FinecoBank	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0000072618	Intesa Sanpaolo	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0003132476	Eni	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0003153415	Snam	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0003242622	Terna	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0003497168	Telecom Italia	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0003796171	Poste Italiane	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0003856405	Leonardo	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0004776628	Banca Mediolanum	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0005211237	Italgas	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0005218380	Banco BPM	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0005239360	UniCredit	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0005366767	Nexi	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:IT0005508921	Banca Monte dei Paschi di Siena	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-issuer:NL0011585146	Ferrari	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:BAMI	BAMI	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:BMED	BMED	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:BMPS	BMPS	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:BPE	BPE	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:ENI	ENI	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:FBK	FBK	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:G	G	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:IG	IG	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:ISP	ISP	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:LDO	LDO	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:MB	MB	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:NEXI	NEXI	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:PST	PST	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:RACE	RACE	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:SRG	SRG	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:TIT	TIT	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:TRN	TRN	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it-ticker:UCG	UCG	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it:bank-of-italy	Banca d'Italia	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it:borsa-italiana	Borsa Italiana	exchange	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it:consob	CONSOB	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-finance-it:ftse-mib	FTSE MIB	market_index	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
-ades:brand:mx:oxxo	OXXO	brand	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:brand:mx:volaris	Volaris	brand	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:country:CA	Canada	country	general-en	false	true	"{""jurisdiction"": ""CA""}"	general-en,finance-mx-en
-ades:country:MX	Mexico	country	general-en	false	true	"{""jurisdiction"": ""MX""}"	general-en,finance-mx-en
-ades:country:US	United States	country	general-en	false	true	"{""jurisdiction"": ""US""}"	general-en,finance-mx-en
-ades:currency:MXN	Mexican peso	currency	finance-mx-en	true	false	"{""jurisdiction"": ""MX"", ""same_as_refs"": [""currency:MXN"", ""iso4217:MXN""]}"	finance-mx-en,general-en
-ades:exchange:us:nasdaq	Nasdaq Stock Market	exchange	finance-mx-en	false	true	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
-ades:exchange:us:nyse	New York Stock Exchange	exchange	finance-mx-en	false	true	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
-ades:index:mx:ftse-biva	FTSE BIVA index family	market_index	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:macro:mx:cpi	Mexico CPI / inflation	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:macro:mx:employment	Mexico employment	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:macro:mx:gdp	Mexico GDP	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:macro:mx:industrial-production	Mexico industrial production	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:macro:mx:retail-sales	Mexico retail sales	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:macro:mx:trade-balance	Mexico trade balance	macro_indicator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:global:fifa	FIFA	organization	finance-mx-en	false	true	"{""jurisdiction"": ""GLOBAL""}"	finance-mx-en,general-en
-ades:org:mx:afac	AFAC	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:atdt	ATDT	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:banxico	Banco de Mexico	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX"", ""same_as_refs"": [""wikidata:Q106800402""], ""wikidata_id"": ""Q106800402""}"	finance-mx-en,general-en
-ades:org:mx:cenace	CENACE	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:cfe	CFE	organization	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:cna-antimonopolio	Comision Nacional Antimonopolio	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:cnbv	CNBV	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:cne	CNE	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:cofece	Historical COFECE	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:cofepris	COFEPRIS	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:cre	Historical CRE	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:crt	CRT	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:ift	Historical IFT	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:inegi	INEGI	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:pemex	Pemex	organization	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:profeco	PROFECO	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:sader	SADER	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:secretaria-economia	Secretaria de Economia	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:senasica	SENASICA	regulator	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:sener	SENER	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:shcp	SHCP	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:org:mx:sict	SICT	government_body	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:program:global:fifa-world-cup-2026	FIFA World Cup 2026	program	finance-mx-en	false	true	"{""jurisdiction"": ""GLOBAL"", ""same_as_refs"": [""wikidata:Q6431616""], ""wikidata_id"": ""Q6431616""}"	finance-mx-en,general-en
-ades:rates:mx:banxico-policy-rate	Banxico policy rate proxy	rate	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-ades:rates:mx:mbono-10y	Mexico 10-year Mbono yield proxy	rate	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 ades:sector:mx:agri-food-health	Agri-food health	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 ades:sector:mx:agriculture	Agriculture	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 ades:sector:mx:agriculture-and-food-trade	Agriculture and food trade	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
@@ -801,6 +652,80 @@ ades:sector:mx:telecom	Telecom	sector	finance-mx-en	false	true	"{""jurisdiction"
 ades:sector:mx:telecom-and-broadband	Telecom and broadband	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 ades:sector:mx:tourism-and-hospitality	Tourism and hospitality	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 ades:sector:mx:transport-infrastructure	Transport infrastructure	sector	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:sector:ru:banking	Banking	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:coal-steel-and-mining	Coal, steel, and mining	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:defense-industrial	Defense industrial	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:electricity-and-power	Electricity and power	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:energy-and-oil-gas	Energy and oil and gas	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:energy-commodity-trading	Energy commodity trading	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:fertilizer-and-phosphates	Fertilizer and phosphates	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:food-retail	Food retail	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:gold-mining	Gold mining	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:industrial-machinery	Industrial machinery	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:metals-and-mining	Metals and mining	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:natural-gas-and-lng	Natural gas and LNG	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:natural-gas-and-pipeline-gas	Natural gas and pipeline gas	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:oil-and-gas	Oil and gas	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:payments	Payments	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:ports-shipping-and-freight	Ports, shipping, and freight	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:public-finance	Public finance	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:russian-equity-market	Russian equity market	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:securities-markets	Securities markets	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:settlement-and-depository	Settlement and depository	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:shipping-insurance-and-freight	Shipping, insurance, and freight	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:sovereign-debt-and-ofz	Sovereign debt and OFZ	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:steel	Steel	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:telecom	Telecom	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:transport-and-logistics	Transport and logistics	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:sa:aviation	Aviation	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:banking	Banking	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:capital-markets	Capital markets	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:chemicals	Chemicals	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:construction	Construction	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:consumer-staples	Consumer staples	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:digital-infrastructure	Digital infrastructure	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:energy	Energy	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:fertilizers	Fertilizers	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:financial-sector-development	Financial-sector development	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:food-dairy	Food and dairy	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:healthcare	Healthcare	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:hospitality	Hospitality	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:industrial-development	Industrial development	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:islamic-finance	Islamic finance	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:logistics-air-cargo	Logistics and air cargo	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:mining	Mining	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:oilfield-services	Oilfield services	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:payments-fintech	Payments and fintech	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:petrochemicals	Petrochemicals	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:pilgrimage-services	Pilgrimage services	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:renewable-power	Renewable power	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:saudi-equity-market	Saudi equity market	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:telecommunications	Telecommunications	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:tourism	Tourism	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:transport-logistics	Transport and logistics	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:sector:sa:water-utilities	Water utilities	sector	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
+ades:security:cn:sse:600941-ashare	China Mobile Limited A-share 600941	security	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600941""}"	finance-cn-en
+ades:security:cn:sse:601988-ashare	Bank of China Limited A-share 601988	security	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601988""}"	finance-cn-en
+ades:security:hk:hkex:00941-hshare	China Mobile Limited H-share 00941	security	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""HK0941009539"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""00941""}"	finance-hk-en,finance-cn-en
+ades:security:hk:hkex:03988-hshare	Bank of China Limited H-share 03988	security	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""CNE1000001Z5"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""03988""}"	finance-hk-en,finance-cn-en
+ades:security:it:borsa:it0000062072-ordinary	Generali ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0000062957-ordinary	Mediobanca ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0000066123-ordinary	BPER Banca ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0000072170-ordinary	FinecoBank ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0000072618-ordinary	Intesa Sanpaolo ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003132476-ordinary	Eni ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003153415-ordinary	Snam ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003242622-ordinary	Terna ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003497168-ordinary	Telecom Italia ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003796171-ordinary	Poste Italiane ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0003856405-ordinary	Leonardo ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0004776628-ordinary	Banca Mediolanum ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0005211237-ordinary	Italgas ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0005218380-ordinary	Banco BPM ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0005239360-ordinary	UniCredit ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0005366767-ordinary	Nexi ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:it0005508921-ordinary	Banca Monte dei Paschi di Siena ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+ades:security:it:borsa:nl0011585146-ordinary	Ferrari ordinary share	security	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
 ades:security:mx:bmv:amx-b	America Movil BMV B share	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 ades:security:mx:bmv:asur-b	ASUR BMV B share	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 ades:security:mx:bmv:cemex-cpo	Cemex BMV CPO	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
@@ -809,6 +734,42 @@ ades:security:mx:bmv:gap-b	GAP BMV B share	security	finance-mx-en	true	false	"{"
 ades:security:mx:bmv:kof-ubl	Coca-Cola FEMSA BMV UBL unit	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 ades:security:mx:bmv:oma-b	OMA BMV B share	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 ades:security:mx:bmv:volar-a	Volaris BMV A share	security	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+ades:security:ru:moex:chmf-share	CHMF MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009046510"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:CHMF"", ""isin:RU0009046510"", ""moex:CHMF""], ""security_identifier"": ""1-02-00143-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:gazp-share	GAZP MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0007661625"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:GAZP"", ""isin:RU0007661625"", ""moex:GAZP""], ""security_identifier"": ""1-02-00028-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:gmkn-share	GMKN MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0007288411"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:GMKN"", ""isin:RU0007288411"", ""moex:GMKN""], ""security_identifier"": ""1-01-40155-F""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:lkoh-share	LKOH MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009024277"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:LKOH"", ""isin:RU0009024277"", ""moex:LKOH""], ""security_identifier"": ""1-01-00077-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:mgnt-share	MGNT MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0JKQU8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:MGNT"", ""isin:RU000A0JKQU8"", ""moex:MGNT""], ""security_identifier"": ""1-01-60525-P""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:mtlr-share	MTLR MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0DKXV5"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:MTLR"", ""isin:RU000A0DKXV5"", ""moex:MTLR""], ""security_identifier"": ""1-01-55005-E""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:mtss-share	MTSS MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0007775219"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:MTSS"", ""isin:RU0007775219"", ""moex:MTSS""], ""security_identifier"": ""1-01-04715-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:nlmk-share	NLMK MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009046452"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:NLMK"", ""isin:RU0009046452"", ""moex:NLMK""], ""security_identifier"": ""1-01-00102-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:nvtk-share	NVTK MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0DKVS5"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:NVTK"", ""isin:RU000A0DKVS5"", ""moex:NVTK""], ""security_identifier"": ""1-02-00268-E""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:omzzp-share	OMZZP MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009090559"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:OMZZP"", ""isin:RU0009090559"", ""moex:OMZZP""], ""security_identifier"": ""2-01-30174-D""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:phor-share	PHOR MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0JRKT8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:PHOR"", ""isin:RU000A0JRKT8"", ""moex:PHOR""], ""security_identifier"": ""1-02-06556-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:plzl-share	PLZL MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0JNAA8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:PLZL"", ""isin:RU000A0JNAA8"", ""moex:PLZL""], ""security_identifier"": ""1-01-55192-E""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:rosn-share	ROSN MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0J2Q06"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:ROSN"", ""isin:RU000A0J2Q06"", ""moex:ROSN""], ""security_identifier"": ""1-02-00122-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:sber-share	SBER MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009029540"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:SBER"", ""isin:RU0009029540"", ""moex:SBER""], ""security_identifier"": ""10301481B""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:sngs-share	SNGS MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0008926258"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:SNGS"", ""isin:RU0008926258"", ""moex:SNGS""], ""security_identifier"": ""1-01-00155-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:tatn-share	TATN MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009033591"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:TATN"", ""isin:RU0009033591"", ""moex:TATN""], ""security_identifier"": ""1-03-00161-A""}"	finance-ru-en,general-en,finance-en
+ades:security:sa:tadawul:1010-ordinary-share	Riyad Bank ordinary share	security	finance-sa-en	true	false	"{""isin"": ""SA0007879048"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879048"", ""ticker_symbol"": ""1010""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:1120-ordinary-share	Al Rajhi Bank ordinary share	security	finance-sa-en	true	false	"{""isin"": ""SA0007879113"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879113"", ""ticker_symbol"": ""1120""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:1180-ordinary-share	The Saudi National Bank ordinary share	security	finance-sa-en	true	false	"{""isin"": ""SA13L050IE10"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA13L050IE10"", ""ticker_symbol"": ""1180""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:1211-ordinary-share	Saudi Arabian Mining Co. ordinary share	security	finance-sa-en	true	false	"{""isin"": ""SA123GA0ITH7"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA123GA0ITH7"", ""ticker_symbol"": ""1211""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:2010-ordinary-share	Saudi Basic Industries Corp. ordinary share	security	finance-sa-en	true	false	"{""isin"": ""SA0007879121"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879121"", ""ticker_symbol"": ""2010""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:2020-ordinary-share	SABIC Agri-Nutrients Co. ordinary share	security	finance-sa-en	true	false	"{""isin"": ""SA0007879139"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879139"", ""ticker_symbol"": ""2020""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:2082-ordinary-share	ACWA POWER Co. ordinary share	security	finance-sa-en	true	false	"{""isin"": ""SA15CGS10H12"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA15CGS10H12"", ""ticker_symbol"": ""2082""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:2222-ordinary-share	Saudi Arabian Oil Co. ordinary share	security	finance-sa-en	true	false	"{""isin"": ""SA14TG012N13"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA14TG012N13"", ""ticker_symbol"": ""2222""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:2280-ordinary-share	Almarai Co. ordinary share	security	finance-sa-en	true	false	"{""isin"": ""SA000A0ETHT1"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA000A0ETHT1"", ""ticker_symbol"": ""2280""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:2381-ordinary-share	Arabian Drilling Co. ordinary share	security	finance-sa-en	true	false	"{""isin"": ""SA15L1I156H7"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA15L1I156H7"", ""ticker_symbol"": ""2381""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:2382-ordinary-share	Ades Holding Co. ordinary share	security	finance-sa-en	true	false	"{""isin"": ""SA55SG6H5716"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA55SG6H5716"", ""ticker_symbol"": ""2382""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:4263-ordinary-share	Sal ordinary share	security	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""4263""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:4264-ordinary-share	Flynas ordinary share	security	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""4264""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:4325-ordinary-share	Masar ordinary share	security	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""4325""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:5110-ordinary-share	Saudi Energy ordinary share	security	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""5110""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:7010-ordinary-share	Stc ordinary share	security	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""7010""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:7020-ordinary-share	Etihad Etisalat ordinary share	security	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""7020""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:7203-ordinary-share	Elm ordinary share	security	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""7203""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:8010-ordinary-share	Tawuniya ordinary share	security	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""8010""}"	finance-sa-en,general-en,finance-en
+ades:security:sa:tadawul:8210-ordinary-share	Bupa Arabia ordinary share	security	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""8210""}"	finance-sa-en,general-en,finance-en
 ades:security:us:nasdaq:omab-adr	OMA Nasdaq ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
 ades:security:us:nyse:amx-adr	America Movil NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
 ades:security:us:nyse:asr-adr	ASUR NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
@@ -817,7 +778,164 @@ ades:security:us:nyse:fmx-adr	FEMSA NYSE ADR	security	finance-mx-en	true	false	"
 ades:security:us:nyse:kof-adr	Coca-Cola FEMSA NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
 ades:security:us:nyse:pac-adr	GAP NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
 ades:security:us:nyse:vlrs-adr	Volaris NYSE ADR	security	finance-mx-en	true	false	"{""jurisdiction"": ""US""}"	finance-mx-en,finance-us-en,general-en
+ades:trade-agreement:in-om:cepa	India-Oman CEPA	trade_agreement	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:trade-agreement:usmca	USMCA	trade_agreement	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
+finance-au-ticker:BHP	BHP	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
+finance-au-ticker:CBA	CBA	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
+finance-au:asx-200	S&P/ASX 200	market_index	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
+finance-br-ticker:B3SA3	B3SA3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRB3SAACNOR6"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""B3SA3""}"	finance-br-en
+finance-br-ticker:BBAS3	BBAS3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRBBASACNOR3"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""BBAS3""}"	finance-br-en
+finance-br-ticker:PETR3	PETR3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRPETRACNOR9"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""PETR3""}"	finance-br-en
+finance-br-ticker:PETR4	PETR4	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRPETRACNPR6"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""PETR4""}"	finance-br-en
+finance-br-ticker:RAIL3	RAIL3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRRAILACNOR9"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""RAIL3""}"	finance-br-en
+finance-br-ticker:VALE3	VALE3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRVALEACNOR0"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""VALE3""}"	finance-br-en
+finance-br:ibovespa	Ibovespa	market_index	finance-br-en	true	false	"{""jurisdiction"": ""BR""}"	finance-br-en
+finance-ca-ticker:tsx:bce	BCE	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""BCE""}"	finance-ca-en
+finance-ca-ticker:tsx:cnq	CNQ	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""CNQ""}"	finance-ca-en
+finance-ca-ticker:tsx:cnr	CNR	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""CNR""}"	finance-ca-en
+finance-ca-ticker:tsx:cp	CP	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""CP""}"	finance-ca-en
+finance-ca-ticker:tsx:enb	ENB	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""ENB""}"	finance-ca-en
+finance-ca-ticker:tsx:rci.b	RCI.B	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""RCI.B""}"	finance-ca-en
+finance-ca-ticker:tsx:ry	RY	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""RY""}"	finance-ca-en
+finance-ca-ticker:tsx:shop	SHOP	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""SHOP""}"	finance-ca-en
+finance-ca-ticker:tsx:t	T	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""T""}"	finance-ca-en
+finance-ca-ticker:tsx:td	TD	ticker	finance-ca-en	true	false	"{""exchange"": ""TSX"", ""jurisdiction"": ""CA"", ""mic"": ""XTSE"", ""ticker_symbol"": ""TD""}"	finance-ca-en
+finance-ca:sp-tsx-composite	S&P/TSX Composite Index	market_index	finance-ca-en	true	false	"{""jurisdiction"": ""CA""}"	finance-ca-en
+finance-cn-issuer:002594	BYD Company Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:300750	Contemporary Amperex Technology Co., Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:600028	China Petroleum & Chemical Corporation	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:600519	Kweichow Moutai Co.,Ltd.	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:600941	China Mobile Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:601398	Industrial and Commercial Bank of China Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:601628	China Life Insurance Company Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:601988	Bank of China Limited	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-issuer:920185	BTR New Material Group Co., Ltd.	issuer	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn-ticker:002594	002594	ticker	finance-cn-en	true	false	"{""exchange"": ""SZSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHE"", ""ticker_symbol"": ""002594""}"	finance-cn-en
+finance-cn-ticker:300750	300750	ticker	finance-cn-en	true	false	"{""exchange"": ""SZSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHE"", ""ticker_symbol"": ""300750""}"	finance-cn-en
+finance-cn-ticker:600028	600028	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600028""}"	finance-cn-en
+finance-cn-ticker:600519	600519	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""isin"": ""CNE0000018R8"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600519""}"	finance-cn-en
+finance-cn-ticker:600941	600941	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600941""}"	finance-cn-en
+finance-cn-ticker:601398	601398	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601398""}"	finance-cn-en
+finance-cn-ticker:601628	601628	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601628""}"	finance-cn-en
+finance-cn-ticker:601988	601988	ticker	finance-cn-en	true	false	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""601988""}"	finance-cn-en
+finance-cn-ticker:920185	920185	ticker	finance-cn-en	true	false	"{""exchange"": ""BSE"", ""isin"": ""CNE100003YM4"", ""jurisdiction"": ""CN"", ""mic"": ""XBSE"", ""ticker_symbol"": ""920185""}"	finance-cn-en
+finance-cn:bse	Beijing Stock Exchange	exchange	finance-cn-en	false	true	"{""exchange"": ""BSE"", ""jurisdiction"": ""CN"", ""mic"": ""XBSE"", ""ticker_symbol"": ""920185""}"	finance-cn-en
+finance-cn:csi-300	CSI 300	market_index	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en
+finance-cn:csrc	China Securities Regulatory Commission	regulator	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+finance-cn:pboc	People's Bank of China	government_body	finance-cn-en	false	true	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
+finance-cn:sse	Shanghai Stock Exchange	exchange	finance-cn-en	false	true	"{""exchange"": ""SSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHG"", ""ticker_symbol"": ""600519""}"	finance-cn-en
+finance-cn:szse	Shenzhen Stock Exchange	exchange	finance-cn-en	false	true	"{""exchange"": ""SZSE"", ""jurisdiction"": ""CN"", ""mic"": ""XSHE"", ""ticker_symbol"": ""300750""}"	finance-cn-en
+finance-de-issuer:DE0005140008	Deutsche Bank AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0005190003	BMW AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0005557508	Deutsche Telekom AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0005810055	Deutsche Boerse AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0006231004	Infineon Technologies AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0007030009	Rheinmetall AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0007037129	RWE AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0007100000	Mercedes-Benz Group AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0007164600	SAP SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0007236101	Siemens AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE0008404005	Allianz SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE000A0D9PT0	MTU Aero Engines AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE000BASF111	BASF SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE000ENAG999	E.ON SE	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-issuer:DE000ENER6Y0	Siemens Energy AG	issuer	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:ALV	ALV	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:BAS	BAS	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:BMW	BMW	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:DB1	DB1	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:DBK	DBK	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:DTE	DTE	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:ENR	ENR	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:EOAN	EOAN	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:IFX	IFX	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:MBG	MBG	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:MTX	MTX	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:RHM	RHM	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:RWE	RWE	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:SAP	SAP	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de-ticker:SIE	SIE	ticker	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de:boerse-frankfurt	Boerse Frankfurt	exchange	finance-de-en	false	true	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-de:dax	DAX	market_index	finance-de-en	true	false	"{""jurisdiction"": ""DE""}"	finance-de-en,general-en
+finance-hk-ticker:hkex:00700	00700	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""KYG875721634"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""00700""}"	finance-hk-en,finance-cn-en
+finance-hk-ticker:hkex:00941	00941	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""HK0941009539"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""00941""}"	finance-hk-en,finance-cn-en
+finance-hk-ticker:hkex:03988	03988	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""CNE1000001Z5"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""03988""}"	finance-hk-en,finance-cn-en
+finance-hk-ticker:hkex:09988	09988	ticker	finance-hk-en	true	false	"{""exchange"": ""HKEX"", ""isin"": ""KYG017191142"", ""jurisdiction"": ""HK"", ""mic"": ""XHKG"", ""ticker_symbol"": ""09988""}"	finance-hk-en,finance-cn-en
+finance-in-issuer:ADANIPORTS	Adani Ports and Special Economic Zone Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:AXISBANK	Axis Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:BAJFINANCE	Bajaj Finance Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:BHARTIARTL	Bharti Airtel Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:HDFCBANK	HDFC Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:HUDCO	Housing & Urban Development Corporation Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:ICICIBANK	ICICI Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:INFY	Infosys Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:ITC	ITC Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:KOTAKBANK	Kotak Mahindra Bank Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:LT	Larsen & Toubro Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:MARUTI	Maruti Suzuki India Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:RELIANCE	Reliance Industries Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:SBIN	State Bank of India	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:SUNPHARMA	Sun Pharmaceutical Industries Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-issuer:TCS	Tata Consultancy Services Limited	issuer	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:ADANIPORTS	ADANIPORTS	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:AXISBANK	AXISBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:BAJFINANCE	BAJFINANCE	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:BHARTIARTL	BHARTIARTL	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:HDFCBANK	HDFCBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:HUDCO	HUDCO	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:ICICIBANK	ICICIBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:INFY	INFY	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:ITC	ITC	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:KOTAKBANK	KOTAKBANK	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:LT	LT	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:MARUTI	MARUTI	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:RELIANCE	RELIANCE	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:SBIN	SBIN	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:SUNPHARMA	SUNPHARMA	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in-ticker:TCS	TCS	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in:nifty-50	NIFTY 50	market_index	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in:nse	National Stock Exchange of India	exchange	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in:sebi	Securities and Exchange Board of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-it-issuer:IT0000062072	Generali	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0000062957	Mediobanca	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0000066123	BPER Banca	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0000072170	FinecoBank	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0000072618	Intesa Sanpaolo	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003132476	Eni	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003153415	Snam	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003242622	Terna	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003497168	Telecom Italia	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003796171	Poste Italiane	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0003856405	Leonardo	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0004776628	Banca Mediolanum	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0005211237	Italgas	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0005218380	Banco BPM	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0005239360	UniCredit	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0005366767	Nexi	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:IT0005508921	Banca Monte dei Paschi di Siena	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-issuer:NL0011585146	Ferrari	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:BAMI	BAMI	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:BMED	BMED	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:BMPS	BMPS	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:BPE	BPE	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:ENI	ENI	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:FBK	FBK	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:G	G	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:IG	IG	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:ISP	ISP	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:LDO	LDO	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:MB	MB	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:NEXI	NEXI	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:PST	PST	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:RACE	RACE	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:SRG	SRG	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:TIT	TIT	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:TRN	TRN	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it-ticker:UCG	UCG	ticker	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it:bank-of-italy	Banca d'Italia	government_body	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it:borsa-italiana	Borsa Italiana	exchange	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it:consob	CONSOB	regulator	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
+finance-it:ftse-mib	FTSE MIB	market_index	finance-it-en	true	false	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en
 finance-mx-issuer:AC	Arca Continental, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 finance-mx-issuer:AMX	America Movil, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 finance-mx-issuer:ASUR	Grupo Aeroportuario Del Sureste, S.A.B. De C.V.	issuer	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
@@ -858,89 +976,6 @@ finance-mx-ticker:VOLAR:a	VOLAR A	ticker	finance-mx-en	true	false	"{""exchange""
 finance-mx-ticker:WALMEX:*	WALMEX *	ticker	finance-mx-en	true	false	"{""exchange"": ""BMV"", ""jurisdiction"": ""MX"", ""ticker_symbol"": ""WALMEX""}"	finance-mx-en,general-en
 finance-mx:bmv	Bolsa Mexicana de Valores	exchange	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 finance-mx:ipc	S&P/BMV IPC	market_index	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
-finance-us-ticker:AMX	AMX	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""AMX""}"	finance-mx-en,finance-us-en,general-en
-finance-us-ticker:ASR	ASR	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""ASR""}"	finance-mx-en,finance-us-en,general-en
-finance-us-ticker:CX	CX	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""CX""}"	finance-mx-en,finance-us-en,general-en
-finance-us-ticker:FMX	FMX	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""FMX""}"	finance-mx-en,finance-us-en,general-en
-finance-us-ticker:KOF	KOF	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""KOF""}"	finance-mx-en,finance-us-en,general-en
-finance-us-ticker:OMAB	OMAB	ticker	finance-mx-en	true	false	"{""exchange"": ""NASDAQ"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""OMAB""}"	finance-mx-en,finance-us-en,general-en
-finance-us-ticker:PAC	PAC	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""PAC""}"	finance-mx-en,finance-us-en,general-en
-finance-us-ticker:VLRS	VLRS	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""VLRS""}"	finance-mx-en,finance-us-en,general-en
-ades:commodity-flow:ru:crude-oil-exports	Russia crude oil exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:commodity-flow:ru:fertilizer-exports	Russia fertilizer exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:commodity-flow:ru:natural-gas-exports	Russia natural gas exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:commodity-flow:ru:wheat-exports	Russia wheat exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:impact:commodity:coal	Coal	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:impact:commodity:fertilizer	Fertilizer	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:impact:commodity:nickel	Nickel	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:impact:commodity:palladium	Palladium	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:impact:commodity:steel	Steel	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:impact:currency:rub	Russian ruble	currency	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:impact:macro:ru-cpi	Russia CPI	macro_indicator	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:impact:macro:ru-gdp	Russia GDP	macro_indicator	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:impact:rate:ru-cbr-key-rate	Bank of Russia key rate	rate	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:market-access-status:ru:moex-active-status-a	MOEX active trading status A	market_access_status	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:org:ru:minenergy	Ministry of Energy of the Russian Federation	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:org:ru:minfin	Ministry of Finance of the Russian Federation	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:org:ru:mintrans	Ministry of Transport of the Russian Federation	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:org:ru:rosstat	Rosstat	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:org:ru:transneft	Transneft	organization	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:payment-system:ru:cross-border-payments	Russian cross-border payments	payment_system	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:pipeline:ru:gas-export-pipelines	Russia gas export pipelines	pipeline	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:pipeline:ru:oil-pipeline-system	Russia oil pipeline system	pipeline	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-authority:ca:gac	Global Affairs Canada	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-authority:ch:seco	Swiss SECO	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-authority:eu:council	Council of the European Union	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-authority:jp:mof	Japan Ministry of Finance	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-authority:uk:ofsi	UK OFSI	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-authority:us:ofac	U.S. Treasury OFAC	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-program:ca:russia	Canada Russia sanctions	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-program:ch:russia	Swiss Russia sanctions and embargoes	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-program:eu:russia-restrictive-measures	EU restrictive measures against Russia	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-program:jp:russia	Japan economic sanctions program	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-program:uk:russia	UK Russia sanctions regime	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sanctions-program:us-ofac:russia-related	OFAC Russia-related sanctions program	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:banking	Banking	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:coal-steel-and-mining	Coal, steel, and mining	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:defense-industrial	Defense industrial	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:electricity-and-power	Electricity and power	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:energy-and-oil-gas	Energy and oil and gas	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:energy-commodity-trading	Energy commodity trading	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:fertilizer-and-phosphates	Fertilizer and phosphates	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:food-retail	Food retail	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:gold-mining	Gold mining	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:industrial-machinery	Industrial machinery	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:metals-and-mining	Metals and mining	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:natural-gas-and-lng	Natural gas and LNG	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:natural-gas-and-pipeline-gas	Natural gas and pipeline gas	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:oil-and-gas	Oil and gas	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:payments	Payments	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:ports-shipping-and-freight	Ports, shipping, and freight	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:public-finance	Public finance	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:russian-equity-market	Russian equity market	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:securities-markets	Securities markets	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:settlement-and-depository	Settlement and depository	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:shipping-insurance-and-freight	Shipping, insurance, and freight	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:sovereign-debt-and-ofz	Sovereign debt and OFZ	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:steel	Steel	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:telecom	Telecom	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:sector:ru:transport-and-logistics	Transport and logistics	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:chmf-share	CHMF MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009046510"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:CHMF"", ""isin:RU0009046510"", ""moex:CHMF""], ""security_identifier"": ""1-02-00143-A""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:gazp-share	GAZP MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0007661625"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:GAZP"", ""isin:RU0007661625"", ""moex:GAZP""], ""security_identifier"": ""1-02-00028-A""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:gmkn-share	GMKN MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0007288411"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:GMKN"", ""isin:RU0007288411"", ""moex:GMKN""], ""security_identifier"": ""1-01-40155-F""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:lkoh-share	LKOH MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009024277"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:LKOH"", ""isin:RU0009024277"", ""moex:LKOH""], ""security_identifier"": ""1-01-00077-A""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:mgnt-share	MGNT MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0JKQU8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:MGNT"", ""isin:RU000A0JKQU8"", ""moex:MGNT""], ""security_identifier"": ""1-01-60525-P""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:mtlr-share	MTLR MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0DKXV5"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:MTLR"", ""isin:RU000A0DKXV5"", ""moex:MTLR""], ""security_identifier"": ""1-01-55005-E""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:mtss-share	MTSS MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0007775219"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:MTSS"", ""isin:RU0007775219"", ""moex:MTSS""], ""security_identifier"": ""1-01-04715-A""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:nlmk-share	NLMK MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009046452"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:NLMK"", ""isin:RU0009046452"", ""moex:NLMK""], ""security_identifier"": ""1-01-00102-A""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:nvtk-share	NVTK MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0DKVS5"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:NVTK"", ""isin:RU000A0DKVS5"", ""moex:NVTK""], ""security_identifier"": ""1-02-00268-E""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:omzzp-share	OMZZP MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009090559"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:OMZZP"", ""isin:RU0009090559"", ""moex:OMZZP""], ""security_identifier"": ""2-01-30174-D""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:phor-share	PHOR MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0JRKT8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:PHOR"", ""isin:RU000A0JRKT8"", ""moex:PHOR""], ""security_identifier"": ""1-02-06556-A""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:plzl-share	PLZL MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0JNAA8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:PLZL"", ""isin:RU000A0JNAA8"", ""moex:PLZL""], ""security_identifier"": ""1-01-55192-E""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:rosn-share	ROSN MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0J2Q06"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:ROSN"", ""isin:RU000A0J2Q06"", ""moex:ROSN""], ""security_identifier"": ""1-02-00122-A""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:sber-share	SBER MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009029540"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:SBER"", ""isin:RU0009029540"", ""moex:SBER""], ""security_identifier"": ""10301481B""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:sngs-share	SNGS MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0008926258"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:SNGS"", ""isin:RU0008926258"", ""moex:SNGS""], ""security_identifier"": ""1-01-00155-A""}"	finance-ru-en,general-en,finance-en
-ades:security:ru:moex:tatn-share	TATN MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009033591"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:TATN"", ""isin:RU0009033591"", ""moex:TATN""], ""security_identifier"": ""1-03-00161-A""}"	finance-ru-en,general-en,finance-en
 finance-ru-issuer:1074	"публичное акционерное общество ""НОВАТЭК"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 finance-ru-issuer:1089	Публичное акционерное общество Объединенные машиностроительные заводы (Группа Уралмаш-Ижора)	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 finance-ru-issuer:1158	"Публичное акционерное общество ""Полюс"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
@@ -978,3 +1013,69 @@ finance-ru:moex	Moscow Exchange	exchange	finance-ru-en	false	true	"{""isin"": ""
 finance-ru:moex-russia-index	MOEX Russia Index	market_index	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 finance-ru:nsd	National Settlement Depository	depository	finance-ru-en	false	true	"{""jurisdiction"": ""RU"", ""same_as_refs"": [""wikidata:Q4315073""]}"	finance-ru-en,general-en,finance-en
 finance-ru:spimex	SPIMEX	exchange	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-sa-issuer:1010	Riyad Bank	issuer	finance-sa-en	false	true	"{""isin"": ""SA0007879048"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879048"", ""ticker_symbol"": ""1010""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:1120	Al Rajhi Bank	issuer	finance-sa-en	false	true	"{""isin"": ""SA0007879113"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879113"", ""ticker_symbol"": ""1120""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:1180	The Saudi National Bank	issuer	finance-sa-en	false	true	"{""isin"": ""SA13L050IE10"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA13L050IE10"", ""ticker_symbol"": ""1180""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:1211	Saudi Arabian Mining Co.	issuer	finance-sa-en	false	true	"{""isin"": ""SA123GA0ITH7"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA123GA0ITH7"", ""ticker_symbol"": ""1211""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:2010	Saudi Basic Industries Corp.	issuer	finance-sa-en	false	true	"{""isin"": ""SA0007879121"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879121"", ""ticker_symbol"": ""2010""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:2020	SABIC Agri-Nutrients Co.	issuer	finance-sa-en	false	true	"{""isin"": ""SA0007879139"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879139"", ""ticker_symbol"": ""2020""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:2082	ACWA POWER Co.	issuer	finance-sa-en	false	true	"{""isin"": ""SA15CGS10H12"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA15CGS10H12"", ""ticker_symbol"": ""2082""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:2222	Saudi Arabian Oil Co.	issuer	finance-sa-en	false	true	"{""isin"": ""SA14TG012N13"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA14TG012N13"", ""ticker_symbol"": ""2222""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:2280	Almarai Co.	issuer	finance-sa-en	false	true	"{""isin"": ""SA000A0ETHT1"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA000A0ETHT1"", ""ticker_symbol"": ""2280""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:2381	Arabian Drilling Co.	issuer	finance-sa-en	false	true	"{""isin"": ""SA15L1I156H7"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA15L1I156H7"", ""ticker_symbol"": ""2381""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:2382	Ades Holding Co.	issuer	finance-sa-en	false	true	"{""isin"": ""SA55SG6H5716"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA55SG6H5716"", ""ticker_symbol"": ""2382""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:4263	Sal	issuer	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""4263""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:4264	Flynas	issuer	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""4264""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:4325	Masar	issuer	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""4325""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:5110	Saudi Energy	issuer	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""5110""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:7010	Stc	issuer	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""7010""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:7020	Etihad Etisalat	issuer	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""7020""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:7203	Elm	issuer	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""7203""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:8010	Tawuniya	issuer	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""8010""}"	finance-sa-en,general-en,finance-en
+finance-sa-issuer:8210	Bupa Arabia	issuer	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""8210""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:1010	1010	ticker	finance-sa-en	true	false	"{""isin"": ""SA0007879048"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879048"", ""ticker_symbol"": ""1010""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:1120	1120	ticker	finance-sa-en	true	false	"{""isin"": ""SA0007879113"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879113"", ""ticker_symbol"": ""1120""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:1180	1180	ticker	finance-sa-en	true	false	"{""isin"": ""SA13L050IE10"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA13L050IE10"", ""ticker_symbol"": ""1180""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:1211	1211	ticker	finance-sa-en	true	false	"{""isin"": ""SA123GA0ITH7"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA123GA0ITH7"", ""ticker_symbol"": ""1211""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:2010	2010	ticker	finance-sa-en	true	false	"{""isin"": ""SA0007879121"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879121"", ""ticker_symbol"": ""2010""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:2020	2020	ticker	finance-sa-en	true	false	"{""isin"": ""SA0007879139"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879139"", ""ticker_symbol"": ""2020""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:2082	2082	ticker	finance-sa-en	true	false	"{""isin"": ""SA15CGS10H12"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA15CGS10H12"", ""ticker_symbol"": ""2082""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:2222	2222	ticker	finance-sa-en	true	false	"{""isin"": ""SA14TG012N13"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA14TG012N13"", ""ticker_symbol"": ""2222""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:2280	2280	ticker	finance-sa-en	true	false	"{""isin"": ""SA000A0ETHT1"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA000A0ETHT1"", ""ticker_symbol"": ""2280""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:2381	2381	ticker	finance-sa-en	true	false	"{""isin"": ""SA15L1I156H7"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA15L1I156H7"", ""ticker_symbol"": ""2381""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:2382	2382	ticker	finance-sa-en	true	false	"{""isin"": ""SA55SG6H5716"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA55SG6H5716"", ""ticker_symbol"": ""2382""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:4263	4263	ticker	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""4263""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:4264	4264	ticker	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""4264""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:4325	4325	ticker	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""4325""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:5110	5110	ticker	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""5110""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:7010	7010	ticker	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""7010""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:7020	7020	ticker	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""7020""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:7203	7203	ticker	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""7203""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:8010	8010	ticker	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""8010""}"	finance-sa-en,general-en,finance-en
+finance-sa-ticker:8210	8210	ticker	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""ticker_symbol"": ""8210""}"	finance-sa-en,general-en,finance-en
+finance-sa:tadawul	Saudi Exchange	exchange	finance-sa-en	false	true	"{""isin"": ""SA0007879048"", ""jurisdiction"": ""SA"", ""security_identifier"": ""SA0007879048"", ""ticker_symbol"": ""1010""}"	finance-sa-en,general-en,finance-en
+finance-sa:tasi	Tadawul All Share Index	market_index	finance-sa-en	true	false	"{""jurisdiction"": ""SA"", ""same_as_refs"": [""TASI""]}"	finance-sa-en,general-en,finance-en
+finance-uk-issuer:04267576	Intertek Group Plc	issuer	finance-uk-en	0	1	"{""same_as_refs"":[""wikidata:Q1136085""],""ticker_ref"":""finance-uk-ticker:itrk""}"	finance-uk-en
+finance-uk-ticker:itrk	ITRK	ticker	finance-uk-en	1	0	"{""same_as_refs"":[""wikidata:Q1136085"",""finance-uk-issuer:04267576""],""issuer_ref"":""finance-uk-issuer:04267576""}"	finance-uk-en
+finance-us-issuer:0000104169	Walmart Inc.	issuer	finance-us-en	false	true	"{""jurisdiction"": ""US""}"	finance-us-en,general-en
+finance-us-issuer:0001318605	Tesla Inc.	issuer	finance-us-en	0	1	"{""same_as_refs"":[""wikidata:Q478214"",""FINANCE-US-ISSUER_0001318605""],""ticker_ref"":""finance-us-ticker:TSLA""}"	finance-us-en
+finance-us-ticker:AMX	AMX	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""AMX""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:ASR	ASR	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""ASR""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:CX	CX	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""CX""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:FMX	FMX	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""FMX""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:KOF	KOF	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""KOF""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:OMAB	OMAB	ticker	finance-mx-en	true	false	"{""exchange"": ""NASDAQ"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""OMAB""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:PAC	PAC	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""PAC""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:TSLA	TSLA	ticker	finance-us-en	1	0	"{""same_as_refs"":[""wikidata:Q478214"",""FINANCE-US-TICKER_TSLA"",""finance-us-issuer:0001318605""]}"	finance-us-en
+finance-us-ticker:VLRS	VLRS	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""VLRS""}"	finance-mx-en,finance-us-en,general-en
+finance-us-ticker:WMT	WMT	ticker	finance-us-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""mic"": ""XNYS"", ""ticker_symbol"": ""WMT""}"	finance-us-en,general-en
+geonames:6252001	United States	country		0	1	"{""country_code"":""us"",""geonames"":""6252001"",""same_as_refs"":[""country:us"",""wikidata:Q30""],""wikidata"":""Q30""}"	general-en,finance-en
+wikidata:Q1136085	Intertek Group Plc	organization	general-en	0	1	"{""same_as_refs"":[""finance-uk-issuer:04267576""],""wikidata"":""Q1136085""}"	general-en,finance-uk-en
+wikidata:Q121826282	OPEC+	organization		0	1	"{""wikidata"":""Q121826282""}"	general-en,finance-en
+wikidata:Q159	Russia	country		0	1	"{""country_code"":""ru"",""geonames_id"":""2017370"",""same_as_refs"":[""country:ru"",""geonames:2017370""],""wikidata"":""Q159""}"	general-en,finance-en
+wikidata:Q317521	Elon Musk	person	general-en	0	1	"{""same_as_refs"":[""person:elon-musk""],""wikidata"":""Q317521""}"	general-en,finance-us-en
+wikidata:Q458	European Union	bloc		0	1	"{""wikidata"":""Q458""}"	general-en
+wikidata:Q53536	Federal Reserve System	central_bank		0	1	"{""wikidata"":""Q53536""}"	general-en,finance-en
+wikidata:Q794	Iran	country		0	1	"{""country_code"":""ir"",""geonames_id"":""130758"",""same_as_refs"":[""country:ir"",""geonames:130758""],""wikidata"":""Q794""}"	general-en,finance-en
+wikidata:Q8901	European Central Bank	central_bank		0	1	"{""wikidata"":""Q8901""}"	general-en,finance-en
+wikidata:Q899	Suez Canal	chokepoint		0	1	"{""wikidata"":""Q899""}"	general-en

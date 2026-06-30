@@ -293,6 +293,53 @@ def test_relationship_schema_covers_russia_market_access_sanctions_and_flow_path
     )
 
 
+def test_relationship_schema_covers_saudi_program_project_and_policy_paths() -> None:
+    assert relation_family_for_relation("vision_program_affects_sector") == (
+        "policy_sector_exposure"
+    )
+    assert relation_family_for_relation("vision_program_has_project") == (
+        "program_project_relationship"
+    )
+    assert relation_direction_preconditions("vision_program_has_project") == (
+        "direct_program_or_project_mention",
+        "source_backed_program_project_evidence",
+        "compatible_event_signal",
+    )
+    assert relation_family_for_relation("project_affects_sector") == ("policy_sector_exposure")
+    assert "supply_disruption" in relation_event_types("project_affects_sector")
+    assert relation_family_for_relation("sovereign_fund_sponsors_program") == (
+        "program_org_relationship"
+    )
+    assert "source_backed_program_org_evidence" in relation_direction_preconditions(
+        "sovereign_fund_sponsors_program"
+    )
+    assert relation_family_for_relation("central_bank_maintains_currency_peg") == (
+        "country_macro_policy"
+    )
+    assert "fx_fixing_or_capital_flow_signal" in relation_direction_preconditions(
+        "central_bank_maintains_currency_peg"
+    )
+    assert relation_family_for_relation("central_bank_sets_policy_rate") == ("country_macro_policy")
+    assert "liquidity_or_policy_rate_signal" in relation_direction_preconditions(
+        "central_bank_sets_policy_rate"
+    )
+    assert relation_family_for_relation("production_policy_affects_commodity") == (
+        "geography_commodity"
+    )
+    assert "commodity_price_move" in relation_event_types("production_policy_affects_commodity")
+    assert relation_family_for_relation("pilgrimage_flow_affects_sector") == (
+        "policy_sector_exposure"
+    )
+    assert (
+        validate_relation_metadata(
+            relation="vision_program_has_project",
+            configured_event_types=(),
+            configured_preconditions=(),
+        )
+        == []
+    )
+
+
 def test_relationship_schema_defaults_and_warnings_are_non_fatal() -> None:
     assert normalized_relation_event_types("regulator_affects_sector", ()) == (
         "sector_policy_change",
@@ -1030,6 +1077,26 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
         == SOURCE_TIER_ISSUER_DISCLOSED
     )
     assert classify_source_tier("OMZ official site", "https://omz.tech/en/") == (
+        SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier("Saudi Exchange profile", "https://www.saudiexchange.sa/")
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert classify_source_tier("Saudi CMA", "https://cma.gov.sa/en/") == (SOURCE_TIER_REGULATOR)
+    assert classify_source_tier("SAMA monetary policy", "https://www.sama.gov.sa/en-US/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("PIF official profile", "https://www.pif.gov.sa/en/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier(
+        "Vision 2030 official site", "https://www.vision2030.gov.sa/en"
+    ) == (SOURCE_TIER_GOVERNMENT)
+    assert classify_source_tier("NEOM official site", "https://www.neom.com/en-us/about") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("SABIC investors", "https://www.sabic.com/en/investors") == (
         SOURCE_TIER_ISSUER_DISCLOSED
     )
     assert classify_source_tier("unit test", "https://example.test/source") == (

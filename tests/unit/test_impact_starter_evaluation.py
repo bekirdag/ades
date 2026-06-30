@@ -1096,3 +1096,89 @@ def test_article_golden_set_evaluates_extraction_then_impact(tmp_path: Path):
         "ades:heuristic_structural_location:general-en:location:strait-of-hormuz",
         "wikidata:Q794",
     ]
+
+
+def test_starter_graph_includes_promoted_saudi_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        saudi_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_saudi_arabia/%'
+                   OR source_snapshot LIKE '/mnt/githubActions/ades_big_data/pack_sources/raw/finance-country-en-sa-stage/%'
+                   OR source_snapshot LIKE '/mnt/githubActions/ades_big_data/prod-deploy/registry-2026-05-07-general-location-repair/packs/finance-sa-en/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-sa-ticker:2222',
+                    'ades:security:sa:tadawul:2222-ordinary-share',
+                    'finance-sa:tasi',
+                    'ades:impact:currency:sar',
+                    'ades:impact:rate:sa-repo-rate',
+                    'ades:impact:commodity:crude-oil'
+                )
+                """
+            )
+        }
+
+    assert saudi_edge_count == 146
+    assert tradable_rows == {
+        "ades:impact:commodity:crude-oil": (1, 1),
+        "ades:impact:currency:sar": (1, 0),
+        "ades:impact:rate:sa-repo-rate": (1, 0),
+        "ades:security:sa:tadawul:2222-ordinary-share": (1, 0),
+        "finance-sa-ticker:2222": (1, 0),
+        "finance-sa:tasi": (1, 0),
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=80,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    aramco_candidate_refs, aramco_passive_refs = expanded_refs("finance-sa-issuer:2222")
+    assert aramco_candidate_refs == {
+        "ades:security:sa:tadawul:2222-ordinary-share",
+        "finance-sa-ticker:2222",
+    }
+    assert "finance-sa:tadawul" in aramco_passive_refs
+    assert "ades:impact:currency:sar" not in aramco_candidate_refs
+    assert "finance-sa:tasi" not in aramco_candidate_refs
+
+    sama_candidate_refs, sama_passive_refs = expanded_refs("ades:org:sa:sama")
+    assert sama_candidate_refs == {"ades:impact:currency:sar", "ades:impact:rate:sa-repo-rate"}
+    assert {"ades:sector:sa:banking", "ades:sector:sa:payments-fintech"}.issubset(sama_passive_refs)
+    assert "finance-sa-ticker:1120" not in sama_candidate_refs
+    assert "finance-sa:tasi" not in sama_candidate_refs
+
+    neom_candidate_refs, neom_passive_refs = expanded_refs("ades:project:sa:neom")
+    assert neom_candidate_refs == set()
+    assert {
+        "ades:sector:sa:construction",
+        "ades:sector:sa:tourism",
+        "ades:sector:sa:transport-logistics",
+    }.issubset(neom_passive_refs)
+    assert "finance-sa-ticker:2222" not in neom_candidate_refs
+    assert "ades:impact:currency:sar" not in neom_candidate_refs
+
+    equity_candidate_refs, _ = expanded_refs("ades:sector:sa:saudi-equity-market")
+    assert equity_candidate_refs == {"finance-sa:tasi"}

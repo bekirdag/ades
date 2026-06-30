@@ -67,6 +67,11 @@ REVIEWED_RUSSIA_MOEX_CBR_SANCTIONS_FIXTURE = Path(
     "program_org_relationship/reviewed/2026-06-29/"
     "russia_moex_cbr_sanctions_policy_relationships.tsv"
 )
+REVIEWED_SAUDI_TADAWUL_SAMA_PIF_FIXTURE = Path(
+    "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/"
+    "program_org_relationship/reviewed/2026-06-29/"
+    "saudi_arabia_tadawul_sama_opec_pif_policy_relationships.tsv"
+)
 
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
@@ -2224,3 +2229,158 @@ def test_reviewed_russia_fixture_expands_moex_cbr_sanctions_and_flow_guardrails(
 
     equity_candidate_refs, _ = expanded_refs("ades:sector:ru:russian-equity-market")
     assert equity_candidate_refs == {"finance-ru:moex-russia-index"}
+
+
+def test_reviewed_saudi_fixture_expands_tadawul_sama_pif_and_project_guardrails(
+    tmp_path: Path,
+) -> None:
+    if not REVIEWED_SAUDI_TADAWUL_SAMA_PIF_FIXTURE.exists():
+        pytest.skip("reviewed Saudi Arabia Tadawul/SAMA/PIF fixture is not mounted")
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[REVIEWED_SAUDI_TADAWUL_SAMA_PIF_FIXTURE],
+        output_root=tmp_path / "impact_relationships",
+        run_id="reviewed-saudi-tadawul-sama-pif",
+        build_artifact=True,
+        include_starter_graph=False,
+        artifact_output_root=tmp_path / "artifacts",
+    )
+
+    assert result.relationship_row_count == 146
+    assert result.relation_counts == {
+        "central_bank_affects_credit_sector": 1,
+        "central_bank_maintains_currency_peg": 1,
+        "central_bank_sets_policy_rate": 1,
+        "country_produces_commodity": 1,
+        "government_body_affects_sector": 5,
+        "issuer_exposed_to_commodity": 4,
+        "issuer_has_listed_ticker": 20,
+        "issuer_has_security": 20,
+        "issuer_in_sector": 13,
+        "project_affects_sector": 5,
+        "regulator_affects_sector": 2,
+        "regulator_supervises_exchange": 1,
+        "sector_affects_index": 1,
+        "security_has_identifier": 20,
+        "security_listed_on_exchange": 20,
+        "sovereign_fund_sponsors_program": 1,
+        "ticker_listed_on_exchange": 20,
+        "vision_program_affects_sector": 9,
+        "vision_program_has_project": 1,
+    }
+    assert result.node_type_counts == {
+        "central_bank": 1,
+        "commodity": 3,
+        "country": 1,
+        "currency": 1,
+        "exchange": 1,
+        "giga_project": 1,
+        "government_body": 1,
+        "issuer": 20,
+        "market_index": 1,
+        "program": 2,
+        "rate": 1,
+        "regulator": 1,
+        "sector": 27,
+        "security": 20,
+        "sovereign_wealth_fund": 1,
+        "ticker": 20,
+        "vision_program": 1,
+    }
+
+    validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
+    assert validation.invalid_row_count == 0
+    assert validation.source_warning_counts == {}
+    assert validation.relation_warning_counts == {}
+    assert validation.source_tier_counts == {
+        "exchange": 101,
+        "government": 22,
+        "issuer_disclosed": 17,
+        "regulator": 6,
+    }
+
+    assert result.artifact_path is not None
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    for tradable_ref in [
+        "finance-sa-ticker:2222",
+        "ades:security:sa:tadawul:2222-ordinary-share",
+        "finance-sa:tasi",
+        "ades:impact:currency:sar",
+        "ades:impact:rate:sa-repo-rate",
+        "ades:impact:commodity:crude-oil",
+    ]:
+        assert nodes[tradable_ref]["is_tradable"] == "true"
+    for passive_ref in [
+        "ades:sector:sa:banking",
+        "ades:sector:sa:tourism",
+        "ades:project:sa:neom",
+        "ades:program:sa:vision-2030",
+    ]:
+        assert nodes[passive_ref]["is_tradable"] == "false"
+
+    with MarketGraphStore(result.artifact_path) as store:
+        aramco_edges = store.outbound_edges_batch(["finance-sa-issuer:2222"])[
+            "finance-sa-issuer:2222"
+        ]
+        sama_edges = store.outbound_edges_batch(["ades:org:sa:sama"])["ades:org:sa:sama"]
+        neom_edges = store.outbound_edges_batch(["ades:project:sa:neom"])["ades:project:sa:neom"]
+
+    assert {edge.target_ref for edge in aramco_edges} == {
+        "ades:security:sa:tadawul:2222-ordinary-share",
+        "finance-sa-ticker:2222",
+    }
+    assert {edge.target_ref for edge in sama_edges} == {
+        "ades:impact:currency:sar",
+        "ades:impact:rate:sa-repo-rate",
+        "ades:sector:sa:banking",
+        "ades:sector:sa:payments-fintech",
+    }
+    assert {edge.target_ref for edge in neom_edges} == {
+        "ades:sector:sa:construction",
+        "ades:sector:sa:renewable-power",
+        "ades:sector:sa:tourism",
+        "ades:sector:sa:transport-logistics",
+        "ades:sector:sa:water-utilities",
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=result.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=80,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    aramco_candidate_refs, aramco_passive_refs = expanded_refs("finance-sa-issuer:2222")
+    assert aramco_candidate_refs == {
+        "ades:security:sa:tadawul:2222-ordinary-share",
+        "finance-sa-ticker:2222",
+    }
+    assert "finance-sa:tadawul" in aramco_passive_refs
+    assert "ades:impact:currency:sar" not in aramco_candidate_refs
+    assert "finance-sa:tasi" not in aramco_candidate_refs
+
+    sama_candidate_refs, sama_passive_refs = expanded_refs("ades:org:sa:sama")
+    assert sama_candidate_refs == {"ades:impact:currency:sar", "ades:impact:rate:sa-repo-rate"}
+    assert {"ades:sector:sa:banking", "ades:sector:sa:payments-fintech"}.issubset(sama_passive_refs)
+    assert "finance-sa-ticker:1120" not in sama_candidate_refs
+    assert "finance-sa:tasi" not in sama_candidate_refs
+
+    neom_candidate_refs, neom_passive_refs = expanded_refs("ades:project:sa:neom")
+    assert neom_candidate_refs == set()
+    assert {
+        "ades:sector:sa:construction",
+        "ades:sector:sa:tourism",
+        "ades:sector:sa:transport-logistics",
+    }.issubset(neom_passive_refs)
+    assert "finance-sa-ticker:2222" not in neom_candidate_refs
+    assert "ades:impact:currency:sar" not in neom_candidate_refs
+
+    equity_candidate_refs, _ = expanded_refs("ades:sector:sa:saudi-equity-market")
+    assert equity_candidate_refs == {"finance-sa:tasi"}
