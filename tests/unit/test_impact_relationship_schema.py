@@ -1,16 +1,24 @@
 from ades.impact.relationship_schema import (
     RELATIONSHIP_NODE_TYPE_SCHEMA_VERSION,
     RELATIONSHIP_NODE_TYPES,
+    RELATIONSHIP_RELATION_SCHEMA_VERSION,
+    REQUIRED_NEWS_STORY_RELATIONS,
     canonical_node_type_for,
     normalized_relation_direction_preconditions,
     normalized_relation_event_types,
+    relation_allowed_source_node_types,
+    relation_allowed_target_node_types,
+    relation_conflict_policy,
     relation_definition_for,
     relation_direction_preconditions,
+    relation_direction_semantics,
     relation_event_types,
     relation_family_for_relation,
+    relation_required_evidence,
     validate_node_type_metadata,
     validate_relation_metadata,
 )
+from ades.impact import REQUIRED_NEWS_STORY_RELATIONS as EXPORTED_REQUIRED_NEWS_STORY_RELATIONS
 from ades.impact.source_catalog import (
     SOURCE_TIER_EXCHANGE,
     SOURCE_TIER_GOVERNMENT,
@@ -69,6 +77,115 @@ def test_relationship_node_type_schema_normalizes_legacy_lane_types() -> None:
     ]
     assert validate_node_type_metadata("") == ["missing_node_type"]
     assert validate_node_type_metadata("person") == ["unknown_node_type_schema:person"]
+
+
+def test_relation_schema_covers_required_news_story_relations() -> None:
+    assert RELATIONSHIP_RELATION_SCHEMA_VERSION == "relationship-relations-v1"
+    assert REQUIRED_NEWS_STORY_RELATIONS == (
+        "government_body_affects_sector",
+        "policy_body_affects_sector",
+        "law_affects_sector",
+        "regulation_affects_sector",
+        "sector_affects_issuer",
+        "issuer_in_sector",
+        "sector_affects_index",
+        "program_operated_by_org",
+        "product_owned_by_org",
+        "brand_owned_by_org",
+        "org_part_of_holding",
+        "org_subsidiary_of_org",
+        "holding_parent_is_issuer",
+        "issuer_has_listed_ticker",
+        "issuer_has_security",
+        "issuer_has_exchange_listing",
+        "issuer_has_lei",
+        "security_has_figi",
+        "security_has_isin",
+        "exchange_lists_security",
+        "commodity_affects_sector",
+        "commodity_affects_issuer",
+        "country_macro_signal_affects_currency",
+        "central_bank_signal_affects_rates_proxy",
+    )
+    assert EXPORTED_REQUIRED_NEWS_STORY_RELATIONS == REQUIRED_NEWS_STORY_RELATIONS
+
+    for relation in REQUIRED_NEWS_STORY_RELATIONS:
+        definition = relation_definition_for(relation)
+        assert definition.family != "other", relation
+        assert definition.compatible_event_types, relation
+        assert definition.direction_preconditions, relation
+        assert definition.allowed_source_node_types, relation
+        assert definition.allowed_target_node_types, relation
+        assert definition.direction_semantics, relation
+        assert definition.required_evidence, relation
+        assert definition.conflict_policy, relation
+        assert relation_allowed_source_node_types(relation) == definition.allowed_source_node_types
+        assert relation_allowed_target_node_types(relation) == definition.allowed_target_node_types
+        assert relation_direction_semantics(relation) == definition.direction_semantics
+        assert relation_required_evidence(relation) == definition.required_evidence
+        assert relation_conflict_policy(relation) == definition.conflict_policy
+        assert validate_relation_metadata(
+            relation=relation,
+            configured_event_types=(),
+            configured_preconditions=(),
+        ) == []
+
+
+def test_relation_schema_exposes_direction_types_evidence_and_conflicts() -> None:
+    policy_definition = relation_definition_for("law_affects_sector")
+    assert policy_definition.allowed_source_node_types == (
+        "policy",
+        "law",
+        "regulation",
+        "government_body",
+        "regulator",
+        "ministry",
+    )
+    assert policy_definition.allowed_target_node_types == ("sector", "industry", "index")
+    assert policy_definition.direction_semantics == (
+        "source_ref policy authority or program creates direct impact exposure for target_ref"
+    )
+    assert policy_definition.required_evidence == (
+        "source_url",
+        "source_tier",
+        "evidence_text",
+        "confidence",
+        "jurisdiction",
+        "effective_date_or_open_ended",
+    )
+    assert policy_definition.conflict_policy == "sector_to_currency_shortcut_forbidden"
+
+    listing_definition = relation_definition_for("issuer_has_listed_ticker")
+    assert listing_definition.allowed_source_node_types == ("issuer",)
+    assert listing_definition.allowed_target_node_types == ("ticker",)
+    assert listing_definition.conflict_policy == "unique_active_listing_per_security_exchange"
+    assert "identifier_or_listing_value" in listing_definition.required_evidence
+
+    assert relation_definition_for("commodity_affects_sector").allowed_source_node_types == (
+        "commodity",
+    )
+    assert relation_definition_for("commodity_affects_issuer").allowed_target_node_types == (
+        "issuer",
+        "ticker",
+        "security",
+    )
+    assert relation_definition_for(
+        "country_macro_signal_affects_currency"
+    ).allowed_target_node_types == ("currency",)
+    assert relation_definition_for(
+        "central_bank_signal_affects_rates_proxy"
+    ).allowed_target_node_types == ("rates_proxy",)
+
+    assert validate_relation_metadata(
+        relation="issuer_has_listed_ticker",
+        configured_event_types=(),
+        configured_preconditions=(),
+        source_node_type="sector",
+        target_node_type="currency",
+    ) == [
+        "unsupported_source_node_type:sector:issuer",
+        "unsupported_target_node_type:currency:ticker",
+    ]
 
 
 def test_relationship_schema_covers_policy_sector_and_regulatory_paths() -> None:

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 RELATIONSHIP_NODE_TYPE_SCHEMA_VERSION = "relationship-node-types-v1"
+RELATIONSHIP_RELATION_SCHEMA_VERSION = "relationship-relations-v1"
 RELATIONSHIP_NODE_TYPES = (
     "program",
     "policy",
@@ -261,6 +262,7 @@ IDENTITY_LISTING_RELATIONS = {
     "index_contains_security",
     "issuer_files_with_regulator",
     "issuer_has_cik",
+    "issuer_has_lei",
     "issuer_has_listed_ticker",
     "ticker_represents_issuer",
     "issuer_has_exchange_listing",
@@ -272,6 +274,7 @@ IDENTITY_LISTING_RELATIONS = {
     "security_has_cusip",
     "security_has_figi",
     "security_has_identifier",
+    "security_has_isin",
     "security_has_ticker",
     "security_listed_on_exchange",
     "security_trades_on_exchange",
@@ -292,6 +295,7 @@ POLICY_SECTOR_RELATIONS = {
     "regulator_affects_sector",
     "policy_body_affects_sector",
     "law_affects_sector",
+    "regulation_affects_sector",
     "sector_affects_issuer",
     "issuer_exposed_to_policy_sector",
 }
@@ -351,6 +355,7 @@ INDUSTRIAL_POLICY_RELATIONS = {
     "procurement_program_affects_sector",
 }
 ISSUER_EXPOSURE_RELATIONS = {
+    "commodity_affects_issuer",
     "issuer_exposed_to_commodity",
     "commodity_affects_issuer_revenue",
     "commodity_affects_issuer_margin",
@@ -410,6 +415,7 @@ GEOGRAPHY_COMMODITY_RELATIONS = {
 COMMODITY_SECTOR_RELATIONS = {
     "agriculture_commodity_affects_sector",
     "battery_metal_affects_sector",
+    "commodity_affects_sector",
     "energy_input_affects_sector",
     "food_commodity_affects_inflation",
     "industrial_metal_affects_sector",
@@ -473,6 +479,7 @@ COMMODITY_FLOW_RELATIONS = {
     "airport_serves_route",
 }
 CENTRAL_BANK_RELATIONS = {
+    "central_bank_signal_affects_rates_proxy",
     "central_bank_affects_currency",
     "central_bank_affects_rates",
     "central_bank_affects_credit_sector",
@@ -485,6 +492,7 @@ CENTRAL_BANK_RELATIONS = {
     "central_bank_maintains_currency_peg",
 }
 STATISTICS_RELATIONS = {
+    "country_macro_signal_affects_currency",
     "statistics_body_reports_macro_indicator",
     "statistics_agency_publishes_indicator",
 }
@@ -511,6 +519,32 @@ COUNTRY_MEMBERSHIP_RELATIONS = {
 CRYPTO_POLICY_RELATIONS = {
     "digital_asset_policy_affects_crypto",
 }
+REQUIRED_NEWS_STORY_RELATIONS = (
+    "government_body_affects_sector",
+    "policy_body_affects_sector",
+    "law_affects_sector",
+    "regulation_affects_sector",
+    "sector_affects_issuer",
+    "issuer_in_sector",
+    "sector_affects_index",
+    "program_operated_by_org",
+    "product_owned_by_org",
+    "brand_owned_by_org",
+    "org_part_of_holding",
+    "org_subsidiary_of_org",
+    "holding_parent_is_issuer",
+    "issuer_has_listed_ticker",
+    "issuer_has_security",
+    "issuer_has_exchange_listing",
+    "issuer_has_lei",
+    "security_has_figi",
+    "security_has_isin",
+    "exchange_lists_security",
+    "commodity_affects_sector",
+    "commodity_affects_issuer",
+    "country_macro_signal_affects_currency",
+    "central_bank_signal_affects_rates_proxy",
+)
 
 
 @dataclass(frozen=True)
@@ -519,6 +553,11 @@ class RelationDefinition:
     family: str
     compatible_event_types: tuple[str, ...] = ()
     direction_preconditions: tuple[str, ...] = ()
+    allowed_source_node_types: tuple[str, ...] = ()
+    allowed_target_node_types: tuple[str, ...] = ()
+    direction_semantics: str = ""
+    required_evidence: tuple[str, ...] = ()
+    conflict_policy: str = ""
 
 
 def canonical_node_type_for(node_type: str | None) -> str | None:
@@ -544,6 +583,332 @@ def validate_node_type_metadata(node_type: str | None) -> list[str]:
     if canonical != normalized:
         return [f"noncanonical_node_type:{normalized}:{canonical}"]
     return []
+
+
+def relation_allowed_source_node_types(relation: str) -> tuple[str, ...]:
+    """Return canonical source node types allowed by the relation schema."""
+
+    if relation == "sector_affects_issuer":
+        return ("sector", "industry")
+    if relation in {"issuer_in_sector", "issuer_in_index"}:
+        return ("issuer",)
+    if relation == "sector_affects_index":
+        return ("sector", "industry")
+    if relation == "issuer_has_listed_ticker":
+        return ("issuer",)
+    if relation in {"issuer_has_security", "issuer_has_exchange_listing"}:
+        return ("issuer",)
+    if relation in {"issuer_has_lei", "legal_entity_has_lei"}:
+        return ("issuer", "legal_entity")
+    if relation in {
+        "security_has_cusip",
+        "security_has_figi",
+        "security_has_identifier",
+        "security_has_isin",
+        "security_has_ticker",
+    }:
+        return ("security",)
+    if relation in {
+        "exchange_lists_security",
+        "ticker_listed_on_exchange",
+        "ticker_trades_on_exchange",
+        "security_listed_on_exchange",
+        "security_trades_on_exchange",
+    }:
+        return ("exchange", "ticker", "security")
+    if relation == "product_owned_by_org":
+        return ("product",)
+    if relation == "brand_owned_by_org":
+        return ("brand",)
+    if relation == "holding_parent_is_issuer":
+        return ("holding_company", "organization", "legal_entity")
+    if relation in ORGANIZATION_CONTROL_RELATIONS:
+        return ("organization", "legal_entity", "holding_company", "government_body")
+    if relation in PROGRAM_ORG_RELATIONS:
+        return ("program", "product", "brand")
+    if relation in PROGRAM_COUNTRY_RELATIONS:
+        return ("program",)
+    if relation in PROGRAM_PROJECT_RELATIONS:
+        return ("program",)
+    if relation in PROJECT_ORG_RELATIONS:
+        return ("program", "organization")
+    if relation in POLICY_SECTOR_RELATIONS:
+        return ("policy", "law", "regulation", "government_body", "regulator", "ministry")
+    if relation in POLICY_PROGRAM_RELATIONS:
+        return ("program", "policy", "government_body", "ministry")
+    if relation in TRADE_AGREEMENT_RELATIONS:
+        return ("policy", "government_body", "country")
+    if relation in INFRASTRUCTURE_PROJECT_RELATIONS:
+        return ("program", "policy", "government_body", "organization")
+    if relation in GOVERNMENT_POLICY_RELATIONS:
+        return ("government_body", "ministry", "regulator")
+    if relation in MARKET_INFRASTRUCTURE_RELATIONS:
+        return ("regulator", "government_body", "ministry")
+    if relation in INDUSTRIAL_POLICY_RELATIONS:
+        return ("policy", "law", "regulation", "government_body", "ministry")
+    if relation in PRODUCT_REGULATORY_RELATIONS:
+        return ("product", "regulator", "government_body")
+    if relation in TAX_AUTHORITY_RELATIONS or relation in COMPANY_REGISTRY_RELATIONS:
+        return ("government_body", "regulator", "ministry")
+    if relation in SOVEREIGN_DEBT_RELATIONS:
+        return ("government_body", "ministry", "country")
+    if relation in FISCAL_COMMODITY_RELATIONS:
+        return ("country", "government_body", "commodity")
+    if relation in ISSUER_EXPOSURE_RELATIONS:
+        return ("issuer", "commodity", "country", "sector", "industry", "program")
+    if relation in ENERGY_IMPORT_RELATIONS:
+        return ("commodity", "country")
+    if relation in COMMODITY_SECTOR_RELATIONS:
+        return ("commodity",)
+    if relation in GEOGRAPHY_COMMODITY_RELATIONS or relation in COMMODITY_MARKET_RELATIONS:
+        return ("country", "commodity", "organization", "government_body")
+    if relation in SANCTIONS_RELATIONS or relation in SANCTIONS_PROGRAM_RELATIONS:
+        return ("government_body", "regulator", "policy", "issuer", "security")
+    if relation in INFRASTRUCTURE_ASSET_RELATIONS:
+        return ("organization", "holding_company", "government_body")
+    if relation in COMMODITY_FLOW_RELATIONS:
+        return ("commodity", "organization", "country")
+    if relation in CENTRAL_BANK_RELATIONS:
+        return ("government_body", "regulator", "ministry")
+    if relation == "country_macro_signal_affects_currency":
+        return ("country", "government_body", "ministry")
+    if relation in STATISTICS_RELATIONS:
+        return ("government_body", "regulator", "ministry")
+    if relation in COUNTRY_MEMBERSHIP_RELATIONS:
+        return ("country",)
+    if relation in CRYPTO_POLICY_RELATIONS:
+        return ("policy", "law", "regulation", "regulator", "government_body")
+    if relation.endswith("_currency_proxy") or relation.endswith("_usd_proxy"):
+        return ("country", "government_body", "regulator")
+    if relation.endswith("_policy_rate_proxy"):
+        return ("country", "government_body", "regulator")
+    if relation.endswith("_country_index_proxy") or relation.endswith("_global_equity_proxy"):
+        return ("country", "sector", "industry", "index")
+    if relation.endswith("_country_risk_proxy") or relation.endswith("_global_policy_risk_proxy"):
+        return ("country", "government_body", "regulator")
+    if relation.endswith("_dxy_proxy"):
+        return ("currency", "country", "government_body")
+    if relation in PERSON_TO_ISSUER_RELATIONS or relation.startswith("person_"):
+        return ("organization", "issuer", "holding_company")
+    if relation in SUPPLY_CHAIN_RELATIONS:
+        return ("issuer",)
+    if relation in MARKET_ACCESS_STATUS_RELATIONS:
+        return ("security", "issuer", "ticker")
+    return ()
+
+
+def relation_allowed_target_node_types(relation: str) -> tuple[str, ...]:
+    """Return canonical target node types allowed by the relation schema."""
+
+    if relation in {
+        "government_body_affects_sector",
+        "policy_body_affects_sector",
+        "law_affects_sector",
+        "regulation_affects_sector",
+        "sector_affects_index",
+        "commodity_affects_sector",
+    }:
+        return ("sector", "industry", "index")
+    if relation == "sector_affects_issuer":
+        return ("issuer", "ticker", "security")
+    if relation == "issuer_in_sector":
+        return ("sector", "industry")
+    if relation == "issuer_has_listed_ticker":
+        return ("ticker",)
+    if relation == "issuer_has_security":
+        return ("security",)
+    if relation == "issuer_has_exchange_listing":
+        return ("exchange",)
+    if relation in {"issuer_has_lei", "legal_entity_has_lei"}:
+        return ("legal_entity",)
+    if relation in {"security_has_cusip", "security_has_figi", "security_has_identifier", "security_has_isin"}:
+        return ("security",)
+    if relation == "security_has_ticker":
+        return ("ticker",)
+    if relation in {"exchange_lists_security", "security_listed_on_exchange", "security_trades_on_exchange"}:
+        return ("security", "exchange")
+    if relation in {"ticker_listed_on_exchange", "ticker_trades_on_exchange"}:
+        return ("exchange",)
+    if relation in {"program_operated_by_org", "program_financed_by_org", "program_loan_recipient_org"}:
+        return ("organization", "issuer", "legal_entity", "holding_company")
+    if relation in {"product_owned_by_org", "brand_owned_by_org", "payment_network_operated_by_org"}:
+        return ("organization", "issuer", "legal_entity", "holding_company")
+    if relation == "holding_parent_is_issuer":
+        return ("issuer",)
+    if relation in ORGANIZATION_CONTROL_RELATIONS:
+        return ("organization", "legal_entity", "holding_company", "issuer")
+    if relation in PROGRAM_COUNTRY_RELATIONS:
+        return ("country",)
+    if relation in PROGRAM_PROJECT_RELATIONS:
+        return ("program",)
+    if relation in PROJECT_ORG_RELATIONS:
+        return ("organization", "issuer", "legal_entity", "holding_company")
+    if relation in POLICY_SECTOR_RELATIONS or relation in POLICY_PROGRAM_RELATIONS:
+        return ("sector", "industry", "issuer")
+    if relation in TRADE_AGREEMENT_RELATIONS:
+        return ("sector", "industry", "country")
+    if relation in INFRASTRUCTURE_PROJECT_RELATIONS:
+        return ("sector", "industry", "issuer")
+    if relation in MARKET_INFRASTRUCTURE_RELATIONS:
+        return ("exchange", "security", "issuer", "sector", "industry")
+    if relation in GOVERNMENT_POLICY_RELATIONS or relation in INDUSTRIAL_POLICY_RELATIONS:
+        return ("sector", "industry", "issuer", "commodity")
+    if relation in PRODUCT_REGULATORY_RELATIONS:
+        return ("product", "program")
+    if relation in TAX_AUTHORITY_RELATIONS:
+        return ("sector", "industry")
+    if relation in COMPANY_REGISTRY_RELATIONS:
+        return ("legal_entity", "issuer")
+    if relation in SOVEREIGN_DEBT_RELATIONS:
+        return ("security", "rates_proxy")
+    if relation in FISCAL_COMMODITY_RELATIONS:
+        return ("country", "currency", "rates_proxy")
+    if relation == "commodity_affects_issuer":
+        return ("issuer", "ticker", "security")
+    if relation in ISSUER_EXPOSURE_RELATIONS:
+        return ("issuer", "ticker", "security", "commodity", "country", "sector", "industry")
+    if relation in ENERGY_IMPORT_RELATIONS:
+        return ("currency", "sector", "industry")
+    if relation in COMMODITY_SECTOR_RELATIONS:
+        return ("sector", "industry")
+    if relation in GEOGRAPHY_COMMODITY_RELATIONS or relation in COMMODITY_MARKET_RELATIONS:
+        return ("commodity", "sector", "industry", "currency")
+    if relation in SANCTIONS_RELATIONS or relation in SANCTIONS_PROGRAM_RELATIONS:
+        return ("commodity", "country", "sector", "industry", "issuer", "security")
+    if relation in INFRASTRUCTURE_ASSET_RELATIONS:
+        return ("organization", "issuer", "commodity", "sector", "industry")
+    if relation in COMMODITY_FLOW_RELATIONS:
+        return ("commodity", "sector", "industry")
+    if relation == "central_bank_signal_affects_rates_proxy":
+        return ("rates_proxy",)
+    if relation in CENTRAL_BANK_RELATIONS:
+        return ("currency", "rates_proxy", "sector", "industry")
+    if relation == "country_macro_signal_affects_currency":
+        return ("currency",)
+    if relation in STATISTICS_RELATIONS:
+        return ("rates_proxy", "currency", "sector", "industry")
+    if relation in COUNTRY_MEMBERSHIP_RELATIONS:
+        return ("government_body", "country")
+    if relation in CRYPTO_POLICY_RELATIONS:
+        return ("currency", "sector", "industry")
+    if relation.endswith("_currency_proxy") or relation.endswith("_usd_proxy"):
+        return ("currency",)
+    if relation.endswith("_policy_rate_proxy"):
+        return ("rates_proxy",)
+    if relation.endswith("_country_index_proxy") or relation.endswith("_global_equity_proxy"):
+        return ("index",)
+    if relation.endswith("_country_risk_proxy") or relation.endswith("_global_policy_risk_proxy"):
+        return ("rates_proxy", "currency", "index")
+    if relation.endswith("_dxy_proxy"):
+        return ("currency",)
+    if relation in PERSON_TO_ISSUER_RELATIONS or relation.startswith("person_"):
+        return ("issuer", "ticker", "security")
+    if relation in SUPPLY_CHAIN_RELATIONS:
+        return ("issuer",)
+    if relation in MARKET_ACCESS_STATUS_RELATIONS:
+        return ("security", "ticker")
+    return ()
+
+
+def relation_direction_semantics(relation: str) -> str:
+    """Return human-readable direction semantics for source_ref -> target_ref."""
+
+    if relation in IDENTITY_LISTING_RELATIONS:
+        return "source_ref identifies, lists, or maps onto target_ref"
+    if relation in ORGANIZATION_CONTROL_RELATIONS:
+        return "source_ref controls, owns, or structurally contains target_ref"
+    if relation in PROGRAM_ORG_RELATIONS or relation in PROJECT_ORG_RELATIONS:
+        return "source_ref program, product, brand, or project is operated, financed, owned, or delivered by target_ref"
+    if relation in PROGRAM_COUNTRY_RELATIONS or relation in PROGRAM_PROJECT_RELATIONS:
+        return "source_ref program is hosted in or composed of target_ref"
+    if relation in POLICY_SECTOR_RELATIONS or relation in POLICY_PROGRAM_RELATIONS:
+        return "source_ref policy authority or program creates direct impact exposure for target_ref"
+    if relation in SECTOR_EXPOSURE_RELATIONS or relation in ORG_SECTOR_RELATIONS:
+        return "source_ref issuer, organization, or sector has membership or index exposure to target_ref"
+    if relation in TRADE_AGREEMENT_RELATIONS:
+        return "source_ref agreement or counterparty creates market-access exposure for target_ref"
+    if relation in INFRASTRUCTURE_PROJECT_RELATIONS:
+        return "source_ref project creates demand, capacity, delay, or logistics exposure for target_ref"
+    if relation in MARKET_INFRASTRUCTURE_RELATIONS:
+        return "source_ref regulator or infrastructure body supervises or serves target_ref"
+    if relation in GOVERNMENT_POLICY_RELATIONS or relation in INDUSTRIAL_POLICY_RELATIONS:
+        return "source_ref public policy lever changes operating exposure for target_ref"
+    if relation in ISSUER_EXPOSURE_RELATIONS:
+        return "source_ref exposure driver affects target_ref issuer economics or risk"
+    if relation in GEOGRAPHY_COMMODITY_RELATIONS or relation in COMMODITY_MARKET_RELATIONS:
+        return "source_ref geography, policy, or market driver affects target_ref commodity or sector"
+    if relation in SANCTIONS_RELATIONS or relation in SANCTIONS_PROGRAM_RELATIONS:
+        return "source_ref sanctions authority, program, or restriction constrains target_ref"
+    if relation in INFRASTRUCTURE_ASSET_RELATIONS or relation in COMMODITY_FLOW_RELATIONS:
+        return "source_ref infrastructure operator, asset, or route enables or disrupts target_ref flow"
+    if relation in CENTRAL_BANK_RELATIONS or relation in STATISTICS_RELATIONS:
+        return "source_ref macro authority or signal moves target_ref rate, currency, or macro proxy"
+    if relation in COUNTRY_MEMBERSHIP_RELATIONS:
+        return "source_ref country has active membership in target_ref bloc or group"
+    if relation in SUPPLY_CHAIN_RELATIONS:
+        return "source_ref issuer has supplier, customer, or partner exposure to target_ref issuer"
+    if relation in MARKET_ACCESS_STATUS_RELATIONS:
+        return "source_ref security or issuer has current market-access status represented by target_ref"
+    if relation in PERSON_TO_ISSUER_RELATIONS or relation.startswith("person_"):
+        return "source_ref key-person or ownership signal affects target_ref issuer"
+    return ""
+
+
+def relation_required_evidence(relation: str) -> tuple[str, ...]:
+    """Return required source-row evidence fields for promoting the relation."""
+
+    if relation_family_for_relation(relation) == "other":
+        return ()
+    required = ("source_url", "source_tier", "evidence_text", "confidence")
+    if relation in IDENTITY_LISTING_RELATIONS:
+        return (*required, "source_snapshot", "identifier_or_listing_value")
+    if relation in ORGANIZATION_CONTROL_RELATIONS:
+        return (*required, "source_snapshot", "effective_date_or_open_ended")
+    if relation in POLICY_SECTOR_RELATIONS or relation in POLICY_PROGRAM_RELATIONS:
+        return (*required, "jurisdiction", "effective_date_or_open_ended")
+    if relation in TRADE_AGREEMENT_RELATIONS:
+        return (*required, "jurisdiction", "counterparty_country")
+    if relation in PROGRAM_ORG_RELATIONS or relation in PROGRAM_COUNTRY_RELATIONS:
+        return (*required, "jurisdiction", "program_name")
+    if relation in PROGRAM_PROJECT_RELATIONS or relation in PROJECT_ORG_RELATIONS:
+        return (*required, "jurisdiction", "project_or_program_name")
+    if relation in ISSUER_EXPOSURE_RELATIONS or relation in SUPPLY_CHAIN_RELATIONS:
+        return (*required, "issuer_ref", "exposure_basis")
+    if relation in GEOGRAPHY_COMMODITY_RELATIONS or relation in COMMODITY_MARKET_RELATIONS:
+        return (*required, "commodity_ref", "exposure_basis")
+    if relation in SANCTIONS_RELATIONS or relation in SANCTIONS_PROGRAM_RELATIONS:
+        return (*required, "authority_or_program", "effective_date_or_open_ended")
+    if relation in CENTRAL_BANK_RELATIONS or relation in STATISTICS_RELATIONS:
+        return (*required, "jurisdiction", "macro_signal")
+    return (*required, "effective_date_or_open_ended")
+
+
+def relation_conflict_policy(relation: str) -> str:
+    """Return the conflict policy used by downstream source-lane validation."""
+
+    if relation in ORGANIZATION_CONTROL_RELATIONS:
+        return "exclusive_active_parent_requires_resolution"
+    if relation in {
+        "issuer_has_listed_ticker",
+        "ticker_listed_on_exchange",
+        "ticker_trades_on_exchange",
+        "security_listed_on_exchange",
+        "security_trades_on_exchange",
+    }:
+        return "unique_active_listing_per_security_exchange"
+    if relation in IDENTITY_LISTING_RELATIONS:
+        return "identifier_conflict_requires_source_priority"
+    if relation in PROGRAM_ORG_RELATIONS or relation in PROJECT_ORG_RELATIONS:
+        return "program_to_ticker_shortcut_forbidden"
+    if relation in POLICY_SECTOR_RELATIONS or relation in POLICY_PROGRAM_RELATIONS:
+        return "sector_to_currency_shortcut_forbidden"
+    if relation in ISSUER_EXPOSURE_RELATIONS or relation in SUPPLY_CHAIN_RELATIONS:
+        return "conflicting_exposure_basis_requires_review"
+    if relation in SANCTIONS_RELATIONS or relation in SANCTIONS_PROGRAM_RELATIONS:
+        return "expired_or_superseded_sanction_requires_inactive_edge"
+    if relation_family_for_relation(relation) != "other":
+        return "source_priority_and_effective_date_resolution"
+    return ""
 
 
 def relation_family_for_relation(relation: str) -> str:
@@ -712,6 +1077,7 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
     if relation in {
         "central_bank_affects_rates",
         "central_bank_affects_credit_sector",
+        "central_bank_signal_affects_rates_proxy",
         "central_bank_sets_policy_rate",
         "central_bank_sets_qe_policy",
         "central_bank_sets_qt_policy",
@@ -720,6 +1086,8 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         "central_bank_operates_liquidity_facility",
     }:
         return POLICY_RATE_EVENT_TYPES
+    if relation == "country_macro_signal_affects_currency":
+        return CURRENCY_PROXY_EVENT_TYPES
     if relation in STATISTICS_RELATIONS:
         return (
             "inflation_shock",
@@ -789,10 +1157,12 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
     if relation in {
         "issuer_files_with_regulator",
         "issuer_has_cik",
+        "issuer_has_lei",
         "legal_entity_has_lei",
         "legal_entity_registered_in_jurisdiction",
         "security_has_cusip",
         "security_has_figi",
+        "security_has_isin",
         "security_has_ticker",
     }:
         return (
@@ -809,6 +1179,7 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
         return ("direct_issuer_or_security_mention", "direct_listing_evidence")
     if relation in {
         "exchange_lists_security",
+        "issuer_has_exchange_listing",
         "issuer_has_security",
         "security_has_identifier",
         "security_listed_on_exchange",
@@ -1012,6 +1383,7 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
         )
     if relation in {
         "central_bank_affects_rates",
+        "central_bank_signal_affects_rates_proxy",
         "central_bank_sets_policy_rate",
         "central_bank_sets_qe_policy",
         "central_bank_sets_qt_policy",
@@ -1023,6 +1395,12 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
             "rate_inflation_central_bank_or_fiscal_signal",
             "liquidity_or_policy_rate_signal",
             "gilt_or_bond_market_signal",
+        )
+    if relation == "country_macro_signal_affects_currency":
+        return (
+            "currency_or_rates_context",
+            "macro_policy_or_risk_signal",
+            "macro_statistics_release_signal",
         )
     if relation == "central_bank_affects_credit_sector":
         return (
@@ -1082,6 +1460,8 @@ def validate_relation_metadata(
     relation: str,
     configured_event_types: Iterable[str] | None,
     configured_preconditions: Iterable[str] | None,
+    source_node_type: str | None = None,
+    target_node_type: str | None = None,
 ) -> list[str]:
     """Return non-fatal schema warnings for one normalized relationship row."""
 
@@ -1091,6 +1471,8 @@ def validate_relation_metadata(
     schema_events = relation_event_types(relation)
     schema_preconditions = relation_direction_preconditions(relation)
     family = relation_family_for_relation(relation)
+    allowed_source_types = relation_allowed_source_node_types(relation)
+    allowed_target_types = relation_allowed_target_node_types(relation)
 
     if family == "other" and not schema_events and not schema_preconditions:
         warnings.append("unknown_relation_schema")
@@ -1112,6 +1494,20 @@ def validate_relation_metadata(
         for precondition in configured_direction_preconditions:
             if precondition.casefold() not in schema_precondition_set:
                 warnings.append(f"unsupported_direction_precondition:{precondition}")
+    if source_node_type and allowed_source_types:
+        canonical_source_type = canonical_node_type_for(source_node_type)
+        if canonical_source_type not in allowed_source_types:
+            warnings.append(
+                "unsupported_source_node_type:"
+                f"{source_node_type}:{'|'.join(allowed_source_types)}"
+            )
+    if target_node_type and allowed_target_types:
+        canonical_target_type = canonical_node_type_for(target_node_type)
+        if canonical_target_type not in allowed_target_types:
+            warnings.append(
+                "unsupported_target_node_type:"
+                f"{target_node_type}:{'|'.join(allowed_target_types)}"
+            )
     return warnings
 
 
@@ -1121,4 +1517,9 @@ def relation_definition_for(relation: str) -> RelationDefinition:
         family=relation_family_for_relation(relation),
         compatible_event_types=relation_event_types(relation),
         direction_preconditions=relation_direction_preconditions(relation),
+        allowed_source_node_types=relation_allowed_source_node_types(relation),
+        allowed_target_node_types=relation_allowed_target_node_types(relation),
+        direction_semantics=relation_direction_semantics(relation),
+        required_evidence=relation_required_evidence(relation),
+        conflict_policy=relation_conflict_policy(relation),
     )
