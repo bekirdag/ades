@@ -333,6 +333,30 @@
       ]
     },
     {
+      "name": "south_africa_sarb_zar_policy_rate_bridge",
+      "entity_refs": [
+        "finance-za:sarb"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-za-en"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:currency:zar",
+        "ades:impact:rate:za-sarb-policy-rate"
+      ],
+      "expected_passive_refs": [
+        "ades:sector:za:banking",
+        "ades:sector:za:credit",
+        "ades:sector:za:financial-stability"
+      ],
+      "expected_relation_families": [
+        "central_bank_affects_currency",
+        "central_bank_sets_policy_rate",
+        "central_bank_affects_credit_sector"
+      ]
+    },
+    {
       "name": "france_lvmh_euronext_bridge",
       "entity_refs": [
         "finance-fr-issuer:FR0000121014"

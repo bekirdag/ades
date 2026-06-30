@@ -120,6 +120,16 @@
       "notes": "Production-promoted Argentina first slice covering BYMA issuer/ticker/security/exchange bridges, BCRA banking-sector regulator context, Rio Negro government program-sector rows, and Banco Patagonia product-to-issuer routing without a direct program-to-ticker or currency proxy."
     },
     {
+      "source_name": "South Africa reviewed JSE/SARB/FSCA/government relationship source lane",
+      "source_url": "https://clientportal.jse.co.za/_vti_bin/JSE/CustomerRoleService.svc/GetAllIssuers",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_south_africa/2026-06-29/SOURCE_INVENTORY.md",
+      "source_year": 2026,
+      "refresh_policy": "refresh_on_country_source_lane_update",
+      "normalized_output_allowed": true,
+      "license_notes": "Reviewed source lane stores only normalized relationship metadata; source URLs and evidence snippets are retained under /mnt/githubActions/ades_big_data.",
+      "notes": "Production-promoted South Africa first slice covering JSE issuer/ticker/security/index bridges, SARB rand and policy-rate rows, FSCA/Prudential Authority/JSE/Strate/ICASA/NERSA/Competition Commission supervisory rows, National Treasury/SARS government policy rows, mining commodity paths for gold and platinum-group metals, telecom paths for MTN/Vodacom/Telkom, bank paths for major listed banks, and SOE infrastructure paths for Eskom and Transnet without direct regulator-to-ticker, central-bank-to-ticker, SOE-to-index, or broad sector-to-ticker fanout."
+    },
+    {
       "source_name": "South Korea reviewed KRX/BOK/FSC/FSS semiconductor policy relationship source lane",
       "source_url": "https://global.krx.co.kr/contents/GLB/99/GLB99000001.jspx",
       "source_snapshot": "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/program_org_relationship/builds/20260629Tprogram-org-kr-reviewed-krx-bok-semiconductor-battery/manifest.json",
