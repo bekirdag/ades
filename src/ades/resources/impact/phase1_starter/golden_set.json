@@ -309,6 +309,30 @@
       ]
     },
     {
+      "name": "saudi_sama_sar_repo_rate_bridge",
+      "entity_refs": [
+        "ades:org:sa:sama"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-sa-en"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:currency:sar",
+        "ades:impact:rate:sa-repo-rate"
+      ],
+      "expected_passive_refs": [
+        "ades:sector:sa:banking",
+        "ades:sector:sa:payments-fintech"
+      ],
+      "expected_relation_families": [
+        "central_bank_maintains_currency_peg",
+        "central_bank_sets_policy_rate",
+        "central_bank_affects_credit_sector",
+        "regulator_affects_sector"
+      ]
+    },
+    {
       "name": "france_lvmh_euronext_bridge",
       "entity_refs": [
         "finance-fr-issuer:FR0000121014"

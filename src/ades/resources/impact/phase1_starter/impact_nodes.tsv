@@ -265,6 +265,7 @@ ades:org:ru:transneft	Transneft	organization	finance-ru-en	false	true	"{""jurisd
 ades:org:sa:cma	Capital Market Authority	regulator	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
 ades:org:sa:ministry-of-hajj-and-umrah	Ministry of Hajj and Umrah	government_body	finance-sa-en	false	true	"{""jurisdiction"": ""SA""}"	finance-sa-en,general-en,finance-en
 ades:org:sa:pif	Public Investment Fund	sovereign_wealth_fund	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""same_as_refs"": [""wikidata:Q2044197""]}"	finance-sa-en,general-en,finance-en
+ades:holding:sa:saudi-aramco	Saudi Aramco controlling shareholder structure	holding_company	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""same_as_refs"": [""wikidata:Q689588""]}"	finance-sa-en,general-en,finance-en
 ades:org:sa:sama	Saudi Central Bank	central_bank	finance-sa-en	false	true	"{""jurisdiction"": ""SA"", ""same_as_refs"": [""wikidata:Q1565279""]}"	finance-sa-en,general-en,finance-en
 ades:payment-network:in:upi	Unified Payments Interface	payment_network	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:payment-network:it:pagopa	PagoPA payment network	payment_network	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en

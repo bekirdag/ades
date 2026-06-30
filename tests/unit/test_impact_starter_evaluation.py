@@ -90,9 +90,10 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert "italy_banca_mediolanum_borsa_bridge" in case_names
     assert "mexico_gfnorte_bmv_banxico_bridge" in case_names
     assert "russia_sber_moex_cbr_bridge" in case_names
+    assert "saudi_sama_sar_repo_rate_bridge" in case_names
     assert report.warnings == []
-    assert report.case_count == 29
-    assert report.empty_path_rate == 0.0345
+    assert report.case_count == 30
+    assert report.empty_path_rate == 0.0333
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -1581,7 +1582,7 @@ def test_starter_graph_includes_promoted_saudi_relationships(tmp_path: Path) -> 
             )
         }
 
-    assert saudi_edge_count == 146
+    assert saudi_edge_count == 148
     assert tradable_rows == {
         "ades:impact:commodity:crude-oil": (1, 1),
         "ades:impact:currency:sar": (1, 0),
@@ -1632,6 +1633,19 @@ def test_starter_graph_includes_promoted_saudi_relationships(tmp_path: Path) -> 
 
     equity_candidate_refs, _ = expanded_refs("ades:sector:sa:saudi-equity-market")
     assert equity_candidate_refs == {"finance-sa:tasi"}
+
+    aramco_holding_candidate_refs, aramco_holding_passive_refs = expanded_refs(
+        "ades:holding:sa:saudi-aramco"
+    )
+    assert {
+        "ades:security:sa:tadawul:2010-ordinary-share",
+        "ades:security:sa:tadawul:2222-ordinary-share",
+        "finance-sa-ticker:2010",
+        "finance-sa-ticker:2222",
+    }.issubset(aramco_holding_candidate_refs)
+    assert {"finance-sa-issuer:2010", "finance-sa-issuer:2222", "finance-sa:tadawul"}.issubset(
+        aramco_holding_passive_refs
+    )
 
 
 def test_starter_graph_includes_promoted_south_africa_relationships(tmp_path: Path) -> None:
