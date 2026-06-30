@@ -1137,6 +1137,158 @@ def test_news_analyze_promotes_tradable_source_entities_to_terminals(
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 
+def test_news_analyze_promotes_only_ades_confirmed_direct_tradable_mentions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-direct-tradables-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _entity(
+        text: str,
+        label: str,
+        entity_ref: str,
+        *,
+        canonical_text: str | None = None,
+    ) -> EntityMatch:
+        start = article_text.index(text)
+        return EntityMatch(
+            text=text,
+            label=label,
+            start=start,
+            end=start + len(text),
+            confidence=0.94,
+            relevance=0.95,
+            provenance=EntityProvenance(
+                match_kind="alias",
+                match_path="aliases.json",
+                match_source="pack",
+                source_pack=pack_id,
+                source_domain="finance",
+            ),
+            link=EntityLink(
+                entity_id=entity_ref,
+                canonical_text=canonical_text or text,
+                provider="ades",
+            ),
+        )
+
+    article_text = (
+        "SPY rose while NVDA common stock rallied and USD/BRL jumped; MISS was also mentioned."
+    )
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                _entity("SPY", "market_index", "finance-us:index:SPY", canonical_text="SPY"),
+                _entity(
+                    "NVDA common stock",
+                    "security",
+                    "ades:security:us:nasdaq:us67066g1040-common-stock",
+                    canonical_text="NVIDIA common stock",
+                ),
+                _entity(
+                    "USD/BRL",
+                    "fx_pair",
+                    "ades:impact:currency-pair:usd-brl",
+                    canonical_text="USD/BRL",
+                ),
+                _entity("MISS", "ticker", "finance-us-ticker:MISS", canonical_text="MISS"),
+            ],
+            topics=[TopicMatch(label="finance", score=0.9, evidence_count=4)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert {
+            "finance-us:index:SPY",
+            "ades:security:us:nasdaq:us67066g1040-common-stock",
+            "ades:impact:currency-pair:usd-brl",
+            "finance-us-ticker:MISS",
+        }.issubset(set(entity_refs))
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-06-30",
+            artifact_hash="sha256:test",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="finance-us:index:SPY",
+                    name="SPY",
+                    entity_type="market_index",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=True,
+                ),
+                ImpactSourceEntity(
+                    entity_ref="ades:security:us:nasdaq:us67066g1040-common-stock",
+                    name="NVIDIA common stock",
+                    entity_type="security",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=True,
+                ),
+                ImpactSourceEntity(
+                    entity_ref="ades:impact:currency-pair:usd-brl",
+                    name="USD/BRL",
+                    entity_type="fx_pair",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=True,
+                ),
+            ],
+            candidates=[],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Direct tradable mentions move",
+            "text": article_text,
+            "packs": [pack_id],
+            "options": {
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    candidates = {
+        candidate["entity_ref"]: candidate for candidate in payload["terminal_impact_candidates"]
+    }
+    assert set(candidates) == {
+        "finance-us:index:SPY",
+        "ades:security:us:nasdaq:us67066g1040-common-stock",
+        "ades:impact:currency-pair:usd-brl",
+    }
+    assert candidates["finance-us:index:SPY"]["entity_type"] == "market_index"
+    assert (
+        candidates["ades:security:us:nasdaq:us67066g1040-common-stock"]["entity_type"] == "security"
+    )
+    assert candidates["ades:impact:currency-pair:usd-brl"]["entity_type"] == "currency_pair"
+    assert "finance-us-ticker:MISS" not in candidates
+    assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
 def test_news_analyze_keeps_deterministic_rule_entities_in_terminal_paths(
     tmp_path: Path,
     monkeypatch,

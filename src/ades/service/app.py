@@ -1160,10 +1160,14 @@ def _entity_name(entity: EntityMatch) -> str:
 
 
 _DIRECT_TERMINAL_REF_PREFIXES = (
+    "ades:security:",
     "ades:impact:commodity:",
     "ades:impact:crypto:",
     "ades:impact:currency:",
+    "ades:impact:currency-pair:",
     "ades:impact:equity-index:",
+    "ades:impact:forex:",
+    "ades:impact:fx:",
     "ades:impact:index:",
     "ades:impact:rates:",
     "ades:impact:bond:",
@@ -1173,14 +1177,19 @@ _DIRECT_TERMINAL_TYPE_TOKENS = {
     "commodity",
     "crypto",
     "currency",
+    "currency_pair",
     "equity",
     "equity_index",
     "etf",
     "forex",
+    "forex_pair",
     "fx",
+    "fx_pair",
     "index",
+    "market_index",
     "rate",
     "rates",
+    "security",
     "stock",
     "ticker",
 }
@@ -1213,7 +1222,14 @@ def _is_direct_terminal_ref(entity_ref: str) -> bool:
     if not normalized_ref:
         return False
     if normalized_ref.startswith("finance-") and (
-        "-ticker:" in normalized_ref or ":ticker:" in normalized_ref or ":equity:" in normalized_ref
+        "-ticker:" in normalized_ref
+        or "-security:" in normalized_ref
+        or ":ticker:" in normalized_ref
+        or ":equity:" in normalized_ref
+        or ":security:" in normalized_ref
+        or ":index:" in normalized_ref
+        or ":equity-index:" in normalized_ref
+        or ":market-index:" in normalized_ref
     ):
         return True
     return any(normalized_ref.startswith(prefix) for prefix in _DIRECT_TERMINAL_REF_PREFIXES)
@@ -1253,14 +1269,26 @@ def _direct_terminal_entity_type(entity_ref: str, entity_type: str | None) -> st
         return "ticker"
     if ":equity:" in normalized_ref or normalized_type in {"equity", "stock", "ticker"}:
         return normalized_type or "equity"
+    if normalized_ref.startswith("ades:security:") or ":security:" in normalized_ref:
+        return "security"
     if normalized_ref.startswith("ades:impact:commodity:"):
         return "commodity"
     if normalized_ref.startswith("ades:impact:crypto:"):
         return "crypto"
+    if normalized_ref.startswith(
+        ("ades:impact:currency-pair:", "ades:impact:forex:", "ades:impact:fx:")
+    ):
+        return "currency_pair"
     if normalized_ref.startswith("ades:impact:currency:"):
         return "currency"
-    if normalized_ref.startswith(("ades:impact:equity-index:", "ades:impact:index:")):
-        return "index"
+    if (
+        ":index:" in normalized_ref
+        or ":equity-index:" in normalized_ref
+        or ":market-index:" in normalized_ref
+        or normalized_ref.startswith(("ades:impact:equity-index:", "ades:impact:index:"))
+        or normalized_type in {"equity_index", "index", "market_index"}
+    ):
+        return normalized_type or "market_index"
     if normalized_ref.startswith("ades:impact:rates:"):
         return "rates"
     if normalized_ref.startswith("ades:impact:bond:"):
