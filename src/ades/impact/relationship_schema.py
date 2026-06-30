@@ -248,6 +248,7 @@ MARKET_INFRASTRUCTURE_RELATIONS = {
     "regulator_supervises_issuer",
     "regulator_supervises_financial_group",
     "regulator_supervises_insurer",
+    "regulator_supervises_capital_market",
     "regulator_supervises_telecom",
     "regulator_supervises_electricity",
     "regulator_supervises_competition",
@@ -255,6 +256,7 @@ MARKET_INFRASTRUCTURE_RELATIONS = {
     "regulator_supervises_port",
     "competition_authority_reviews_transaction",
     "depository_serves_security",
+    "clearing_house_clears_security",
 }
 GOVERNMENT_POLICY_RELATIONS = {
     "government_body_sets_export_policy",
@@ -289,7 +291,17 @@ ISSUER_EXPOSURE_RELATIONS = {
     "issuer_exposed_to_auto_cycle",
     "issuer_exposed_to_shipbuilding_cycle",
     "issuer_exposed_to_energy_import_cost",
+    "issuer_exposed_to_fx_pass_through",
+    "issuer_exposed_to_rate_cycle",
+    "issuer_exposed_to_tourism_cycle",
+    "issuer_exposed_to_defense_procurement",
+    "issuer_exposed_to_air_travel_cycle",
+    "issuer_exposed_to_construction_cycle",
     "product_exposed_to_commodity_input",
+}
+ENERGY_IMPORT_RELATIONS = {
+    "energy_import_affects_currency",
+    "energy_import_affects_sector",
 }
 GEOGRAPHY_COMMODITY_RELATIONS = {
     "location_affects_commodity_route",
@@ -351,6 +363,8 @@ INFRASTRUCTURE_ASSET_RELATIONS = {
     "org_operates_shipyard",
     "org_operates_power_utility",
     "org_operates_telecom_network",
+    "org_operates_airport",
+    "org_operates_airline",
 }
 COMMODITY_FLOW_RELATIONS = {
     "infrastructure_asset_supports_commodity_flow",
@@ -367,6 +381,7 @@ CENTRAL_BANK_RELATIONS = {
     "central_bank_affects_rates",
     "central_bank_affects_credit_sector",
     "central_bank_sets_policy_rate",
+    "central_bank_sets_reserve_requirement",
     "central_bank_maintains_currency_peg",
 }
 STATISTICS_RELATIONS = {
@@ -430,6 +445,7 @@ def relation_family_for_relation(relation: str) -> str:
         or relation in MARKET_INFRASTRUCTURE_RELATIONS
         or relation in GOVERNMENT_POLICY_RELATIONS
         or relation in INDUSTRIAL_POLICY_RELATIONS
+        or relation in ENERGY_IMPORT_RELATIONS
         or relation in FISCAL_COMMODITY_RELATIONS
     ):
         return "policy_sector_exposure"
@@ -525,6 +541,7 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         return SUPPLY_CHAIN_EVENT_TYPES
     if (
         relation in ISSUER_EXPOSURE_RELATIONS
+        or relation in ENERGY_IMPORT_RELATIONS
         or relation in GEOGRAPHY_COMMODITY_RELATIONS
         or relation in COMMODITY_MARKET_RELATIONS
     ):
@@ -541,6 +558,7 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         "central_bank_affects_rates",
         "central_bank_affects_credit_sector",
         "central_bank_sets_policy_rate",
+        "central_bank_sets_reserve_requirement",
     }:
         return POLICY_RATE_EVENT_TYPES
     if relation in STATISTICS_RELATIONS:
@@ -719,6 +737,12 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
         )
     if relation in ISSUER_EXPOSURE_RELATIONS:
         return ("source_backed_issuer_exposure", "compatible_event_signal")
+    if relation in ENERGY_IMPORT_RELATIONS:
+        return (
+            "energy_import_or_current_account_signal",
+            "fuel_price_import_cost_signal",
+            "jurisdiction_or_regulator_context",
+        )
     if relation in COMMODITY_SECTOR_RELATIONS:
         return (
             "input_cost_change",
@@ -785,7 +809,11 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
             "macro_policy_or_risk_signal",
             "fx_fixing_or_capital_flow_signal",
         )
-    if relation in {"central_bank_affects_rates", "central_bank_sets_policy_rate"}:
+    if relation in {
+        "central_bank_affects_rates",
+        "central_bank_sets_policy_rate",
+        "central_bank_sets_reserve_requirement",
+    }:
         return (
             "rate_inflation_central_bank_or_fiscal_signal",
             "liquidity_or_policy_rate_signal",

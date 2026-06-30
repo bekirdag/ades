@@ -82,6 +82,11 @@ REVIEWED_SOUTH_KOREA_KRX_BOK_FSC_POLICY_FIXTURE = Path(
     "program_org_relationship/reviewed/2026-06-29/"
     "south_korea_krx_bok_fsc_fss_semiconductor_policy_relationships.tsv"
 )
+REVIEWED_TURKIYE_BIST_TCMB_BDDK_SPK_ENERGY_FIXTURE = Path(
+    "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/"
+    "program_org_relationship/reviewed/2026-06-29/"
+    "turkiye_bist_tcmb_bddk_spk_energy_policy_relationships.tsv"
+)
 
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
@@ -2803,3 +2808,196 @@ def test_reviewed_south_korea_fixture_expands_krx_bok_and_industrial_guardrails(
     sector_candidate_refs, sector_passive_refs = expanded_refs("ades:sector:kr:semiconductors")
     assert sector_candidate_refs == set()
     assert sector_passive_refs == set()
+
+
+def test_reviewed_turkiye_fixture_expands_bist_tcmb_bddk_spk_guardrails(
+    tmp_path: Path,
+) -> None:
+    if not REVIEWED_TURKIYE_BIST_TCMB_BDDK_SPK_ENERGY_FIXTURE.exists():
+        pytest.skip("reviewed Turkiye BIST/TCMB/BDDK/SPK fixture is not mounted")
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[REVIEWED_TURKIYE_BIST_TCMB_BDDK_SPK_ENERGY_FIXTURE],
+        output_root=tmp_path / "impact_relationships",
+        run_id="reviewed-turkiye-bist-tcmb-bddk-spk-energy",
+        build_artifact=True,
+        include_starter_graph=False,
+        artifact_output_root=tmp_path / "artifacts",
+    )
+
+    assert result.relationship_row_count == 244
+    assert result.relation_counts == {
+        "central_bank_affects_credit_sector": 1,
+        "central_bank_affects_currency": 1,
+        "central_bank_sets_policy_rate": 1,
+        "central_bank_sets_reserve_requirement": 1,
+        "clearing_house_clears_security": 1,
+        "depository_serves_security": 1,
+        "government_body_affects_sector": 2,
+        "government_body_sets_energy_policy": 1,
+        "government_body_sets_fiscal_policy": 1,
+        "government_body_sets_industrial_policy": 1,
+        "government_body_sets_tourism_policy": 1,
+        "government_body_sets_trade_policy": 1,
+        "issuer_exposed_to_air_travel_cycle": 2,
+        "issuer_exposed_to_auto_cycle": 2,
+        "issuer_exposed_to_construction_cycle": 1,
+        "issuer_has_listed_ticker": 35,
+        "issuer_has_security": 35,
+        "issuer_in_sector": 35,
+        "org_operates_airline": 2,
+        "org_operates_power_utility": 2,
+        "org_operates_refinery": 1,
+        "org_operates_telecom_network": 2,
+        "regulator_supervises_bank": 1,
+        "regulator_supervises_capital_market": 1,
+        "regulator_supervises_competition": 1,
+        "regulator_supervises_electricity": 1,
+        "regulator_supervises_exchange": 1,
+        "regulator_supervises_insurer": 1,
+        "regulator_supervises_issuer": 1,
+        "sector_affects_index": 1,
+        "security_has_identifier": 35,
+        "security_listed_on_exchange": 35,
+        "statistics_body_reports_macro_indicator": 1,
+        "ticker_listed_on_exchange": 35,
+    }
+    assert result.node_type_counts == {
+        "airline": 2,
+        "central_bank": 1,
+        "clearing_house": 1,
+        "currency": 1,
+        "depository": 1,
+        "exchange": 1,
+        "government_body": 7,
+        "issuer": 35,
+        "macro_indicator": 1,
+        "market_index": 1,
+        "policy": 1,
+        "power_utility": 2,
+        "rate": 1,
+        "refinery": 1,
+        "regulator": 5,
+        "sector": 38,
+        "security": 36,
+        "telecom_network": 2,
+        "ticker": 35,
+    }
+
+    validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
+    assert validation.invalid_row_count == 0
+    assert validation.source_warning_counts == {}
+    assert validation.relation_warning_counts == {}
+    assert validation.source_tier_counts == {
+        "exchange": 1,
+        "government": 12,
+        "issuer_disclosed": 5,
+        "regulator": 226,
+    }
+
+    assert result.artifact_path is not None
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    for tradable_ref in [
+        "finance-tr-ticker:THYAO",
+        "ades:security:tr:bist:thyao-ordinary-share",
+        "ades:impact:currency:try",
+        "ades:impact:rate:tr-policy-rate",
+        "ades:impact:index:bist-100",
+    ]:
+        assert nodes[tradable_ref]["is_tradable"] == "true"
+    for passive_ref in [
+        "ades:policy-body:tr:tcmb",
+        "ades:regulator:tr:bddk",
+        "ades:sector:tr:banking",
+        "ades:sector:tr:aviation",
+    ]:
+        assert nodes[passive_ref]["is_tradable"] == "false"
+
+    edges = _read_tsv(result.edge_tsv_path)
+    edge_refs = {ref for row in edges for ref in (row["source_ref"], row["target_ref"])}
+    assert "finance-us-ticker:TKC" not in edge_refs
+    assert "finance-us-ticker:MRT" not in edge_refs
+    assert "ades:impact:index:bist-30" not in edge_refs
+
+    with MarketGraphStore(result.artifact_path) as store:
+        tcmb_edges = store.outbound_edges_batch(["ades:policy-body:tr:tcmb"])[
+            "ades:policy-body:tr:tcmb"
+        ]
+        bddk_edges = store.outbound_edges_batch(["ades:regulator:tr:bddk"])[
+            "ades:regulator:tr:bddk"
+        ]
+        thyao_edges = store.outbound_edges_batch(["finance-tr-issuer:1107"])[
+            "finance-tr-issuer:1107"
+        ]
+
+    assert {edge.target_ref for edge in tcmb_edges} == {
+        "ades:impact:currency:try",
+        "ades:impact:rate:tr-policy-rate",
+        "ades:policy:tr:reserve-requirements",
+        "ades:sector:tr:banking-credit",
+    }
+    assert {edge.target_ref for edge in bddk_edges} == {"ades:sector:tr:banking"}
+    assert {edge.target_ref for edge in thyao_edges} == {
+        "ades:airline:tr:turkish-airlines",
+        "ades:security:tr:bist:thyao-ordinary-share",
+        "ades:sector:tr:air-travel",
+        "ades:sector:tr:aviation",
+        "finance-tr-ticker:THYAO",
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=result.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=80,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    tcmb_candidate_refs, tcmb_passive_refs = expanded_refs("ades:policy-body:tr:tcmb")
+    assert tcmb_candidate_refs == {
+        "ades:impact:currency:try",
+        "ades:impact:rate:tr-policy-rate",
+    }
+    assert {
+        "ades:policy:tr:reserve-requirements",
+        "ades:sector:tr:banking-credit",
+    }.issubset(tcmb_passive_refs)
+    assert "ades:impact:index:bist-100" not in tcmb_candidate_refs
+    assert "finance-tr-ticker:AKBNK" not in tcmb_candidate_refs
+    assert "finance-tr-ticker:THYAO" not in tcmb_candidate_refs
+
+    bddk_candidate_refs, bddk_passive_refs = expanded_refs("ades:regulator:tr:bddk")
+    assert bddk_candidate_refs == set()
+    assert "ades:sector:tr:banking" in bddk_passive_refs
+    assert "ades:impact:currency:try" not in bddk_candidate_refs
+    assert "finance-tr-ticker:AKBNK" not in bddk_candidate_refs
+
+    thyao_candidate_refs, thyao_passive_refs = expanded_refs("finance-tr-issuer:1107")
+    assert thyao_candidate_refs == {
+        "ades:security:tr:bist:thyao-ordinary-share",
+        "finance-tr-ticker:THYAO",
+    }
+    assert {
+        "ades:airline:tr:turkish-airlines",
+        "ades:sector:tr:air-travel",
+        "ades:sector:tr:aviation",
+    }.issubset(thyao_passive_refs)
+    assert "ades:impact:currency:try" not in thyao_candidate_refs
+    assert "ades:impact:index:bist-100" not in thyao_candidate_refs
+
+    energy_candidate_refs, energy_passive_refs = expanded_refs(
+        "ades:government-body:tr:energy-ministry"
+    )
+    assert energy_candidate_refs == set()
+    assert "ades:sector:tr:energy" in energy_passive_refs
+    assert "ades:impact:currency:try" not in energy_candidate_refs
+
+    equity_candidate_refs, equity_passive_refs = expanded_refs("ades:sector:tr:bist-equity-market")
+    assert equity_candidate_refs == {"ades:impact:index:bist-100"}
+    assert equity_passive_refs == set()

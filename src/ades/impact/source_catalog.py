@@ -274,6 +274,17 @@ _OFFICIAL_HOST_FRAGMENTS = (
     "molit.go.kr",
     "mofa.go.kr",
     "mohw.go.kr",
+    "tccb.gov.tr",
+    "hmb.gov.tr",
+    "en.hmb.gov.tr",
+    "tcmb.gov.tr",
+    "tuik.gov.tr",
+    "trade.gov.tr",
+    "sanayi.gov.tr",
+    "enerji.gov.tr",
+    "uab.gov.tr",
+    "ktb.gov.tr",
+    "msb.gov.tr",
     "consilium.europa.eu",
 )
 _EXCHANGE_HOST_FRAGMENTS = (
@@ -331,6 +342,7 @@ _EXCHANGE_HOST_FRAGMENTS = (
     "global.krx.co.kr",
     "kind.krx.co.kr",
     "engkind.krx.co.kr",
+    "borsaistanbul.com",
 )
 _REGULATOR_HOST_FRAGMENTS = (
     "fca.org.uk",
@@ -447,6 +459,15 @@ _REGULATOR_HOST_FRAGMENTS = (
     "ftc.go.kr",
     "ksd.or.kr",
     "kdic.or.kr",
+    "spk.gov.tr",
+    "bddk.org.tr",
+    "bddk.gov.tr",
+    "kap.org.tr",
+    "rekabet.gov.tr",
+    "epdk.gov.tr",
+    "mkk.com.tr",
+    "takasbank.com.tr",
+    "seddk.gov.tr",
 )
 _REGULATOR_URL_FRAGMENTS = (
     "gob.mx/cnbv",
@@ -679,6 +700,41 @@ _ISSUER_DISCLOSED_HOST_FRAGMENTS = (
     "hd-hyundaiheavyindustries.com",
     "hanwhaaerospace.com",
     "lignex1.com",
+    "aselsan.com",
+    "turkishairlines.com",
+    "flypgs.com",
+    "turktelekom.com.tr",
+    "enerjisainvestorrelations.com",
+    "enerjisaenerji.com.tr",
+    "tupras.com.tr",
+    "koc.com.tr",
+    "sabanci.com",
+    "akbankinvestorrelations.com",
+    "akbank.com",
+    "garantibbvainvestorrelations.com",
+    "garantibbva.com.tr",
+    "isbank.com.tr",
+    "fordotosan.com.tr",
+    "bim.com.tr",
+    "yapikredi.com.tr",
+    "halkbank.com.tr",
+    "vakifbank.com.tr",
+    "erdemir.com.tr",
+    "cci.com.tr",
+    "gubretas.com.tr",
+    "tofas.com.tr",
+    "sisecam.com.tr",
+    "oyakcimento.com",
+    "migroskurumsal.com",
+    "kalkinma.com.tr",
+    "qnbfl.com",
+    "sasainvestorrelations.com",
+    "aksaenerji.com.tr",
+    "isyatirim.com.tr",
+    "arcelikglobal.com",
+    "arcelik.com.tr",
+    "mavicompany.com",
+    "hektas.com.tr",
 )
 
 
@@ -736,6 +792,7 @@ def classify_source_tier(source_name: str | None, source_url: str | None) -> str
         or host.endswith(".gov.au")
         or host.endswith(".gov.cn")
         or host.endswith(".gov.ru")
+        or host.endswith(".gov.tr")
         or _contains_any(host, _OFFICIAL_HOST_FRAGMENTS)
     ):
         return SOURCE_TIER_GOVERNMENT

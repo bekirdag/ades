@@ -1411,3 +1411,101 @@ def test_starter_graph_includes_promoted_south_korea_relationships(tmp_path: Pat
     sector_candidate_refs, sector_passive_refs = expanded_refs("ades:sector:kr:semiconductors")
     assert sector_candidate_refs == set()
     assert sector_passive_refs == set()
+
+
+def test_starter_graph_includes_promoted_turkiye_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        turkiye_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_turkiye/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-tr-ticker:THYAO',
+                    'ades:security:tr:bist:thyao-ordinary-share',
+                    'ades:impact:index:bist-100',
+                    'ades:impact:currency:try',
+                    'ades:impact:rate:tr-policy-rate',
+                    'ades:sector:tr:aviation'
+                )
+                """
+            )
+        }
+
+    assert turkiye_edge_count == 244
+    assert tradable_rows == {
+        "ades:impact:currency:try": (1, 0),
+        "ades:impact:index:bist-100": (1, 0),
+        "ades:impact:rate:tr-policy-rate": (1, 0),
+        "ades:sector:tr:aviation": (0, 1),
+        "ades:security:tr:bist:thyao-ordinary-share": (1, 0),
+        "finance-tr-ticker:THYAO": (1, 0),
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=80,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    tcmb_candidate_refs, tcmb_passive_refs = expanded_refs("ades:policy-body:tr:tcmb")
+    assert tcmb_candidate_refs == {
+        "ades:impact:currency:try",
+        "ades:impact:rate:tr-policy-rate",
+    }
+    assert {
+        "ades:policy:tr:reserve-requirements",
+        "ades:sector:tr:banking-credit",
+    }.issubset(tcmb_passive_refs)
+    assert "ades:impact:index:bist-100" not in tcmb_candidate_refs
+    assert "finance-tr-ticker:THYAO" not in tcmb_candidate_refs
+
+    bddk_candidate_refs, bddk_passive_refs = expanded_refs("ades:regulator:tr:bddk")
+    assert bddk_candidate_refs == set()
+    assert "ades:sector:tr:banking" in bddk_passive_refs
+    assert "finance-tr-ticker:AKBNK" not in bddk_candidate_refs
+    assert "ades:impact:currency:try" not in bddk_candidate_refs
+
+    thyao_candidate_refs, thyao_passive_refs = expanded_refs("finance-tr-issuer:1107")
+    assert thyao_candidate_refs == {
+        "ades:security:tr:bist:thyao-ordinary-share",
+        "finance-tr-ticker:THYAO",
+    }
+    assert {
+        "ades:airline:tr:turkish-airlines",
+        "ades:sector:tr:air-travel",
+        "ades:sector:tr:aviation",
+    }.issubset(thyao_passive_refs)
+    assert "ades:impact:currency:try" not in thyao_candidate_refs
+    assert "ades:impact:index:bist-100" not in thyao_candidate_refs
+
+    energy_candidate_refs, energy_passive_refs = expanded_refs(
+        "ades:government-body:tr:energy-ministry"
+    )
+    assert energy_candidate_refs == set()
+    assert "ades:sector:tr:energy" in energy_passive_refs
+    assert "ades:impact:currency:try" not in energy_candidate_refs
+
+    equity_candidate_refs, equity_passive_refs = expanded_refs("ades:sector:tr:bist-equity-market")
+    assert equity_candidate_refs == {"ades:impact:index:bist-100"}
+    assert equity_passive_refs == set()

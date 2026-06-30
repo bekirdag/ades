@@ -390,6 +390,39 @@ def test_relationship_schema_covers_saudi_program_project_and_policy_paths() -> 
     )
 
 
+def test_relationship_schema_covers_turkiye_market_policy_and_exposure_paths() -> None:
+    assert relation_family_for_relation("central_bank_sets_reserve_requirement") == (
+        "country_macro_policy"
+    )
+    assert "policy_rate_hike" in relation_event_types("central_bank_sets_reserve_requirement")
+    assert "liquidity_or_policy_rate_signal" in relation_direction_preconditions(
+        "central_bank_sets_reserve_requirement"
+    )
+    assert relation_family_for_relation("regulator_supervises_capital_market") == (
+        "policy_sector_exposure"
+    )
+    assert relation_family_for_relation("clearing_house_clears_security") == (
+        "policy_sector_exposure"
+    )
+    assert relation_family_for_relation("issuer_exposed_to_air_travel_cycle") == ("issuer_exposure")
+    assert "source_backed_issuer_exposure" in relation_direction_preconditions(
+        "issuer_exposed_to_air_travel_cycle"
+    )
+    assert relation_family_for_relation("org_operates_airline") == "infrastructure_asset"
+    assert relation_family_for_relation("org_operates_airport") == "infrastructure_asset"
+    assert "energy_import_or_current_account_signal" in relation_direction_preconditions(
+        "energy_import_affects_currency"
+    )
+    assert (
+        validate_relation_metadata(
+            relation="central_bank_sets_reserve_requirement",
+            configured_event_types=(),
+            configured_preconditions=(),
+        )
+        == []
+    )
+
+
 def test_relationship_schema_defaults_and_warnings_are_non_fatal() -> None:
     assert normalized_relation_event_types("regulator_affects_sector", ()) == (
         "sector_policy_change",
@@ -1186,6 +1219,21 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     assert classify_source_tier("Samsung semiconductor", "https://semiconductor.samsung.com/") == (
         SOURCE_TIER_ISSUER_DISCLOSED
     )
+    assert classify_source_tier("KAP profile", "https://www.kap.org.tr/en/bist-sirketler") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier(
+        "TCMB monetary policy",
+        "https://www.tcmb.gov.tr/wps/wcm/connect/EN/TCMB+EN/Main+Menu/Core+Functions/Monetary+Policy",
+    ) == (SOURCE_TIER_GOVERNMENT)
+    assert classify_source_tier(
+        "Borsa Istanbul listed companies",
+        "https://www.borsaistanbul.com/en/companies/listed-companies",
+    ) == (SOURCE_TIER_EXCHANGE)
+    assert classify_source_tier(
+        "Turkish Airlines investor relations",
+        "https://investor.turkishairlines.com/en",
+    ) == (SOURCE_TIER_ISSUER_DISCLOSED)
     assert classify_source_tier("unit test", "https://example.test/source") == (
         SOURCE_TIER_TEST_FIXTURE
     )
