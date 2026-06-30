@@ -114,6 +114,170 @@ def _build_uk_mining_sector_graph(tmp_path: Path) -> tuple[str, str]:
     return graph.artifact_path, graph.artifact_hash
 
 
+def _build_us_policy_terminal_graph(tmp_path: Path) -> tuple[str, str]:
+    node_path = tmp_path / "policy_impact_nodes.tsv"
+    edge_path = tmp_path / "policy_impact_edges.tsv"
+    node_path.write_text(
+        "\t".join(
+            [
+                "entity_ref",
+                "canonical_name",
+                "entity_type",
+                "library_id",
+                "is_tradable",
+                "is_seed_eligible",
+                "identifiers_json",
+                "packs",
+            ]
+        )
+        + "\n"
+        + "\n".join(
+            [
+                (
+                    "ades:us-law:chips-act\tCHIPS Act\tlaw\tfinance-us-en\t"
+                    '0\t1\t{"jurisdiction":"us"}\tfinance-us-en'
+                ),
+                (
+                    "ades:us-government-body:commerce-department\tUS Commerce Department\t"
+                    'government_body\tfinance-us-en\t0\t1\t{"jurisdiction":"us"}\t'
+                    "finance-us-en"
+                ),
+                (
+                    "ades:us-ministry:commerce\tUS Commerce Ministry\tministry\t"
+                    'finance-us-en\t0\t1\t{"jurisdiction":"us"}\tfinance-us-en'
+                ),
+                (
+                    "ades:us-policy:chip-subsidy-policy\tUS Chip Subsidy Policy\tpolicy\t"
+                    'finance-us-en\t0\t1\t{"jurisdiction":"us"}\tfinance-us-en'
+                ),
+                (
+                    "ades:us-regulation:chip-export-rule\tUS Chip Export Rule\t"
+                    'regulation\tfinance-us-en\t0\t1\t{"jurisdiction":"us"}\t'
+                    "finance-us-en"
+                ),
+                (
+                    "ades:sector:semiconductors\tSemiconductors\tsector\t"
+                    'finance-us-en\t0\t1\t{"jurisdiction":"us"}\tfinance-us-en'
+                ),
+                (
+                    "finance-us-issuer:example-semiconductor\tExample Semiconductor Inc\t"
+                    'issuer\tfinance-us-en\t1\t0\t{"jurisdiction":"us"}\tfinance-us-en'
+                ),
+                (
+                    "finance-us-ticker:nasdaq:xchp\tXCHP\tticker\t"
+                    "finance-us-en\t1\t0\t{}\tfinance-us-en"
+                ),
+                (
+                    "ades:impact:index:us-semiconductor-index\tUS Semiconductor Index\t"
+                    'index\tfinance-us-en\t1\t0\t{"jurisdiction":"us"}\tfinance-us-en'
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    edge_path.write_text(
+        "\t".join(
+            [
+                "source_ref",
+                "target_ref",
+                "relation",
+                "evidence_level",
+                "confidence",
+                "direction_hint",
+                "source_name",
+                "source_url",
+                "source_snapshot",
+                "source_year",
+                "refresh_policy",
+                "pack_ids",
+                "notes",
+                "compatible_event_types",
+                "direction_preconditions",
+            ]
+        )
+        + "\n"
+        + "\n".join(
+            [
+                (
+                    "ades:us-law:chips-act\tades:sector:semiconductors\t"
+                    "law_affects_sector\tdirect\t0.93\tpolicy_risk\t"
+                    "Congress CHIPS Act\t"
+                    "https://www.congress.gov/bill/117th-congress/house-bill/4346\t"
+                    "2026-06-30\t2026\tannual\tfinance-us-en\t"
+                    "reviewed law-to-sector policy exposure fixture\t"
+                    "sector_policy_change\tsector_policy_event_signal"
+                ),
+                (
+                    "ades:us-government-body:commerce-department\t"
+                    "ades:sector:semiconductors\tgovernment_body_affects_sector\t"
+                    "direct\t0.92\tpolicy_risk\tUS Commerce Department\t"
+                    "https://www.commerce.gov/\t2026-06-30\t2026\tannual\t"
+                    "finance-us-en\treviewed government-body sector fixture\t"
+                    "sector_policy_change\tsector_policy_event_signal"
+                ),
+                (
+                    "ades:us-ministry:commerce\tades:sector:semiconductors\t"
+                    "government_body_affects_sector\tdirect\t0.92\tpolicy_risk\t"
+                    "US Commerce Ministry\thttps://www.commerce.gov/\t"
+                    "2026-06-30\t2026\tannual\tfinance-us-en\t"
+                    "reviewed ministry sector fixture\t"
+                    "sector_policy_change\tsector_policy_event_signal"
+                ),
+                (
+                    "ades:us-policy:chip-subsidy-policy\tades:sector:semiconductors\t"
+                    "policy_body_affects_sector\tdirect\t0.9\tpolicy_risk\t"
+                    "White House industrial policy\t"
+                    "https://www.whitehouse.gov/briefing-room/\t2026-06-30\t"
+                    "2026\tannual\tfinance-us-en\treviewed policy sector fixture\t"
+                    "sector_policy_change\tsector_policy_event_signal"
+                ),
+                (
+                    "ades:us-regulation:chip-export-rule\tades:sector:semiconductors\t"
+                    "regulation_affects_sector\tdirect\t0.91\tpolicy_risk\t"
+                    "SEC semiconductor disclosure rule\thttps://www.sec.gov/rules\t"
+                    "2026-06-30\t2026\tannual\tfinance-us-en\t"
+                    "reviewed regulation sector fixture\t"
+                    "sector_policy_change\tsector_policy_event_signal"
+                ),
+                (
+                    "ades:sector:semiconductors\tfinance-us-issuer:example-semiconductor\t"
+                    "sector_affects_issuer\tdirect\t0.91\tpolicy_risk\t"
+                    "SEC EDGAR issuer filings\thttps://www.sec.gov/edgar\t"
+                    "2026-06-30\t2026\tannual\tfinance-us-en\t"
+                    "reviewed sector-to-issuer exposure fixture\t"
+                    "sector_policy_change\tdirect_issuer_or_sector_membership_evidence"
+                ),
+                (
+                    "finance-us-issuer:example-semiconductor\tfinance-us-ticker:nasdaq:xchp\t"
+                    "issuer_has_listed_ticker\tdirect\t0.96\tlisted_equity\t"
+                    "Nasdaq listed company directory\thttps://www.nasdaq.com/market-activity/stocks/xchp\t"
+                    "2026-06-30\t2026\tannual\tfinance-us-en\t"
+                    "reviewed issuer ticker fixture\t"
+                    "sector_policy_change\tlisted_issuer"
+                ),
+                (
+                    "ades:sector:semiconductors\tades:impact:index:us-semiconductor-index\t"
+                    "sector_affects_index\tdirect\t0.89\tsector_index\t"
+                    "Nasdaq indexes\thttps://www.nasdaq.com/solutions/indexes\t"
+                    "2026-06-30\t2026\tannual\tfinance-us-en\t"
+                    "reviewed sector index fixture\t"
+                    "sector_policy_change\tdirect_issuer_or_sector_membership_evidence"
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    graph = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "policy-graph-artifact",
+        artifact_version="2026-06-30Tpolicy-path-test",
+    )
+    return graph.artifact_path, graph.artifact_hash
+
+
 def test_news_candidate_path_terminal_identity_supports_legacy_finance_refs() -> None:
     jurisdiction, exchange, ticker, security_ids = _terminal_identity_parts("finance-us:equity:EXM")
 
@@ -3133,6 +3297,184 @@ def test_news_analyze_uses_sector_graph_seeds_for_installed_country_pack(
     assert bem_path["effective_to"] is None
     assert bem_path["artifact_ref"] == graph_artifact_hash
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
+def test_news_analyze_returns_government_policy_terminal_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    for pack_id, domain in (
+        ("general-en", "general"),
+        ("finance-en", "finance"),
+        ("finance-us-en", "finance"),
+    ):
+        _install_named_pack(tmp_path, pack_id, domain=domain)
+    graph_artifact_path, graph_artifact_hash = _build_us_policy_terminal_graph(tmp_path)
+
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ARTIFACT_PATH", graph_artifact_path)
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    source_cases = [
+        (
+            "CHIPS Act",
+            "law",
+            "ades:us-law:chips-act",
+            "law_affects_sector",
+            "government",
+        ),
+        (
+            "US Commerce Department",
+            "government_body",
+            "ades:us-government-body:commerce-department",
+            "government_body_affects_sector",
+            "government",
+        ),
+        (
+            "US Commerce Ministry",
+            "ministry",
+            "ades:us-ministry:commerce",
+            "government_body_affects_sector",
+            "government",
+        ),
+        (
+            "US Chip Subsidy Policy",
+            "policy",
+            "ades:us-policy:chip-subsidy-policy",
+            "policy_body_affects_sector",
+            "government",
+        ),
+        (
+            "US Chip Export Rule",
+            "regulation",
+            "ades:us-regulation:chip-export-rule",
+            "regulation_affects_sector",
+            "regulator",
+        ),
+    ]
+    current_source = source_cases[0]
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        source_text, source_label, source_ref, _source_relation, _source_tier = current_source
+        entities = []
+        if pack == "finance-us-en":
+            entities.append(
+                EntityMatch(
+                    text=source_text,
+                    label=source_label,
+                    start=text.index(source_text),
+                    end=text.index(source_text) + len(source_text),
+                    confidence=0.94,
+                    relevance=0.95,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack,
+                        source_domain="finance",
+                    ),
+                    link=EntityLink(
+                        entity_id=source_ref,
+                        canonical_text=source_text,
+                        provider="ades",
+                    ),
+                )
+            )
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=entities,
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    for source_case in source_cases:
+        current_source = source_case
+        source_text, _source_label, source_ref, source_relation, source_tier = source_case
+        response = client.post(
+            "/v0/news/analyze",
+            json={
+                "title": f"US officials advance semiconductor measure: {source_text}",
+                "text": (
+                    f"US officials advanced {source_text} for semiconductor "
+                    "companies, changing policy support for chipmakers."
+                ),
+                "source": {"source_country": "US"},
+                "options": {
+                    "include_relationship_paths": True,
+                    "include_terminal_candidates": True,
+                    "include_tag_responses": False,
+                    "impact_max_depth": 3,
+                    "max_country_finance_packs": 1,
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["event_signal"]["event_type"] == "sector_policy_change"
+        assert any(
+            source["entity_ref"] == source_ref and source["is_graph_seed"] is True
+            for source in payload["source_entities"]
+        )
+        candidates_by_ref = {
+            candidate["entity_ref"]: candidate
+            for candidate in payload["terminal_impact_candidates"]
+        }
+        assert "finance-us-issuer:example-semiconductor" in candidates_by_ref
+        assert "finance-us-ticker:nasdaq:xchp" in candidates_by_ref
+        assert "ades:impact:index:us-semiconductor-index" in candidates_by_ref
+
+        issuer_path = candidates_by_ref["finance-us-issuer:example-semiconductor"][
+            "relationship_paths"
+        ][0]
+        assert [edge["relation"] for edge in issuer_path["edges"]] == [
+            source_relation,
+            "sector_affects_issuer",
+        ]
+        assert issuer_path["edges"][0]["source_tier"] == source_tier
+
+        candidate_paths_by_ref = {
+            candidate_path["terminal_ref"]: candidate_path
+            for candidate_path in payload["candidate_paths"]
+        }
+        ticker_path = candidate_paths_by_ref["finance-us-ticker:nasdaq:xchp"]
+        assert ticker_path["terminal_type"] == "ticker"
+        assert ticker_path["jurisdiction"] == "us"
+        assert ticker_path["exchange"] == "nasdaq"
+        assert ticker_path["ticker"] == "xchp"
+        assert ticker_path["security_ids"] == {
+            "ades_ref": "finance-us-ticker:nasdaq:xchp",
+            "ticker": "xchp",
+            "exchange_ticker": "nasdaq:xchp",
+        }
+        assert ticker_path["event_compatibility"] == ["sector_policy_change"]
+        assert ticker_path["artifact_ref"] == graph_artifact_hash
+        assert source_tier in ticker_path["source_tiers"]
+        assert "exchange" in ticker_path["source_tiers"]
+        assert [edge["relation"] for edge in ticker_path["relationship_path"]["edges"]] == [
+            source_relation,
+            "sector_affects_issuer",
+            "issuer_has_listed_ticker",
+        ]
+        assert (
+            candidate_paths_by_ref["ades:impact:index:us-semiconductor-index"]["terminal_type"]
+            == "index"
+        )
+        assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 
 def test_news_analyze_default_pack_budget_allows_full_country_pack_budget(
