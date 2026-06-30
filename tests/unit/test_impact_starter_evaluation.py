@@ -88,9 +88,10 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
 
     case_names = {str(case["name"]) for case in golden_payload["cases"]}
     assert "italy_banca_mediolanum_borsa_bridge" in case_names
+    assert "mexico_gfnorte_bmv_banxico_bridge" in case_names
     assert report.warnings == []
-    assert report.case_count == 27
-    assert report.empty_path_rate == 0.037
+    assert report.case_count == 28
+    assert report.empty_path_rate == 0.0357
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
