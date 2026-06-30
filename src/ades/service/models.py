@@ -1974,6 +1974,73 @@ class NewsAnalyzeArtifactVersions(BaseModel):
     impact_artifact_hash: str | None = None
 
 
+class NewsAnalyzeArtifactMetadata(BaseModel):
+    """BDYA-facing artifact identity and source-lane version metadata."""
+
+    artifact_id: str
+    artifact_version: str | None = None
+    artifact_hash: str | None = None
+    artifact_built_at: str | None = None
+    artifact_deployed_at: str | None = None
+    graph_version: str | None = None
+    ades_version: str
+    source_lane_versions: dict[str, str | None] = Field(default_factory=dict)
+
+
+class NewsAnalyzeCandidatePath(BaseModel):
+    """BDYA-facing terminal candidate path with artifact provenance."""
+
+    terminal_ref: str
+    terminal_type: str | None = None
+    terminal_name: str
+    source_entity_refs: list[str] = Field(default_factory=list)
+    event_compatibility: list[str] = Field(default_factory=list)
+    path_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    relationship_path: ImpactRelationshipPath
+    artifact_ref: str | None = None
+
+
+class NewsAnalyzeRejectedCandidate(BaseModel):
+    """Terminal candidate considered by ADES but rejected before BDYA consumption."""
+
+    terminal_ref: str
+    terminal_type: str | None = None
+    terminal_name: str
+    reason_code: str
+    reason: str
+    source_entity_refs: list[str] = Field(default_factory=list)
+    event_compatibility: list[str] = Field(default_factory=list)
+    path_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    relationship_paths: list[ImpactRelationshipPath] = Field(default_factory=list)
+    artifact_ref: str | None = None
+
+
+class NewsAnalyzeDiagnostic(BaseModel):
+    """Stable diagnostic emitted with the ADES news-analysis contract."""
+
+    code: str
+    severity: Literal["info", "warning", "error"] = "info"
+    message: str
+    entity_ref: str | None = None
+    terminal_ref: str | None = None
+    source_lane: str | None = None
+    event_type: str | None = None
+
+
+class NewsAnalyzeSourceLaneCoverage(BaseModel):
+    """Coverage summary for one source lane used or considered in analysis."""
+
+    lane: str
+    version: str | None = None
+    used: bool = False
+    source_entity_count: int = Field(default=0, ge=0)
+    terminal_candidate_count: int = Field(default=0, ge=0)
+    unresolved_entity_count: int = Field(default=0, ge=0)
+    rejected_candidate_count: int = Field(default=0, ge=0)
+    warning_count: int = Field(default=0, ge=0)
+    artifact_hash: str | None = None
+
+
 class NewsAnalyzeResponse(BaseModel):
     """Normalized ADES news-analysis response for downstream consumers."""
 
@@ -1995,6 +2062,13 @@ class NewsAnalyzeResponse(BaseModel):
     impact_paths: ImpactExpansionResult | None = None
     topics: list[Any] = Field(default_factory=list)
     artifact_versions: NewsAnalyzeArtifactVersions
+    artifact_metadata: NewsAnalyzeArtifactMetadata | None = None
+    terminal_candidates: list[ImpactCandidate] = Field(default_factory=list)
+    candidate_paths: list[NewsAnalyzeCandidatePath] = Field(default_factory=list)
+    rejected_candidates: list[NewsAnalyzeRejectedCandidate] = Field(default_factory=list)
+    diagnostics: list[NewsAnalyzeDiagnostic] = Field(default_factory=list)
+    event_signal: NewsEventSignal | None = None
+    source_lane_coverage: list[NewsAnalyzeSourceLaneCoverage] = Field(default_factory=list)
     tag_responses: list[Any] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     quality_flags: list[str] = Field(default_factory=list)

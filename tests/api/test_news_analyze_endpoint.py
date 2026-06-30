@@ -286,7 +286,16 @@ def test_news_analyze_endpoint_returns_normalized_contract(
                             ],
                         }
                     ],
-                )
+                ),
+                ImpactCandidate(
+                    entity_ref="ades:impact:rates:policy-rate",
+                    name="Policy rate proxy",
+                    entity_type="rates_proxy",
+                    evidence_level="shallow",
+                    confidence=0.81,
+                    source_entity_refs=["entity_hormuz"],
+                    relationship_paths=[],
+                ),
             ],
         )
 
@@ -321,12 +330,51 @@ def test_news_analyze_endpoint_returns_normalized_contract(
     assert payload["topic_scope"]["finance_relevant"] is True
     assert payload["topic_scope"]["politics_relevant"] is True
     assert payload["artifact_versions"]["impact_artifact_hash"] == "sha256:test"
+    assert payload["artifact_metadata"] == {
+        "artifact_id": "sha256:test",
+        "artifact_version": "2026-05-12",
+        "artifact_hash": "sha256:test",
+        "artifact_built_at": None,
+        "artifact_deployed_at": None,
+        "graph_version": "test-graph",
+        "ades_version": payload["version"],
+        "source_lane_versions": {
+            pack_id: "0.1.0",
+            "impact_graph": "test-graph",
+            "impact_artifact": "2026-05-12",
+        },
+    }
     assert [signal["event_type"] for signal in payload["event_signals"]] == [
         "shipping_chokepoint_disruption"
     ]
+    assert payload["event_signal"]["event_type"] == "shipping_chokepoint_disruption"
     assert [candidate["entity_ref"] for candidate in payload["terminal_impact_candidates"]] == [
         "entity_crude_oil"
     ]
+    assert payload["terminal_candidates"] == payload["terminal_impact_candidates"]
+    assert payload["candidate_paths"][0]["terminal_ref"] == "entity_crude_oil"
+    assert payload["candidate_paths"][0]["terminal_type"] == "commodity"
+    assert payload["candidate_paths"][0]["artifact_ref"] == "sha256:test"
+    assert (
+        payload["candidate_paths"][0]["relationship_path"]["edges"][0]["relation"]
+        == "chokepoint_affects_energy"
+    )
+    assert payload["rejected_candidates"][0]["terminal_ref"] == "ades:impact:rates:policy-rate"
+    assert payload["rejected_candidates"][0]["reason_code"] == "event_incompatible"
+    assert any(
+        diagnostic["code"] == "country_scope_without_terminal_candidate"
+        and diagnostic["entity_ref"] == "country:ir"
+        for diagnostic in payload["diagnostics"]
+    )
+    impact_graph_coverage = next(
+        lane for lane in payload["source_lane_coverage"] if lane["lane"] == "impact_graph"
+    )
+    assert impact_graph_coverage["artifact_hash"] == "sha256:test"
+    assert impact_graph_coverage["terminal_candidate_count"] == 1
+    assert any(
+        lane["lane"] == pack_id and lane["version"] == "0.1.0"
+        for lane in payload["source_lane_coverage"]
+    )
     assert payload["terminal_impact_candidates"][0]["compatible_event_types"] == [
         "shipping_chokepoint_disruption"
     ]

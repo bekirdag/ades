@@ -155,14 +155,19 @@ from .models import (
     RegistryGeneratePackResponse,
     RegistryReportPackRequest,
     RegistryReportPackResponse,
+    NewsAnalyzeArtifactMetadata,
     NewsAnalyzeArtifactVersions,
+    NewsAnalyzeCandidatePath,
     NewsAnalyzeCountryScope,
+    NewsAnalyzeDiagnostic,
     NewsAnalyzePackDecision,
     NewsAnalyzePassiveEntity,
     NewsAnalyzeRawEntity,
+    NewsAnalyzeRejectedCandidate,
     NewsAnalyzeRelationshipProposal,
     NewsAnalyzeRequest,
     NewsAnalyzeResponse,
+    NewsAnalyzeSourceLaneCoverage,
     NewsAnalyzeTopicScope,
     NewsAnalyzeUnresolvedEntity,
     StatusResponse,
@@ -485,6 +490,273 @@ def _dedupe_string_values(values: list[str | None]) -> list[str]:
         seen.add(key)
         result.append(normalized)
     return result
+
+
+def _candidate_artifact_ref(artifact_versions: NewsAnalyzeArtifactVersions) -> str | None:
+    return (
+        artifact_versions.impact_artifact_hash
+        or artifact_versions.impact_artifact_version
+        or artifact_versions.impact_graph_version
+    )
+
+
+def _candidate_path_confidence(candidate: ImpactCandidate) -> float | None:
+    values = [candidate.confidence]
+    for relationship_path in candidate.relationship_paths:
+        values.extend(edge.confidence for edge in relationship_path.edges)
+    return min(values) if values else None
+
+
+def _candidate_key(candidate: ImpactCandidate) -> str:
+    return candidate.entity_ref.strip().casefold()
+
+
+def _build_artifact_metadata(
+    artifact_versions: NewsAnalyzeArtifactVersions,
+) -> NewsAnalyzeArtifactMetadata:
+    source_lane_versions = dict(artifact_versions.packs)
+    if artifact_versions.impact_graph_version is not None:
+        source_lane_versions["impact_graph"] = artifact_versions.impact_graph_version
+    if artifact_versions.impact_artifact_version is not None:
+        source_lane_versions["impact_artifact"] = artifact_versions.impact_artifact_version
+
+    artifact_id = (
+        artifact_versions.impact_artifact_hash
+        or artifact_versions.impact_artifact_version
+        or artifact_versions.impact_graph_version
+        or artifact_versions.ades_version
+    )
+    return NewsAnalyzeArtifactMetadata(
+        artifact_id=artifact_id,
+        artifact_version=artifact_versions.impact_artifact_version,
+        artifact_hash=artifact_versions.impact_artifact_hash,
+        graph_version=artifact_versions.impact_graph_version,
+        ades_version=artifact_versions.ades_version,
+        source_lane_versions=source_lane_versions,
+    )
+
+
+def _build_candidate_paths(
+    *,
+    terminal_candidates: list[ImpactCandidate],
+    artifact_ref: str | None,
+) -> list[NewsAnalyzeCandidatePath]:
+    candidate_paths: list[NewsAnalyzeCandidatePath] = []
+    for candidate in terminal_candidates:
+        relationship_paths = candidate.relationship_paths or [
+            ImpactRelationshipPath(path_depth=0, edges=[])
+        ]
+        for relationship_path in relationship_paths:
+            candidate_paths.append(
+                NewsAnalyzeCandidatePath(
+                    terminal_ref=candidate.entity_ref,
+                    terminal_type=candidate.entity_type,
+                    terminal_name=candidate.name,
+                    source_entity_refs=candidate.source_entity_refs,
+                    event_compatibility=candidate.compatible_event_types,
+                    path_confidence=_candidate_path_confidence(candidate),
+                    relationship_path=relationship_path,
+                    artifact_ref=artifact_ref,
+                )
+            )
+    return candidate_paths
+
+
+def _rejected_candidate(
+    candidate: ImpactCandidate,
+    *,
+    reason_code: str,
+    reason: str,
+    artifact_ref: str | None,
+) -> NewsAnalyzeRejectedCandidate:
+    return NewsAnalyzeRejectedCandidate(
+        terminal_ref=candidate.entity_ref,
+        terminal_type=candidate.entity_type,
+        terminal_name=candidate.name,
+        reason_code=reason_code,
+        reason=reason,
+        source_entity_refs=candidate.source_entity_refs,
+        event_compatibility=candidate.compatible_event_types,
+        path_confidence=_candidate_path_confidence(candidate),
+        relationship_paths=candidate.relationship_paths,
+        artifact_ref=artifact_ref,
+    )
+
+
+def _build_rejected_candidates(
+    *,
+    pre_gate_candidates: list[ImpactCandidate],
+    gated_candidates: list[ImpactCandidate],
+    returned_candidates: list[ImpactCandidate],
+    artifact_ref: str | None,
+) -> list[NewsAnalyzeRejectedCandidate]:
+    gated_refs = {_candidate_key(candidate) for candidate in gated_candidates}
+    returned_refs = {_candidate_key(candidate) for candidate in returned_candidates}
+    rejected: list[NewsAnalyzeRejectedCandidate] = []
+    seen: set[tuple[str, str]] = set()
+
+    for candidate in pre_gate_candidates:
+        key = _candidate_key(candidate)
+        if key and key not in gated_refs:
+            marker = (key, "event_incompatible")
+            if marker not in seen:
+                seen.add(marker)
+                rejected.append(
+                    _rejected_candidate(
+                        candidate,
+                        reason_code="event_incompatible",
+                        reason="Candidate did not satisfy ADES event-signal compatibility gates.",
+                        artifact_ref=artifact_ref,
+                    )
+                )
+
+    for candidate in gated_candidates:
+        key = _candidate_key(candidate)
+        if key and key not in returned_refs:
+            marker = (key, "candidate_limit")
+            if marker not in seen:
+                seen.add(marker)
+                rejected.append(
+                    _rejected_candidate(
+                        candidate,
+                        reason_code="candidate_limit",
+                        reason="Candidate was valid but omitted by the response candidate limit.",
+                        artifact_ref=artifact_ref,
+                    )
+                )
+
+    return rejected
+
+
+def _build_diagnostics(
+    *,
+    warnings: list[str],
+    quality_flags: list[str],
+    unresolved_entities: list[NewsAnalyzeUnresolvedEntity],
+    rejected_candidates: list[NewsAnalyzeRejectedCandidate],
+) -> list[NewsAnalyzeDiagnostic]:
+    diagnostics: list[NewsAnalyzeDiagnostic] = []
+    for flag in quality_flags:
+        diagnostics.append(
+            NewsAnalyzeDiagnostic(
+                code=flag,
+                severity="warning" if flag.startswith("NO_") else "info",
+                message=flag.lower(),
+            )
+        )
+    for warning in warnings:
+        diagnostics.append(
+            NewsAnalyzeDiagnostic(
+                code=warning.split(":", 1)[0],
+                severity="warning",
+                message=warning,
+            )
+        )
+    for entity in unresolved_entities:
+        diagnostics.append(
+            NewsAnalyzeDiagnostic(
+                code=entity.missing_reason,
+                severity="info",
+                message=entity.missing_reason,
+                entity_ref=entity.entity_ref,
+                event_type=entity.event_types[0] if entity.event_types else None,
+            )
+        )
+    for candidate in rejected_candidates:
+        diagnostics.append(
+            NewsAnalyzeDiagnostic(
+                code=candidate.reason_code,
+                severity="info",
+                message=candidate.reason,
+                terminal_ref=candidate.terminal_ref,
+                event_type=(
+                    candidate.event_compatibility[0]
+                    if candidate.event_compatibility
+                    else None
+                ),
+            )
+        )
+    return diagnostics
+
+
+def _build_source_lane_coverage(
+    *,
+    tag_responses: list[TagResponse],
+    pack_decisions: list[NewsAnalyzePackDecision],
+    artifact_versions: NewsAnalyzeArtifactVersions,
+    source_entities: list[ImpactSourceEntity],
+    terminal_candidates: list[ImpactCandidate],
+    unresolved_entities: list[NewsAnalyzeUnresolvedEntity],
+    rejected_candidates: list[NewsAnalyzeRejectedCandidate],
+    warnings: list[str],
+    impact_paths: ImpactExpansionResult | None,
+) -> list[NewsAnalyzeSourceLaneCoverage]:
+    source_lane_order = _dedupe_string_values(
+        [
+            *[decision.pack_id for decision in pack_decisions],
+            *[response.pack for response in tag_responses],
+            *list(artifact_versions.packs.keys()),
+        ]
+    )
+    source_entities_by_ref = {
+        source_entity.entity_ref.casefold(): source_entity for source_entity in source_entities
+    }
+    source_lane_coverage: list[NewsAnalyzeSourceLaneCoverage] = []
+    used_packs = {response.pack for response in tag_responses if response.pack}
+
+    for lane in source_lane_order:
+        lane_key = lane.casefold()
+        lane_source_refs = {
+            source_entity.entity_ref.casefold()
+            for source_entity in source_entities
+            if (source_entity.library_id or "").casefold() == lane_key
+        }
+        terminal_count = 0
+        rejected_count = 0
+        for candidate in terminal_candidates:
+            candidate_lanes = {
+                (source_entities_by_ref.get(ref.casefold()).library_id or "").casefold()
+                for ref in candidate.source_entity_refs
+                if source_entities_by_ref.get(ref.casefold()) is not None
+            }
+            if lane_key in candidate_lanes:
+                terminal_count += 1
+        for candidate in rejected_candidates:
+            candidate_lanes = {
+                (source_entities_by_ref.get(ref.casefold()).library_id or "").casefold()
+                for ref in candidate.source_entity_refs
+                if source_entities_by_ref.get(ref.casefold()) is not None
+            }
+            if lane_key in candidate_lanes:
+                rejected_count += 1
+        source_lane_coverage.append(
+            NewsAnalyzeSourceLaneCoverage(
+                lane=lane,
+                version=artifact_versions.packs.get(lane),
+                used=lane in used_packs or bool(lane_source_refs),
+                source_entity_count=len(lane_source_refs),
+                terminal_candidate_count=terminal_count,
+                unresolved_entity_count=0,
+                rejected_candidate_count=rejected_count,
+                warning_count=sum(1 for warning in warnings if lane_key in warning.casefold()),
+            )
+        )
+
+    if impact_paths is not None or artifact_versions.impact_artifact_hash:
+        source_lane_coverage.append(
+            NewsAnalyzeSourceLaneCoverage(
+                lane="impact_graph",
+                version=artifact_versions.impact_graph_version,
+                used=impact_paths is not None,
+                source_entity_count=len(source_entities),
+                terminal_candidate_count=len(terminal_candidates),
+                unresolved_entity_count=len(unresolved_entities),
+                rejected_candidate_count=len(rejected_candidates),
+                warning_count=len(impact_paths.warnings) if impact_paths is not None else 0,
+                artifact_hash=artifact_versions.impact_artifact_hash,
+            )
+        )
+    return source_lane_coverage
 
 
 def _normalize_market_asset_phrase(value: object) -> str:
@@ -3083,6 +3355,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 impact_paths = impact_paths.model_copy(
                     update={"candidates": expanded_terminal_candidates}
                 )
+        pre_gate_terminal_candidates = list(expanded_terminal_candidates)
         if impact_paths is not None:
             expanded_terminal_candidates, event_gate_warnings = (
                 gate_terminal_candidates_by_event_signals(
@@ -3160,6 +3433,18 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             impact_artifact_version=(impact_paths.artifact_version if impact_paths else None),
             impact_artifact_hash=impact_paths.artifact_hash if impact_paths else None,
         )
+        artifact_metadata = _build_artifact_metadata(artifact_versions)
+        artifact_ref = _candidate_artifact_ref(artifact_versions)
+        rejected_candidates = _build_rejected_candidates(
+            pre_gate_candidates=pre_gate_terminal_candidates,
+            gated_candidates=expanded_terminal_candidates,
+            returned_candidates=terminal_candidates,
+            artifact_ref=artifact_ref,
+        )
+        candidate_paths = _build_candidate_paths(
+            terminal_candidates=terminal_candidates,
+            artifact_ref=artifact_ref,
+        )
         quality_flags: list[str] = []
         if country_scope is None:
             quality_flags.append("COUNTRY_SCOPE_MISSING")
@@ -3169,6 +3454,25 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             quality_flags.append("NO_TERMINAL_IMPACT_CANDIDATES")
         if unresolved_entities:
             quality_flags.append("UNRESOLVED_MARKET_RELATIONSHIPS_PRESENT")
+
+        deduped_warnings = _dedupe_string_values(warnings)[:32]
+        diagnostics = _build_diagnostics(
+            warnings=deduped_warnings,
+            quality_flags=quality_flags,
+            unresolved_entities=unresolved_entities,
+            rejected_candidates=rejected_candidates,
+        )
+        source_lane_coverage = _build_source_lane_coverage(
+            tag_responses=tag_responses,
+            pack_decisions=pack_decisions,
+            artifact_versions=artifact_versions,
+            source_entities=impact_paths.source_entities if impact_paths else [],
+            terminal_candidates=terminal_candidates,
+            unresolved_entities=unresolved_entities,
+            rejected_candidates=rejected_candidates,
+            warnings=deduped_warnings,
+            impact_paths=impact_paths,
+        )
 
         timing_ms = int((time.perf_counter() - started_at) * 1000)
         return NewsAnalyzeResponse(
@@ -3189,8 +3493,15 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             impact_paths=impact_paths,
             topics=topics,
             artifact_versions=artifact_versions,
+            artifact_metadata=artifact_metadata,
+            terminal_candidates=terminal_candidates,
+            candidate_paths=candidate_paths,
+            rejected_candidates=rejected_candidates,
+            diagnostics=diagnostics,
+            event_signal=event_signals[0] if event_signals else None,
+            source_lane_coverage=source_lane_coverage,
             tag_responses=(tag_responses if request.options.include_tag_responses else []),
-            warnings=_dedupe_string_values(warnings)[:32],
+            warnings=deduped_warnings,
             quality_flags=quality_flags,
             timing_ms=timing_ms,
             total_time_ms=timing_ms,
