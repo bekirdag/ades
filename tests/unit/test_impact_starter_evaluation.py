@@ -92,9 +92,10 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert "russia_sber_moex_cbr_bridge" in case_names
     assert "saudi_sama_sar_repo_rate_bridge" in case_names
     assert "south_africa_sarb_zar_policy_rate_bridge" in case_names
+    assert "south_korea_sk_hynix_krx_bok_bridge" in case_names
     assert report.warnings == []
-    assert report.case_count == 31
-    assert report.empty_path_rate == 0.0323
+    assert report.case_count == 32
+    assert report.empty_path_rate == 0.0312
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -153,6 +154,18 @@ def test_starter_source_manifest_has_required_fields():
     assert "telecom paths for MTN/Vodacom/Telkom" in south_africa_source["notes"]
     assert "bank paths for major listed banks" in south_africa_source["notes"]
     assert "SOE infrastructure paths for Eskom and Transnet" in south_africa_source["notes"]
+    south_korea_source = next(
+        source
+        for source in payload["sources"]
+        if source["source_name"]
+        == "South Korea reviewed KRX/BOK/FSC/FSS semiconductor policy relationship source lane"
+    )
+    assert "KRX issuer/ticker/security bridges" in south_korea_source["notes"]
+    assert "BOK KRW/rate rows" in south_korea_source["notes"]
+    assert "FSC/FSS/KRX/KSD/KFTC market-supervision rows" in south_korea_source["notes"]
+    assert "MOTIR/MSIT/Customs/MOEF government policy rows" in south_korea_source["notes"]
+    assert "Republic of Korea/South Korea alias handling" in south_korea_source["notes"]
+    assert "bounded chaebol/issuer/security paths" in south_korea_source["notes"]
     for source in payload["sources"]:
         assert source["source_name"]
         assert str(source["source_url"]).startswith("https://")

@@ -137,7 +137,7 @@
       "refresh_policy": "refresh_on_country_source_lane_update",
       "normalized_output_allowed": true,
       "license_notes": "Reviewed source lane stores only normalized relationship metadata; source URLs and evidence snippets are retained under /mnt/githubActions/ades_big_data, with low-trust rows kept in review queue.",
-      "notes": "Production-promoted South Korea first slice covering KRX issuer/ticker/security bridges, BOK KRW/rate rows, FSC/FSS/KRX/KSD/KFTC market-supervision rows, MOTIR/MSIT/Customs/MOEF policy rows, and bounded semiconductor, battery, auto, telecom, utility, gas, shipbuilding, defense, platform, and entertainment issuer paths without broad country-to-KOSPI or country-to-KRW fanout."
+      "notes": "Production-promoted South Korea first slice covering KRX issuer/ticker/security bridges, BOK KRW/rate rows, FSC/FSS/KRX/KSD/KFTC market-supervision rows, MOTIR/MSIT/Customs/MOEF government policy rows, Republic of Korea/South Korea alias handling, and bounded chaebol/issuer/security paths across semiconductor, battery, auto, telecom, utility, gas, shipbuilding, defense, platform, and entertainment issuers without broad country-to-KOSPI or country-to-KRW fanout."
     },
     {
       "source_name": "Australian Office of the Chief Economist Resources and Energy Quarterly",

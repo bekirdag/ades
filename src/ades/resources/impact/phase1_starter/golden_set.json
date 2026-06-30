@@ -357,6 +357,41 @@
       ]
     },
     {
+      "name": "south_korea_sk_hynix_krx_bok_bridge",
+      "entity_refs": [
+        "finance-kr-issuer:1:000660",
+        "ades:policy-body:kr:bank-of-korea"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-kr-en"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:currency:krw",
+        "ades:impact:rate:kr-base-rate",
+        "ades:security:kr:krx:000660-common-share",
+        "finance-kr-ticker:1:000660"
+      ],
+      "expected_passive_refs": [
+        "ades:exchange:kr:krx",
+        "ades:sector:kr:banking",
+        "ades:sector:kr:semiconductors",
+        "ades:supply-chain-stage:kr:memory-semiconductors"
+      ],
+      "expected_relation_families": [
+        "central_bank_affects_credit_sector",
+        "central_bank_affects_currency",
+        "central_bank_sets_policy_rate",
+        "issuer_exposed_to_semiconductor_cycle",
+        "issuer_has_listed_ticker",
+        "issuer_has_security",
+        "issuer_in_sector",
+        "security_has_identifier",
+        "security_listed_on_exchange",
+        "ticker_listed_on_exchange"
+      ]
+    },
+    {
       "name": "france_lvmh_euronext_bridge",
       "entity_refs": [
         "finance-fr-issuer:FR0000121014"
