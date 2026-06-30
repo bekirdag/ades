@@ -1286,6 +1286,270 @@ def test_news_analyze_maps_legal_entity_to_terminal_ticker_path(
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 
+def test_news_analyze_maps_product_and_brand_mentions_to_owner_security_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-product-brand-terminal-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+    article_text = (
+        "Mekaar and Oxxo beat earnings estimates as the companies expanded lending "
+        "and convenience-store sales."
+    )
+
+    def _entity(
+        surface: str,
+        label: str,
+        entity_ref: str,
+        canonical_text: str,
+    ) -> EntityMatch:
+        start = article_text.index(surface)
+        return EntityMatch(
+            text=surface,
+            label=label,
+            start=start,
+            end=start + len(surface),
+            confidence=0.94,
+            relevance=0.95,
+            provenance=EntityProvenance(
+                match_kind="alias",
+                match_path="aliases.json",
+                match_source="pack",
+                source_pack=pack_id,
+                source_domain="finance",
+            ),
+            link=EntityLink(
+                entity_id=entity_ref,
+                canonical_text=canonical_text,
+                provider="ades",
+            ),
+        )
+
+    def _edge(
+        source_ref: str,
+        target_ref: str,
+        relation: str,
+        *,
+        confidence: float,
+        source_name: str,
+        source_url: str,
+        effective_from: str,
+    ) -> ImpactPathEdge:
+        return ImpactPathEdge(
+            source_ref=source_ref,
+            target_ref=target_ref,
+            relation=relation,
+            evidence_level="direct",
+            confidence=confidence,
+            direction_hint="source_backed_owner_terminal_path",
+            source_name=source_name,
+            source_url=source_url,
+            source_snapshot="2026-06-30",
+            source_year=2026,
+            source_tier="issuer_disclosed",
+            effective_from=effective_from,
+        )
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                _entity(
+                    "Mekaar",
+                    "product",
+                    "ades:product:id:pnm-mekaar",
+                    "PNM Mekaar",
+                ),
+                _entity(
+                    "Oxxo",
+                    "brand",
+                    "ades:brand:mx:oxxo",
+                    "Oxxo",
+                ),
+            ],
+            topics=[TopicMatch(label="finance", score=0.91, evidence_count=2)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert {"ades:product:id:pnm-mekaar", "ades:brand:mx:oxxo"}.issubset(set(entity_refs))
+        mekaar_path = ImpactRelationshipPath(
+            path_depth=2,
+            edges=[
+                _edge(
+                    "ades:product:id:pnm-mekaar",
+                    "finance-id-issuer:bank-rakyat-indonesia",
+                    "product_owned_by_org",
+                    confidence=0.94,
+                    source_name="PNM annual report",
+                    source_url="https://example.test/pnm-annual-report",
+                    effective_from="2024-01-01",
+                ),
+                _edge(
+                    "finance-id-issuer:bank-rakyat-indonesia",
+                    "finance-id-ticker:BBRI",
+                    "issuer_has_listed_ticker",
+                    confidence=0.97,
+                    source_name="Indonesia Stock Exchange issuer directory",
+                    source_url="https://example.test/idx-bbri",
+                    effective_from="2024-01-01",
+                ),
+            ],
+        )
+        oxxo_path = ImpactRelationshipPath(
+            path_depth=2,
+            edges=[
+                _edge(
+                    "ades:brand:mx:oxxo",
+                    "finance-mx-issuer:FEMSA",
+                    "brand_owned_by_org",
+                    confidence=0.93,
+                    source_name="FEMSA annual report",
+                    source_url="https://example.test/femsa-annual-report",
+                    effective_from="2025-01-01",
+                ),
+                _edge(
+                    "finance-mx-issuer:FEMSA",
+                    "ades:security:mx:bmv:femsa-ubd",
+                    "issuer_has_security",
+                    confidence=0.96,
+                    source_name="BMV issuer security directory",
+                    source_url="https://example.test/bmv-femsa-ubd",
+                    effective_from="2025-01-01",
+                ),
+            ],
+        )
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-06-30",
+            artifact_hash="sha256:product-brand-terminals",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="ades:product:id:pnm-mekaar",
+                    name="PNM Mekaar",
+                    entity_type="product",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=False,
+                ),
+                ImpactSourceEntity(
+                    entity_ref="ades:brand:mx:oxxo",
+                    name="Oxxo",
+                    entity_type="brand",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=False,
+                ),
+            ],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref="finance-id-ticker:BBRI",
+                    name="Bank Rakyat Indonesia",
+                    entity_type="ticker",
+                    evidence_level="direct",
+                    confidence=0.92,
+                    source_entity_refs=["ades:product:id:pnm-mekaar"],
+                    relationship_paths=[mekaar_path],
+                    compatible_event_types=["earnings_beat"],
+                ),
+                ImpactCandidate(
+                    entity_ref="ades:security:mx:bmv:femsa-ubd",
+                    name="FEMSA UBD share",
+                    entity_type="security",
+                    evidence_level="direct",
+                    confidence=0.91,
+                    source_entity_refs=["ades:brand:mx:oxxo"],
+                    relationship_paths=[oxxo_path],
+                    compatible_event_types=["earnings_beat"],
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Mekaar and Oxxo beat earnings estimates",
+            "text": article_text,
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    candidates_by_ref = {
+        candidate["entity_ref"]: candidate for candidate in payload["terminal_impact_candidates"]
+    }
+    assert set(candidates_by_ref) == {
+        "finance-id-ticker:BBRI",
+        "ades:security:mx:bmv:femsa-ubd",
+    }
+    assert candidates_by_ref["finance-id-ticker:BBRI"]["source_entity_refs"] == [
+        "ades:product:id:pnm-mekaar"
+    ]
+    assert candidates_by_ref["ades:security:mx:bmv:femsa-ubd"]["source_entity_refs"] == [
+        "ades:brand:mx:oxxo"
+    ]
+
+    paths_by_ref = {
+        candidate_path["terminal_ref"]: candidate_path
+        for candidate_path in payload["candidate_paths"]
+    }
+    mekaar_path = paths_by_ref["finance-id-ticker:BBRI"]
+    assert mekaar_path["jurisdiction"] == "id"
+    assert mekaar_path["ticker"] == "BBRI"
+    assert mekaar_path["source_entity_refs"] == ["ades:product:id:pnm-mekaar"]
+    assert mekaar_path["source_tiers"] == ["issuer_disclosed"]
+    assert mekaar_path["path_confidence"] == 0.92
+    assert mekaar_path["weakest_edge_ref"] == (
+        "ades:product:id:pnm-mekaar->product_owned_by_org->finance-id-issuer:bank-rakyat-indonesia"
+    )
+    assert [edge["relation"] for edge in mekaar_path["relationship_path"]["edges"]] == [
+        "product_owned_by_org",
+        "issuer_has_listed_ticker",
+    ]
+    assert mekaar_path["artifact_ref"] == "sha256:product-brand-terminals"
+
+    oxxo_path = paths_by_ref["ades:security:mx:bmv:femsa-ubd"]
+    assert oxxo_path["jurisdiction"] == "mx"
+    assert oxxo_path["exchange"] == "bmv"
+    assert oxxo_path["security_ids"] == {
+        "ades_ref": "ades:security:mx:bmv:femsa-ubd",
+        "local_security_id": "femsa-ubd",
+    }
+    assert oxxo_path["source_entity_refs"] == ["ades:brand:mx:oxxo"]
+    assert oxxo_path["path_confidence"] == 0.91
+    assert oxxo_path["weakest_edge_ref"] == (
+        "ades:brand:mx:oxxo->brand_owned_by_org->finance-mx-issuer:FEMSA"
+    )
+    assert [edge["relation"] for edge in oxxo_path["relationship_path"]["edges"]] == [
+        "brand_owned_by_org",
+        "issuer_has_security",
+    ]
+    assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
 def test_news_analyze_promotes_only_ades_confirmed_direct_tradable_mentions(
     tmp_path: Path,
     monkeypatch,
