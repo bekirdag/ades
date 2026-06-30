@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "name": "ades_big_data_workspace_manifest",
+  "generated_at": "2026-06-30T00:00:00Z",
+  "workspace_root": "/mnt/githubActions/ades_big_data",
+  "storage_policy": "Large raw downloads, normalized bulk source outputs, review queues, and generated graph/vector artifacts are stored under /mnt/githubActions/ades_big_data and are not committed to git.",
+  "git_policy": "Only compact manifests, source-lane schemas, tests, and planning/build documentation are committed. Dataset payloads are not committed to git and stay in the local big-data workspace.",
+  "required_roots": [
+    {
+      "name": "raw_pack_source_snapshots",
+      "path": "/mnt/githubActions/ades_big_data/pack_sources/raw",
+      "manifest_names": [
+        "sources.fetch.json"
+      ],
+      "producer_commands": [
+        "ades registry fetch-finance-sources",
+        "ades registry fetch-finance-country-sources",
+        "ades registry fetch-general-sources",
+        "ades registry fetch-medical-sources"
+      ]
+    },
+    {
+      "name": "normalized_pack_bundles",
+      "path": "/mnt/githubActions/ades_big_data/pack_sources/bundles",
+      "manifest_names": [
+        "bundle.json",
+        "sources.lock.json"
+      ],
+      "producer_commands": [
+        "ades registry build-finance-bundle",
+        "ades registry build-finance-country-bundles",
+        "ades registry build-general-bundle",
+        "ades registry build-medical-bundle"
+      ]
+    },
+    {
+      "name": "relationship_source_lanes",
+      "path": "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships",
+      "manifest_names": [
+        "manifest.json"
+      ],
+      "producer_commands": [
+        "ades registry derive-finance-country-source-lane-inputs",
+        "ades registry build-finance-country-proxy-source-lane",
+        "ades registry build-policy-sector-source-lane",
+        "ades registry build-program-org-relationship-source-lane",
+        "ades registry build-issuer-exposure-source-lane",
+        "ades registry import-bdya-impact-gap-backlog",
+        "ades registry promote-reviewed-relationship-proposals"
+      ]
+    },
+    {
+      "name": "legacy_country_relationship_reviews",
+      "path": "/mnt/githubActions/ades_big_data/source_lane_<country>/<snapshot>",
+      "manifest_names": [
+        "SOURCE_INVENTORY.md",
+        "build_summary.json",
+        "build_summary_repaired.json"
+      ],
+      "producer_commands": [
+        "reviewed source-backed country relationship lane builders"
+      ]
+    },
+    {
+      "name": "market_graph_artifacts",
+      "path": "/mnt/githubActions/ades_big_data/artifacts/market-graph",
+      "manifest_names": [
+        "market_graph_store_manifest.json"
+      ],
+      "producer_commands": [
+        "ades registry build-market-graph-store",
+        "ades registry build-starter-market-graph-store"
+      ]
+    },
+    {
+      "name": "release_artifacts",
+      "path": "/mnt/githubActions/ades_big_data/pack_releases",
+      "manifest_names": [
+        "index.json",
+        "manifest.json",
+        "release_manifest.json"
+      ],
+      "producer_commands": [
+        "ades registry refresh-generated-packs",
+        "ades registry write-artifact-release-manifest"
+      ]
+    },
+    {
+      "name": "vector_and_qid_artifacts",
+      "path": "/mnt/githubActions/ades_big_data/vector_builds",
+      "manifest_names": [
+        "manifest.json",
+        "qid_graph_store_manifest.json",
+        "qid_graph_index_manifest.json"
+      ],
+      "producer_commands": [
+        "ades registry build-qid-graph-store",
+        "ades registry build-qid-graph-index",
+        "scripts/build_recent_news_support_artifact.py"
+      ]
+    },
+    {
+      "name": "review_feedback_queues",
+      "path": "/mnt/githubActions/ades_big_data/feedback",
+      "manifest_names": [
+        "summary.json",
+        "manifest.json"
+      ],
+      "producer_commands": [
+        "ades registry import-bdya-impact-gap-backlog"
+      ]
+    }
+  ],
+  "linked_docs": [
+    "docs/news_story_creation_ades_source_lane_inventory_2026-06-30.md",
+    "docs/library_pack_publication_workflow.md",
+    "docs/v0.1.0_decisions.md"
+  ],
+  "local_manifest_rules": [
+    "Every new raw or normalized source dataset stored under the workspace must have a sibling or run-directory manifest before it is referenced by planning or build docs.",
+    "Planning/build docs must link this workspace manifest and name the lane-specific manifest file emitted by the relevant command.",
+    "Checked-in package resources may reference /mnt/githubActions/ades_big_data manifest paths, but must not embed large source payloads.",
+    "Build outputs that combine multiple source lanes must carry source manifest hashes or row counts in their own generated manifest."
+  ]
+}

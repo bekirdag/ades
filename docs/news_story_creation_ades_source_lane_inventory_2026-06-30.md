@@ -13,6 +13,13 @@ This includes the NSC-A001 relationship-family view over current shared
 builders. This is a local inventory only; no artifact build or deployment was
 run.
 
+Big-data workspace manifest:
+[`big_data_workspace_manifest_2026-06-30.json`](big_data_workspace_manifest_2026-06-30.json).
+Large raw source datasets, reviewed source rows, normalized bulk outputs, and
+generated graph/vector artifacts stay under `/mnt/githubActions/ades_big_data`;
+this document links the lane-level local manifest files that make those
+workspace datasets auditable without committing their payloads.
+
 ## Lane Matrix
 
 | Lane name | Input files | Build command | Validation command | Output artifact | Manifest support | Source-tier policy |
@@ -55,6 +62,9 @@ Common market-graph lane behavior:
   `/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/<lane>/<run_id>`;
   built market graph artifacts are under
   `/mnt/githubActions/ades_big_data/artifacts/market-graph/<run_id>`.
+- The workspace-level storage and manifest contract is recorded in
+  [`big_data_workspace_manifest_2026-06-30.json`](big_data_workspace_manifest_2026-06-30.json).
+  Lane rows below name the local manifest emitted by each build/fetch command.
 - `ades registry validate-market-graph-source-lanes --edge-tsv-path ...`
   checks source attribution and relation metadata for normalized edge TSVs.
 - Relation schema version is the current ADES relationship metadata surface in

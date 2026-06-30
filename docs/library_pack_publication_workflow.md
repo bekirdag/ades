@@ -55,6 +55,14 @@ If any pack fails source governance:
 
 ## Output Layout
 
+Large local source datasets and generated bulk artifacts used by this workflow
+belong under `/mnt/githubActions/ades_big_data`. The workspace-level manifest
+contract is checked in as
+[`big_data_workspace_manifest_2026-06-30.json`](big_data_workspace_manifest_2026-06-30.json);
+the fetch/build commands below emit lane-specific manifests such as
+`sources.fetch.json`, `bundle.json`, `sources.lock.json`, and
+`market_graph_store_manifest.json` inside that workspace.
+
 Given `--output-dir /path/to/release`, the refresh run writes:
 
 ```text
