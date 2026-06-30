@@ -86,8 +86,8 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
         )
 
     assert report.warnings == []
-    assert report.case_count == 18
-    assert report.empty_path_rate == 0.0556
+    assert report.case_count == 20
+    assert report.empty_path_rate == 0.05
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -200,8 +200,20 @@ def test_starter_graph_includes_promoted_brazil_relationships(tmp_path: Path) ->
             """
         ).fetchone()
 
-    assert brazil_edge_count == 47
+    assert brazil_edge_count == 49
     assert ibovespa_row == (1, 0)
+
+    bcb_expansion = expand_impact_paths(
+        ["ades:org:br:bcb"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=1,
+        max_candidates=5,
+    )
+    bcb_candidate_refs = {candidate.entity_ref for candidate in bcb_expansion.candidates}
+    assert {"ades:impact:currency:brl", "ades:impact:rate:br-selic"}.issubset(
+        bcb_candidate_refs
+    )
 
     equity_expansion = expand_impact_paths(
         ["ades:sector:br:brazilian-equity-market"],

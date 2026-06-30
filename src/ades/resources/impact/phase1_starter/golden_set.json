@@ -212,6 +212,41 @@
       ]
     },
     {
+      "name": "brazil_petrobras_b3_bridge",
+      "entity_refs": [
+        "ades:issuer:br:petrobras"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-br-en"
+      ],
+      "expected_candidate_refs": [
+        "finance-br-ticker:PETR3",
+        "finance-br-ticker:PETR4"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker"
+      ]
+    },
+    {
+      "name": "brazil_bcb_brl_selic_bridge",
+      "entity_refs": [
+        "ades:org:br:bcb"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-br-en"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:currency:brl",
+        "ades:impact:rate:br-selic"
+      ],
+      "expected_relation_families": [
+        "central_bank_affects_currency",
+        "central_bank_sets_policy_rate"
+      ]
+    },
+    {
       "name": "negative_empty_refs",
       "entity_refs": [
         "ades:impact:unknown:not-in-graph"

@@ -43,6 +43,7 @@ ades:impact:commodity:steel	Steel	commodity	finance-ru-en	true	false	"{""jurisdi
 ades:impact:commodity:tungsten	Tungsten	commodity		1	1	"{""commodity"":""tungsten""}"	general-en,finance-en
 ades:impact:commodity:wheat	Wheat	commodity		1	1	"{""commodity"":""wheat""}"	general-en,finance-en
 ades:impact:crypto:bitcoin	Bitcoin	crypto		1	1	"{""symbol"":""BTC""}"	general-en,finance-en
+ades:impact:currency:brl	Brazilian real	currency	finance-br-en	true	false	"{""jurisdiction"": ""BR"", ""same_as_refs"": [""currency:BRL"", ""iso4217:BRL""]}"	finance-br-en,general-en
 ades:impact:currency:cny	Chinese yuan	currency	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
 ades:impact:currency:eur	Euro	currency		1	1	"{""iso4217"":""EUR""}"	general-en,finance-en
 ades:impact:currency:inr	Indian rupee	currency	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
@@ -61,6 +62,7 @@ ades:impact:macro:de-industrial-production	Germany industrial production	macro_i
 ades:impact:macro:ru-cpi	Russia CPI	macro_indicator	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 ades:impact:macro:ru-gdp	Russia GDP	macro_indicator	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
 ades:impact:policy:digital-asset-regulation	Digital asset regulation	policy		0	1	"{""category"":""digital_asset_regulation""}"	general-en,finance-en
+ades:impact:rate:br-selic	Selic target rate	rate	finance-br-en	true	false	"{""jurisdiction"": ""BR""}"	finance-br-en,general-en
 ades:impact:rate:cn-lpr	PBOC loan prime rate	rate	finance-cn-en	true	false	"{""jurisdiction"": ""CN""}"	finance-cn-en,general-en
 ades:impact:rate:ecb-deposit-rate	ECB deposit facility rate	rate	finance-de-en	true	false	"{""jurisdiction"": ""EU""}"	finance-de-en,general-en
 ades:impact:rate:ecb-policy-rates	ECB policy rates	rate		1	1	"{""rate"":""ecb-policy-rates""}"	general-en,finance-en
@@ -145,6 +147,7 @@ ades:org:br:anatel	Agência Nacional de Telecomunicações	regulator	finance-br-
 ades:org:br:aneel	Agência Nacional de Energia Elétrica	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
 ades:org:br:anp	Agência Nacional do Petróleo, Gás Natural e Biocombustíveis	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
 ades:org:br:antt	Agência Nacional de Transportes Terrestres	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
+ades:org:br:bcb	Banco Central do Brasil	central_bank	finance-br-en	false	true	"{""jurisdiction"": ""BR"", ""same_as_refs"": [""wikidata:Q806177""]}"	finance-br-en,general-en
 ades:org:br:bndes	Banco Nacional de Desenvolvimento Econômico e Social	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
 ades:org:br:cvm	Comissão de Valores Mobiliários	regulator	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
 ades:org:br:mapa	Ministério da Agricultura e Pecuária	government_body	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
