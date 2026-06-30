@@ -218,6 +218,81 @@ def test_relationship_schema_covers_program_org_relationship_paths() -> None:
     )
 
 
+def test_relationship_schema_covers_russia_market_access_sanctions_and_flow_paths() -> None:
+    assert relation_family_for_relation("security_has_market_access_status") == (
+        "market_access_status"
+    )
+    assert "regulatory_enforcement" in relation_event_types("security_has_market_access_status")
+    assert relation_direction_preconditions("security_has_market_access_status") == (
+        "direct_issuer_or_security_mention",
+        "trading_status_or_market_access_signal",
+        "source_backed_security_status_evidence",
+    )
+    assert (
+        validate_relation_metadata(
+            relation="security_has_market_access_status",
+            configured_event_types=(),
+            configured_preconditions=(),
+        )
+        == []
+    )
+
+    assert relation_family_for_relation("sanctions_restriction_affects_commodity") == "sanctions"
+    assert relation_event_types("sanctions_restriction_affects_commodity") == (
+        "sanctions",
+        "export_control",
+        "war_escalation",
+        "ceasefire_risk_relief",
+    )
+    assert relation_direction_preconditions("sanctions_program_targets_sector") == (
+        "direct_sanctions_authority_or_program_mention",
+        "sanctions_target_or_restriction_context",
+        "compatible_event_signal",
+    )
+    assert (
+        validate_relation_metadata(
+            relation="sanctions_restriction_affects_commodity",
+            configured_event_types=(),
+            configured_preconditions=(),
+        )
+        == []
+    )
+
+    assert relation_family_for_relation("commodity_flow_affects_commodity") == "commodity_flow"
+    assert "supply_disruption" in relation_event_types("commodity_flow_affects_commodity")
+    assert relation_direction_preconditions("pipeline_transports_commodity") == (
+        "commodity_flow_or_infrastructure_event_signal",
+        "source_backed_flow_evidence",
+        "compatible_event_signal",
+    )
+    assert (
+        validate_relation_metadata(
+            relation="org_operates_pipeline",
+            configured_event_types=(),
+            configured_preconditions=(),
+        )
+        == []
+    )
+
+    assert relation_family_for_relation("regulator_supervises_exchange") == (
+        "policy_sector_exposure"
+    )
+    assert relation_event_types("government_body_sets_energy_policy") == (
+        "sector_policy_change",
+        "regulatory_enforcement",
+        "fiscal_expansion",
+        "fiscal_austerity",
+        "tariff",
+        "export_control",
+        "sanctions",
+        "policy_rate_cut",
+        "policy_rate_hike",
+        "policy_rate_hold",
+        "inflation_shock",
+        "future_policy_expectation",
+    )
+
+
 def test_relationship_schema_defaults_and_warnings_are_non_fatal() -> None:
     assert normalized_relation_event_types("regulator_affects_sector", ()) == (
         "sector_policy_change",
@@ -921,6 +996,41 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
             "https://www.americamovil.com/English/investors/default.aspx",
         )
         == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert (
+        classify_source_tier(
+            "MOEX ISS security description",
+            "https://iss.moex.com/iss/securities/SBER.json",
+        )
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert (
+        classify_source_tier("SPIMEX official site", "https://spimex.global/about/")
+        == SOURCE_TIER_EXCHANGE
+    )
+    assert classify_source_tier("Bank of Russia key rate", "https://www.cbr.ru/eng/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "EU Sanctions Map Russia regime",
+            "https://www.sanctionsmap.eu/api/v1/regime?id%5B%5D=26&lang=en",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
+            "National Settlement Depository official site",
+            "https://www.nsd.ru/en/",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier("Gazprom investors", "https://www.gazprom.com/investors/")
+        == SOURCE_TIER_ISSUER_DISCLOSED
+    )
+    assert classify_source_tier("OMZ official site", "https://omz.tech/en/") == (
+        SOURCE_TIER_ISSUER_DISCLOSED
     )
     assert classify_source_tier("unit test", "https://example.test/source") == (
         SOURCE_TIER_TEST_FIXTURE

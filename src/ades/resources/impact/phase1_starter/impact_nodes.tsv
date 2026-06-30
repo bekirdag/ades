@@ -866,3 +866,115 @@ finance-us-ticker:KOF	KOF	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE
 finance-us-ticker:OMAB	OMAB	ticker	finance-mx-en	true	false	"{""exchange"": ""NASDAQ"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""OMAB""}"	finance-mx-en,finance-us-en,general-en
 finance-us-ticker:PAC	PAC	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""PAC""}"	finance-mx-en,finance-us-en,general-en
 finance-us-ticker:VLRS	VLRS	ticker	finance-mx-en	true	false	"{""exchange"": ""NYSE"", ""jurisdiction"": ""US"", ""ticker_symbol"": ""VLRS""}"	finance-mx-en,finance-us-en,general-en
+ades:commodity-flow:ru:crude-oil-exports	Russia crude oil exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:commodity-flow:ru:fertilizer-exports	Russia fertilizer exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:commodity-flow:ru:natural-gas-exports	Russia natural gas exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:commodity-flow:ru:wheat-exports	Russia wheat exports	commodity_flow	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:commodity:coal	Coal	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:commodity:fertilizer	Fertilizer	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:commodity:nickel	Nickel	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:commodity:palladium	Palladium	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:commodity:steel	Steel	commodity	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:currency:rub	Russian ruble	currency	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:macro:ru-cpi	Russia CPI	macro_indicator	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:macro:ru-gdp	Russia GDP	macro_indicator	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:impact:rate:ru-cbr-key-rate	Bank of Russia key rate	rate	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:market-access-status:ru:moex-active-status-a	MOEX active trading status A	market_access_status	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:org:ru:minenergy	Ministry of Energy of the Russian Federation	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:org:ru:minfin	Ministry of Finance of the Russian Federation	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:org:ru:mintrans	Ministry of Transport of the Russian Federation	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:org:ru:rosstat	Rosstat	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:org:ru:transneft	Transneft	organization	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:payment-system:ru:cross-border-payments	Russian cross-border payments	payment_system	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:pipeline:ru:gas-export-pipelines	Russia gas export pipelines	pipeline	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:pipeline:ru:oil-pipeline-system	Russia oil pipeline system	pipeline	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-authority:ca:gac	Global Affairs Canada	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-authority:ch:seco	Swiss SECO	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-authority:eu:council	Council of the European Union	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-authority:jp:mof	Japan Ministry of Finance	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-authority:uk:ofsi	UK OFSI	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-authority:us:ofac	U.S. Treasury OFAC	sanctions_authority	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:ca:russia	Canada Russia sanctions	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:ch:russia	Swiss Russia sanctions and embargoes	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:eu:russia-restrictive-measures	EU restrictive measures against Russia	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:jp:russia	Japan economic sanctions program	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:uk:russia	UK Russia sanctions regime	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sanctions-program:us-ofac:russia-related	OFAC Russia-related sanctions program	sanctions_program	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:banking	Banking	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:coal-steel-and-mining	Coal, steel, and mining	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:defense-industrial	Defense industrial	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:electricity-and-power	Electricity and power	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:energy-and-oil-gas	Energy and oil and gas	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:energy-commodity-trading	Energy commodity trading	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:fertilizer-and-phosphates	Fertilizer and phosphates	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:food-retail	Food retail	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:gold-mining	Gold mining	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:industrial-machinery	Industrial machinery	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:metals-and-mining	Metals and mining	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:natural-gas-and-lng	Natural gas and LNG	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:natural-gas-and-pipeline-gas	Natural gas and pipeline gas	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:oil-and-gas	Oil and gas	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:payments	Payments	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:ports-shipping-and-freight	Ports, shipping, and freight	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:public-finance	Public finance	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:russian-equity-market	Russian equity market	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:securities-markets	Securities markets	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:settlement-and-depository	Settlement and depository	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:shipping-insurance-and-freight	Shipping, insurance, and freight	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:sovereign-debt-and-ofz	Sovereign debt and OFZ	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:steel	Steel	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:telecom	Telecom	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:sector:ru:transport-and-logistics	Transport and logistics	sector	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:chmf-share	CHMF MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009046510"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:CHMF"", ""isin:RU0009046510"", ""moex:CHMF""], ""security_identifier"": ""1-02-00143-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:gazp-share	GAZP MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0007661625"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:GAZP"", ""isin:RU0007661625"", ""moex:GAZP""], ""security_identifier"": ""1-02-00028-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:gmkn-share	GMKN MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0007288411"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:GMKN"", ""isin:RU0007288411"", ""moex:GMKN""], ""security_identifier"": ""1-01-40155-F""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:lkoh-share	LKOH MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009024277"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:LKOH"", ""isin:RU0009024277"", ""moex:LKOH""], ""security_identifier"": ""1-01-00077-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:mgnt-share	MGNT MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0JKQU8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:MGNT"", ""isin:RU000A0JKQU8"", ""moex:MGNT""], ""security_identifier"": ""1-01-60525-P""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:mtlr-share	MTLR MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0DKXV5"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:MTLR"", ""isin:RU000A0DKXV5"", ""moex:MTLR""], ""security_identifier"": ""1-01-55005-E""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:mtss-share	MTSS MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0007775219"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:MTSS"", ""isin:RU0007775219"", ""moex:MTSS""], ""security_identifier"": ""1-01-04715-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:nlmk-share	NLMK MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009046452"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:NLMK"", ""isin:RU0009046452"", ""moex:NLMK""], ""security_identifier"": ""1-01-00102-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:nvtk-share	NVTK MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0DKVS5"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:NVTK"", ""isin:RU000A0DKVS5"", ""moex:NVTK""], ""security_identifier"": ""1-02-00268-E""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:omzzp-share	OMZZP MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009090559"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:OMZZP"", ""isin:RU0009090559"", ""moex:OMZZP""], ""security_identifier"": ""2-01-30174-D""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:phor-share	PHOR MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0JRKT8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:PHOR"", ""isin:RU000A0JRKT8"", ""moex:PHOR""], ""security_identifier"": ""1-02-06556-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:plzl-share	PLZL MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0JNAA8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:PLZL"", ""isin:RU000A0JNAA8"", ""moex:PLZL""], ""security_identifier"": ""1-01-55192-E""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:rosn-share	ROSN MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU000A0J2Q06"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:ROSN"", ""isin:RU000A0J2Q06"", ""moex:ROSN""], ""security_identifier"": ""1-02-00122-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:sber-share	SBER MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009029540"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:SBER"", ""isin:RU0009029540"", ""moex:SBER""], ""security_identifier"": ""10301481B""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:sngs-share	SNGS MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0008926258"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:SNGS"", ""isin:RU0008926258"", ""moex:SNGS""], ""security_identifier"": ""1-01-00155-A""}"	finance-ru-en,general-en,finance-en
+ades:security:ru:moex:tatn-share	TATN MOEX share	security	finance-ru-en	true	false	"{""isin"": ""RU0009033591"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""finance-ru-ticker:TATN"", ""isin:RU0009033591"", ""moex:TATN""], ""security_identifier"": ""1-03-00161-A""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:1074	"публичное акционерное общество ""НОВАТЭК"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:1089	Публичное акционерное общество Объединенные машиностроительные заводы (Группа Уралмаш-Ижора)	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:1158	"Публичное акционерное общество ""Полюс"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:1352	"Публичное акционерное общество ""Мобильные ТелеСистемы"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:1399	"Публичное акционерное общество ""Горно-металлургическая компания ""Норильский никель"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:1406	"Публичное акционерное общество ""Сургутнефтегаз"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:4513	"Публичное акционерное общество ""ФосАгро"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:484	"Публичное акционерное общество ""Сбербанк России"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU"", ""same_as_refs"": [""wikidata:Q205012""]}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:651	"публичное акционерное общество ""Нефтяная компания ""Роснефть"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:711	"Публичное акционерное общество ""Газпром"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:716	"Публичное акционерное общество ""Мечел"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:770	"Публичное акционерное общество ""Нефтяная компания ""ЛУКОЙЛ"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:852	"публичное акционерное общество ""Татнефть"" имени В.Д. Шашина"	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:886	"Публичное акционерное общество ""Магнит"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:927	"Публичное акционерное общество ""Северсталь"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-issuer:970	"Публичное акционерное общество ""Новолипецкий металлургический комбинат"""	issuer	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:CHMF	CHMF	ticker	finance-ru-en	true	false	"{""isin"": ""RU0009046510"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:CHMF"", ""isin:RU0009046510""], ""security_identifier"": ""1-02-00143-A"", ""ticker_symbol"": ""CHMF""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:GAZP	GAZP	ticker	finance-ru-en	true	false	"{""isin"": ""RU0007661625"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:GAZP"", ""isin:RU0007661625""], ""security_identifier"": ""1-02-00028-A"", ""ticker_symbol"": ""GAZP""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:GMKN	GMKN	ticker	finance-ru-en	true	false	"{""isin"": ""RU0007288411"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:GMKN"", ""isin:RU0007288411""], ""security_identifier"": ""1-01-40155-F"", ""ticker_symbol"": ""GMKN""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:LKOH	LKOH	ticker	finance-ru-en	true	false	"{""isin"": ""RU0009024277"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:LKOH"", ""isin:RU0009024277""], ""security_identifier"": ""1-01-00077-A"", ""ticker_symbol"": ""LKOH""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:MGNT	MGNT	ticker	finance-ru-en	true	false	"{""isin"": ""RU000A0JKQU8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:MGNT"", ""isin:RU000A0JKQU8""], ""security_identifier"": ""1-01-60525-P"", ""ticker_symbol"": ""MGNT""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:MTLR	MTLR	ticker	finance-ru-en	true	false	"{""isin"": ""RU000A0DKXV5"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:MTLR"", ""isin:RU000A0DKXV5""], ""security_identifier"": ""1-01-55005-E"", ""ticker_symbol"": ""MTLR""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:MTSS	MTSS	ticker	finance-ru-en	true	false	"{""isin"": ""RU0007775219"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:MTSS"", ""isin:RU0007775219""], ""security_identifier"": ""1-01-04715-A"", ""ticker_symbol"": ""MTSS""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:NLMK	NLMK	ticker	finance-ru-en	true	false	"{""isin"": ""RU0009046452"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:NLMK"", ""isin:RU0009046452""], ""security_identifier"": ""1-01-00102-A"", ""ticker_symbol"": ""NLMK""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:NVTK	NVTK	ticker	finance-ru-en	true	false	"{""isin"": ""RU000A0DKVS5"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:NVTK"", ""isin:RU000A0DKVS5""], ""security_identifier"": ""1-02-00268-E"", ""ticker_symbol"": ""NVTK""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:OMZZP	OMZZP	ticker	finance-ru-en	true	false	"{""isin"": ""RU0009090559"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:OMZZP"", ""isin:RU0009090559""], ""security_identifier"": ""2-01-30174-D"", ""ticker_symbol"": ""OMZZP""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:PHOR	PHOR	ticker	finance-ru-en	true	false	"{""isin"": ""RU000A0JRKT8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:PHOR"", ""isin:RU000A0JRKT8""], ""security_identifier"": ""1-02-06556-A"", ""ticker_symbol"": ""PHOR""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:PLZL	PLZL	ticker	finance-ru-en	true	false	"{""isin"": ""RU000A0JNAA8"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:PLZL"", ""isin:RU000A0JNAA8""], ""security_identifier"": ""1-01-55192-E"", ""ticker_symbol"": ""PLZL""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:ROSN	ROSN	ticker	finance-ru-en	true	false	"{""isin"": ""RU000A0J2Q06"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:ROSN"", ""isin:RU000A0J2Q06""], ""security_identifier"": ""1-02-00122-A"", ""ticker_symbol"": ""ROSN""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:SBER	SBER	ticker	finance-ru-en	true	false	"{""isin"": ""RU0009029540"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:SBER"", ""isin:RU0009029540""], ""security_identifier"": ""10301481B"", ""ticker_symbol"": ""SBER""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:SNGS	SNGS	ticker	finance-ru-en	true	false	"{""isin"": ""RU0008926258"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:SNGS"", ""isin:RU0008926258""], ""security_identifier"": ""1-01-00155-A"", ""ticker_symbol"": ""SNGS""}"	finance-ru-en,general-en,finance-en
+finance-ru-ticker:TATN	TATN	ticker	finance-ru-en	true	false	"{""isin"": ""RU0009033591"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:TATN"", ""isin:RU0009033591""], ""security_identifier"": ""1-03-00161-A"", ""ticker_symbol"": ""TATN""}"	finance-ru-en,general-en,finance-en
+finance-ru:cbr	Bank of Russia	government_body	finance-ru-en	false	true	"{""jurisdiction"": ""RU"", ""same_as_refs"": [""wikidata:Q827011""]}"	finance-ru-en,general-en,finance-en
+finance-ru:moex	Moscow Exchange	exchange	finance-ru-en	false	true	"{""isin"": ""RU0009029540"", ""jurisdiction"": ""RU"", ""same_as_refs"": [""moex:exchange"", ""wikidata:Q2632892""], ""security_identifier"": ""10301481B""}"	finance-ru-en,general-en,finance-en
+finance-ru:moex-russia-index	MOEX Russia Index	market_index	finance-ru-en	true	false	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en
+finance-ru:nsd	National Settlement Depository	depository	finance-ru-en	false	true	"{""jurisdiction"": ""RU"", ""same_as_refs"": [""wikidata:Q4315073""]}"	finance-ru-en,general-en,finance-en
+finance-ru:spimex	SPIMEX	exchange	finance-ru-en	false	true	"{""jurisdiction"": ""RU""}"	finance-ru-en,general-en,finance-en

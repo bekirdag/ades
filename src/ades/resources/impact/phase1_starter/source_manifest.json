@@ -10,6 +10,16 @@
   ],
   "sources": [
     {
+      "source_name": "Russia reviewed program/org relationship source lane",
+      "source_url": "https://iss.moex.com/iss/securities/SBER.json?iss.meta=off&iss.only=description",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_russia/2026-06-29/build_summary_repaired.json",
+      "source_year": 2026,
+      "refresh_policy": "refresh_on_country_source_lane_update",
+      "normalized_output_allowed": true,
+      "license_notes": "Reviewed source lane stores only normalized relationship metadata; source URLs and evidence snippets are retained under /mnt/githubActions/ades_big_data.",
+      "notes": "Production-promoted Russia first slice covering MOEX issuer/ticker/security/status bridges, Bank of Russia currency/rates/market-supervision rows, Minfin/Rosstat/MinEnergy/Mintrans policy/statistics rows, sanctions-authority/program rows, and commodity-flow or pipeline paths with no direct country-to-commodity or sanctions/program-to-issuer fanout."
+    },
+    {
       "source_name": "Mexico reviewed program/org relationship source lane",
       "source_url": "https://www.bmv.com.mx/en/movil/JSONClaveCotizacion?idBusquedaCotizacion=2",
       "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_mexico/2026-06-29/SOURCE_INVENTORY.md",

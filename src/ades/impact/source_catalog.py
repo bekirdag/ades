@@ -208,6 +208,24 @@ _OFFICIAL_HOST_FRAGMENTS = (
     "pemex.com",
     "cenace.gob.mx",
     "proyectosmexico.gob.mx",
+    "cbr.ru",
+    "minfin.gov.ru",
+    "rosstat.gov.ru",
+    "government.ru",
+    "roskazna.gov.ru",
+    "economy.gov.ru",
+    "nalog.gov.ru",
+    "customs.gov.ru",
+    "rosim.gov.ru",
+    "minenergo.gov.ru",
+    "minpromtorg.gov.ru",
+    "mcx.gov.ru",
+    "mintrans.gov.ru",
+    "favt.gov.ru",
+    "fsvps.gov.ru",
+    "rkn.gov.ru",
+    "rospotrebnadzor.ru",
+    "consilium.europa.eu",
 )
 _EXCHANGE_HOST_FRAGMENTS = (
     "nasdaq.com",
@@ -252,6 +270,10 @@ _EXCHANGE_HOST_FRAGMENTS = (
     "bmv.com.mx",
     "grupo-bmv.com.mx",
     "biva.mx",
+    "moex.com",
+    "iss.moex.com",
+    "spimex.com",
+    "spimex.global",
 )
 _REGULATOR_HOST_FRAGMENTS = (
     "fca.org.uk",
@@ -336,6 +358,13 @@ _REGULATOR_HOST_FRAGMENTS = (
     "cne.gob.mx",
     "antimonopolio.gob.mx",
     "resoluciones.antimonopolio.gob.mx",
+    "ofac.treasury.gov",
+    "sanctionsmap.eu",
+    "mof.go.jp",
+    "seco.admin.ch",
+    "nsd.ru",
+    "fas.gov.ru",
+    "en.fas.gov.ru",
 )
 _REGULATOR_URL_FRAGMENTS = (
     "gob.mx/cnbv",
@@ -474,6 +503,28 @@ _ISSUER_DISCLOSED_HOST_FRAGMENTS = (
     "megacable.com.mx",
     "genommalab.com",
     "bmv.com.mx",
+    "sberbank.com",
+    "sberbank.ru",
+    "rosneft.com",
+    "novatek.ru",
+    "lukoil.com",
+    "polyus.com",
+    "gazprom.com",
+    "nornickel.com",
+    "tatneft.ru",
+    "phosagro.com",
+    "severstal.com",
+    "surgutneftegas.ru",
+    "nlmk.com",
+    "mts.ru",
+    "magnit.com",
+    "omz.ru",
+    "omz.tech",
+    "mechel.com",
+    "rzd.ru",
+    "transneft.ru",
+    "rosatom.ru",
+    "rostec.ru",
 )
 
 
@@ -530,6 +581,7 @@ def classify_source_tier(source_name: str | None, source_url: str | None) -> str
         or host.endswith(".gov.uk")
         or host.endswith(".gov.au")
         or host.endswith(".gov.cn")
+        or host.endswith(".gov.ru")
         or _contains_any(host, _OFFICIAL_HOST_FRAGMENTS)
     ):
         return SOURCE_TIER_GOVERNMENT

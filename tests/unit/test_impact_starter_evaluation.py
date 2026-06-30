@@ -896,6 +896,119 @@ def test_starter_graph_includes_promoted_mexico_relationships(tmp_path: Path) ->
     assert equity_candidate_refs == {"finance-mx:ipc"}
 
 
+def test_starter_graph_includes_promoted_russia_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        russia_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_russia/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-ru-ticker:SBER',
+                    'ades:security:ru:moex:sber-share',
+                    'finance-ru:moex-russia-index',
+                    'ades:impact:currency:rub',
+                    'ades:impact:rate:ru-cbr-key-rate',
+                    'ades:impact:commodity:crude-oil',
+                    'ades:impact:commodity:natural-gas',
+                    'ades:impact:commodity:fertilizer'
+                )
+                """
+            )
+        }
+
+    assert russia_edge_count == 165
+    assert tradable_rows == {
+        "ades:impact:commodity:crude-oil": (1, 1),
+        "ades:impact:commodity:fertilizer": (1, 0),
+        "ades:impact:commodity:natural-gas": (1, 1),
+        "ades:impact:currency:rub": (1, 0),
+        "ades:impact:rate:ru-cbr-key-rate": (1, 0),
+        "ades:security:ru:moex:sber-share": (1, 0),
+        "finance-ru-ticker:SBER": (1, 0),
+        "finance-ru:moex-russia-index": (1, 0),
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=120,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    sber_candidate_refs, sber_passive_refs = expanded_refs("finance-ru-issuer:484")
+    assert sber_candidate_refs == {"ades:security:ru:moex:sber-share", "finance-ru-ticker:SBER"}
+    assert "ades:sector:ru:banking" in sber_passive_refs
+    assert "ades:impact:currency:rub" not in sber_candidate_refs
+    assert "ades:impact:commodity:crude-oil" not in sber_candidate_refs
+
+    cbr_candidate_refs, cbr_passive_refs = expanded_refs("finance-ru:cbr")
+    assert cbr_candidate_refs == {"ades:impact:currency:rub", "ades:impact:rate:ru-cbr-key-rate"}
+    assert {"finance-ru:moex", "finance-ru:nsd"}.issubset(cbr_passive_refs)
+    assert "finance-ru-ticker:SBER" not in cbr_candidate_refs
+
+    wikidata_cbr_candidate_refs, wikidata_cbr_passive_refs = expanded_refs("wikidata:Q827011")
+    assert wikidata_cbr_candidate_refs == cbr_candidate_refs
+    assert {"finance-ru:moex", "finance-ru:nsd"}.issubset(wikidata_cbr_passive_refs)
+
+    wikidata_sber_candidate_refs, wikidata_sber_passive_refs = expanded_refs("wikidata:Q205012")
+    assert wikidata_sber_candidate_refs == {
+        "ades:security:ru:moex:sber-share",
+        "finance-ru-ticker:SBER",
+    }
+    assert "ades:sector:ru:banking" in wikidata_sber_passive_refs
+
+    wikidata_nsd_candidate_refs, wikidata_nsd_passive_refs = expanded_refs("wikidata:Q4315073")
+    assert wikidata_nsd_candidate_refs == set()
+    assert "ades:sector:ru:settlement-and-depository" in wikidata_nsd_passive_refs
+
+    ofac_candidate_refs, ofac_passive_refs = expanded_refs(
+        "ades:sanctions-program:us-ofac:russia-related"
+    )
+    assert ofac_candidate_refs == set()
+    assert {"ades:sector:ru:banking", "finance-ru:nsd"}.issubset(ofac_passive_refs)
+
+    eu_candidate_refs, _ = expanded_refs("ades:sanctions-program:eu:russia-restrictive-measures")
+    assert {
+        "ades:impact:commodity:crude-oil",
+        "ades:impact:commodity:fertilizer",
+        "ades:impact:commodity:natural-gas",
+    }.issubset(eu_candidate_refs)
+    assert "finance-ru-ticker:GAZP" not in eu_candidate_refs
+    assert "ades:impact:currency:rub" not in eu_candidate_refs
+
+    crude_flow_candidate_refs, _ = expanded_refs("ades:commodity-flow:ru:crude-oil-exports")
+    assert {
+        "ades:impact:commodity:crude-oil",
+        "ades:impact:currency:usd",
+        "ades:impact:sector:airlines",
+    }.issubset(crude_flow_candidate_refs)
+    assert "finance-ru-ticker:SBER" not in crude_flow_candidate_refs
+    assert "ades:impact:currency:rub" not in crude_flow_candidate_refs
+
+    equity_candidate_refs, _ = expanded_refs("ades:sector:ru:russian-equity-market")
+    assert equity_candidate_refs == {"finance-ru:moex-russia-index"}
+
+
 def test_article_golden_set_evaluates_extraction_then_impact(tmp_path: Path):
     response = build_starter_market_graph_store(output_dir=tmp_path / "artifact")
     golden_set_path = tmp_path / "article_golden_set.json"
