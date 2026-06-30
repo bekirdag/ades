@@ -1691,6 +1691,9 @@ class ImpactPathEdge(BaseModel):
     source_url: str
     source_snapshot: str
     source_year: int | None = None
+    source_tier: str | None = None
+    effective_from: str | None = None
+    effective_to: str | None = None
     compatible_event_types: list[str] = Field(default_factory=list)
     direction_preconditions: list[str] = Field(default_factory=list)
 
@@ -1993,9 +1996,19 @@ class NewsAnalyzeCandidatePath(BaseModel):
     terminal_ref: str
     terminal_type: str | None = None
     terminal_name: str
+    jurisdiction: str | None = None
+    exchange: str | None = None
+    ticker: str | None = None
+    security_ids: dict[str, str] = Field(default_factory=dict)
     source_entity_refs: list[str] = Field(default_factory=list)
     event_compatibility: list[str] = Field(default_factory=list)
     path_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    weakest_edge: ImpactPathEdge | None = None
+    weakest_edge_ref: str | None = None
+    weakest_edge_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    source_tiers: list[str] = Field(default_factory=list)
+    effective_from: str | None = None
+    effective_to: str | None = None
     relationship_path: ImpactRelationshipPath
     artifact_ref: str | None = None
 

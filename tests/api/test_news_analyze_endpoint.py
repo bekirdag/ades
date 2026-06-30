@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from ades.impact.graph_builder import build_market_graph_store
 from ades.packs.registry import PackRegistry
-from ades.service.app import create_app
+from ades.service.app import _terminal_identity_parts, create_app
 from ades.service.models import (
     EntityLink,
     EntityMatch,
@@ -47,6 +47,43 @@ def _install_named_pack(storage_root: Path, pack_id: str, domain: str = "general
     )
     PackRegistry(storage_root).sync_pack_from_disk(pack_dir.name)
     return pack_dir.name
+
+
+def test_news_candidate_path_terminal_identity_supports_legacy_finance_refs() -> None:
+    jurisdiction, exchange, ticker, security_ids = _terminal_identity_parts(
+        "finance-us:equity:EXM"
+    )
+
+    assert jurisdiction == "us"
+    assert exchange is None
+    assert ticker == "EXM"
+    assert security_ids == {
+        "ades_ref": "finance-us:equity:EXM",
+        "ticker": "EXM",
+    }
+
+    jurisdiction, exchange, ticker, security_ids = _terminal_identity_parts(
+        "finance-ca-ticker:tsx:key.r"
+    )
+
+    assert jurisdiction == "ca"
+    assert exchange == "tsx"
+    assert ticker == "key.r"
+    assert security_ids == {
+        "ades_ref": "finance-ca-ticker:tsx:key.r",
+        "ticker": "key.r",
+        "exchange_ticker": "tsx:key.r",
+    }
+
+    jurisdiction, exchange, ticker, security_ids = _terminal_identity_parts("sec-cik:1730168")
+
+    assert jurisdiction is None
+    assert exchange is None
+    assert ticker is None
+    assert security_ids == {
+        "ades_ref": "sec-cik:1730168",
+        "cik": "1730168",
+    }
 
 
 def test_news_analyze_endpoint_is_feature_flagged(tmp_path: Path) -> None:
@@ -354,6 +391,22 @@ def test_news_analyze_endpoint_returns_normalized_contract(
     assert payload["terminal_candidates"] == payload["terminal_impact_candidates"]
     assert payload["candidate_paths"][0]["terminal_ref"] == "entity_crude_oil"
     assert payload["candidate_paths"][0]["terminal_type"] == "commodity"
+    assert payload["candidate_paths"][0]["terminal_name"] == "Crude oil"
+    assert payload["candidate_paths"][0]["jurisdiction"] is None
+    assert payload["candidate_paths"][0]["exchange"] is None
+    assert payload["candidate_paths"][0]["ticker"] is None
+    assert payload["candidate_paths"][0]["security_ids"] == {
+        "ades_ref": "entity_crude_oil"
+    }
+    assert payload["candidate_paths"][0]["path_confidence"] == 0.92
+    assert (
+        payload["candidate_paths"][0]["weakest_edge_ref"]
+        == "entity_hormuz->chokepoint_affects_energy->entity_crude_oil"
+    )
+    assert payload["candidate_paths"][0]["weakest_edge"]["confidence"] == 0.92
+    assert payload["candidate_paths"][0]["source_tiers"] == ["test_fixture"]
+    assert payload["candidate_paths"][0]["effective_from"] is None
+    assert payload["candidate_paths"][0]["effective_to"] is None
     assert payload["candidate_paths"][0]["artifact_ref"] == "sha256:test"
     assert (
         payload["candidate_paths"][0]["relationship_path"]["edges"][0]["relation"]
@@ -2213,6 +2266,31 @@ def test_news_analyze_uses_sector_graph_seeds_for_uninstalled_country_pack(
         candidates_by_ref["finance-uk-ticker:bem"]["relationship_paths"][0]["edges"][0]["relation"]
         == "issuer_has_listed_ticker"
     )
+    candidate_paths_by_ref = {
+        candidate_path["terminal_ref"]: candidate_path
+        for candidate_path in payload["candidate_paths"]
+    }
+    bem_path = candidate_paths_by_ref["finance-uk-ticker:bem"]
+    assert bem_path["terminal_type"] == "ticker"
+    assert bem_path["terminal_name"] == "BEM"
+    assert bem_path["jurisdiction"] == "uk"
+    assert bem_path["exchange"] is None
+    assert bem_path["ticker"] == "bem"
+    assert bem_path["security_ids"] == {
+        "ades_ref": "finance-uk-ticker:bem",
+        "ticker": "bem",
+    }
+    assert bem_path["event_compatibility"] == ["sector_policy_change"]
+    assert bem_path["path_confidence"] == 0.81216
+    assert (
+        bem_path["weakest_edge_ref"]
+        == "finance-uk-issuer:beowulf-mining->issuer_has_listed_ticker->finance-uk-ticker:bem"
+    )
+    assert bem_path["weakest_edge_confidence"] == 0.96
+    assert bem_path["source_tiers"] == ["exchange"]
+    assert bem_path["effective_from"] == "2026-01-01"
+    assert bem_path["effective_to"] is None
+    assert bem_path["artifact_ref"] == graph.artifact_hash
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 

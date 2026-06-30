@@ -71,6 +71,7 @@ from ..news_events import (
     gate_terminal_candidates_by_event_signals,
 )
 from ..impact.graph_store import MarketGraphStore
+from ..impact.source_catalog import classify_source_tier
 from ..runtime_matcher import clear_runtime_matcher_cache, load_runtime_matcher
 from ..storage import UnsupportedRuntimeConfigurationError
 from ..version import __version__
@@ -507,6 +508,163 @@ def _candidate_path_confidence(candidate: ImpactCandidate) -> float | None:
     return min(values) if values else None
 
 
+def _relationship_path_confidence(
+    candidate: ImpactCandidate,
+    relationship_path: ImpactRelationshipPath,
+) -> float | None:
+    values = [candidate.confidence]
+    values.extend(edge.confidence for edge in relationship_path.edges)
+    return min(values) if values else None
+
+
+def _weakest_edge(relationship_path: ImpactRelationshipPath) -> object | None:
+    if not relationship_path.edges:
+        return None
+    return min(
+        relationship_path.edges,
+        key=lambda edge: (
+            edge.confidence,
+            edge.source_ref.casefold(),
+            edge.relation.casefold(),
+            edge.target_ref.casefold(),
+        ),
+    )
+
+
+def _edge_ref(edge: object | None) -> str | None:
+    if edge is None:
+        return None
+    source_ref = getattr(edge, "source_ref", "")
+    relation = getattr(edge, "relation", "")
+    target_ref = getattr(edge, "target_ref", "")
+    if not (source_ref and relation and target_ref):
+        return None
+    return f"{source_ref}->{relation}->{target_ref}"
+
+
+def _edge_source_tier(edge: object) -> str:
+    source_tier = str(getattr(edge, "source_tier", "") or "").strip()
+    if source_tier:
+        return source_tier
+    return classify_source_tier(
+        str(getattr(edge, "source_name", "") or ""),
+        str(getattr(edge, "source_url", "") or ""),
+    )
+
+
+def _edge_effective_from(edge: object) -> str | None:
+    effective_from = getattr(edge, "effective_from", None)
+    if effective_from:
+        return str(effective_from)
+    source_year = getattr(edge, "source_year", None)
+    if isinstance(source_year, int):
+        return f"{source_year:04d}-01-01"
+    return None
+
+
+def _edge_effective_to(edge: object) -> str | None:
+    effective_to = getattr(edge, "effective_to", None)
+    return str(effective_to) if effective_to else None
+
+
+def _path_source_tiers(relationship_path: ImpactRelationshipPath) -> list[str]:
+    return _dedupe_string_values([_edge_source_tier(edge) for edge in relationship_path.edges])
+
+
+def _path_effective_from(relationship_path: ImpactRelationshipPath) -> str | None:
+    values = _dedupe_string_values(
+        [_edge_effective_from(edge) for edge in relationship_path.edges]
+    )
+    return max(values) if values else None
+
+
+def _path_effective_to(relationship_path: ImpactRelationshipPath) -> str | None:
+    values = _dedupe_string_values([_edge_effective_to(edge) for edge in relationship_path.edges])
+    return min(values) if values else None
+
+
+def _terminal_identity_parts(
+    terminal_ref: str,
+) -> tuple[str | None, str | None, str | None, dict[str, str]]:
+    raw_ref = terminal_ref.strip()
+    security_ids: dict[str, str] = {}
+    if raw_ref:
+        security_ids["ades_ref"] = raw_ref
+
+    finance_ticker_match = re.match(
+        r"^finance-([a-z]{2})-ticker:(.+)$",
+        raw_ref,
+        flags=re.IGNORECASE,
+    )
+    if finance_ticker_match:
+        jurisdiction = finance_ticker_match.group(1).casefold()
+        ticker_parts = [part for part in finance_ticker_match.group(2).split(":") if part]
+        if not ticker_parts:
+            return jurisdiction, None, None, security_ids
+        exchange = ticker_parts[0] if len(ticker_parts) > 1 else None
+        ticker = ":".join(ticker_parts[1:]) if len(ticker_parts) > 1 else ticker_parts[0]
+        security_ids["ticker"] = ticker
+        if exchange:
+            security_ids["exchange_ticker"] = f"{exchange}:{ticker}"
+        return jurisdiction, exchange, ticker, security_ids
+
+    finance_colon_ref_match = re.match(
+        r"^finance-([a-z]{2}):(issuer|security|equity):(.+)$",
+        raw_ref,
+        flags=re.IGNORECASE,
+    )
+    if finance_colon_ref_match:
+        jurisdiction = finance_colon_ref_match.group(1).casefold()
+        ref_type = finance_colon_ref_match.group(2).casefold()
+        local_id = finance_colon_ref_match.group(3).strip()
+        if ref_type == "equity" and local_id:
+            security_ids["ticker"] = local_id
+            return jurisdiction, None, local_id, security_ids
+        if ref_type == "security" and local_id:
+            security_ids["local_security_id"] = local_id
+        return jurisdiction, None, None, security_ids
+
+    finance_ref_match = re.match(
+        r"^finance-([a-z]{2})-(?:issuer|security|equity):(.+)$",
+        raw_ref,
+        flags=re.IGNORECASE,
+    )
+    if finance_ref_match:
+        return finance_ref_match.group(1).casefold(), None, None, security_ids
+
+    ades_security_match = re.match(
+        r"^ades:security:([a-z]{2}):([^:]+):(.+)$",
+        raw_ref,
+        flags=re.IGNORECASE,
+    )
+    if ades_security_match:
+        jurisdiction = ades_security_match.group(1).casefold()
+        exchange = ades_security_match.group(2)
+        security_ids["local_security_id"] = ades_security_match.group(3)
+        return jurisdiction, exchange, None, security_ids
+
+    ades_security_local_match = re.match(
+        r"^ades:security:(.+)$",
+        raw_ref,
+        flags=re.IGNORECASE,
+    )
+    if ades_security_local_match:
+        security_ids["local_security_id"] = ades_security_local_match.group(1)
+        return None, None, None, security_ids
+
+    prefixed_id_match = re.match(
+        r"^(sec-cik|isin|openfigi|figi|lei):(.+)$",
+        raw_ref,
+        flags=re.IGNORECASE,
+    )
+    if prefixed_id_match:
+        raw_key = prefixed_id_match.group(1).casefold()
+        key = "cik" if raw_key == "sec-cik" else raw_key.replace("-", "_")
+        security_ids[key] = prefixed_id_match.group(2)
+
+    return None, None, None, security_ids
+
+
 def _candidate_key(candidate: ImpactCandidate) -> str:
     return candidate.entity_ref.strip().casefold()
 
@@ -547,14 +705,32 @@ def _build_candidate_paths(
             ImpactRelationshipPath(path_depth=0, edges=[])
         ]
         for relationship_path in relationship_paths:
+            weakest_edge = _weakest_edge(relationship_path)
+            jurisdiction, exchange, ticker, security_ids = _terminal_identity_parts(
+                candidate.entity_ref
+            )
             candidate_paths.append(
                 NewsAnalyzeCandidatePath(
                     terminal_ref=candidate.entity_ref,
                     terminal_type=candidate.entity_type,
                     terminal_name=candidate.name,
+                    jurisdiction=jurisdiction,
+                    exchange=exchange,
+                    ticker=ticker,
+                    security_ids=security_ids,
                     source_entity_refs=candidate.source_entity_refs,
                     event_compatibility=candidate.compatible_event_types,
-                    path_confidence=_candidate_path_confidence(candidate),
+                    path_confidence=_relationship_path_confidence(candidate, relationship_path),
+                    weakest_edge=weakest_edge,
+                    weakest_edge_ref=_edge_ref(weakest_edge),
+                    weakest_edge_confidence=(
+                        getattr(weakest_edge, "confidence", None)
+                        if weakest_edge is not None
+                        else None
+                    ),
+                    source_tiers=_path_source_tiers(relationship_path),
+                    effective_from=_path_effective_from(relationship_path),
+                    effective_to=_path_effective_to(relationship_path),
                     relationship_path=relationship_path,
                     artifact_ref=artifact_ref,
                 )

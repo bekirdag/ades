@@ -19,6 +19,7 @@ from ..service.models import (
     TagResponse,
 )
 from .graph_store import MarketGraphEdge, MarketGraphNode, MarketGraphStore
+from .source_catalog import classify_source_tier
 
 _DEPTH_DECAY = {0: 1.0, 1: 0.9, 2: 0.75}
 _MAX_DEPTH_CAP = 4
@@ -203,6 +204,12 @@ def _direct_terminal_name_for_ref(entity_ref: str, entity_type: str) -> str:
     return slug.title()
 
 
+def _edge_effective_from(edge: MarketGraphEdge) -> str | None:
+    if edge.source_year is None:
+        return None
+    return f"{edge.source_year:04d}-01-01"
+
+
 def _path_edges(edges: tuple[MarketGraphEdge, ...]) -> list[ImpactPathEdge]:
     return [
         ImpactPathEdge(
@@ -216,6 +223,9 @@ def _path_edges(edges: tuple[MarketGraphEdge, ...]) -> list[ImpactPathEdge]:
             source_url=edge.source_url,
             source_snapshot=edge.source_snapshot,
             source_year=edge.source_year,
+            source_tier=classify_source_tier(edge.source_name, edge.source_url),
+            effective_from=_edge_effective_from(edge),
+            effective_to=None,
             compatible_event_types=list(edge.compatible_event_types),
             direction_preconditions=list(edge.direction_preconditions),
         )
