@@ -183,10 +183,13 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
         event_type="regulatory_enforcement",
         patterns=(
             _rx(
-                r"\b(?:regulator|regulators|agency|watchdog|competition\s+authority|antitrust|securities\s+commission|environmental\s+agency|central\s+bank)\b.{0,180}\b(?:fine(?:s|d)?|penalt(?:y|ies)|probe|probes|investigat(?:e|es|ed|ion)|enforcement|crackdown|lawsuit|sue(?:s|d)?|order(?:s|ed)?|ban(?:s|ned)?|suspend(?:s|ed)?|revoke(?:s|d)?|licen[cs]e|settlement)\b"
+                r"\b(?:regulator|regulators|agency|watchdog|competition\s+authority|antitrust|securities\s+commission|environmental\s+agency|central\s+bank)\b.{0,180}\b(?:fine(?:s|d)?|penalt(?:y|ies)|probe|probes|investigat(?:e|es|ed|ion)|enforcement|crackdown|lawsuit|class\s+action|legal\s+claims?|price\s+conduct|sue(?:s|d)?|order(?:s|ed)?|ban(?:s|ned)?|suspend(?:s|ed)?|revoke(?:s|d)?|licen[cs]e|settlement)\b"
             ),
             _rx(
-                r"\b(?:fine(?:s|d)?|penalt(?:y|ies)|probe|probes|investigat(?:e|es|ed|ion)|enforcement|crackdown|lawsuit|sue(?:s|d)?|order(?:s|ed)?|ban(?:s|ned)?|suspend(?:s|ed)?|revoke(?:s|d)?|settlement)\b.{0,180}\b(?:regulator|regulators|agency|watchdog|competition\s+authority|antitrust|securities\s+commission|environmental\s+agency|central\s+bank|banks?|miners?|utilities|telecom|pharma|technology|crypto|energy|oil|gas|airlines?|shipping)\b"
+                r"\b(?:fine(?:s|d)?|penalt(?:y|ies)|probe|probes|investigat(?:e|es|ed|ion)|enforcement|crackdown|lawsuit|class\s+action|legal\s+claims?|price\s+conduct|sue(?:s|d)?|order(?:s|ed)?|ban(?:s|ned)?|suspend(?:s|ed)?|revoke(?:s|d)?|settlement)\b.{0,180}\b(?:regulator|regulators|agency|watchdog|competition\s+authority|antitrust|securities\s+commission|environmental\s+agency|central\s+bank|banks?|miners?|utilities|telecom|pharma|technology|crypto|energy|oil|gas|airlines?|shipping|housebuilders?|homebuilders?|builders?|housing|construction|real\s+estate|property|developers?)\b"
+            ),
+            _rx(
+                r"\b(?:banks?|miners?|utilities|telecom|pharma|technology|crypto|energy|oil|gas|airlines?|shipping|housebuilders?|homebuilders?|builders?|housing|construction|real\s+estate|property|developers?)\b.{0,180}\b(?:fine(?:s|d)?|penalt(?:y|ies)|probe|probes|investigat(?:e|es|ed|ion)|enforcement|crackdown|lawsuit|class\s+action|legal\s+claims?|price\s+conduct|sue(?:s|d)?|order(?:s|ed)?|ban(?:s|ned)?|suspend(?:s|ed)?|revoke(?:s|d)?|settlement)\b"
             ),
         ),
         compatible_asset_families=(
@@ -373,16 +376,16 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
         event_type="key_person_ownership_governance",
         patterns=(
             _rx(
-                r"\b(?:trial|lawsuit|court|legal\s+dispute|testif(?:y|ies|ied|ying))\b.{0,140}\b(?:stake|shares?|ownership|control|board|leadership|founder|ceo|chair|executive)\b"
+                r"\b(?:trial|lawsuit|court|legal\s+dispute|testif(?:y|ies|ied|ying))\b.{0,140}\b(?:stake|shareholding|shareholder|ownership|control|board|leadership|founder|ceo|chair|executive)\b"
             ),
             _rx(
-                r"\b(?:stake|shares?|ownership|control|board|leadership|founder|ceo|chair|executive)\b.{0,140}\b(?:trial|lawsuit|court|legal\s+dispute|testif(?:y|ies|ied|ying))\b"
+                r"\b(?:stake|shareholding|shareholder|ownership|control|board|leadership|founder|ceo|chair|executive)\b.{0,140}\b(?:trial|lawsuit|court|legal\s+dispute|testif(?:y|ies|ied|ying))\b"
             ),
             _rx(
-                r"\b(?:sought|wanted|asked|demanded|proposed|offered|bid|bids?|pursued)\b.{0,120}\b(?:stake|shares?|ownership|control|board|leadership)\b"
+                r"\b(?:sought|wanted|asked|demanded|proposed|offered|bid|bids?|pursued)\b.{0,120}\b(?:stake|shareholding|shareholder|ownership|control|board|leadership)\b"
             ),
             _rx(
-                r"\b(?:stake|shares?|ownership|control|board|leadership)\b.{0,120}\b(?:sought|wanted|asked|demanded|proposed|offered|bid|bids?|pursued)\b"
+                r"\b(?:stake|shareholding|shareholder|ownership|control|board|leadership)\b.{0,120}\b(?:sought|wanted|asked|demanded|proposed|offered|bid|bids?|pursued)\b"
             ),
             _rx(
                 r"\b(?:resign(?:s|ed|ation)?|step(?:s|ped)?\s+down|depart(?:s|ed|ure)?|leave|leaves|left|oust(?:ed|s)?|fired|dismiss(?:ed|es)?|appoint(?:ed|s)?|named|replace(?:d|s)?|succession|successor|died|dies|death|illness|hospitali[sz]ed|arrest(?:ed|s)?|investigat(?:e|ed|es|ion)|probe|fraud)\b.{0,160}\b(?:ceo|chief\s+executive|cfo|chief\s+financial\s+officer|founder|chair|chairman|chairwoman|board|director|executive|owner|shareholder|leadership)\b"

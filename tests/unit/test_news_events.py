@@ -86,6 +86,20 @@ def test_extract_news_event_signals_covers_sector_policy_and_regulatory_events()
     assert "equity" in by_type["regulatory_enforcement"].compatible_asset_families
 
 
+def test_extract_news_event_signals_covers_sector_class_action_without_governance() -> None:
+    text = (
+        "Housebuilders' shares tumbled after a GBP4bn class action lawsuit "
+        "over price conduct claims emerged."
+    )
+
+    by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
+
+    assert "regulatory_enforcement" in by_type
+    assert "sector" in by_type["regulatory_enforcement"].compatible_asset_families
+    assert "equity_index" in by_type["regulatory_enforcement"].compatible_asset_families
+    assert "key_person_ownership_governance" not in by_type
+
+
 def test_extract_news_event_signals_covers_takeover_approach_language() -> None:
     text = (
         "Intertek backed a GBP10.6bn takeover approach from Swedish private "
