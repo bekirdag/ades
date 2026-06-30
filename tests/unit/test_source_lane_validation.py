@@ -31,6 +31,29 @@ NODE_COLUMNS = [
     "identifiers_json",
     "packs",
 ]
+CANONICAL_EDGE_COLUMNS = [
+    "source_ref",
+    "source_type",
+    "target_ref",
+    "target_type",
+    "relation",
+    "jurisdiction",
+    "source_url",
+    "source_title",
+    "source_tier",
+    "evidence",
+    "effective_start_date",
+    "effective_end_date",
+    "confidence",
+    "notes",
+    "fetched_at",
+    "content_hash",
+    "review_status",
+    "license_notes",
+    "confidence_basis",
+    "exchange_ref",
+    "exchange_country",
+]
 
 
 def _write_edges(path: Path, rows: list[dict[str, str]]) -> None:
@@ -45,6 +68,42 @@ def _write_nodes(path: Path, rows: list[dict[str, str]]) -> None:
         writer = csv.DictWriter(handle, delimiter="\t", fieldnames=NODE_COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
+
+
+def _write_canonical_edges(path: Path, rows: list[dict[str, str]]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, delimiter="\t", fieldnames=CANONICAL_EDGE_COLUMNS)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(_canonical_edge(row))
+
+
+def _canonical_edge(overrides: dict[str, str]) -> dict[str, str]:
+    row = {
+        "source_ref": "ades:uk-law:mining-royalties",
+        "source_type": "law",
+        "target_ref": "ades:sector:mining",
+        "target_type": "sector",
+        "relation": "law_affects_sector",
+        "jurisdiction": "GB",
+        "source_url": "https://bills.parliament.uk/bills/example",
+        "source_title": "UK Parliament bill",
+        "source_tier": "government",
+        "evidence": "Official source backs the relationship.",
+        "effective_start_date": "2026-01-01",
+        "effective_end_date": "",
+        "confidence": "0.9",
+        "notes": "",
+        "fetched_at": "2026-06-28T00:00:00Z",
+        "content_hash": "sha256:abc123",
+        "review_status": "accepted",
+        "license_notes": "public sector source",
+        "confidence_basis": "official source page",
+        "exchange_ref": "",
+        "exchange_country": "",
+    }
+    row.update(overrides)
+    return row
 
 
 def test_validate_market_graph_source_lanes_accepts_source_backed_row(
@@ -267,6 +326,7 @@ def test_validate_market_graph_source_lanes_keeps_missing_canonical_tier_proposa
     assert result.source_policy_counts == {"low_trust_proposal_only": 1}
     assert result.production_eligible_row_count == 0
     assert result.proposal_only_row_count == 1
+    assert result.source_warning_counts == {}
 
 
 def test_validate_market_graph_source_lanes_blocks_incomplete_canonical_production_row(
@@ -406,3 +466,265 @@ def test_validate_market_graph_source_lanes_counts_node_type_warnings(
         "unknown_node_type_schema:person": 1,
     }
     assert len(result.warning_samples) == 2
+
+
+def test_validate_market_graph_source_lanes_detects_relationship_conflicts(
+    tmp_path: Path,
+) -> None:
+    edge_path = tmp_path / "canonical_edges.tsv"
+    _write_canonical_edges(
+        edge_path,
+        [
+            _canonical_edge(
+                {
+                    "source_ref": "ades:holding:alpha",
+                    "source_type": "holding_company",
+                    "target_ref": "ades:org:operating-company",
+                    "target_type": "organization",
+                    "relation": "org_part_of_holding",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:holding:beta",
+                    "source_type": "holding_company",
+                    "target_ref": "ades:org:operating-company",
+                    "target_type": "organization",
+                    "relation": "org_part_of_holding",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:issuer:alpha",
+                    "source_type": "issuer",
+                    "target_ref": "NYSE:ABC",
+                    "target_type": "ticker",
+                    "relation": "issuer_has_listed_ticker",
+                    "jurisdiction": "US",
+                    "exchange_ref": "NYSE",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:issuer:beta",
+                    "source_type": "issuer",
+                    "target_ref": "NYSE:ABC",
+                    "target_type": "ticker",
+                    "relation": "issuer_has_listed_ticker",
+                    "jurisdiction": "US",
+                    "exchange_ref": "NYSE",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:security:abc",
+                    "source_type": "security",
+                    "target_ref": "NYSE",
+                    "target_type": "exchange",
+                    "relation": "security_listed_on_exchange",
+                    "jurisdiction": "GB",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:program:subsidy",
+                    "source_type": "program",
+                    "target_ref": "NYSE:XYZ",
+                    "target_type": "ticker",
+                    "relation": "program_operated_by_org",
+                    "jurisdiction": "US",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:sector:builders",
+                    "source_type": "sector",
+                    "target_ref": "GBP",
+                    "target_type": "currency",
+                    "relation": "sector_affects_issuer",
+                    "jurisdiction": "GB",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:law:expired",
+                    "source_type": "law",
+                    "target_ref": "ades:sector:energy",
+                    "target_type": "sector",
+                    "relation": "law_affects_sector",
+                    "effective_end_date": "2020-01-01",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:law:blog",
+                    "source_type": "law",
+                    "target_ref": "ades:sector:retail",
+                    "target_type": "sector",
+                    "relation": "law_affects_sector",
+                    "source_url": "https://randomblog.invalid/example",
+                    "source_tier": "government",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:issuer:wrong-source-type",
+                    "source_type": "currency",
+                    "target_ref": "ades:sector:mining",
+                    "target_type": "sector",
+                    "relation": "law_affects_sector",
+                }
+            ),
+        ],
+    )
+
+    result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
+
+    assert result.source_warning_counts == {
+        "low_trust_source_proposal_only": 1,
+        "unknown_source_tier": 1,
+        "unrecognized_source_host": 1,
+    }
+    assert result.relation_warning_counts == {
+        "active_parent_conflict:ades:org:operating-company": 1,
+        "direct_program_to_ticker_shortcut": 1,
+        "expired_edge": 1,
+        "sector_to_currency_shortcut": 1,
+        "ticker_security_conflict:ticker_parent:NYSE:ABC": 1,
+        "unsupported_source_node_type:currency:policy|law|regulation|government_body|regulator|"
+        "ministry": 1,
+        "unsupported_target_node_type:currency:issuer|ticker|security": 1,
+        "unsupported_target_node_type:ticker:organization|issuer|legal_entity|holding_company": 1,
+        "wrong_exchange_country:NYSE:US:GB": 1,
+    }
+
+
+def test_validate_market_graph_source_lanes_ignores_expired_parent_conflicts(
+    tmp_path: Path,
+) -> None:
+    edge_path = tmp_path / "canonical_edges.tsv"
+    _write_canonical_edges(
+        edge_path,
+        [
+            _canonical_edge(
+                {
+                    "source_ref": "ades:holding:old",
+                    "source_type": "holding_company",
+                    "target_ref": "ades:org:operating-company",
+                    "target_type": "organization",
+                    "relation": "org_part_of_holding",
+                    "effective_end_date": "2020-01-01",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:holding:current",
+                    "source_type": "holding_company",
+                    "target_ref": "ades:org:operating-company",
+                    "target_type": "organization",
+                    "relation": "org_part_of_holding",
+                }
+            ),
+        ],
+    )
+
+    result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
+
+    assert result.relation_warning_counts == {"expired_edge": 1}
+
+
+def test_validate_market_graph_source_lanes_detects_security_ticker_exchange_conflicts(
+    tmp_path: Path,
+) -> None:
+    edge_path = tmp_path / "canonical_edges.tsv"
+    _write_canonical_edges(
+        edge_path,
+        [
+            _canonical_edge(
+                {
+                    "source_ref": "ades:issuer:alpha",
+                    "source_type": "issuer",
+                    "target_ref": "ades:security:alpha-common",
+                    "target_type": "security",
+                    "relation": "issuer_has_security",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:security:alpha-common",
+                    "source_type": "security",
+                    "target_ref": "NYSE:AAA",
+                    "target_type": "ticker",
+                    "relation": "security_has_ticker",
+                    "jurisdiction": "US",
+                    "exchange_ref": "NYSE",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:security:alpha-common",
+                    "source_type": "security",
+                    "target_ref": "NYSE:AAB",
+                    "target_type": "ticker",
+                    "relation": "security_has_ticker",
+                    "jurisdiction": "US",
+                    "exchange_ref": "NYSE",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:issuer:beta",
+                    "source_type": "issuer",
+                    "target_ref": "NYSE:AAA",
+                    "target_type": "ticker",
+                    "relation": "issuer_has_listed_ticker",
+                    "jurisdiction": "US",
+                    "exchange_ref": "NYSE",
+                }
+            ),
+        ],
+    )
+
+    result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
+
+    assert result.relation_warning_counts == {
+        "ticker_security_conflict:issuer_mismatch:ades:security:alpha-common:NYSE:AAA": 1,
+        "ticker_security_conflict:security_ticker:ades:security:alpha-common": 1,
+    }
+
+
+def test_validate_market_graph_source_lanes_allows_security_tickers_on_different_exchanges(
+    tmp_path: Path,
+) -> None:
+    edge_path = tmp_path / "canonical_edges.tsv"
+    _write_canonical_edges(
+        edge_path,
+        [
+            _canonical_edge(
+                {
+                    "source_ref": "ades:security:alpha-common",
+                    "source_type": "security",
+                    "target_ref": "NYSE:AAA",
+                    "target_type": "ticker",
+                    "relation": "security_has_ticker",
+                    "jurisdiction": "US",
+                    "exchange_ref": "NYSE",
+                }
+            ),
+            _canonical_edge(
+                {
+                    "source_ref": "ades:security:alpha-common",
+                    "source_type": "security",
+                    "target_ref": "LSE:AAA",
+                    "target_type": "ticker",
+                    "relation": "security_has_ticker",
+                    "jurisdiction": "GB",
+                    "exchange_ref": "LSE",
+                }
+            ),
+        ],
+    )
+
+    result = validate_market_graph_source_lanes(edge_tsv_paths=[edge_path])
+
+    assert result.relation_warning_counts == {}
