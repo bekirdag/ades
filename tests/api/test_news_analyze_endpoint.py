@@ -1036,6 +1036,102 @@ def test_news_analyze_promotes_tradable_source_entities_to_terminals(
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 
+def test_news_analyze_keeps_deterministic_rule_entities_in_terminal_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-rule-backed-ticker-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="EXM",
+                    label="ticker",
+                    start=text.index("EXM"),
+                    end=text.index("EXM") + len("EXM"),
+                    confidence=0.9,
+                    relevance=0.92,
+                    provenance=EntityProvenance(
+                        match_kind="rule",
+                        match_path="rule.regex",
+                        match_source="ticker_symbol",
+                        source_pack=pack or pack_id,
+                        source_domain="finance",
+                        model_name="regex",
+                    ),
+                    link=EntityLink(
+                        entity_id="finance-us-ticker:EXM",
+                        canonical_text="Example Corp",
+                        provider="rule.regex",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="finance", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert "finance-us-ticker:EXM" in set(entity_refs)
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-06-30",
+            artifact_hash="sha256:test",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="finance-us-ticker:EXM",
+                    name="Example Corp",
+                    entity_type="ticker",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=True,
+                )
+            ],
+            candidates=[],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "EXM reports earnings beat",
+            "text": "EXM reported an earnings beat and raised guidance.",
+            "packs": [pack_id],
+            "options": {
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [candidate["entity_ref"] for candidate in payload["terminal_impact_candidates"]] == [
+        "finance-us-ticker:EXM"
+    ]
+    assert not any(
+        warning.startswith("ADES_NEWS_ANALYZE_LOW_TRUST_ENTITY_CLAIMS_PROPOSAL_ONLY")
+        for warning in payload["warnings"]
+    )
+
+
 def test_news_analyze_returns_review_only_relationship_proposals(
     tmp_path: Path,
     monkeypatch,
@@ -1150,6 +1246,98 @@ def test_news_analyze_returns_review_only_relationship_proposals(
     assert unresolved_by_ref["wikidata:Qminister"]["missing_reason"] == (
         "passive_relationship_without_terminal_candidate"
     )
+
+
+def test_news_analyze_keeps_low_trust_entity_claims_out_of_terminal_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-low-trust-claim-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="FAKE",
+                    label="ticker",
+                    start=text.index("FAKE"),
+                    end=text.index("FAKE") + len("FAKE"),
+                    confidence=0.82,
+                    relevance=0.9,
+                    provenance=EntityProvenance(
+                        match_kind="proposal",
+                        match_path="llm-digest",
+                        match_source="llm",
+                        source_pack=pack or pack_id,
+                        source_domain="finance",
+                        model_name="test-llm",
+                    ),
+                    link=EntityLink(
+                        entity_id="finance-us-ticker:FAKE",
+                        canonical_text="Fake Proposed Ticker",
+                        provider="llm.proposal",
+                    ),
+                )
+            ],
+            related_entities=[],
+            topics=[TopicMatch(label="finance", score=0.88, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(*_: object, **__: object) -> ImpactExpansionResult:
+        raise AssertionError("low-trust proposal entities must not seed impact expansion")
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "LLM proposes FAKE ticker after earnings beat",
+            "text": "Analysts said FAKE reported an earnings beat, but the ticker came from a model claim.",
+            "packs": [pack_id],
+            "options": {
+                "include_relationship_proposals": True,
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["terminal_impact_candidates"] == []
+    assert payload["relationship_proposals"] == [
+        {
+            "entity_ref": "finance-us-ticker:FAKE",
+            "name": "Fake Proposed Ticker",
+            "entity_type": "ticker",
+            "score": 0.9,
+            "provider": "llm.proposal",
+            "source": "extracted_entity_claim",
+            "seed_entity_refs": ["finance-us-ticker:FAKE"],
+            "shared_seed_count": 1,
+            "publication_allowed": False,
+            "promotion_required": "source_backed_edge_or_strict_identity_bridge",
+        }
+    ]
+    assert payload["warnings"] == ["ADES_NEWS_ANALYZE_LOW_TRUST_ENTITY_CLAIMS_PROPOSAL_ONLY:1"]
 
 
 def test_news_analyze_returns_passive_path_relationship_proposals(

@@ -1951,7 +1951,11 @@ class NewsAnalyzeRelationshipProposal(BaseModel):
     entity_type: str | None = None
     score: float | None = Field(default=None, ge=0.0, le=1.0)
     provider: str | None = None
-    source: Literal["related_entity", "impact_passive_path"] = "related_entity"
+    source: Literal[
+        "related_entity",
+        "impact_passive_path",
+        "extracted_entity_claim",
+    ] = "related_entity"
     seed_entity_refs: list[str] = Field(default_factory=list)
     shared_seed_count: int = Field(default=0, ge=0)
     publication_allowed: bool = False

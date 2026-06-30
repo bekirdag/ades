@@ -736,6 +736,28 @@ _DIRECT_TERMINAL_TYPE_TOKENS = {
     "stock",
     "ticker",
 }
+_LOW_TRUST_ENTITY_PROVENANCE_TOKENS = {
+    "llm",
+    "search",
+    "proposal",
+    "news",
+}
+_LOW_TRUST_MATCH_SOURCE_TOKENS = {
+    "llm",
+    "search",
+    "proposal",
+}
+_LOW_TRUST_MODEL_PROVENANCE_TOKENS = {
+    "anthropic",
+    "claude",
+    "gemini",
+    "gpt",
+    "llama",
+    "llm",
+    "mistral",
+    "openai",
+    "qwen",
+}
 
 
 def _is_direct_terminal_ref(entity_ref: str) -> bool:
@@ -747,6 +769,33 @@ def _is_direct_terminal_ref(entity_ref: str) -> bool:
     ):
         return True
     return any(normalized_ref.startswith(prefix) for prefix in _DIRECT_TERMINAL_REF_PREFIXES)
+
+
+def _provenance_value_tokens(value: str | None) -> set[str]:
+    return {token for token in re.split(r"[^a-z0-9]+", (value or "").casefold()) if token}
+
+
+def _is_low_trust_entity_claim(entity: EntityMatch) -> bool:
+    provenance = entity.provenance
+    if provenance is None:
+        return False
+    if provenance.match_kind == "proposal":
+        return True
+    model_tokens = _provenance_value_tokens(provenance.model_name) | _provenance_value_tokens(
+        provenance.model_version
+    )
+    if model_tokens & _LOW_TRUST_MODEL_PROVENANCE_TOKENS:
+        return True
+    if _provenance_value_tokens(provenance.match_source) & _LOW_TRUST_MATCH_SOURCE_TOKENS:
+        return True
+    values = (
+        provenance.match_path,
+        provenance.lane or "",
+        entity.link.provider if entity.link else "",
+    )
+    return any(
+        _provenance_value_tokens(value) & _LOW_TRUST_ENTITY_PROVENANCE_TOKENS for value in values
+    )
 
 
 def _direct_terminal_entity_type(entity_ref: str, entity_type: str | None) -> str | None:
@@ -1389,6 +1438,8 @@ def _passive_display_eligible(quality: str, weak_alias_reasons: list[str]) -> bo
 
 
 def _is_tradable_entity(entity: EntityMatch, terminal_refs: set[str]) -> bool:
+    if _is_low_trust_entity_claim(entity):
+        return False
     entity_ref = _entity_ref(entity).casefold()
     if entity_ref in terminal_refs:
         return True
@@ -1605,6 +1656,32 @@ def _build_relationship_proposals(
     }
     proposals_by_ref: dict[str, NewsAnalyzeRelationshipProposal] = {}
     for response in tag_responses:
+        for entity in response.entities:
+            if not _is_low_trust_entity_claim(entity):
+                continue
+            entity_ref = _entity_ref(entity).strip()
+            name = _entity_name(entity).strip()
+            if not entity_ref or not name or entity_ref.casefold() in terminal_refs:
+                continue
+            proposal = NewsAnalyzeRelationshipProposal(
+                entity_ref=entity_ref,
+                name=name,
+                entity_type=entity.label,
+                score=_score_entity(entity),
+                provider=(
+                    entity.link.provider
+                    if entity.link
+                    else (entity.provenance.match_source if entity.provenance else None)
+                ),
+                source="extracted_entity_claim",
+                seed_entity_refs=[entity_ref],
+                shared_seed_count=1,
+                publication_allowed=False,
+            )
+            key = entity_ref.casefold()
+            existing = proposals_by_ref.get(key)
+            if existing is None or (proposal.score or 0.0) > (existing.score or 0.0):
+                proposals_by_ref[key] = proposal
         for related in response.related_entities:
             entity_ref = related.entity_id.strip()
             name = related.canonical_text.strip()
@@ -2918,8 +2995,23 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         entities = _merge_entity_matches(
             [entity for response in tag_responses for entity in response.entities]
         )
+        production_entities = [
+            entity for entity in entities if not _is_low_trust_entity_claim(entity)
+        ]
+        proposal_only_entity_refs = _dedupe_string_values(
+            [
+                entity.link.entity_id if entity.link else _entity_ref(entity)
+                for entity in entities
+                if _is_low_trust_entity_claim(entity)
+            ]
+        )
+        if proposal_only_entity_refs:
+            warnings.append(
+                "ADES_NEWS_ANALYZE_LOW_TRUST_ENTITY_CLAIMS_PROPOSAL_ONLY:"
+                f"{len(proposal_only_entity_refs)}"
+            )
         entity_refs = _dedupe_string_values(
-            [entity.link.entity_id if entity.link else None for entity in entities]
+            [entity.link.entity_id if entity.link else None for entity in production_entities]
         )
         graph_enabled_packs = _news_graph_enabled_packs(
             tag_responses=tag_responses,
