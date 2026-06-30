@@ -156,6 +156,14 @@ def _build_us_policy_terminal_graph(tmp_path: Path) -> tuple[str, str]:
                     "finance-us-en"
                 ),
                 (
+                    "ades:us-regulator:ftc\tFederal Trade Commission\tregulator\t"
+                    'finance-us-en\t0\t1\t{"jurisdiction":"us"}\tfinance-us-en'
+                ),
+                (
+                    "ades:us-court:district-court\tUS District Court\tgovernment_body\t"
+                    'finance-us-en\t0\t1\t{"jurisdiction":"us"}\tfinance-us-en'
+                ),
+                (
                     "ades:sector:semiconductors\tSemiconductors\tsector\t"
                     'finance-us-en\t0\t1\t{"jurisdiction":"us"}\tfinance-us-en'
                 ),
@@ -241,12 +249,29 @@ def _build_us_policy_terminal_graph(tmp_path: Path) -> tuple[str, str]:
                     "sector_policy_change\tsector_policy_event_signal"
                 ),
                 (
+                    "ades:us-regulator:ftc\tades:sector:semiconductors\t"
+                    "regulator_affects_sector\tdirect\t0.92\tregulatory_action\t"
+                    "Federal Trade Commission technology competition action\t"
+                    "https://www.ftc.gov/news-events\t2026-06-30\t2026\tannual\t"
+                    "finance-us-en\treviewed regulator enforcement sector fixture\t"
+                    "regulatory_enforcement\tjurisdiction_or_regulator_context"
+                ),
+                (
+                    "ades:us-court:district-court\tades:sector:semiconductors\t"
+                    "government_body_affects_sector\tdirect\t0.9\tlegal_action\t"
+                    "United States District Court antitrust docket\t"
+                    "https://www.uscourts.gov/\t2026-06-30\t2026\tannual\t"
+                    "finance-us-en\treviewed court lawsuit sector fixture\t"
+                    "regulatory_enforcement\tjurisdiction_or_regulator_context"
+                ),
+                (
                     "ades:sector:semiconductors\tfinance-us-issuer:example-semiconductor\t"
                     "sector_affects_issuer\tdirect\t0.91\tpolicy_risk\t"
                     "SEC EDGAR issuer filings\thttps://www.sec.gov/edgar\t"
                     "2026-06-30\t2026\tannual\tfinance-us-en\t"
                     "reviewed sector-to-issuer exposure fixture\t"
-                    "sector_policy_change\tdirect_issuer_or_sector_membership_evidence"
+                    "sector_policy_change;regulatory_enforcement\t"
+                    "direct_issuer_or_sector_membership_evidence"
                 ),
                 (
                     "finance-us-issuer:example-semiconductor\tfinance-us-ticker:nasdaq:xchp\t"
@@ -254,7 +279,7 @@ def _build_us_policy_terminal_graph(tmp_path: Path) -> tuple[str, str]:
                     "Nasdaq listed company directory\thttps://www.nasdaq.com/market-activity/stocks/xchp\t"
                     "2026-06-30\t2026\tannual\tfinance-us-en\t"
                     "reviewed issuer ticker fixture\t"
-                    "sector_policy_change\tlisted_issuer"
+                    "sector_policy_change;regulatory_enforcement\tlisted_issuer"
                 ),
                 (
                     "ades:sector:semiconductors\tades:impact:index:us-semiconductor-index\t"
@@ -262,7 +287,8 @@ def _build_us_policy_terminal_graph(tmp_path: Path) -> tuple[str, str]:
                     "Nasdaq indexes\thttps://www.nasdaq.com/solutions/indexes\t"
                     "2026-06-30\t2026\tannual\tfinance-us-en\t"
                     "reviewed sector index fixture\t"
-                    "sector_policy_change\tdirect_issuer_or_sector_membership_evidence"
+                    "sector_policy_change;regulatory_enforcement\t"
+                    "direct_issuer_or_sector_membership_evidence"
                 ),
             ]
         )
@@ -3472,6 +3498,210 @@ def test_news_analyze_returns_government_policy_terminal_paths(
         ]
         assert (
             candidate_paths_by_ref["ades:impact:index:us-semiconductor-index"]["terminal_type"]
+            == "index"
+        )
+        assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
+def test_news_analyze_returns_legal_regulatory_action_terminal_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    for pack_id, domain in (
+        ("general-en", "general"),
+        ("finance-en", "finance"),
+        ("finance-us-en", "finance"),
+    ):
+        _install_named_pack(tmp_path, pack_id, domain=domain)
+    graph_artifact_path, graph_artifact_hash = _build_us_policy_terminal_graph(tmp_path)
+
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ARTIFACT_PATH", graph_artifact_path)
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    source_cases = [
+        (
+            "lawsuit",
+            "US District Court",
+            "government_body",
+            "ades:us-court:district-court",
+            "government_body_affects_sector",
+            "government",
+            (
+                "A class action lawsuit in US District Court targeted technology "
+                "companies over price conduct claims."
+            ),
+        ),
+        (
+            "investigation",
+            "Federal Trade Commission",
+            "regulator",
+            "ades:us-regulator:ftc",
+            "regulator_affects_sector",
+            "regulator",
+            (
+                "The regulator Federal Trade Commission opened an antitrust "
+                "investigation into technology companies."
+            ),
+        ),
+        (
+            "regulator",
+            "Federal Trade Commission",
+            "regulator",
+            "ades:us-regulator:ftc",
+            "regulator_affects_sector",
+            "regulator",
+            (
+                "The regulator Federal Trade Commission ordered remedies against "
+                "technology companies after an enforcement probe."
+            ),
+        ),
+        (
+            "court",
+            "US District Court",
+            "government_body",
+            "ades:us-court:district-court",
+            "government_body_affects_sector",
+            "government",
+            (
+                "US District Court ruled against technology companies in an "
+                "antitrust case over price conduct claims."
+            ),
+        ),
+    ]
+    current_source = source_cases[0]
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        (
+            _case_name,
+            source_text,
+            source_label,
+            source_ref,
+            _source_relation,
+            _source_tier,
+            _body_text,
+        ) = current_source
+        entities = []
+        if pack == "finance-us-en":
+            entities.append(
+                EntityMatch(
+                    text=source_text,
+                    label=source_label,
+                    start=text.index(source_text),
+                    end=text.index(source_text) + len(source_text),
+                    confidence=0.94,
+                    relevance=0.95,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack,
+                        source_domain="finance",
+                    ),
+                    link=EntityLink(
+                        entity_id=source_ref,
+                        canonical_text=source_text,
+                        provider="ades",
+                    ),
+                )
+            )
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=entities,
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    for source_case in source_cases:
+        current_source = source_case
+        (
+            case_name,
+            source_text,
+            _source_label,
+            source_ref,
+            source_relation,
+            source_tier,
+            body_text,
+        ) = source_case
+        response = client.post(
+            "/v0/news/analyze",
+            json={
+                "title": f"Legal regulatory action: {case_name}",
+                "text": body_text,
+                "source": {"source_country": "US"},
+                "options": {
+                    "include_relationship_paths": True,
+                    "include_terminal_candidates": True,
+                    "include_tag_responses": False,
+                    "impact_max_depth": 3,
+                    "max_country_finance_packs": 1,
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["event_signal"]["event_type"] == "regulatory_enforcement"
+        assert any(
+            source["entity_ref"] == source_ref and source["is_graph_seed"] is True
+            for source in payload["source_entities"]
+        )
+        candidates_by_ref = {
+            candidate["entity_ref"]: candidate
+            for candidate in payload["terminal_impact_candidates"]
+        }
+        assert "finance-us-issuer:example-semiconductor" in candidates_by_ref
+        assert "finance-us-ticker:nasdaq:xchp" in candidates_by_ref
+        assert "ades:impact:index:us-semiconductor-index" in candidates_by_ref
+
+        issuer_path = candidates_by_ref["finance-us-issuer:example-semiconductor"][
+            "relationship_paths"
+        ][0]
+        assert [edge["relation"] for edge in issuer_path["edges"]] == [
+            source_relation,
+            "sector_affects_issuer",
+        ]
+        assert all(edge["source_url"] for edge in issuer_path["edges"])
+        assert all(edge["source_tier"] for edge in issuer_path["edges"])
+        assert issuer_path["edges"][0]["source_tier"] == source_tier
+
+        candidate_paths_by_ref = {
+            candidate_path["terminal_ref"]: candidate_path
+            for candidate_path in payload["candidate_paths"]
+        }
+        ticker_path = candidate_paths_by_ref["finance-us-ticker:nasdaq:xchp"]
+        assert ticker_path["terminal_type"] == "ticker"
+        assert ticker_path["event_compatibility"] == ["regulatory_enforcement"]
+        assert ticker_path["artifact_ref"] == graph_artifact_hash
+        assert source_tier in ticker_path["source_tiers"]
+        assert "exchange" in ticker_path["source_tiers"]
+        assert [edge["relation"] for edge in ticker_path["relationship_path"]["edges"]] == [
+            source_relation,
+            "sector_affects_issuer",
+            "issuer_has_listed_ticker",
+        ]
+        assert all(
+            edge["source_url"] and edge["source_tier"]
+            for edge in ticker_path["relationship_path"]["edges"]
+        )
+        assert (
+            candidate_paths_by_ref["ades:impact:index:us-semiconductor-index"][
+                "terminal_type"
+            ]
             == "index"
         )
         assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]

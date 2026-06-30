@@ -100,6 +100,19 @@ def test_extract_news_event_signals_covers_sector_class_action_without_governanc
     assert "key_person_ownership_governance" not in by_type
 
 
+def test_extract_news_event_signals_covers_court_regulatory_action() -> None:
+    text = (
+        "The court ruled against technology companies in an antitrust case "
+        "and ordered remedies after price conduct claims."
+    )
+
+    by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
+
+    assert "regulatory_enforcement" in by_type
+    assert "ticker" in by_type["regulatory_enforcement"].compatible_asset_families
+    assert "sector" in by_type["regulatory_enforcement"].compatible_asset_families
+
+
 def test_extract_news_event_signals_covers_takeover_approach_language() -> None:
     text = (
         "Intertek backed a GBP10.6bn takeover approach from Swedish private "
