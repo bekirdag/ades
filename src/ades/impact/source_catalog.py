@@ -286,12 +286,23 @@ _OFFICIAL_HOST_FRAGMENTS = (
     "ktb.gov.tr",
     "msb.gov.tr",
     "consilium.europa.eu",
+    "gov.uk",
+    "dmo.gov.uk",
+    "ons.gov.uk",
+    "hmrc.gov.uk",
+    "companieshouse.gov.uk",
+    "find-and-update.company-information.service.gov.uk",
+    "nstauthority.co.uk",
+    "thepensionsregulator.gov.uk",
 )
 _EXCHANGE_HOST_FRAGMENTS = (
     "nasdaq.com",
     "nyse.com",
     "londonstockexchange.com",
     "lse.co.uk",
+    "lseg.com",
+    "aquis.eu",
+    "ftserussell.com",
     "asx.com.au",
     "tsx.com",
     "b3.com.br",
@@ -350,8 +361,13 @@ _REGULATOR_HOST_FRAGMENTS = (
     "cftc.gov",
     "esma.europa.eu",
     "ofgem.gov.uk",
+    "ofwat.gov.uk",
     "ofcom.org.uk",
     "cma.gov.uk",
+    "psr.org.uk",
+    "mhra.gov.uk",
+    "nstauthority.co.uk",
+    "thepensionsregulator.gov.uk",
     "epa.gov",
     "bankofengland.co.uk",
     "federalreserve.gov",
@@ -701,6 +717,37 @@ _ISSUER_DISCLOSED_HOST_FRAGMENTS = (
     "hanwhaaerospace.com",
     "lignex1.com",
     "aselsan.com",
+    "rolls-royce.com",
+    "barclays.com",
+    "natwestgroup.com",
+    "severntrent.com",
+    "unitedutilities.com",
+    "taylorwimpey.co.uk",
+    "barrattredrow.co.uk",
+    "berkeleygroup.co.uk",
+    "drax.com",
+    "shell.com",
+    "bp.com",
+    "gsk.com",
+    "vodafone.com",
+    "bt.com",
+    "j-sainsbury.co.uk",
+    "kingfisher.com",
+    "jdplc.com",
+    "antofagasta.co.uk",
+    "angloamerican.com",
+    "britishland.com",
+    "segro.com",
+    "thephoenixgroup.com",
+    "prudentialplc.com",
+    "astrazeneca.com",
+    "nationalgrid.com",
+    "wise.com",
+    "beazley.com",
+    "metrobankonline.co.uk",
+    "vanquisbankinggroup.com",
+    "serco.com",
+    "babcockinternational.com",
     "turkishairlines.com",
     "flypgs.com",
     "turktelekom.com.tr",
@@ -778,14 +825,14 @@ def classify_source_tier(source_name: str | None, source_url: str | None) -> str
         return SOURCE_TIER_LICENSED
     if _contains_any(host, _INDUSTRY_ASSOCIATION_HOST_FRAGMENTS):
         return SOURCE_TIER_INDUSTRY_ASSOCIATION
+    if _contains_any(host, _EXCHANGE_HOST_FRAGMENTS) or "exchange" in name:
+        return SOURCE_TIER_EXCHANGE
     if (
         _contains_any(host, _REGULATOR_HOST_FRAGMENTS)
         or _contains_any(url_lower, _REGULATOR_URL_FRAGMENTS)
         or "regulator" in name
     ):
         return SOURCE_TIER_REGULATOR
-    if _contains_any(host, _EXCHANGE_HOST_FRAGMENTS) or "exchange" in name:
-        return SOURCE_TIER_EXCHANGE
     if (
         host.endswith(".gov")
         or host.endswith(".gov.uk")

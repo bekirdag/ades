@@ -468,6 +468,16 @@
       "normalized_output_allowed": true,
       "license_notes": "Official exchange, regulator, central bank, ministry, market-infrastructure, and issuer-disclosed evidence; blocked or ambiguous rows are kept in the review queue.",
       "notes": "Promotes reviewed Turkiye program/org/policy/market identity relationships for BDYA impact extraction guardrails."
+    },
+    {
+      "source_name": "United Kingdom reviewed LSE/BoE/FCA/PRA/gilt relationship source lane",
+      "source_url": "https://marketsecurities.fca.org.uk/downloadOfficiallist/live",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/program_org_relationship/generated/20260629Tprogram-org-gb-reviewed-lse-boe-fca-pra-gilts/manifest.json",
+      "source_year": "2026",
+      "refresh_policy": "manual reviewed source-lane refresh after official United Kingdom source collection",
+      "normalized_output_allowed": true,
+      "license_notes": "Official exchange, regulator, central bank, government, market-infrastructure, and reviewed issuer evidence; blocked ADR/cross-listing or ambiguous rows are kept in the review queue.",
+      "notes": "Promotes reviewed United Kingdom program/org/policy/market identity relationships for BDYA impact extraction guardrails."
     }
   ]
 }

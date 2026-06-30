@@ -423,6 +423,59 @@ def test_relationship_schema_covers_turkiye_market_policy_and_exposure_paths() -
     )
 
 
+def test_relationship_schema_covers_united_kingdom_macro_regulatory_and_exposure_paths() -> None:
+    assert relation_family_for_relation("central_bank_sets_qt_policy") == "country_macro_policy"
+    assert "policy_rate_hike" in relation_event_types("central_bank_sets_qt_policy")
+    assert "gilt_or_bond_market_signal" in relation_direction_preconditions(
+        "central_bank_sets_qt_policy"
+    )
+
+    assert relation_family_for_relation("sovereign_debt_office_issues_bond") == (
+        "country_macro_policy"
+    )
+    assert "fiscal_austerity" in relation_event_types("sovereign_debt_office_issues_bond")
+    assert "gilt_or_sovereign_debt_signal" in relation_direction_preconditions(
+        "sovereign_debt_office_issues_bond"
+    )
+
+    assert relation_family_for_relation("regulator_supervises_water_utility") == (
+        "policy_sector_exposure"
+    )
+    assert relation_family_for_relation("regulator_supervises_energy_utility") == (
+        "policy_sector_exposure"
+    )
+    assert relation_family_for_relation("tax_authority_affects_sector") == (
+        "policy_sector_exposure"
+    )
+    assert "tax_or_budget_context" in relation_direction_preconditions(
+        "tax_authority_affects_sector"
+    )
+    assert relation_family_for_relation("company_registry_registers_legal_entity") == (
+        "policy_sector_exposure"
+    )
+    assert relation_family_for_relation("issuer_exposed_to_gilt_yields") == "issuer_exposure"
+    assert relation_family_for_relation("issuer_exposed_to_water_regulation") == ("issuer_exposure")
+    assert relation_family_for_relation("org_operates_water_network") == "infrastructure_asset"
+    assert relation_family_for_relation("org_operates_oil_gas_asset") == "infrastructure_asset"
+    assert relation_family_for_relation("statistics_agency_publishes_indicator") == (
+        "country_macro_policy"
+    )
+    assert relation_family_for_relation("product_authorized_by_regulator") == (
+        "policy_sector_exposure"
+    )
+    assert "product_approval_or_regulatory_signal" in relation_direction_preconditions(
+        "product_authorized_by_regulator"
+    )
+    assert (
+        validate_relation_metadata(
+            relation="central_bank_sets_qt_policy",
+            configured_event_types=(),
+            configured_preconditions=(),
+        )
+        == []
+    )
+
+
 def test_relationship_schema_defaults_and_warnings_are_non_fatal() -> None:
     assert normalized_relation_event_types("regulator_affects_sector", ()) == (
         "sector_policy_change",
@@ -1233,6 +1286,38 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     assert classify_source_tier(
         "Turkish Airlines investor relations",
         "https://investor.turkishairlines.com/en",
+    ) == (SOURCE_TIER_ISSUER_DISCLOSED)
+    assert classify_source_tier(
+        "Bank of England monetary policy",
+        "https://www.bankofengland.co.uk/monetary-policy",
+    ) == (SOURCE_TIER_REGULATOR)
+    assert classify_source_tier(
+        "HM Treasury official organisation page",
+        "https://www.gov.uk/government/organisations/hm-treasury",
+    ) == (SOURCE_TIER_GOVERNMENT)
+    assert classify_source_tier("UK Debt Management Office", "https://www.dmo.gov.uk/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("Office for National Statistics", "https://www.ons.gov.uk/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("Ofwat official site", "https://www.ofwat.gov.uk/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("Payment Systems Regulator", "https://www.psr.org.uk/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier(
+        "London Stock Exchange RR company page",
+        "https://www.londonstockexchange.com/stock/RR./rolls-royce-holdings-plc/company-page",
+    ) == (SOURCE_TIER_EXCHANGE)
+    assert classify_source_tier(
+        "LSEG Regulatory News Service",
+        "https://www.lseg.com/en/capital-markets/regulatory-news-service",
+    ) == (SOURCE_TIER_EXCHANGE)
+    assert classify_source_tier(
+        "Rolls-Royce investor relations",
+        "https://www.rolls-royce.com/investors.aspx",
     ) == (SOURCE_TIER_ISSUER_DISCLOSED)
     assert classify_source_tier("unit test", "https://example.test/source") == (
         SOURCE_TIER_TEST_FIXTURE

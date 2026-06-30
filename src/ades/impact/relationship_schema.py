@@ -248,6 +248,10 @@ MARKET_INFRASTRUCTURE_RELATIONS = {
     "regulator_supervises_issuer",
     "regulator_supervises_financial_group",
     "regulator_supervises_insurer",
+    "regulator_supervises_asset_manager",
+    "regulator_supervises_payment_system",
+    "regulator_supervises_water_utility",
+    "regulator_supervises_energy_utility",
     "regulator_supervises_capital_market",
     "regulator_supervises_telecom",
     "regulator_supervises_electricity",
@@ -263,6 +267,11 @@ GOVERNMENT_POLICY_RELATIONS = {
     "government_body_sets_trade_policy",
     "government_body_sets_fiscal_policy",
     "government_body_sets_energy_policy",
+    "government_body_sets_tax_policy",
+    "government_body_sets_housing_policy",
+    "government_body_sets_water_policy",
+    "government_body_sets_health_policy",
+    "government_body_sets_defense_procurement",
     "government_body_sets_mining_policy",
     "government_body_sets_tourism_policy",
     "government_body_sets_industrial_policy",
@@ -293,6 +302,13 @@ ISSUER_EXPOSURE_RELATIONS = {
     "issuer_exposed_to_energy_import_cost",
     "issuer_exposed_to_fx_pass_through",
     "issuer_exposed_to_rate_cycle",
+    "issuer_exposed_to_gilt_yields",
+    "issuer_exposed_to_mortgage_rates",
+    "issuer_exposed_to_consumer_demand",
+    "issuer_exposed_to_energy_cost",
+    "issuer_exposed_to_water_regulation",
+    "issuer_exposed_to_oil_gas_price",
+    "issuer_exposed_to_fx",
     "issuer_exposed_to_tourism_cycle",
     "issuer_exposed_to_defense_procurement",
     "issuer_exposed_to_air_travel_cycle",
@@ -362,6 +378,9 @@ INFRASTRUCTURE_ASSET_RELATIONS = {
     "org_operates_refinery",
     "org_operates_shipyard",
     "org_operates_power_utility",
+    "org_operates_utility_network",
+    "org_operates_water_network",
+    "org_operates_oil_gas_asset",
     "org_operates_telecom_network",
     "org_operates_airport",
     "org_operates_airline",
@@ -381,11 +400,26 @@ CENTRAL_BANK_RELATIONS = {
     "central_bank_affects_rates",
     "central_bank_affects_credit_sector",
     "central_bank_sets_policy_rate",
+    "central_bank_sets_qe_policy",
+    "central_bank_sets_qt_policy",
     "central_bank_sets_reserve_requirement",
     "central_bank_maintains_currency_peg",
 }
 STATISTICS_RELATIONS = {
     "statistics_body_reports_macro_indicator",
+    "statistics_agency_publishes_indicator",
+}
+TAX_AUTHORITY_RELATIONS = {
+    "tax_authority_affects_sector",
+}
+COMPANY_REGISTRY_RELATIONS = {
+    "company_registry_registers_legal_entity",
+}
+SOVEREIGN_DEBT_RELATIONS = {
+    "sovereign_debt_office_issues_bond",
+}
+PRODUCT_REGULATORY_RELATIONS = {
+    "product_authorized_by_regulator",
 }
 FISCAL_COMMODITY_RELATIONS = {
     "oil_revenue_affects_fiscal_balance",
@@ -445,6 +479,9 @@ def relation_family_for_relation(relation: str) -> str:
         or relation in MARKET_INFRASTRUCTURE_RELATIONS
         or relation in GOVERNMENT_POLICY_RELATIONS
         or relation in INDUSTRIAL_POLICY_RELATIONS
+        or relation in TAX_AUTHORITY_RELATIONS
+        or relation in COMPANY_REGISTRY_RELATIONS
+        or relation in PRODUCT_REGULATORY_RELATIONS
         or relation in ENERGY_IMPORT_RELATIONS
         or relation in FISCAL_COMMODITY_RELATIONS
     ):
@@ -474,7 +511,11 @@ def relation_family_for_relation(relation: str) -> str:
         return "risk_proxy"
     if relation.endswith("_global_equity_proxy"):
         return "global_equity_proxy"
-    if relation in CENTRAL_BANK_RELATIONS or relation in STATISTICS_RELATIONS:
+    if (
+        relation in CENTRAL_BANK_RELATIONS
+        or relation in STATISTICS_RELATIONS
+        or relation in SOVEREIGN_DEBT_RELATIONS
+    ):
         return "country_macro_policy"
     if relation in COUNTRY_MEMBERSHIP_RELATIONS:
         return "country_membership"
@@ -531,6 +572,14 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         return tuple(dict.fromkeys((*POLICY_SECTOR_EVENT_TYPES, *POLICY_RATE_EVENT_TYPES)))
     if relation in INDUSTRIAL_POLICY_RELATIONS:
         return POLICY_SECTOR_EVENT_TYPES
+    if relation in TAX_AUTHORITY_RELATIONS or relation in PRODUCT_REGULATORY_RELATIONS:
+        return POLICY_SECTOR_EVENT_TYPES
+    if relation in COMPANY_REGISTRY_RELATIONS:
+        return EQUITY_EVENT_TYPES
+    if relation in SOVEREIGN_DEBT_RELATIONS:
+        return tuple(
+            dict.fromkeys((*POLICY_RATE_EVENT_TYPES, "fiscal_expansion", "fiscal_austerity"))
+        )
     if relation in FISCAL_COMMODITY_RELATIONS:
         return tuple(dict.fromkeys((*POLICY_SECTOR_EVENT_TYPES, *POLICY_RATE_EVENT_TYPES)))
     if relation in ORG_SECTOR_RELATIONS:
@@ -558,6 +607,8 @@ def relation_event_types(relation: str) -> tuple[str, ...]:
         "central_bank_affects_rates",
         "central_bank_affects_credit_sector",
         "central_bank_sets_policy_rate",
+        "central_bank_sets_qe_policy",
+        "central_bank_sets_qt_policy",
         "central_bank_sets_reserve_requirement",
     }:
         return POLICY_RATE_EVENT_TYPES
@@ -701,6 +752,29 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
         return ("sector_policy_event_signal", "jurisdiction_or_regulator_context")
     if relation in INDUSTRIAL_POLICY_RELATIONS:
         return ("sector_policy_event_signal", "industrial_policy_or_subsidy_context")
+    if relation in TAX_AUTHORITY_RELATIONS:
+        return (
+            "sector_policy_event_signal",
+            "tax_or_budget_context",
+            "jurisdiction_or_regulator_context",
+        )
+    if relation in COMPANY_REGISTRY_RELATIONS:
+        return (
+            "direct_company_or_registry_context",
+            "source_backed_registry_evidence",
+        )
+    if relation in SOVEREIGN_DEBT_RELATIONS:
+        return (
+            "gilt_or_sovereign_debt_signal",
+            "fiscal_or_rate_context",
+            "jurisdiction_or_regulator_context",
+        )
+    if relation in PRODUCT_REGULATORY_RELATIONS:
+        return (
+            "product_approval_or_regulatory_signal",
+            "source_backed_product_authorization_evidence",
+            "jurisdiction_or_regulator_context",
+        )
     if relation in FISCAL_COMMODITY_RELATIONS:
         return (
             "fiscal_or_oil_revenue_signal",
@@ -812,11 +886,14 @@ def relation_direction_preconditions(relation: str) -> tuple[str, ...]:
     if relation in {
         "central_bank_affects_rates",
         "central_bank_sets_policy_rate",
+        "central_bank_sets_qe_policy",
+        "central_bank_sets_qt_policy",
         "central_bank_sets_reserve_requirement",
     }:
         return (
             "rate_inflation_central_bank_or_fiscal_signal",
             "liquidity_or_policy_rate_signal",
+            "gilt_or_bond_market_signal",
         )
     if relation == "central_bank_affects_credit_sector":
         return (

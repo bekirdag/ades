@@ -1509,3 +1509,109 @@ def test_starter_graph_includes_promoted_turkiye_relationships(tmp_path: Path) -
     equity_candidate_refs, equity_passive_refs = expanded_refs("ades:sector:tr:bist-equity-market")
     assert equity_candidate_refs == {"ades:impact:index:bist-100"}
     assert equity_passive_refs == set()
+
+
+def test_starter_graph_includes_promoted_united_kingdom_relationships(
+    tmp_path: Path,
+) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        united_kingdom_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_united_kingdom/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-uk-ticker:rr',
+                    'ades:security:gb:lse:rr-ordinary-share',
+                    'ades:impact:currency:gbp',
+                    'ades:impact:rate:gb-bank-rate',
+                    'ades:sovereign-bond:gb:gilt',
+                    'ades:yield-curve:gb:gilt-yield-curve',
+                    'finance-uk:ftse-100',
+                    'ades:sector:gb:water-utilities'
+                )
+                """
+            )
+        }
+
+    assert united_kingdom_edge_count == 264
+    assert tradable_rows == {
+        "ades:impact:currency:gbp": (1, 0),
+        "ades:impact:rate:gb-bank-rate": (1, 0),
+        "ades:sector:gb:water-utilities": (0, 1),
+        "ades:security:gb:lse:rr-ordinary-share": (1, 0),
+        "ades:sovereign-bond:gb:gilt": (1, 0),
+        "ades:yield-curve:gb:gilt-yield-curve": (1, 0),
+        "finance-uk:ftse-100": (1, 0),
+        "finance-uk-ticker:rr": (1, 0),
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=120,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    boe_candidate_refs, boe_passive_refs = expanded_refs("ades:policy-body:gb:bank-of-england")
+    assert boe_candidate_refs == {
+        "ades:impact:currency:gbp",
+        "ades:impact:rate:gb-bank-rate",
+        "ades:sovereign-bond:gb:gilt",
+        "ades:yield-curve:gb:gilt-yield-curve",
+    }
+    assert {
+        "ades:policy:gb:asset-purchase-facility",
+        "ades:sector:gb:banking-credit",
+    }.issubset(boe_passive_refs)
+    assert "finance-uk:ftse-100" not in boe_candidate_refs
+    assert "finance-uk-ticker:rr" not in boe_candidate_refs
+
+    fca_candidate_refs, fca_passive_refs = expanded_refs("finance-uk:fca")
+    assert fca_candidate_refs == set()
+    assert {
+        "ades:sector:gb:asset-management",
+        "ades:sector:gb:listed-issuers",
+        "finance-uk:lse",
+    }.issubset(fca_passive_refs)
+
+    rr_candidate_refs, rr_passive_refs = expanded_refs("finance-uk-issuer:07524813")
+    assert rr_candidate_refs == {
+        "ades:security:gb:lse:rr-ordinary-share",
+        "finance-uk-ticker:rr",
+    }
+    assert {
+        "ades:sector:gb:aerospace-defense",
+        "ades:sector:gb:defense-procurement",
+        "finance-uk:lse",
+    }.issubset(rr_passive_refs)
+    assert "ades:impact:currency:gbp" not in rr_candidate_refs
+    assert "finance-uk:ftse-100" not in rr_candidate_refs
+
+    ofwat_candidate_refs, ofwat_passive_refs = expanded_refs("ades:regulator:gb:ofwat")
+    assert ofwat_candidate_refs == set()
+    assert "ades:sector:gb:water-utilities" in ofwat_passive_refs
+    assert "finance-uk-ticker:svt" not in ofwat_candidate_refs
+
+    equity_candidate_refs, equity_passive_refs = expanded_refs("ades:sector:gb:uk-equity-market")
+    assert equity_candidate_refs == {"finance-uk:ftse-100"}
+    assert equity_passive_refs == set()

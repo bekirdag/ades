@@ -87,6 +87,11 @@ REVIEWED_TURKIYE_BIST_TCMB_BDDK_SPK_ENERGY_FIXTURE = Path(
     "program_org_relationship/reviewed/2026-06-29/"
     "turkiye_bist_tcmb_bddk_spk_energy_policy_relationships.tsv"
 )
+REVIEWED_UNITED_KINGDOM_LSE_BOE_FCA_PRA_GILT_FIXTURE = Path(
+    "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/"
+    "program_org_relationship/reviewed/2026-06-29/"
+    "united_kingdom_lse_boe_fca_pra_gilt_policy_relationships.tsv"
+)
 
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
@@ -3000,4 +3005,235 @@ def test_reviewed_turkiye_fixture_expands_bist_tcmb_bddk_spk_guardrails(
 
     equity_candidate_refs, equity_passive_refs = expanded_refs("ades:sector:tr:bist-equity-market")
     assert equity_candidate_refs == {"ades:impact:index:bist-100"}
+    assert equity_passive_refs == set()
+
+
+def test_reviewed_united_kingdom_fixture_expands_lse_boe_gilt_guardrails(
+    tmp_path: Path,
+) -> None:
+    if not REVIEWED_UNITED_KINGDOM_LSE_BOE_FCA_PRA_GILT_FIXTURE.exists():
+        pytest.skip("reviewed United Kingdom LSE/BoE/FCA/PRA/gilt fixture is not mounted")
+
+    result = build_program_org_relationship_source_lane(
+        relationship_tsv_paths=[REVIEWED_UNITED_KINGDOM_LSE_BOE_FCA_PRA_GILT_FIXTURE],
+        output_root=tmp_path / "impact_relationships",
+        run_id="reviewed-united-kingdom-lse-boe-fca-pra-gilts",
+        build_artifact=True,
+        include_starter_graph=False,
+        artifact_output_root=tmp_path / "artifacts",
+    )
+
+    assert result.relationship_row_count == 264
+    assert result.relation_counts == {
+        "central_bank_affects_credit_sector": 1,
+        "central_bank_affects_currency": 1,
+        "central_bank_affects_rates": 1,
+        "central_bank_sets_policy_rate": 1,
+        "central_bank_sets_qe_policy": 1,
+        "central_bank_sets_qt_policy": 1,
+        "company_registry_registers_legal_entity": 1,
+        "government_body_sets_defense_procurement": 2,
+        "government_body_sets_energy_policy": 1,
+        "government_body_sets_fiscal_policy": 1,
+        "government_body_sets_housing_policy": 1,
+        "government_body_sets_tax_policy": 1,
+        "issuer_exposed_to_air_travel_cycle": 1,
+        "issuer_exposed_to_commodity": 2,
+        "issuer_exposed_to_consumer_demand": 6,
+        "issuer_exposed_to_defense_procurement": 3,
+        "issuer_exposed_to_energy_cost": 2,
+        "issuer_exposed_to_gilt_yields": 4,
+        "issuer_exposed_to_mortgage_rates": 3,
+        "issuer_exposed_to_oil_gas_price": 2,
+        "issuer_exposed_to_rate_cycle": 4,
+        "issuer_exposed_to_water_regulation": 2,
+        "issuer_has_listed_ticker": 32,
+        "issuer_has_security": 32,
+        "issuer_in_sector": 32,
+        "org_operates_oil_gas_asset": 2,
+        "org_operates_telecom_network": 2,
+        "org_operates_utility_network": 2,
+        "org_operates_water_network": 2,
+        "prudential_authority_supervises_bank": 1,
+        "regulator_affects_sector": 3,
+        "regulator_supervises_asset_manager": 1,
+        "regulator_supervises_competition": 1,
+        "regulator_supervises_energy_utility": 1,
+        "regulator_supervises_exchange": 1,
+        "regulator_supervises_insurer": 1,
+        "regulator_supervises_issuer": 1,
+        "regulator_supervises_payment_system": 1,
+        "regulator_supervises_telecom": 1,
+        "regulator_supervises_water_utility": 1,
+        "sector_affects_index": 2,
+        "security_has_identifier": 32,
+        "security_listed_on_exchange": 32,
+        "sovereign_debt_office_issues_bond": 1,
+        "statistics_agency_publishes_indicator": 3,
+        "tax_authority_affects_sector": 3,
+        "ticker_listed_on_exchange": 32,
+    }
+    assert result.node_type_counts == {
+        "central_bank": 1,
+        "commodity": 2,
+        "company_registry": 1,
+        "currency": 1,
+        "exchange": 1,
+        "government_body": 4,
+        "grid": 1,
+        "infrastructure_asset": 2,
+        "issuer": 32,
+        "legal_entity": 1,
+        "macro_indicator": 3,
+        "market_index": 2,
+        "oil_field": 1,
+        "payment_system": 1,
+        "policy": 3,
+        "prudential_authority": 1,
+        "rate": 1,
+        "regulator": 9,
+        "sector": 27,
+        "security": 32,
+        "sovereign_bond": 1,
+        "statistics_agency": 1,
+        "tax": 1,
+        "tax_authority": 1,
+        "telecom_network": 2,
+        "ticker": 32,
+        "yield_curve": 1,
+    }
+
+    validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
+    assert validation.invalid_row_count == 0
+    assert validation.source_warning_counts == {}
+    assert validation.relation_warning_counts == {}
+    assert validation.source_tier_counts == {
+        "exchange": 167,
+        "government": 15,
+        "regulator": 82,
+    }
+
+    assert result.artifact_path is not None
+    nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
+    for tradable_ref in [
+        "finance-uk-ticker:rr",
+        "ades:security:gb:lse:rr-ordinary-share",
+        "ades:impact:currency:gbp",
+        "ades:impact:rate:gb-bank-rate",
+        "ades:sovereign-bond:gb:gilt",
+        "ades:yield-curve:gb:gilt-yield-curve",
+        "finance-uk:ftse-100",
+    ]:
+        assert nodes[tradable_ref]["is_tradable"] == "true"
+    for passive_ref in [
+        "ades:policy-body:gb:bank-of-england",
+        "finance-uk:fca",
+        "ades:regulator:gb:pra",
+        "ades:sector:gb:banking",
+        "ades:sector:gb:homebuilders",
+        "ades:sector:gb:water-utilities",
+    ]:
+        assert nodes[passive_ref]["is_tradable"] == "false"
+
+    edge_refs = {
+        ref
+        for row in _read_tsv(result.edge_tsv_path)
+        for ref in (row["source_ref"], row["target_ref"])
+    }
+    assert "finance-uk-ticker:wise" not in edge_refs
+    assert "finance-uk-ticker:phnx" not in edge_refs
+    assert "finance-us-ticker:ARM" not in edge_refs
+
+    with MarketGraphStore(result.artifact_path) as store:
+        boe_edges = store.outbound_edges_batch(["ades:policy-body:gb:bank-of-england"])[
+            "ades:policy-body:gb:bank-of-england"
+        ]
+        fca_edges = store.outbound_edges_batch(["finance-uk:fca"])["finance-uk:fca"]
+        rr_edges = store.outbound_edges_batch(["finance-uk-issuer:07524813"])[
+            "finance-uk-issuer:07524813"
+        ]
+
+    assert {edge.target_ref for edge in boe_edges} == {
+        "ades:impact:currency:gbp",
+        "ades:impact:rate:gb-bank-rate",
+        "ades:policy:gb:asset-purchase-facility",
+        "ades:sector:gb:banking-credit",
+        "ades:sovereign-bond:gb:gilt",
+        "ades:yield-curve:gb:gilt-yield-curve",
+    }
+    assert {edge.target_ref for edge in fca_edges} == {
+        "ades:sector:gb:asset-management",
+        "ades:sector:gb:listed-issuers",
+        "finance-uk:lse",
+    }
+    assert {edge.target_ref for edge in rr_edges} == {
+        "ades:security:gb:lse:rr-ordinary-share",
+        "ades:sector:gb:aerospace-defense",
+        "ades:sector:gb:defense-procurement",
+        "finance-uk-ticker:rr",
+    }
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=result.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=120,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    boe_candidate_refs, boe_passive_refs = expanded_refs("ades:policy-body:gb:bank-of-england")
+    assert boe_candidate_refs == {
+        "ades:impact:currency:gbp",
+        "ades:impact:rate:gb-bank-rate",
+        "ades:sovereign-bond:gb:gilt",
+        "ades:yield-curve:gb:gilt-yield-curve",
+    }
+    assert {
+        "ades:policy:gb:asset-purchase-facility",
+        "ades:sector:gb:banking-credit",
+    }.issubset(boe_passive_refs)
+    assert "finance-uk:ftse-100" not in boe_candidate_refs
+    assert "finance-uk-ticker:barc" not in boe_candidate_refs
+
+    dmo_candidate_refs, dmo_passive_refs = expanded_refs(
+        "ades:government-body:gb:debt-management-office"
+    )
+    assert dmo_candidate_refs == {"ades:sovereign-bond:gb:gilt"}
+    assert dmo_passive_refs == set()
+
+    fca_candidate_refs, fca_passive_refs = expanded_refs("finance-uk:fca")
+    assert fca_candidate_refs == set()
+    assert {
+        "ades:sector:gb:asset-management",
+        "ades:sector:gb:listed-issuers",
+        "finance-uk:lse",
+    }.issubset(fca_passive_refs)
+    assert "finance-uk-ticker:rr" not in fca_candidate_refs
+
+    ofwat_candidate_refs, ofwat_passive_refs = expanded_refs("ades:regulator:gb:ofwat")
+    assert ofwat_candidate_refs == set()
+    assert "ades:sector:gb:water-utilities" in ofwat_passive_refs
+    assert "finance-uk-ticker:svt" not in ofwat_candidate_refs
+
+    rr_candidate_refs, rr_passive_refs = expanded_refs("finance-uk-issuer:07524813")
+    assert rr_candidate_refs == {
+        "ades:security:gb:lse:rr-ordinary-share",
+        "finance-uk-ticker:rr",
+    }
+    assert {
+        "ades:sector:gb:aerospace-defense",
+        "ades:sector:gb:defense-procurement",
+        "finance-uk:lse",
+    }.issubset(rr_passive_refs)
+    assert "ades:impact:currency:gbp" not in rr_candidate_refs
+    assert "finance-uk:ftse-100" not in rr_candidate_refs
+
+    equity_candidate_refs, equity_passive_refs = expanded_refs("ades:sector:gb:uk-equity-market")
+    assert equity_candidate_refs == {"finance-uk:ftse-100"}
     assert equity_passive_refs == set()
