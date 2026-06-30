@@ -49,6 +49,71 @@ def _install_named_pack(storage_root: Path, pack_id: str, domain: str = "general
     return pack_dir.name
 
 
+def _build_uk_mining_sector_graph(tmp_path: Path) -> tuple[str, str]:
+    node_path = tmp_path / "impact_nodes.tsv"
+    edge_path = tmp_path / "impact_edges.tsv"
+    node_path.write_text(
+        "\t".join(
+            [
+                "entity_ref",
+                "canonical_name",
+                "entity_type",
+                "library_id",
+                "is_tradable",
+                "is_seed_eligible",
+                "identifiers_json",
+                "packs",
+            ]
+        )
+        + "\n"
+        + "\n".join(
+            [
+                "finance-uk-issuer:beowulf-mining\tBeowulf Mining PLC\torganization\tfinance-uk-en\t0\t1\t{}\tfinance-uk-en",
+                "finance-uk-ticker:bem\tBEM\tticker\tfinance-uk-en\t1\t0\t{}\tfinance-uk-en",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    edge_path.write_text(
+        "\t".join(
+            [
+                "source_ref",
+                "target_ref",
+                "relation",
+                "evidence_level",
+                "confidence",
+                "direction_hint",
+                "source_name",
+                "source_url",
+                "source_snapshot",
+                "source_year",
+                "refresh_policy",
+                "pack_ids",
+                "notes",
+                "compatible_event_types",
+                "direction_preconditions",
+            ]
+        )
+        + "\n"
+        + (
+            "finance-uk-issuer:beowulf-mining\tfinance-uk-ticker:bem\t"
+            "issuer_has_listed_ticker\tdirect\t0.96\tlisted_equity\t"
+            "London Stock Exchange\thttps://www.londonstockexchange.com/\t"
+            "2026-06-29\t2026\tannual\tfinance-uk-en\told artifact fixture\t"
+            "earnings_beat\tlisted_issuer\n"
+        ),
+        encoding="utf-8",
+    )
+    graph = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "graph-artifact",
+        artifact_version="2026-06-29Tsector-seed-test",
+    )
+    return graph.artifact_path, graph.artifact_hash
+
+
 def test_news_candidate_path_terminal_identity_supports_legacy_finance_refs() -> None:
     jurisdiction, exchange, ticker, security_ids = _terminal_identity_parts("finance-us:equity:EXM")
 
@@ -2895,7 +2960,7 @@ def test_news_analyze_uses_text_country_mentions_for_country_pack(
     )
 
 
-def test_news_analyze_uses_sector_graph_seeds_for_uninstalled_country_pack(
+def test_news_analyze_blocks_sector_graph_seeds_for_uninstalled_country_pack(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -2904,71 +2969,11 @@ def test_news_analyze_uses_sector_graph_seeds_for_uninstalled_country_pack(
         ("finance-en", "finance"),
     ):
         _install_named_pack(tmp_path, pack_id, domain=domain)
-    node_path = tmp_path / "impact_nodes.tsv"
-    edge_path = tmp_path / "impact_edges.tsv"
-    node_path.write_text(
-        "\t".join(
-            [
-                "entity_ref",
-                "canonical_name",
-                "entity_type",
-                "library_id",
-                "is_tradable",
-                "is_seed_eligible",
-                "identifiers_json",
-                "packs",
-            ]
-        )
-        + "\n"
-        + "\n".join(
-            [
-                "finance-uk-issuer:beowulf-mining\tBeowulf Mining PLC\torganization\tfinance-uk-en\t0\t1\t{}\tfinance-uk-en",
-                "finance-uk-ticker:bem\tBEM\tticker\tfinance-uk-en\t1\t0\t{}\tfinance-uk-en",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    edge_path.write_text(
-        "\t".join(
-            [
-                "source_ref",
-                "target_ref",
-                "relation",
-                "evidence_level",
-                "confidence",
-                "direction_hint",
-                "source_name",
-                "source_url",
-                "source_snapshot",
-                "source_year",
-                "refresh_policy",
-                "pack_ids",
-                "notes",
-                "compatible_event_types",
-                "direction_preconditions",
-            ]
-        )
-        + "\n"
-        + (
-            "finance-uk-issuer:beowulf-mining\tfinance-uk-ticker:bem\t"
-            "issuer_has_listed_ticker\tdirect\t0.96\tlisted_equity\t"
-            "London Stock Exchange\thttps://www.londonstockexchange.com/\t"
-            "2026-06-29\t2026\tannual\tfinance-uk-en\told artifact fixture\t"
-            "earnings_beat\tlisted_issuer\n"
-        ),
-        encoding="utf-8",
-    )
-    graph = build_market_graph_store(
-        node_tsv_paths=[node_path],
-        edge_tsv_paths=[edge_path],
-        output_dir=tmp_path / "graph-artifact",
-        artifact_version="2026-06-29Tsector-seed-test",
-    )
+    graph_artifact_path, _graph_artifact_hash = _build_uk_mining_sector_graph(tmp_path)
 
     monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
     monkeypatch.setenv("ADES_IMPACT_EXPANSION_ENABLED", "1")
-    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ARTIFACT_PATH", graph.artifact_path)
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ARTIFACT_PATH", graph_artifact_path)
     client = TestClient(create_app(storage_root=tmp_path))
 
     def _fake_tag(
@@ -3017,6 +3022,75 @@ def test_news_analyze_uses_sector_graph_seeds_for_uninstalled_country_pack(
         and decision["country_code"] == "uk"
         for decision in payload["pack_decisions"]
     )
+    assert payload["source_entities"] == []
+    assert payload["terminal_impact_candidates"] == []
+    assert payload["candidate_paths"] == []
+    assert "NO_TERMINAL_IMPACT_CANDIDATES" in payload["quality_flags"]
+
+
+def test_news_analyze_uses_sector_graph_seeds_for_installed_country_pack(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    for pack_id, domain in (
+        ("general-en", "general"),
+        ("finance-en", "finance"),
+        ("finance-uk-en", "finance"),
+    ):
+        _install_named_pack(tmp_path, pack_id, domain=domain)
+    graph_artifact_path, graph_artifact_hash = _build_uk_mining_sector_graph(tmp_path)
+
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ARTIFACT_PATH", graph_artifact_path)
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[],
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "UK parliament passes mining royalty reform",
+            "text": (
+                "The UK parliament passed a mining royalty reform that analysts said "
+                "could affect listed mining companies."
+            ),
+            "options": {
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "max_country_finance_packs": 1,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(
+        decision["pack_id"] == "finance-uk-en"
+        and decision["selected"] is True
+        and decision["country_code"] == "uk"
+        for decision in payload["pack_decisions"]
+    )
     assert any(
         source["entity_ref"] == "finance-uk-issuer:beowulf-mining"
         for source in payload["source_entities"]
@@ -3057,7 +3131,7 @@ def test_news_analyze_uses_sector_graph_seeds_for_uninstalled_country_pack(
     assert bem_path["source_tiers"] == ["exchange"]
     assert bem_path["effective_from"] == "2026-01-01"
     assert bem_path["effective_to"] is None
-    assert bem_path["artifact_ref"] == graph.artifact_hash
+    assert bem_path["artifact_ref"] == graph_artifact_hash
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 

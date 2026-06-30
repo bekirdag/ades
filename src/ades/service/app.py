@@ -1095,7 +1095,7 @@ def _news_graph_enabled_packs(
 ) -> list[str]:
     graph_packs: list[str | None] = [response.pack for response in tag_responses]
     for decision in pack_decisions:
-        if decision.selected or decision.country_code:
+        if decision.selected:
             graph_packs.append(decision.pack_id)
     return _dedupe_string_values(graph_packs)
 
