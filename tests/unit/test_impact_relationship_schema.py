@@ -902,6 +902,13 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     )
     assert (
         classify_source_tier(
+            "SEC EDGAR company submissions",
+            "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/",
+        )
+        == SOURCE_TIER_REGULATOR
+    )
+    assert (
+        classify_source_tier(
             "Indonesia Stock Exchange company profile",
             "https://www.idx.co.id/en/listed-companies/company-profiles/BBRI",
         )
@@ -1336,6 +1343,9 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     assert classify_source_tier("TRAI official site", "https://www.trai.gov.in/") == (
         SOURCE_TIER_REGULATOR
     )
+    assert classify_source_tier("India national portal", "https://www.india.gov.in/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
     assert classify_source_tier("NSE HUDCO quote", "https://www.nseindia.com/") == (
         SOURCE_TIER_EXCHANGE
     )
@@ -1451,6 +1461,15 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     assert classify_source_tier("Bank of Russia key rate", "https://www.cbr.ru/eng/") == (
         SOURCE_TIER_GOVERNMENT
     )
+    assert classify_source_tier("France economy ministry", "https://www.economie.gouv.fr/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("Banque de France publications", "https://www.banque-france.fr/en") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("France AMF regulator", "https://www.amf-france.org/en") == (
+        SOURCE_TIER_REGULATOR
+    )
     assert (
         classify_source_tier(
             "EU Sanctions Map Russia regime",
@@ -1526,6 +1545,18 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     assert classify_source_tier("MOTIR policy page", "https://english.motir.go.kr/") == (
         SOURCE_TIER_GOVERNMENT
     )
+    assert classify_source_tier("Bank of Japan statistics", "https://www.boj.or.jp/en/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("Japan FSA regulation", "https://www.fsa.go.jp/en/") == (
+        SOURCE_TIER_REGULATOR
+    )
+    assert classify_source_tier("Japan Ministry of Finance", "https://www.mof.go.jp/english/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
+    assert classify_source_tier("Japan METI policy", "https://www.meti.go.jp/english/") == (
+        SOURCE_TIER_GOVERNMENT
+    )
     assert classify_source_tier("Samsung semiconductor", "https://semiconductor.samsung.com/") == (
         SOURCE_TIER_ISSUER_DISCLOSED
     )
@@ -1579,6 +1610,12 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     assert classify_source_tier("unit test", "https://example.test/source") == (
         SOURCE_TIER_TEST_FIXTURE
     )
+    assert classify_source_tier("spoofed filing", "https://sec.gov.evil.invalid/edgar") == (
+        SOURCE_TIER_UNKNOWN
+    )
+    assert classify_source_tier("OpenFIGI mirror", "https://openfigi.com.evil.invalid/api") == (
+        SOURCE_TIER_UNKNOWN
+    )
     assert classify_source_tier("blog", "https://unknown.example/source") == (SOURCE_TIER_UNKNOWN)
 
 
@@ -1590,17 +1627,25 @@ def test_source_catalog_validation_marks_non_promotable_sources() -> None:
     )
 
     assert attribution.source_tier == SOURCE_TIER_LOCAL_PACK_METADATA
-    assert attribution.promotion_eligible is True
+    assert attribution.promotion_eligible is False
+    assert validate_source_attribution(
+        source_name="ades-finance-country-pack-metadata",
+        source_url="file:///packs/finance-us-en/sources.json",
+        source_snapshot="2026-06-28",
+    ) == ["low_trust_source_proposal_only"]
     assert validate_source_attribution(
         source_name="Wikidata",
         source_url="https://www.wikidata.org/wiki/Q123",
         source_snapshot="2026-06-28",
-    ) == ["bridge_source_requires_supporting_source_before_promotion"]
+    ) == [
+        "bridge_source_requires_supporting_source_before_promotion",
+        "low_trust_source_proposal_only",
+    ]
     assert validate_source_attribution(
         source_name="unit test",
         source_url="https://example.test/source",
         source_snapshot="2026-06-28",
-    ) == ["test_fixture_source_not_promotable"]
+    ) == ["test_fixture_source_not_promotable", "low_trust_source_proposal_only"]
     assert validate_source_attribution(
         source_name=None,
         source_url="",

@@ -53,6 +53,27 @@ LOW_TRUST_PROPOSAL_ONLY_SOURCE_TIERS = {
     SOURCE_TIER_UNKNOWN,
 }
 
+_OFFICIAL_HOST_SUFFIXES = (
+    ".gov",
+    ".gov.ar",
+    ".gob.ar",
+    ".gov.au",
+    ".gov.br",
+    ".gov.cn",
+    ".gov.in",
+    ".gov.it",
+    ".go.jp",
+    ".go.kr",
+    ".gov.kr",
+    ".gob.mx",
+    ".gov.mx",
+    ".gov.ru",
+    ".gov.sa",
+    ".gov.tr",
+    ".gov.uk",
+    ".gov.za",
+    ".gouv.fr",
+)
 _OFFICIAL_HOST_FRAGMENTS = (
     "sec.gov",
     "companieshouse.gov.uk",
@@ -309,6 +330,15 @@ _OFFICIAL_HOST_FRAGMENTS = (
     "ktb.gov.tr",
     "msb.gov.tr",
     "consilium.europa.eu",
+    "banque-france.fr",
+    "data.gouv.fr",
+    "economie.gouv.fr",
+    "insee.fr",
+    "legifrance.gouv.fr",
+    "service-public.fr",
+    "boj.or.jp",
+    "meti.go.jp",
+    "mof.go.jp",
     "gov.uk",
     "treasury.gov",
     "home.treasury.gov",
@@ -496,7 +526,8 @@ _REGULATOR_HOST_FRAGMENTS = (
     "resoluciones.antimonopolio.gob.mx",
     "ofac.treasury.gov",
     "sanctionsmap.eu",
-    "mof.go.jp",
+    "amf-france.org",
+    "fsa.go.jp",
     "seco.admin.ch",
     "nsd.ru",
     "fas.gov.ru",
@@ -847,11 +878,19 @@ class SourceAttribution:
 
 def _host(source_url: str) -> str:
     parsed = urlparse(source_url)
-    return (parsed.netloc or "").casefold()
+    return (parsed.hostname or parsed.netloc or "").casefold()
 
 
 def _contains_any(value: str, fragments: tuple[str, ...]) -> bool:
     return any(fragment in value for fragment in fragments)
+
+
+def _host_matches_any(host: str, fragments: tuple[str, ...]) -> bool:
+    return any(host == fragment or host.endswith(f".{fragment}") for fragment in fragments)
+
+
+def _host_has_official_suffix(host: str) -> bool:
+    return any(host.endswith(suffix) for suffix in _OFFICIAL_HOST_SUFFIXES)
 
 
 def classify_source_tier(source_name: str | None, source_url: str | None) -> str:
@@ -872,34 +911,26 @@ def classify_source_tier(source_name: str | None, source_url: str | None) -> str
         return SOURCE_TIER_REVIEWED_PROPOSAL
     if url_lower.startswith("file://"):
         return SOURCE_TIER_LOCAL_PACK_METADATA
-    if "licensed" in name or "openfigi" in name or _contains_any(host, _LICENSED_HOST_FRAGMENTS):
+    if "licensed" in name or _host_matches_any(host, _LICENSED_HOST_FRAGMENTS):
         return SOURCE_TIER_LICENSED
-    if _contains_any(host, _INDUSTRY_ASSOCIATION_HOST_FRAGMENTS):
+    if _host_matches_any(host, _INDUSTRY_ASSOCIATION_HOST_FRAGMENTS):
         return SOURCE_TIER_INDUSTRY_ASSOCIATION
-    if _contains_any(host, _EXCHANGE_HOST_FRAGMENTS) or "exchange" in name:
+    if _host_matches_any(host, _EXCHANGE_HOST_FRAGMENTS) or "exchange" in name:
         return SOURCE_TIER_EXCHANGE
     if (
-        _contains_any(host, _REGULATOR_HOST_FRAGMENTS)
+        _host_matches_any(host, _REGULATOR_HOST_FRAGMENTS)
         or _contains_any(url_lower, _REGULATOR_URL_FRAGMENTS)
         or "regulator" in name
     ):
         return SOURCE_TIER_REGULATOR
-    if (
-        host.endswith(".gov")
-        or host.endswith(".gov.uk")
-        or host.endswith(".gov.au")
-        or host.endswith(".gov.cn")
-        or host.endswith(".gov.ru")
-        or host.endswith(".gov.tr")
-        or _contains_any(host, _OFFICIAL_HOST_FRAGMENTS)
-    ):
+    if _host_has_official_suffix(host) or _host_matches_any(host, _OFFICIAL_HOST_FRAGMENTS):
         return SOURCE_TIER_GOVERNMENT
     if (
         "investor" in name
         or "annual report" in name
         or "/investor" in url_lower
         or host.startswith("ir.")
-        or _contains_any(host, _ISSUER_DISCLOSED_HOST_FRAGMENTS)
+        or _host_matches_any(host, _ISSUER_DISCLOSED_HOST_FRAGMENTS)
     ):
         return SOURCE_TIER_ISSUER_DISCLOSED
     return SOURCE_TIER_UNKNOWN
