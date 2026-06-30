@@ -80,14 +80,17 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     response = build_starter_market_graph_store(output_dir=tmp_path)
 
     with starter_golden_set_path() as golden_set_path:
+        golden_payload = json.loads(golden_set_path.read_text(encoding="utf-8"))
         report = evaluate_impact_golden_set(
             golden_set_path=golden_set_path,
             artifact_path=response.artifact_path,
         )
 
+    case_names = {str(case["name"]) for case in golden_payload["cases"]}
+    assert "italy_banca_mediolanum_borsa_bridge" in case_names
     assert report.warnings == []
-    assert report.case_count == 25
-    assert report.empty_path_rate == 0.04
+    assert report.case_count == 26
+    assert report.empty_path_rate == 0.0385
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
