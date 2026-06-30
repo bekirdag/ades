@@ -86,8 +86,8 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
         )
 
     assert report.warnings == []
-    assert report.case_count == 17
-    assert report.empty_path_rate == 0.0588
+    assert report.case_count == 18
+    assert report.empty_path_rate == 0.0556
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -145,7 +145,7 @@ def test_starter_graph_includes_promoted_australia_relationships(tmp_path: Path)
             """
         ).fetchone()
 
-    assert australia_edge_count == 30
+    assert australia_edge_count == 38
     assert asx_200_row == (1, 0)
 
     expansion = expand_impact_paths(
@@ -157,6 +157,26 @@ def test_starter_graph_includes_promoted_australia_relationships(tmp_path: Path)
     )
     candidate_refs = {candidate.entity_ref for candidate in expansion.candidates}
     assert "finance-au:asx-200" in candidate_refs
+
+    systemic_bank_expansion = expand_impact_paths(
+        ["ades:sector:au:banking"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=10,
+    )
+    systemic_bank_refs = {candidate.entity_ref for candidate in systemic_bank_expansion.candidates}
+    assert {"finance-au-ticker:CBA", "finance-au-ticker:NAB"}.issubset(systemic_bank_refs)
+
+    telecom_expansion = expand_impact_paths(
+        ["ades:sector:au:telecommunications"],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=10,
+    )
+    telecom_refs = {candidate.entity_ref for candidate in telecom_expansion.candidates}
+    assert "finance-au-ticker:TLS" in telecom_refs
 
 
 def test_starter_graph_includes_promoted_brazil_relationships(tmp_path: Path) -> None:

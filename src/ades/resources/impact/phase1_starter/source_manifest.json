@@ -57,7 +57,7 @@
       "refresh_policy": "refresh_on_country_source_lane_update",
       "normalized_output_allowed": true,
       "license_notes": "Reviewed source lane stores only normalized relationship metadata; source URLs and evidence snippets are carried in row notes and retained under /mnt/githubActions/ades_big_data.",
-      "notes": "Production-promoted Australia first slice covering ASX issuer/ticker/index bridges, APRA/ASIC/TGA regulators, and government program or sector relationships from official public evidence."
+      "notes": "Production-promoted Australia first slice covering ASX issuer/ticker/index bridges, systemic-bank rows for CBA and NAB, BHP resources exposure, Telstra telecommunications exposure, APRA/ASIC/TGA regulators, and government program or sector relationships from official public evidence."
     },
     {
       "source_name": "Brazil reviewed program/org relationship source lane",

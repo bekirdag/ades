@@ -595,26 +595,26 @@ def test_reviewed_australia_fixture_expands_asx_and_keeps_program_guardrails(
         artifact_output_root=tmp_path / "artifacts",
     )
 
-    assert result.relationship_row_count == 30
+    assert result.relationship_row_count == 38
     assert result.relation_counts == {
         "government_body_affects_sector": 12,
-        "issuer_has_listed_ticker": 2,
-        "issuer_in_sector": 2,
+        "issuer_has_listed_ticker": 4,
+        "issuer_in_sector": 4,
         "program_operated_by_org": 3,
         "regulator_affects_sector": 6,
         "sector_affects_index": 1,
-        "sector_affects_issuer": 2,
-        "ticker_listed_on_exchange": 2,
+        "sector_affects_issuer": 4,
+        "ticker_listed_on_exchange": 4,
     }
     assert result.node_type_counts["market_index"] == 1
-    assert result.node_type_counts["ticker"] == 2
+    assert result.node_type_counts["ticker"] == 4
 
     validation = validate_market_graph_source_lanes(edge_tsv_paths=[result.edge_tsv_path])
     assert validation.invalid_row_count == 0
     assert validation.source_warning_counts == {}
     assert validation.relation_warning_counts == {}
     assert validation.source_tier_counts == {
-        "exchange": 9,
+        "exchange": 17,
         "government": 15,
         "regulator": 6,
     }
@@ -622,7 +622,9 @@ def test_reviewed_australia_fixture_expands_asx_and_keeps_program_guardrails(
     assert result.artifact_path is not None
     nodes = {row["entity_ref"]: row for row in _read_tsv(result.node_tsv_path)}
     assert nodes["finance-au-ticker:CBA"]["is_tradable"] == "true"
+    assert nodes["finance-au-ticker:NAB"]["is_tradable"] == "true"
     assert nodes["finance-au-ticker:BHP"]["is_tradable"] == "true"
+    assert nodes["finance-au-ticker:TLS"]["is_tradable"] == "true"
     assert nodes["finance-au:asx-200"]["is_tradable"] == "true"
     assert nodes["ades:program:au:fuel-tax-credits"]["is_seed_eligible"] == "true"
     assert nodes["ades:sector:au:fuel-retail"]["is_tradable"] == "false"
@@ -633,6 +635,12 @@ def test_reviewed_australia_fixture_expands_asx_and_keeps_program_guardrails(
         ]
         bhp_edges = store.outbound_edges_batch(["ades:issuer:au:bhp-group"])[
             "ades:issuer:au:bhp-group"
+        ]
+        nab_edges = store.outbound_edges_batch(["ades:issuer:au:national-australia-bank"])[
+            "ades:issuer:au:national-australia-bank"
+        ]
+        telstra_edges = store.outbound_edges_batch(["ades:issuer:au:telstra-group"])[
+            "ades:issuer:au:telstra-group"
         ]
         fuel_edges = store.outbound_edges_batch(["ades:program:au:fuel-tax-credits"])[
             "ades:program:au:fuel-tax-credits"
@@ -645,6 +653,14 @@ def test_reviewed_australia_fixture_expands_asx_and_keeps_program_guardrails(
     assert {edge.target_ref for edge in bhp_edges} == {
         "ades:sector:au:materials",
         "finance-au-ticker:BHP",
+    }
+    assert {edge.target_ref for edge in nab_edges} == {
+        "ades:sector:au:banking",
+        "finance-au-ticker:NAB",
+    }
+    assert {edge.target_ref for edge in telstra_edges} == {
+        "ades:sector:au:telecommunications",
+        "finance-au-ticker:TLS",
     }
     assert [edge.target_ref for edge in fuel_edges] == ["ades:org:au:ato"]
 
@@ -659,6 +675,30 @@ def test_reviewed_australia_fixture_expands_asx_and_keeps_program_guardrails(
     cba_candidate_refs = {candidate.entity_ref for candidate in cba_expansion.candidates}
     assert "finance-au-ticker:CBA" in cba_candidate_refs
     assert "ades:currency:AUD" not in cba_candidate_refs
+
+    banking_expansion = expand_impact_paths(
+        ["ades:sector:au:banking"],
+        artifact_path=result.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    banking_candidate_refs = {candidate.entity_ref for candidate in banking_expansion.candidates}
+    assert {"finance-au-ticker:CBA", "finance-au-ticker:NAB"}.issubset(
+        banking_candidate_refs
+    )
+
+    telecom_expansion = expand_impact_paths(
+        ["ades:sector:au:telecommunications"],
+        artifact_path=result.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=2,
+        max_candidates=10,
+        include_passive_paths=True,
+    )
+    telecom_candidate_refs = {candidate.entity_ref for candidate in telecom_expansion.candidates}
+    assert "finance-au-ticker:TLS" in telecom_candidate_refs
 
     apra_expansion = expand_impact_paths(
         ["ades:org:au:apra"],

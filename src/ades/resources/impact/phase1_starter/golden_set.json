@@ -196,6 +196,22 @@
       ]
     },
     {
+      "name": "australia_telstra_telecom_bridge",
+      "entity_refs": [
+        "ades:issuer:au:telstra-group"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-au-en"
+      ],
+      "expected_candidate_refs": [
+        "finance-au-ticker:TLS"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker"
+      ]
+    },
+    {
       "name": "negative_empty_refs",
       "entity_refs": [
         "ades:impact:unknown:not-in-graph"

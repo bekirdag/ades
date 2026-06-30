@@ -89,6 +89,8 @@ ades:index:in:nifty-bank	NIFTY Bank	market_index	finance-in-en	true	false	"{""ju
 ades:index:mx:ftse-biva	FTSE BIVA index family	market_index	finance-mx-en	true	false	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 ades:issuer:au:bhp-group	BHP Group	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:issuer:au:commonwealth-bank-of-australia	Commonwealth Bank of Australia	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:issuer:au:national-australia-bank	National Australia Bank	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:issuer:au:telstra-group	Telstra Group	issuer	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:issuer:br:b3	B3 S.A. - Brasil, Bolsa, Balcão	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
 ades:issuer:br:banco-do-brasil	Banco do Brasil S.A.	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
 ades:issuer:br:petrobras	Petróleo Brasileiro S.A. - Petrobras	issuer	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
@@ -322,6 +324,7 @@ ades:sector:au:renewable-energy	Australian renewable energy sector	sector	financ
 ades:sector:au:road-safety-insurance	Australian road safety and motor insurance sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:sector:au:securities-market	Australian securities and markets sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:sector:au:superannuation	Australian superannuation sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
+ades:sector:au:telecommunications	Australian telecommunications sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:sector:au:transport-logistics	Australian transport and logistics sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:sector:au:transport-policy	Australian transport policy sector	sector	finance-au-en	false	true	"{""jurisdiction"": ""AU""}"	finance-au-en
 ades:sector:br:agribusiness	Brazil agribusiness	sector	finance-br-en	false	true	"{""jurisdiction"": ""BR""}"	finance-br-en
@@ -782,6 +785,8 @@ ades:trade-agreement:in-om:cepa	India-Oman CEPA	trade_agreement	finance-in-en	fa
 ades:trade-agreement:usmca	USMCA	trade_agreement	finance-mx-en	false	true	"{""jurisdiction"": ""MX""}"	finance-mx-en,general-en
 finance-au-ticker:BHP	BHP	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
 finance-au-ticker:CBA	CBA	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
+finance-au-ticker:NAB	NAB	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
+finance-au-ticker:TLS	TLS	ticker	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
 finance-au:asx-200	S&P/ASX 200	market_index	finance-au-en	true	false	"{""jurisdiction"": ""AU""}"	finance-au-en
 finance-br-ticker:B3SA3	B3SA3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRB3SAACNOR6"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""B3SA3""}"	finance-br-en
 finance-br-ticker:BBAS3	BBAS3	ticker	finance-br-en	true	false	"{""exchange"": ""B3"", ""isin"": ""BRBBASACNOR3"", ""jurisdiction"": ""BR"", ""mic"": ""BVMF"", ""ticker_symbol"": ""BBAS3""}"	finance-br-en
