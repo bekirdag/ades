@@ -903,6 +903,7 @@ finance-in-ticker:SBIN	SBIN	ticker	finance-in-en	true	false	"{""jurisdiction"": 
 finance-in-ticker:SUNPHARMA	SUNPHARMA	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 finance-in-ticker:TCS	TCS	ticker	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 finance-in:nifty-50	NIFTY 50	market_index	finance-in-en	true	false	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+finance-in:bse	BSE Limited	exchange	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 finance-in:nse	National Stock Exchange of India	exchange	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 finance-in:sebi	Securities and Exchange Board of India	regulator	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 finance-it-issuer:IT0000062072	Generali	issuer	finance-it-en	false	true	"{""jurisdiction"": ""IT""}"	finance-it-en,general-en

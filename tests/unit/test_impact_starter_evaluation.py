@@ -86,8 +86,8 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
         )
 
     assert report.warnings == []
-    assert report.case_count == 24
-    assert report.empty_path_rate == 0.0417
+    assert report.case_count == 25
+    assert report.empty_path_rate == 0.04
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -738,6 +738,22 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
                 """
             )
         }
+        india_source_nodes = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, entity_type, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-in:bse',
+                    'finance-in:nse',
+                    'finance-in:sebi',
+                    'ades:org:in:rbi',
+                    'ades:org:in:commerce'
+                )
+                """
+            )
+        }
         cepa_targets = {
             str(row[0])
             for row in connection.execute(
@@ -749,12 +765,19 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
             )
         }
 
-    assert india_edge_count == 136
+    assert india_edge_count == 137
     assert tradable_rows == {
         "ades:impact:currency:inr": (1, 0),
         "ades:impact:rate:in-repo-rate": (1, 0),
         "finance-in-ticker:HUDCO": (1, 0),
         "finance-in:nifty-50": (1, 0),
+    }
+    assert india_source_nodes == {
+        "ades:org:in:commerce": ("government_body", 0, 1),
+        "ades:org:in:rbi": ("government_body", 0, 1),
+        "finance-in:bse": ("exchange", 0, 1),
+        "finance-in:nse": ("exchange", 0, 1),
+        "finance-in:sebi": ("regulator", 0, 1),
     }
     assert {
         "ades:country:IN",
@@ -793,6 +816,13 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
         "ades:impact:rate:in-slr",
     }
     assert "ades:sector:in:fx-funding" in rbi_passive_refs
+
+    sebi_candidate_refs, sebi_passive_refs = expanded_refs("finance-in:sebi")
+    assert sebi_candidate_refs == set()
+    assert {
+        "ades:sector:in:securities-markets",
+        "finance-in:bse",
+    }.issubset(sebi_passive_refs)
 
     cepa_candidate_refs, cepa_passive_refs = expanded_refs("ades:trade-agreement:in-om:cepa")
     assert cepa_candidate_refs == set()

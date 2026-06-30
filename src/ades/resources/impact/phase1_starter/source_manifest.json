@@ -460,7 +460,7 @@
       "notes": "Country-risk proxy relationship reference."
     },
     {
-      "source_name": "India reviewed NSE/RBI/MoSPI/policy relationship source lane",
+      "source_name": "India reviewed NSE/BSE/SEBI/RBI/MoSPI/policy relationship source lane",
       "source_url": "https://www.nseindia.com/",
       "source_snapshot": "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/program_org_relationship/20260629Tprogram-org-in-reviewed-nse-bse-rbi-policy/manifest.json",
       "source_year": "2026",
