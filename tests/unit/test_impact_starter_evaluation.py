@@ -89,9 +89,10 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     case_names = {str(case["name"]) for case in golden_payload["cases"]}
     assert "italy_banca_mediolanum_borsa_bridge" in case_names
     assert "mexico_gfnorte_bmv_banxico_bridge" in case_names
+    assert "russia_sber_moex_cbr_bridge" in case_names
     assert report.warnings == []
-    assert report.case_count == 28
-    assert report.empty_path_rate == 0.0357
+    assert report.case_count == 29
+    assert report.empty_path_rate == 0.0345
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -119,6 +120,18 @@ def test_starter_source_manifest_has_required_fields():
     )
     assert payload["normalized_files"] == ["impact_nodes.tsv", "impact_edges.tsv"]
     assert len(payload["sources"]) >= 8
+    russia_source = next(
+        source
+        for source in payload["sources"]
+        if source["source_name"] == "Russia reviewed program/org relationship source lane"
+    )
+    assert "MOEX issuer/ticker/security/status bridges" in russia_source["notes"]
+    assert "Bank of Russia currency/rates/market-supervision rows" in russia_source["notes"]
+    assert "Minfin/Rosstat/MinEnergy/Mintrans policy/statistics rows" in russia_source["notes"]
+    assert "Source availability constraints:" in russia_source["notes"]
+    assert "Issuer/security caveats:" in russia_source["notes"]
+    assert "no direct country-to-commodity" in russia_source["notes"]
+    assert "central-bank-to-ticker" in russia_source["notes"]
     for source in payload["sources"]:
         assert source["source_name"]
         assert str(source["source_url"]).startswith("https://")

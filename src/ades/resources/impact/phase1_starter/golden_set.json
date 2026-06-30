@@ -405,6 +405,37 @@
       ]
     },
     {
+      "name": "russia_sber_moex_cbr_bridge",
+      "entity_refs": [
+        "finance-ru-issuer:484",
+        "finance-ru:cbr"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-ru-en"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:currency:rub",
+        "ades:impact:rate:ru-cbr-key-rate",
+        "ades:security:ru:moex:sber-share",
+        "finance-ru-ticker:SBER"
+      ],
+      "expected_passive_refs": [
+        "ades:sector:ru:banking",
+        "finance-ru:moex",
+        "finance-ru:nsd"
+      ],
+      "expected_relation_families": [
+        "central_bank_affects_currency",
+        "central_bank_affects_rates",
+        "issuer_has_listed_ticker",
+        "issuer_has_security",
+        "issuer_in_sector",
+        "regulator_supervises_depository",
+        "regulator_supervises_exchange"
+      ]
+    },
+    {
       "name": "negative_empty_refs",
       "entity_refs": [
         "ades:impact:unknown:not-in-graph"

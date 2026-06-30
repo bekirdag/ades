@@ -17,7 +17,7 @@
       "refresh_policy": "refresh_on_country_source_lane_update",
       "normalized_output_allowed": true,
       "license_notes": "Reviewed source lane stores only normalized relationship metadata; source URLs and evidence snippets are retained under /mnt/githubActions/ades_big_data.",
-      "notes": "Production-promoted Russia first slice covering MOEX issuer/ticker/security/status bridges, Bank of Russia currency/rates/market-supervision rows, Minfin/Rosstat/MinEnergy/Mintrans policy/statistics rows, sanctions-authority/program rows, and commodity-flow or pipeline paths with no direct country-to-commodity or sanctions/program-to-issuer fanout."
+      "notes": "Production-promoted Russia first slice covering MOEX issuer/ticker/security/status bridges, Bank of Russia currency/rates/market-supervision rows, Minfin/Rosstat/MinEnergy/Mintrans policy/statistics rows, sanctions-authority/program rows, and commodity-flow or pipeline paths. Source availability constraints: MOEX ISS/Bank of Russia official pages and issuer disclosures were retained as normalized relationship metadata only; raw source snapshots remain under /mnt/githubActions/ades_big_data, official-source availability may vary by sanctions/geoblocking/robots constraints, and issuer pages require periodic refresh before promotion. Issuer/security caveats: MOEX listed-security identity remains separate from ADR/GDR instruments and market access status; no direct country-to-commodity, sanctions/program-to-issuer, central-bank-to-ticker, or broad sector-to-ticker fanout is asserted."
     },
     {
       "source_name": "Mexico reviewed program/org relationship source lane",
