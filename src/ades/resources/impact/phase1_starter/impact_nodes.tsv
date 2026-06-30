@@ -1913,3 +1913,41 @@ finance-fr:cac-40	CAC 40	market_index	finance-fr-en	true	false	"{""jurisdiction"
 finance-fr:euronext-access-paris	Euronext Access Paris	exchange	finance-fr-en	false	true	"{""jurisdiction"": ""FR"", ""mic"": ""XMLI"", ""same_as_refs"": [""wikidata:Q107190270""]}"	finance-fr-en,general-en
 finance-fr:euronext-growth-paris	Euronext Growth Paris	exchange	finance-fr-en	false	true	"{""jurisdiction"": ""FR"", ""mic"": ""ALXP"", ""same_as_refs"": [""wikidata:Q107188657""]}"	finance-fr-en,general-en
 finance-fr:euronext-paris	Euronext Paris	exchange	finance-fr-en	false	true	"{""jurisdiction"": ""FR"", ""mic"": ""XPAR"", ""same_as_refs"": [""wikidata:Q2385849""]}"	finance-fr-en,general-en
+ades:impact:currency:jpy	Japanese yen	currency	finance-jp-en	true	false	"{""jurisdiction"": ""JP"", ""same_as_refs"": [""currency:JPY"", ""iso4217:JPY""]}"	finance-jp-en,general-en,finance-en
+ades:impact:rate:jp-jgb-10y	Japan 10-year JGB yield	rate	finance-jp-en	true	false	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:impact:rate:jp-policy-rate	Bank of Japan policy rate	rate	finance-jp-en	true	false	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:org:jp:meti	Ministry of Economy, Trade and Industry	government_body	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:org:jp:mic	Ministry of Internal Affairs and Communications	government_body	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:org:jp:mlit	Ministry of Land, Infrastructure, Transport and Tourism	government_body	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:product:jp:paypay	PayPay	product	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:product:jp:playstation	PlayStation	product	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:product:jp:prius	Prius	product	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:sector:jp:asset-management	Japan asset management	sector	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:sector:jp:automotive	Japan automotive	sector	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:sector:jp:banking	Japan banking	sector	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:sector:jp:consumer-electronics	Japan consumer electronics	sector	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:sector:jp:digital-platforms	Japan digital platforms	sector	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:sector:jp:semiconductor-equipment	Japan semiconductor equipment	sector	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:sector:jp:securities-markets	Japan securities markets	sector	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:sector:jp:telecommunications	Japan telecommunications	sector	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:sector:jp:transport-infrastructure	Japan transport infrastructure	sector	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en,general-en
+ades:security:jp:tse:jp3435000009-ordinary	Sony Group ordinary share	security	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3435000009"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""6758""}"	finance-jp-en
+ades:security:jp:tse:jp3436100006-ordinary	SoftBank Group ordinary share	security	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3436100006"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""9984""}"	finance-jp-en
+ades:security:jp:tse:jp3571400005-ordinary	Tokyo Electron ordinary share	security	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3571400005"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""8035""}"	finance-jp-en
+ades:security:jp:tse:jp3633400001-ordinary	Toyota Motor ordinary share	security	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3633400001"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""7203""}"	finance-jp-en
+ades:security:jp:tse:jp3902900004-ordinary	Mitsubishi UFJ Financial Group ordinary share	security	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3902900004"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""8306""}"	finance-jp-en
+finance-jp:fsa	Financial Services Agency	regulator	finance-jp-en	false	true	"{""jurisdiction"": ""JP"", ""same_as_refs"": [""wikidata:Q5444181""]}"	finance-jp-en,general-en
+finance-jp:boj	Bank of Japan	central_bank	finance-jp-en	false	true	"{""jurisdiction"": ""JP"", ""same_as_refs"": [""wikidata:Q189310""]}"	finance-jp-en,general-en
+finance-jp:jpx	Japan Exchange Group	exchange	finance-jp-en	false	true	"{""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""same_as_refs"": [""wikidata:Q17125284""]}"	finance-jp-en,general-en
+finance-jp:tse	Tokyo Stock Exchange	exchange	finance-jp-en	false	true	"{""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""same_as_refs"": [""wikidata:Q217475""]}"	finance-jp-en,general-en
+finance-jp:nikkei-225	Nikkei 225	market_index	finance-jp-en	true	false	"{""jurisdiction"": ""JP"", ""same_as_refs"": [""wikidata:Q162806""]}"	finance-jp-en,general-en
+finance-jp-issuer:6758	Sony Group Corporation	issuer	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en
+finance-jp-issuer:7203	Toyota Motor Corporation	issuer	finance-jp-en	false	true	"{""jurisdiction"": ""JP"", ""same_as_refs"": [""wikidata:Q53268""]}"	finance-jp-en
+finance-jp-issuer:8035	Tokyo Electron Limited	issuer	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en
+finance-jp-issuer:8306	Mitsubishi UFJ Financial Group, Inc.	issuer	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en
+finance-jp-issuer:9984	SoftBank Group Corp.	issuer	finance-jp-en	false	true	"{""jurisdiction"": ""JP""}"	finance-jp-en
+finance-jp-ticker:6758	6758	ticker	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3435000009"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""6758""}"	finance-jp-en
+finance-jp-ticker:7203	7203	ticker	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3633400001"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""7203""}"	finance-jp-en
+finance-jp-ticker:8035	8035	ticker	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3571400005"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""8035""}"	finance-jp-en
+finance-jp-ticker:8306	8306	ticker	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3902900004"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""8306""}"	finance-jp-en
+finance-jp-ticker:9984	9984	ticker	finance-jp-en	true	false	"{""exchange"": ""Tokyo Stock Exchange"", ""isin"": ""JP3436100006"", ""jurisdiction"": ""JP"", ""mic"": ""XTKS"", ""ticker_symbol"": ""9984""}"	finance-jp-en

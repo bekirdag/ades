@@ -89,8 +89,8 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     case_names = {str(case["name"]) for case in golden_payload["cases"]}
     assert "italy_banca_mediolanum_borsa_bridge" in case_names
     assert report.warnings == []
-    assert report.case_count == 26
-    assert report.empty_path_rate == 0.0385
+    assert report.case_count == 27
+    assert report.empty_path_rate == 0.037
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -835,6 +835,147 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
     upi_candidate_refs, upi_passive_refs = expanded_refs("ades:payment-network:in:upi")
     assert upi_candidate_refs == set()
     assert {"ades:org:in:npci", "ades:sector:in:digital-payments"}.issubset(upi_passive_refs)
+
+
+def test_starter_graph_includes_promoted_japan_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        japan_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges
+                WHERE source_snapshot LIKE '/mnt/githubActions/ades_big_data/source_lane_japan/%'
+                """
+            ).fetchone()[0]
+        )
+        tradable_rows = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-jp-ticker:7203',
+                    'ades:security:jp:tse:jp3633400001-ordinary',
+                    'ades:impact:currency:jpy',
+                    'ades:impact:rate:jp-policy-rate'
+                )
+                """
+            )
+        }
+        japan_source_nodes = {
+            str(row[0]): tuple(row[1:])
+            for row in connection.execute(
+                """
+                SELECT entity_ref, entity_type, is_tradable, is_seed_eligible
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                    'finance-jp:jpx',
+                    'finance-jp:tse',
+                    'finance-jp:fsa',
+                    'finance-jp:boj',
+                    'ades:org:jp:meti',
+                    'ades:org:jp:mlit',
+                    'ades:org:jp:mic'
+                )
+                """
+            )
+        }
+        boj_targets = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT target_ref
+                FROM impact_edges
+                WHERE source_ref = 'finance-jp:boj'
+                """
+            )
+        }
+        fsa_targets = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT target_ref
+                FROM impact_edges
+                WHERE source_ref = 'finance-jp:fsa'
+                """
+            )
+        }
+
+    assert japan_edge_count == 42
+    assert tradable_rows == {
+        "ades:impact:currency:jpy": (1, 0),
+        "ades:impact:rate:jp-policy-rate": (1, 0),
+        "ades:security:jp:tse:jp3633400001-ordinary": (1, 0),
+        "finance-jp-ticker:7203": (1, 0),
+    }
+    assert japan_source_nodes == {
+        "ades:org:jp:meti": ("government_body", 0, 1),
+        "ades:org:jp:mic": ("government_body", 0, 1),
+        "ades:org:jp:mlit": ("government_body", 0, 1),
+        "finance-jp:boj": ("central_bank", 0, 1),
+        "finance-jp:fsa": ("regulator", 0, 1),
+        "finance-jp:jpx": ("exchange", 0, 1),
+        "finance-jp:tse": ("exchange", 0, 1),
+    }
+    assert {
+        "ades:impact:currency:jpy",
+        "ades:impact:rate:jp-jgb-10y",
+        "ades:impact:rate:jp-policy-rate",
+        "ades:sector:jp:banking",
+    } == boj_targets
+    assert {
+        "ades:sector:jp:asset-management",
+        "ades:sector:jp:banking",
+        "ades:sector:jp:securities-markets",
+    } == fsa_targets
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=80,
+            include_passive_paths=True,
+        )
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+        )
+
+    toyota_candidate_refs, toyota_passive_refs = expanded_refs("finance-jp-issuer:7203")
+    assert toyota_candidate_refs == {
+        "ades:security:jp:tse:jp3633400001-ordinary",
+        "finance-jp-ticker:7203",
+    }
+    assert "ades:sector:jp:automotive" in toyota_passive_refs
+    assert "ades:impact:currency:jpy" not in toyota_candidate_refs
+
+    boj_candidate_refs, boj_passive_refs = expanded_refs("finance-jp:boj")
+    assert boj_candidate_refs == {
+        "ades:impact:currency:jpy",
+        "ades:impact:rate:jp-jgb-10y",
+        "ades:impact:rate:jp-policy-rate",
+    }
+    assert "ades:sector:jp:banking" in boj_passive_refs
+    assert "finance-jp-ticker:8306" not in boj_candidate_refs
+
+    prius_candidate_refs, prius_passive_refs = expanded_refs("ades:product:jp:prius")
+    assert {
+        "ades:security:jp:tse:jp3633400001-ordinary",
+        "finance-jp-ticker:7203",
+    }.issubset(prius_candidate_refs)
+    assert "finance-jp-issuer:7203" in prius_passive_refs
+
+    meti_candidate_refs, meti_passive_refs = expanded_refs("ades:org:jp:meti")
+    assert meti_candidate_refs == set()
+    assert {
+        "ades:sector:jp:automotive",
+        "ades:sector:jp:semiconductor-equipment",
+    }.issubset(meti_passive_refs)
 
 
 def test_starter_graph_includes_promoted_argentina_relationships(

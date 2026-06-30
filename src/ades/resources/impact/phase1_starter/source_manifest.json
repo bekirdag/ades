@@ -50,6 +50,16 @@
       "notes": "Production-promoted Italy first slice covering Euronext Milan issuer/ticker/security bridges, Banca d'Italia/ISTAT macro rows, CONSOB/IVASS/ARERA/AGCOM/AGCM/AIFA/ENAC/ART/ANAC regulator sector rows, MEF/MIMIT/MASE/MIT policy rows, CDP/SACE/SIMEST/Invitalia/GME/GSE/PagoPA organization rows, and PNRR/export-program guardrails without direct program-to-ticker assertions."
     },
     {
+      "source_name": "Japan reviewed JPX/FSA/BOJ/government relationship source lane",
+      "source_url": "https://www.jpx.co.jp/english/listing/co-search/",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_japan/2026-06-29/SOURCE_INVENTORY.md",
+      "source_year": 2026,
+      "refresh_policy": "refresh_on_country_source_lane_update",
+      "normalized_output_allowed": true,
+      "license_notes": "Reviewed source lane stores only normalized relationship metadata; source URLs and evidence snippets are retained under /mnt/githubActions/ades_big_data.",
+      "notes": "Production-promoted Japan first slice covering JPX/TSE issuer/ticker/security bridges, FSA financial-sector supervision rows, Bank of Japan JPY/rate/credit rows, METI/MLIT/MIC government sector rows, major issuer sector mappings, and product-to-issuer paths for Toyota, Sony, and SoftBank without broad sector-to-ticker fanout."
+    },
+    {
       "source_name": "Australia reviewed program/org relationship source lane",
       "source_url": "https://www.asx.com.au/markets/trade-our-cash-market/directory",
       "source_snapshot": "/mnt/githubActions/ades_big_data/source_lane_australia/2026-06-29/SOURCE_INVENTORY.md",

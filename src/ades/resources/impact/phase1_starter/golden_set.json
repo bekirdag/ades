@@ -433,6 +433,24 @@
       ]
     },
     {
+      "name": "toyota_jpx_issuer_ticker_security_bridge",
+      "entity_refs": [
+        "finance-jp-issuer:7203",
+        "wikidata:Q53268"
+      ],
+      "enabled_packs": [
+        "finance-jp-en"
+      ],
+      "expected_candidate_refs": [
+        "ades:security:jp:tse:jp3633400001-ordinary",
+        "finance-jp-ticker:7203"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker",
+        "issuer_has_security"
+      ]
+    },
+    {
       "name": "intertek_issuer_ticker_bridge",
       "entity_refs": [
         "finance-uk-issuer:04267576",
