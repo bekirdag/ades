@@ -507,6 +507,7 @@ ades:sector:in:power-grid	Power grid	sector	finance-in-en	false	true	"{""jurisdi
 ades:sector:in:power-transmission	Power transmission	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:sector:in:public-sector-borrowers	Public-sector borrowers	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:sector:in:public-sector-enterprises	Public-sector enterprises	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
+ades:sector:in:refining	Refining	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:sector:in:renewables	Renewables	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:sector:in:roads	Roads	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en
 ades:sector:in:seafood-exports	Seafood exports	sector	finance-in-en	false	true	"{""jurisdiction"": ""IN""}"	finance-in-en,general-en

@@ -88,6 +88,7 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
 
     case_names = {str(case["name"]) for case in golden_payload["cases"]}
     assert "italy_banca_mediolanum_borsa_bridge" in case_names
+    assert "india_oil_import_policy_reliance_commodity" in case_names
     assert "mexico_gfnorte_bmv_banxico_bridge" in case_names
     assert "russia_sber_moex_cbr_bridge" in case_names
     assert "saudi_sama_sar_repo_rate_bridge" in case_names
@@ -96,8 +97,8 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert "tesla_supercharger_product_org_bridge" in case_names
     assert "turkiye_turk_telekom_bist_security_bridge" in case_names
     assert report.warnings == []
-    assert report.case_count == 34
-    assert report.empty_path_rate == 0.0294
+    assert report.case_count == 35
+    assert report.empty_path_rate == 0.0286
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -937,7 +938,7 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
             )
         }
 
-    assert india_edge_count == 137
+    assert india_edge_count == 138
     assert tradable_rows == {
         "ades:impact:currency:inr": (1, 0),
         "ades:impact:rate:in-repo-rate": (1, 0),
@@ -1004,6 +1005,52 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
     upi_candidate_refs, upi_passive_refs = expanded_refs("ades:payment-network:in:upi")
     assert upi_candidate_refs == set()
     assert {"ades:org:in:npci", "ades:sector:in:digital-payments"}.issubset(upi_passive_refs)
+
+    oil_policy_expansion = expand_impact_paths(
+        [
+            "finance-in-issuer:RELIANCE",
+            "ades:impact:commodity:crude-oil",
+            "ades:org:in:pngrb",
+        ],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=4,
+        max_candidates=80,
+        include_passive_paths=True,
+    )
+    oil_policy_candidate_refs = {
+        candidate.entity_ref for candidate in oil_policy_expansion.candidates
+    }
+    oil_policy_passive_refs = {path.entity_ref for path in oil_policy_expansion.passive_paths}
+    assert oil_policy_candidate_refs == {
+        "ades:impact:commodity:crude-oil",
+        "ades:impact:currency:usd",
+        "ades:impact:sector:airlines",
+        "finance-in-ticker:RELIANCE",
+    }
+    assert oil_policy_passive_refs == {
+        "ades:sector:in:city-gas-distribution",
+        "ades:sector:in:energy-conglomerates",
+        "ades:sector:in:natural-gas",
+        "ades:sector:in:pipelines",
+        "ades:sector:in:refining",
+        "finance-in:nse",
+    }
+    assert {
+        "ades:impact:currency:inr",
+        "ades:impact:rate:in-crr",
+        "ades:impact:rate:in-gsec-10y",
+        "ades:impact:rate:in-repo-rate",
+        "ades:impact:rate:in-slr",
+        "finance-in:nifty-50",
+        "finance-in-ticker:HUDCO",
+    }.isdisjoint(oil_policy_candidate_refs)
+    assert {
+        "ades:sector:in:banking",
+        "ades:sector:in:fx-funding",
+        "ades:sector:in:public-sector-borrowers",
+        "ades:sector:in:securities-markets",
+    }.isdisjoint(oil_policy_passive_refs)
 
 
 def test_starter_graph_includes_promoted_japan_relationships(tmp_path: Path) -> None:

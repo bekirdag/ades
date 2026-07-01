@@ -309,6 +309,41 @@
       ]
     },
     {
+      "name": "india_oil_import_policy_reliance_commodity",
+      "entity_refs": [
+        "finance-in-issuer:RELIANCE",
+        "ades:impact:commodity:crude-oil",
+        "ades:org:in:pngrb"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-en",
+        "finance-in-en"
+      ],
+      "expected_candidate_refs": [
+        "ades:impact:commodity:crude-oil",
+        "ades:impact:currency:usd",
+        "ades:impact:sector:airlines",
+        "finance-in-ticker:RELIANCE"
+      ],
+      "expected_passive_refs": [
+        "ades:sector:in:city-gas-distribution",
+        "ades:sector:in:energy-conglomerates",
+        "ades:sector:in:natural-gas",
+        "ades:sector:in:pipelines",
+        "ades:sector:in:refining",
+        "finance-in:nse"
+      ],
+      "expected_relation_families": [
+        "commodity_traded_in_currency",
+        "energy_input_affects_sector",
+        "issuer_has_listed_ticker",
+        "issuer_in_sector",
+        "regulator_affects_sector",
+        "ticker_listed_on_exchange"
+      ]
+    },
+    {
       "name": "saudi_sama_sar_repo_rate_bridge",
       "entity_refs": [
         "ades:org:sa:sama"
