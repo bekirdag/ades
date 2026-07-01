@@ -109,6 +109,16 @@ def test_extract_news_event_signals_returns_evidence_spans_and_asset_families() 
     )
 
 
+def test_extract_news_event_signals_keeps_sector_subsidy_out_of_fiscal_macro() -> None:
+    signals = extract_news_event_signals(
+        "The government expanded semiconductor subsidies for chipmakers."
+    )
+
+    signal_types = {signal.event_type for signal in signals}
+    assert "sector_policy_change" in signal_types
+    assert "fiscal_expansion" not in signal_types
+
+
 def test_extract_news_event_signals_covers_policy_rate_hold_without_unchanged_wording() -> None:
     text = (
         "Banxico held its benchmark policy rate and said inflation risks remain "

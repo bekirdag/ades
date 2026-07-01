@@ -304,6 +304,10 @@ def _build_us_policy_terminal_graph(tmp_path: Path) -> tuple[str, str]:
                     "ades:impact:index:us-semiconductor-index\tUS Semiconductor Index\t"
                     'index\tfinance-us-en\t1\t0\t{"jurisdiction":"us"}\tfinance-us-en'
                 ),
+                (
+                    "ades:impact:currency:usd\tUS dollar\tcurrency\t"
+                    'finance-us-en\t1\t0\t{"jurisdiction":"us"}\tfinance-us-en'
+                ),
             ]
         )
         + "\n",
@@ -4176,6 +4180,179 @@ def test_news_analyze_returns_government_policy_terminal_paths(
             == "index"
         )
         assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
+def test_news_analyze_government_subsidy_reaches_sector_issuers_not_currency_proxies(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    for pack_id, domain in (
+        ("general-en", "general"),
+        ("finance-en", "finance"),
+        ("finance-us-en", "finance"),
+    ):
+        _install_named_pack(tmp_path, pack_id, domain=domain)
+    graph_artifact_path, graph_artifact_hash = _build_us_policy_terminal_graph(tmp_path)
+
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ARTIFACT_PATH", graph_artifact_path)
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    source_text = "US Chip Subsidy Policy"
+    source_ref = "ades:us-policy:chip-subsidy-policy"
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        entities = []
+        if pack == "finance-us-en":
+            usd_text = "USD 39 billion"
+            entities.extend(
+                [
+                    EntityMatch(
+                        text=source_text,
+                        label="policy",
+                        start=text.index(source_text),
+                        end=text.index(source_text) + len(source_text),
+                        confidence=0.94,
+                        relevance=0.95,
+                        provenance=EntityProvenance(
+                            match_kind="alias",
+                            match_path="aliases.json",
+                            match_source="pack",
+                            source_pack=pack,
+                            source_domain="finance",
+                        ),
+                        link=EntityLink(
+                            entity_id=source_ref,
+                            canonical_text=source_text,
+                            provider="ades",
+                        ),
+                    ),
+                    EntityMatch(
+                        text=usd_text,
+                        label="currency",
+                        start=text.index(usd_text),
+                        end=text.index(usd_text) + len(usd_text),
+                        confidence=0.91,
+                        relevance=0.88,
+                        provenance=EntityProvenance(
+                            match_kind="alias",
+                            match_path="aliases.json",
+                            match_source="pack",
+                            source_pack=pack,
+                            source_domain="finance",
+                        ),
+                        link=EntityLink(
+                            entity_id="ades:impact:currency:usd",
+                            canonical_text="US dollar",
+                            provider="ades",
+                        ),
+                    ),
+                ]
+            )
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=entities,
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "US expands chip subsidies for semiconductor manufacturers",
+            "text": (
+                "The US Chip Subsidy Policy expanded USD 39 billion in government subsidy support "
+                "for semiconductor companies and chipmakers."
+            ),
+            "source": {"source_country": "US"},
+            "options": {
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "impact_max_depth": 3,
+                "max_country_finance_packs": 1,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["event_signal"]["event_type"] == "sector_policy_change"
+    assert any(
+        source["entity_ref"] == source_ref and source["is_graph_seed"] is True
+        for source in payload["source_entities"]
+    )
+
+    terminal_candidates_by_ref = {
+        candidate["entity_ref"]: candidate
+        for candidate in payload["terminal_impact_candidates"]
+    }
+    candidate_paths_by_ref = {
+        candidate_path["terminal_ref"]: candidate_path
+        for candidate_path in payload["candidate_paths"]
+    }
+    expected_sector_terminals = {
+        "finance-us-issuer:example-semiconductor",
+        "finance-us-ticker:nasdaq:xchp",
+        "ades:impact:index:us-semiconductor-index",
+    }
+
+    assert expected_sector_terminals.issubset(terminal_candidates_by_ref)
+    assert expected_sector_terminals.issubset(candidate_paths_by_ref)
+    assert "ades:impact:currency:usd" not in terminal_candidates_by_ref
+    assert "ades:impact:currency:usd" not in candidate_paths_by_ref
+    assert all(
+        candidate_path["terminal_type"] not in {"currency", "rates_proxy"}
+        for candidate_path in candidate_paths_by_ref.values()
+    )
+
+    issuer_path = terminal_candidates_by_ref["finance-us-issuer:example-semiconductor"][
+        "relationship_paths"
+    ][0]
+    assert [edge["relation"] for edge in issuer_path["edges"]] == [
+        "policy_body_affects_sector",
+        "sector_affects_issuer",
+    ]
+    assert issuer_path["edges"][0]["source_tier"] == "government"
+
+    ticker_path = candidate_paths_by_ref["finance-us-ticker:nasdaq:xchp"]
+    assert ticker_path["terminal_type"] == "ticker"
+    assert ticker_path["jurisdiction"] == "us"
+    assert ticker_path["exchange"] == "nasdaq"
+    assert ticker_path["ticker"] == "xchp"
+    assert ticker_path["security_ids"] == {
+        "ades_ref": "finance-us-ticker:nasdaq:xchp",
+        "ticker": "xchp",
+        "exchange_ticker": "nasdaq:xchp",
+    }
+    assert ticker_path["event_compatibility"] == ["sector_policy_change"]
+    assert ticker_path["artifact_ref"] == graph_artifact_hash
+    assert "government" in ticker_path["source_tiers"]
+    assert "exchange" in ticker_path["source_tiers"]
+    assert [edge["relation"] for edge in ticker_path["relationship_path"]["edges"]] == [
+        "policy_body_affects_sector",
+        "sector_affects_issuer",
+        "issuer_has_listed_ticker",
+    ]
+    assert (
+        candidate_paths_by_ref["ades:impact:index:us-semiconductor-index"]["terminal_type"]
+        == "index"
+    )
+    assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 
 def test_news_analyze_returns_legal_regulatory_action_terminal_paths(

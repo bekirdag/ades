@@ -119,7 +119,7 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
         event_type="fiscal_expansion",
         patterns=(
             _rx(
-                r"\b(?:stimulus|spending\s+package|fiscal\s+support|budget\s+expansion|tax\s+cut|subsid(?:y|ies)|public\s+spending)\b"
+                r"\b(?:stimulus|spending\s+package|fiscal\s+support|budget\s+expansion|tax\s+cut|public\s+spending)\b"
             ),
         ),
         compatible_asset_families=("rates", "currency", "bonds", "equity_index", "country_risk"),
