@@ -698,6 +698,72 @@ def test_news_analyze_endpoint_returns_normalized_contract(
     assert unresolved_by_ref["country:ir"]["has_terminal_candidate"] is False
     assert "entity_hormuz" not in unresolved_by_ref
     assert payload["tag_responses"] == []
+    assert payload["debug"] is None
+
+    debug_text = (
+        "Iran said oil shipping lanes near the Strait of Hormuz were disrupted "
+        "while $50 was cited " + "by market desk analysts " * 30
+    )
+    debug_response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Energy shipping risk rises",
+            "text": debug_text,
+            "hints": {"country": "ir", "topics": ["finance"]},
+            "source": {"publisher": "Example", "source_country": "IR"},
+            "packs": [pack_id],
+            "options": {
+                "debug": True,
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "max_passive_entities": 32,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert debug_response.status_code == 200
+    debug_payload = debug_response.json()
+    debug = debug_payload["debug"]
+    assert debug["enabled"] is True
+    assert debug["candidate_path_count"] == len(debug_payload["candidate_paths"])
+    assert debug["rejected_candidate_count"] == len(debug_payload["rejected_candidates"])
+    assert debug["unresolved_entity_count"] == len(debug_payload["unresolved_entities"])
+    assert set(debug["entity_refs"]) == {"country:ir", "entity_hormuz"}
+    assert debug["graph_enabled_packs"] == [pack_id]
+    assert debug["paths"][0] == {
+        "terminal_ref": "entity_crude_oil",
+        "terminal_name": "Crude oil",
+        "terminal_type": "commodity",
+        "source_entity_refs": ["entity_hormuz"],
+        "relationship_depth": 1,
+        "edge_refs": ["entity_hormuz->chokepoint_affects_energy->entity_crude_oil"],
+        "source_tiers": ["test_fixture"],
+        "source_names": ["test"],
+        "source_urls": ["https://example.com"],
+        "source_snapshots": ["test"],
+        "artifact_ref": "sha256:test",
+    }
+    assert debug["rejected_candidates"][0]["terminal_ref"] == ("ades:impact:rates:policy-rate")
+    assert debug["rejected_candidates"][0]["reason_code"] == "event_incompatible"
+    debug_unresolved_by_ref = {
+        entity["entity_ref"]: entity for entity in debug["unresolved_entities"]
+    }
+    assert debug_unresolved_by_ref["country:ir"]["source_lane_suggestion"] == ("finance-ir-en")
+    assert debug_unresolved_by_ref["country:ir"]["replay_key"].startswith("unresolved-entity:")
+    assert debug["limits"]["source_evidence_chars"] == 240
+    assert all(len(item["text"]) <= 240 for item in debug["source_evidence"])
+    assert any(
+        item["evidence_type"] == "event_sentence" and item["text"].endswith("...")
+        for item in debug["source_evidence"]
+    )
+    assert any(
+        item["evidence_type"] == "path_source" and item["source_url"] == "https://example.com"
+        for item in debug["source_evidence"]
+    )
+    assert debug_payload["tag_responses"] == []
 
 
 def test_news_analyze_hides_weak_alias_passive_entities(

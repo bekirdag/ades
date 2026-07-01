@@ -2065,6 +2065,86 @@ class NewsAnalyzeSourceLaneCoverage(BaseModel):
     artifact_hash: str | None = None
 
 
+class NewsAnalyzeDebugPath(BaseModel):
+    """Bounded internal path summary for BDYA debug calls."""
+
+    terminal_ref: str
+    terminal_name: str
+    terminal_type: str | None = None
+    source_entity_refs: list[str] = Field(default_factory=list)
+    relationship_depth: int = Field(ge=0)
+    edge_refs: list[str] = Field(default_factory=list)
+    source_tiers: list[str] = Field(default_factory=list)
+    source_names: list[str] = Field(default_factory=list)
+    source_urls: list[str] = Field(default_factory=list)
+    source_snapshots: list[str] = Field(default_factory=list)
+    artifact_ref: str | None = None
+
+
+class NewsAnalyzeDebugRejectedCandidate(BaseModel):
+    """Bounded rejected-candidate summary for BDYA debug calls."""
+
+    terminal_ref: str
+    terminal_name: str
+    terminal_type: str | None = None
+    reason_code: str
+    reason: str
+    source_entity_refs: list[str] = Field(default_factory=list)
+    path_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    artifact_ref: str | None = None
+
+
+class NewsAnalyzeDebugUnresolvedEntity(BaseModel):
+    """Bounded unresolved-entity summary for BDYA debug calls."""
+
+    entity_ref: str
+    name: str
+    entity_type: str | None = None
+    missing_reason: str
+    country_scope: str | None = None
+    topic_scope: str | None = None
+    event_types: list[str] = Field(default_factory=list)
+    review_priority: Literal["low", "medium", "high"] | None = None
+    replay_key: str | None = None
+    source_lane_suggestion: str | None = None
+
+
+class NewsAnalyzeDebugSourceEvidence(BaseModel):
+    """Short evidence snippet safe for internal debug responses."""
+
+    evidence_type: Literal[
+        "entity_mention",
+        "event_signal",
+        "event_sentence",
+        "path_source",
+    ]
+    ref: str
+    text: str
+    source_name: str | None = None
+    source_url: str | None = None
+    source_snapshot: str | None = None
+    start: int | None = Field(default=None, ge=0)
+    end: int | None = Field(default=None, ge=0)
+
+
+class NewsAnalyzeDebug(BaseModel):
+    """Internal debug payload for BDYA news-analysis calls."""
+
+    enabled: bool = True
+    limits: dict[str, int] = Field(default_factory=dict)
+    entity_refs: list[str] = Field(default_factory=list)
+    graph_enabled_packs: list[str] = Field(default_factory=list)
+    candidate_path_count: int = Field(default=0, ge=0)
+    rejected_candidate_count: int = Field(default=0, ge=0)
+    unresolved_entity_count: int = Field(default=0, ge=0)
+    paths: list[NewsAnalyzeDebugPath] = Field(default_factory=list)
+    rejected_candidates: list[NewsAnalyzeDebugRejectedCandidate] = Field(default_factory=list)
+    unresolved_entities: list[NewsAnalyzeDebugUnresolvedEntity] = Field(default_factory=list)
+    source_evidence: list[NewsAnalyzeDebugSourceEvidence] = Field(default_factory=list)
+    diagnostic_codes: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class NewsAnalyzeResponse(BaseModel):
     """Normalized ADES news-analysis response for downstream consumers."""
 
@@ -2097,6 +2177,7 @@ class NewsAnalyzeResponse(BaseModel):
     tag_responses: list[Any] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     quality_flags: list[str] = Field(default_factory=list)
+    debug: NewsAnalyzeDebug | None = None
     timing_ms: int
     total_time_ms: int | None = None
 

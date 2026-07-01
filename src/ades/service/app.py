@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import time
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 
@@ -160,6 +161,11 @@ from .models import (
     NewsAnalyzeArtifactVersions,
     NewsAnalyzeCandidatePath,
     NewsAnalyzeCountryScope,
+    NewsAnalyzeDebug,
+    NewsAnalyzeDebugPath,
+    NewsAnalyzeDebugRejectedCandidate,
+    NewsAnalyzeDebugSourceEvidence,
+    NewsAnalyzeDebugUnresolvedEntity,
     NewsAnalyzeDiagnostic,
     NewsAnalyzePackDecision,
     NewsAnalyzePassiveEntity,
@@ -333,6 +339,12 @@ _NO_TERMINAL_REASON_MESSAGES = {
     "missing_source_lane": "A needed source lane or impact expansion path was unavailable.",
     "stale_artifact": "A stale artifact warning affected terminal candidate generation.",
 }
+_NEWS_ANALYZE_DEBUG_PATH_LIMIT = 32
+_NEWS_ANALYZE_DEBUG_REJECTED_LIMIT = 32
+_NEWS_ANALYZE_DEBUG_UNRESOLVED_LIMIT = 32
+_NEWS_ANALYZE_DEBUG_EVIDENCE_LIMIT = 24
+_NEWS_ANALYZE_DEBUG_EVIDENCE_CHAR_LIMIT = 240
+_NEWS_ANALYZE_DEBUG_ENTITY_REF_LIMIT = 64
 _COUNTRY_ALIAS_TO_CODE: dict[str, str] = {}
 for _country in DEFAULT_CURATED_G20_COUNTRY_ENTITIES:
     entity_id = str(_country.get("entity_id", ""))
@@ -1042,6 +1054,196 @@ def _build_diagnostics(
             )
         )
     return diagnostics
+
+
+def _debug_snippet(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = " ".join(str(value).split())
+    if not normalized:
+        return None
+    if len(normalized) <= _NEWS_ANALYZE_DEBUG_EVIDENCE_CHAR_LIMIT:
+        return normalized
+    return normalized[: _NEWS_ANALYZE_DEBUG_EVIDENCE_CHAR_LIMIT - 3].rstrip() + "..."
+
+
+def _append_debug_evidence(
+    evidence: list[NewsAnalyzeDebugSourceEvidence],
+    seen: set[tuple[str, str, str]],
+    *,
+    evidence_type: Literal["entity_mention", "event_signal", "event_sentence", "path_source"],
+    ref: str,
+    text: str | None,
+    source_name: str | None = None,
+    source_url: str | None = None,
+    source_snapshot: str | None = None,
+    start: int | None = None,
+    end: int | None = None,
+) -> None:
+    if len(evidence) >= _NEWS_ANALYZE_DEBUG_EVIDENCE_LIMIT:
+        return
+    snippet = _debug_snippet(text)
+    if snippet is None:
+        return
+    key = (evidence_type, ref, snippet)
+    if key in seen:
+        return
+    seen.add(key)
+    evidence.append(
+        NewsAnalyzeDebugSourceEvidence(
+            evidence_type=evidence_type,
+            ref=ref,
+            text=snippet,
+            source_name=source_name,
+            source_url=source_url,
+            source_snapshot=source_snapshot,
+            start=start,
+            end=end,
+        )
+    )
+
+
+def _debug_unresolved_entity(
+    entity: NewsAnalyzeUnresolvedEntity,
+    diagnostic_by_entity_reason: dict[tuple[str | None, str], NewsAnalyzeDiagnostic],
+) -> NewsAnalyzeDebugUnresolvedEntity:
+    diagnostic = diagnostic_by_entity_reason.get((entity.entity_ref, entity.missing_reason))
+    return NewsAnalyzeDebugUnresolvedEntity(
+        entity_ref=entity.entity_ref,
+        name=entity.name,
+        entity_type=entity.entity_type,
+        missing_reason=entity.missing_reason,
+        country_scope=entity.country_scope,
+        topic_scope=entity.topic_scope,
+        event_types=entity.event_types,
+        review_priority=diagnostic.review_priority if diagnostic else None,
+        replay_key=diagnostic.replay_key if diagnostic else None,
+        source_lane_suggestion=(diagnostic.source_lane_suggestion if diagnostic else None),
+    )
+
+
+def _build_news_analyze_debug(
+    *,
+    entity_refs: list[str],
+    graph_enabled_packs: list[str],
+    candidate_paths: list[NewsAnalyzeCandidatePath],
+    rejected_candidates: list[NewsAnalyzeRejectedCandidate],
+    unresolved_entities: list[NewsAnalyzeUnresolvedEntity],
+    diagnostics: list[NewsAnalyzeDiagnostic],
+    passive_entities: list[NewsAnalyzePassiveEntity],
+    event_signals: list[object],
+    warnings: list[str],
+) -> NewsAnalyzeDebug:
+    diagnostic_by_entity_reason = {
+        (diagnostic.entity_ref, diagnostic.code): diagnostic
+        for diagnostic in diagnostics
+        if diagnostic.entity_ref
+    }
+    debug_paths: list[NewsAnalyzeDebugPath] = []
+    evidence: list[NewsAnalyzeDebugSourceEvidence] = []
+    seen_evidence: set[tuple[str, str, str]] = set()
+
+    for candidate_path in candidate_paths[:_NEWS_ANALYZE_DEBUG_PATH_LIMIT]:
+        edges = candidate_path.relationship_path.edges
+        source_names = _dedupe_string_values(
+            [edge.source_name for edge in edges if edge.source_name]
+        )
+        source_urls = _dedupe_string_values([edge.source_url for edge in edges if edge.source_url])
+        source_snapshots = _dedupe_string_values(
+            [edge.source_snapshot for edge in edges if edge.source_snapshot]
+        )
+        debug_paths.append(
+            NewsAnalyzeDebugPath(
+                terminal_ref=candidate_path.terminal_ref,
+                terminal_name=candidate_path.terminal_name,
+                terminal_type=candidate_path.terminal_type,
+                source_entity_refs=candidate_path.source_entity_refs,
+                relationship_depth=candidate_path.relationship_path.path_depth,
+                edge_refs=_dedupe_string_values([_edge_ref(edge) for edge in edges]),
+                source_tiers=candidate_path.source_tiers,
+                source_names=source_names,
+                source_urls=source_urls,
+                source_snapshots=source_snapshots,
+                artifact_ref=candidate_path.artifact_ref,
+            )
+        )
+        for edge in edges:
+            _append_debug_evidence(
+                evidence,
+                seen_evidence,
+                evidence_type="path_source",
+                ref=_edge_ref(edge) or candidate_path.terminal_ref,
+                text=(f"{edge.relation} via {edge.source_name}; snapshot={edge.source_snapshot}"),
+                source_name=edge.source_name,
+                source_url=edge.source_url,
+                source_snapshot=edge.source_snapshot,
+            )
+
+    for signal in event_signals:
+        event_type = str(getattr(signal, "event_type", "") or "event_signal")
+        _append_debug_evidence(
+            evidence,
+            seen_evidence,
+            evidence_type="event_signal",
+            ref=event_type,
+            text=getattr(signal, "evidence_text", None),
+            start=getattr(signal, "evidence_start", None),
+            end=getattr(signal, "evidence_end", None),
+        )
+        _append_debug_evidence(
+            evidence,
+            seen_evidence,
+            evidence_type="event_sentence",
+            ref=event_type,
+            text=getattr(signal, "source_sentence", None),
+        )
+
+    for entity in passive_entities:
+        if len(evidence) >= _NEWS_ANALYZE_DEBUG_EVIDENCE_LIMIT:
+            break
+        _append_debug_evidence(
+            evidence,
+            seen_evidence,
+            evidence_type="entity_mention",
+            ref=entity.entity_ref,
+            text=entity.evidence_text,
+        )
+
+    return NewsAnalyzeDebug(
+        limits={
+            "paths": _NEWS_ANALYZE_DEBUG_PATH_LIMIT,
+            "rejected_candidates": _NEWS_ANALYZE_DEBUG_REJECTED_LIMIT,
+            "unresolved_entities": _NEWS_ANALYZE_DEBUG_UNRESOLVED_LIMIT,
+            "source_evidence": _NEWS_ANALYZE_DEBUG_EVIDENCE_LIMIT,
+            "source_evidence_chars": _NEWS_ANALYZE_DEBUG_EVIDENCE_CHAR_LIMIT,
+        },
+        entity_refs=_dedupe_string_values(entity_refs)[:_NEWS_ANALYZE_DEBUG_ENTITY_REF_LIMIT],
+        graph_enabled_packs=_dedupe_string_values(graph_enabled_packs),
+        candidate_path_count=len(candidate_paths),
+        rejected_candidate_count=len(rejected_candidates),
+        unresolved_entity_count=len(unresolved_entities),
+        paths=debug_paths,
+        rejected_candidates=[
+            NewsAnalyzeDebugRejectedCandidate(
+                terminal_ref=candidate.terminal_ref,
+                terminal_name=candidate.terminal_name,
+                terminal_type=candidate.terminal_type,
+                reason_code=candidate.reason_code,
+                reason=candidate.reason,
+                source_entity_refs=candidate.source_entity_refs,
+                path_confidence=candidate.path_confidence,
+                artifact_ref=candidate.artifact_ref,
+            )
+            for candidate in rejected_candidates[:_NEWS_ANALYZE_DEBUG_REJECTED_LIMIT]
+        ],
+        unresolved_entities=[
+            _debug_unresolved_entity(entity, diagnostic_by_entity_reason)
+            for entity in unresolved_entities[:_NEWS_ANALYZE_DEBUG_UNRESOLVED_LIMIT]
+        ],
+        source_evidence=evidence,
+        diagnostic_codes=_dedupe_string_values([diagnostic.code for diagnostic in diagnostics]),
+        warnings=warnings,
+    )
 
 
 def _build_source_lane_coverage(
@@ -3879,6 +4081,21 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             warnings=deduped_warnings,
             impact_paths=impact_paths,
         )
+        debug = (
+            _build_news_analyze_debug(
+                entity_refs=entity_refs,
+                graph_enabled_packs=graph_enabled_packs,
+                candidate_paths=candidate_paths,
+                rejected_candidates=rejected_candidates,
+                unresolved_entities=unresolved_entities,
+                diagnostics=diagnostics,
+                passive_entities=passive_entities,
+                event_signals=event_signals,
+                warnings=deduped_warnings,
+            )
+            if request.options.debug
+            else None
+        )
 
         timing_ms = int((time.perf_counter() - started_at) * 1000)
         return NewsAnalyzeResponse(
@@ -3910,6 +4127,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             tag_responses=(tag_responses if request.options.include_tag_responses else []),
             warnings=deduped_warnings,
             quality_flags=quality_flags,
+            debug=debug,
             timing_ms=timing_ms,
             total_time_ms=timing_ms,
         )
