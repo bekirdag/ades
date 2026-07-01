@@ -133,6 +133,30 @@ Expected result: the command exits `0` and emits JSON with
 and `action_items`. Any non-empty warning count must be assigned to Ops/ADES for
 source refresh or relationship re-verification before promotion.
 
+## 2.2 Quarterly Source-License Audit
+
+Run this local-only audit once per quarter for the exact source-lane TSVs and
+source manifests used by the current artifact candidate. It confirms source use
+is still allowed and license notes are present before a separate release
+decision.
+
+```bash
+python scripts/audit_source_licenses.py \
+  --edge-tsv-path "${ADES_EDGE_TSV}" \
+  --source-manifest-path src/ades/resources/impact/phase1_starter/source_manifest.json \
+  --sample-limit 100 \
+  | tee "${ADES_ARTIFACT_DIR}/quarterly-source-license-audit.json"
+```
+
+Expected result: the command exits `0` and emits JSON with
+`status: "clean"`, empty `license_warning_counts`, source-row and manifest
+counts, and no `action_items`. Include the current source manifest whenever an
+edge TSV lacks per-row license columns; otherwise the audit will report
+`missing_license_metadata`. Any non-empty warning count must be assigned to
+Ops/ADES to add missing license metadata or notes, re-confirm source terms,
+quarantine restricted rows, or remove affected sources from production promotion
+before promotion.
+
 ## 3. Run Golden News-Analysis Checks
 
 Run repo-embedded golden coverage first. These tests cover the evaluator, the

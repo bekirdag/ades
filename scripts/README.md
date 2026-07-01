@@ -20,6 +20,12 @@ Current review helpers:
   market-graph source-lane validation, surfaces stale ownership/security/issuer
   relationship warnings, flags source rows whose dated snapshots exceed their
   refresh policy, and writes action items for Ops/ADES follow-up.
+- `audit_source_licenses.py`
+  Emit a local JSON audit for quarterly ADES source-license review. The report
+  confirms canonical source rows have production-eligible `license_status`
+  values and `license_notes`, confirms source manifests still allow normalized
+  output, requires a source manifest when legacy TSVs have no license columns,
+  and writes action items for Ops/ADES follow-up.
 - `public_ades_news_smoke.py`
   Run read-only ADES smoke checks for `/healthz`, `/v0/status`, and
   `/v0/news/analyze` against either public ADES or a local `ades serve`
