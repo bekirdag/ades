@@ -114,6 +114,154 @@ def _build_uk_mining_sector_graph(tmp_path: Path) -> tuple[str, str]:
     return graph.artifact_path, graph.artifact_hash
 
 
+def _build_uk_direct_sector_story_graph(tmp_path: Path) -> tuple[str, str]:
+    node_path = tmp_path / "uk_direct_sector_impact_nodes.tsv"
+    edge_path = tmp_path / "uk_direct_sector_impact_edges.tsv"
+    node_path.write_text(
+        "\t".join(
+            [
+                "entity_ref",
+                "canonical_name",
+                "entity_type",
+                "library_id",
+                "is_tradable",
+                "is_seed_eligible",
+                "identifiers_json",
+                "packs",
+            ]
+        )
+        + "\n"
+        + "\n".join(
+            [
+                (
+                    "finance-uk-sector:mining\tUK mining sector\tsector\tfinance-uk-en\t"
+                    '0\t1\t{"jurisdiction":"GB"}\tfinance-uk-en'
+                ),
+                (
+                    "finance-uk-issuer:beowulf-mining\tBeowulf Mining PLC\tissuer\t"
+                    'finance-uk-en\t0\t1\t{"jurisdiction":"GB"}\tfinance-uk-en'
+                ),
+                (
+                    "finance-uk-issuer:greatland-gold\tGreatland Gold PLC\tissuer\t"
+                    'finance-uk-en\t0\t1\t{"jurisdiction":"GB"}\tfinance-uk-en'
+                ),
+                (
+                    "ades:security:gb:lse:bem-ordinary-share\t"
+                    "Beowulf Mining PLC ordinary share\tsecurity\tfinance-uk-en\t1\t0\t"
+                    '{"jurisdiction":"GB","exchange":"LSE","isin":"GB0033163287"}\t'
+                    "finance-uk-en"
+                ),
+                (
+                    "finance-uk-ticker:bem\tBEM.L\tticker\tfinance-uk-en\t1\t0\t"
+                    '{"jurisdiction":"GB","exchange":"LSE","ticker_symbol":"BEM.L"}\t'
+                    "finance-uk-en"
+                ),
+                (
+                    "finance-uk-ticker:ggp\tGGP.L\tticker\tfinance-uk-en\t1\t0\t"
+                    '{"jurisdiction":"GB","exchange":"LSE","ticker_symbol":"GGP.L"}\t'
+                    "finance-uk-en"
+                ),
+                (
+                    "ades:impact:index:uk-mining-index\tUK Mining Index\tindex\t"
+                    'finance-uk-en\t1\t0\t{"jurisdiction":"GB"}\tfinance-uk-en'
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    edge_path.write_text(
+        "\t".join(
+            [
+                "source_ref",
+                "target_ref",
+                "relation",
+                "evidence_level",
+                "confidence",
+                "direction_hint",
+                "source_name",
+                "source_url",
+                "source_snapshot",
+                "source_year",
+                "refresh_policy",
+                "pack_ids",
+                "notes",
+                "compatible_event_types",
+                "direction_preconditions",
+            ]
+        )
+        + "\n"
+        + "\n".join(
+            [
+                (
+                    "finance-uk-sector:mining\tfinance-uk-issuer:beowulf-mining\t"
+                    "sector_affects_issuer\tdirect\t0.91\tsector_membership\t"
+                    "London Stock Exchange issuer sector profile\t"
+                    "https://www.londonstockexchange.com/stock/BEM/beowulf-mining-plc/company-page\t"
+                    "2026-07-01\t2026\tannual\tfinance-uk-en\t"
+                    "reviewed direct sector issuer basket fixture\t"
+                    "sector_policy_change\tdirect_issuer_or_sector_membership_evidence"
+                ),
+                (
+                    "finance-uk-sector:mining\tfinance-uk-issuer:greatland-gold\t"
+                    "sector_affects_issuer\tdirect\t0.9\tsector_membership\t"
+                    "London Stock Exchange issuer sector profile\t"
+                    "https://www.londonstockexchange.com/stock/GGP/greatland-gold-plc/company-page\t"
+                    "2026-07-01\t2026\tannual\tfinance-uk-en\t"
+                    "reviewed direct sector issuer basket fixture\t"
+                    "sector_policy_change\tdirect_issuer_or_sector_membership_evidence"
+                ),
+                (
+                    "finance-uk-issuer:beowulf-mining\t"
+                    "ades:security:gb:lse:bem-ordinary-share\t"
+                    "issuer_has_security\tdirect\t0.96\tlisted_equity\t"
+                    "London Stock Exchange Beowulf Mining company page\t"
+                    "https://www.londonstockexchange.com/stock/BEM/beowulf-mining-plc/company-page\t"
+                    "2026-07-01\t2026\tannual\tfinance-uk-en\t"
+                    "reviewed direct sector security fixture\t"
+                    "sector_policy_change\tdirect_issuer_or_security_mention"
+                ),
+                (
+                    "finance-uk-issuer:beowulf-mining\tfinance-uk-ticker:bem\t"
+                    "issuer_has_listed_ticker\tdirect\t0.96\tlisted_equity\t"
+                    "London Stock Exchange Beowulf Mining company page\t"
+                    "https://www.londonstockexchange.com/stock/BEM/beowulf-mining-plc/company-page\t"
+                    "2026-07-01\t2026\tannual\tfinance-uk-en\t"
+                    "reviewed direct sector ticker fixture\t"
+                    "sector_policy_change\tlisted_issuer"
+                ),
+                (
+                    "finance-uk-issuer:greatland-gold\tfinance-uk-ticker:ggp\t"
+                    "issuer_has_listed_ticker\tdirect\t0.95\tlisted_equity\t"
+                    "London Stock Exchange Greatland Gold company page\t"
+                    "https://www.londonstockexchange.com/stock/GGP/greatland-gold-plc/company-page\t"
+                    "2026-07-01\t2026\tannual\tfinance-uk-en\t"
+                    "reviewed direct sector ticker fixture\t"
+                    "sector_policy_change\tlisted_issuer"
+                ),
+                (
+                    "finance-uk-sector:mining\tades:impact:index:uk-mining-index\t"
+                    "sector_affects_index\tdirect\t0.89\tsector_index\t"
+                    "FTSE Russell UK mining index factsheet\t"
+                    "https://www.lseg.com/en/ftse-russell/indices\t"
+                    "2026-07-01\t2026\tannual\tfinance-uk-en\t"
+                    "reviewed direct sector index fixture\t"
+                    "sector_policy_change\tdirect_issuer_or_sector_membership_evidence"
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    graph = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "uk-direct-sector-graph-artifact",
+        artifact_version="2026-07-01Tuk-direct-sector-story-test",
+    )
+    return graph.artifact_path, graph.artifact_hash
+
+
 def _build_uk_housebuilder_legal_graph(tmp_path: Path) -> tuple[str, str]:
     node_path = tmp_path / "uk_housebuilder_impact_nodes.tsv"
     edge_path = tmp_path / "uk_housebuilder_impact_edges.tsv"
@@ -4220,6 +4368,156 @@ def test_news_analyze_uses_sector_graph_seeds_for_installed_country_pack(
     assert bem_path["effective_to"] is None
     assert bem_path["artifact_ref"] == graph_artifact_hash
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
+def test_news_analyze_direct_sector_story_is_country_pack_gated(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ENABLED", "1")
+
+    def _run_direct_sector_case(*, install_country_pack: bool) -> dict[str, object]:
+        case_root = tmp_path / ("with-country-pack" if install_country_pack else "no-country-pack")
+        for pack_id, domain in (
+            ("general-en", "general"),
+            ("finance-en", "finance"),
+        ):
+            _install_named_pack(case_root, pack_id, domain=domain)
+        if install_country_pack:
+            _install_named_pack(case_root, "finance-uk-en", domain="finance")
+        graph_artifact_path, _graph_artifact_hash = _build_uk_direct_sector_story_graph(case_root)
+        monkeypatch.setenv("ADES_IMPACT_EXPANSION_ARTIFACT_PATH", graph_artifact_path)
+        client = TestClient(create_app(storage_root=case_root))
+
+        def _fake_tag(
+            text: str,
+            *,
+            pack: str | None = None,
+            content_type: str = "text/plain",
+            **_: object,
+        ) -> TagResponse:
+            return TagResponse(
+                version="0.1.0",
+                pack=pack or "unknown",
+                pack_version="0.1.0",
+                language="en",
+                content_type=content_type,
+                entities=[],
+                topics=[],
+                warnings=[],
+                timing_ms=1,
+            )
+
+        monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+        response = client.post(
+            "/v0/news/analyze",
+            json={
+                "title": "UK mining sector faces policy reform",
+                "text": (
+                    "The UK government announced a mining policy reform that analysts said "
+                    "could affect miners and mining companies."
+                ),
+                "source": {"source_country": "GB"},
+                "options": {
+                    "include_relationship_paths": True,
+                    "include_terminal_candidates": True,
+                    "include_tag_responses": False,
+                    "impact_max_depth": 3,
+                    "max_country_finance_packs": 1,
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        return response.json()
+
+    unsupported_payload = _run_direct_sector_case(install_country_pack=False)
+    assert any(
+        decision["pack_id"] == "finance-uk-en"
+        and decision["selected"] is False
+        and decision["country_code"] == "uk"
+        for decision in unsupported_payload["pack_decisions"]
+    )
+    assert unsupported_payload["source_entities"] == []
+    assert unsupported_payload["terminal_impact_candidates"] == []
+    assert unsupported_payload["candidate_paths"] == []
+    assert "missing_country_pack" in unsupported_payload["no_terminal_reasons"]
+    assert any(
+        diagnostic["code"] == "no_terminal:missing_country_pack"
+        for diagnostic in unsupported_payload["diagnostics"]
+    )
+
+    supported_payload = _run_direct_sector_case(install_country_pack=True)
+    assert supported_payload["event_signal"]["event_type"] == "sector_policy_change"
+    assert any(
+        decision["pack_id"] == "finance-uk-en"
+        and decision["selected"] is True
+        and decision["country_code"] == "uk"
+        for decision in supported_payload["pack_decisions"]
+    )
+    assert any(
+        source["entity_ref"] == "finance-uk-sector:mining"
+        and source["is_graph_seed"] is True
+        for source in supported_payload["source_entities"]
+    )
+    terminal_candidates_by_ref = {
+        candidate["entity_ref"]: candidate
+        for candidate in supported_payload["terminal_impact_candidates"]
+    }
+    assert {
+        "ades:impact:index:uk-mining-index",
+        "ades:security:gb:lse:bem-ordinary-share",
+        "finance-uk-ticker:bem",
+        "finance-uk-ticker:ggp",
+    } <= set(terminal_candidates_by_ref)
+    assert terminal_candidates_by_ref["ades:impact:index:uk-mining-index"][
+        "compatible_event_types"
+    ] == ["sector_policy_change"]
+    assert all(
+        candidate["compatible_event_types"] == ["sector_policy_change"]
+        for candidate_ref, candidate in terminal_candidates_by_ref.items()
+        if candidate_ref
+        in {
+            "ades:security:gb:lse:bem-ordinary-share",
+            "finance-uk-ticker:bem",
+            "finance-uk-ticker:ggp",
+        }
+    )
+
+    candidate_paths_by_ref = {
+        candidate_path["terminal_ref"]: candidate_path
+        for candidate_path in supported_payload["candidate_paths"]
+    }
+    index_path = candidate_paths_by_ref["ades:impact:index:uk-mining-index"]
+    assert index_path["terminal_type"] == "index"
+    assert index_path["security_ids"] == {"ades_ref": "ades:impact:index:uk-mining-index"}
+    assert [edge["relation"] for edge in index_path["relationship_path"]["edges"]] == [
+        "sector_affects_index"
+    ]
+    assert index_path["source_tiers"] == ["exchange"]
+
+    security_path = candidate_paths_by_ref["ades:security:gb:lse:bem-ordinary-share"]
+    assert security_path["terminal_type"] == "security"
+    assert security_path["jurisdiction"] == "gb"
+    assert security_path["exchange"] == "lse"
+    assert security_path["security_ids"] == {
+        "ades_ref": "ades:security:gb:lse:bem-ordinary-share",
+        "local_security_id": "bem-ordinary-share",
+    }
+    assert [edge["relation"] for edge in security_path["relationship_path"]["edges"]] == [
+        "sector_affects_issuer",
+        "issuer_has_security",
+    ]
+
+    ggp_path = candidate_paths_by_ref["finance-uk-ticker:ggp"]
+    assert ggp_path["terminal_type"] == "ticker"
+    assert ggp_path["ticker"] == "ggp"
+    assert [edge["relation"] for edge in ggp_path["relationship_path"]["edges"]] == [
+        "sector_affects_issuer",
+        "issuer_has_listed_ticker",
+    ]
+    assert "NO_TERMINAL_IMPACT_CANDIDATES" not in supported_payload["quality_flags"]
 
 
 def test_news_analyze_returns_government_policy_terminal_paths(
