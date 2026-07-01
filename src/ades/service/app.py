@@ -307,6 +307,32 @@ _NEWS_ANALYZE_COUNTRY_FINANCE_PACK_BY_CODE = {
     "us": "finance-us-en",
     "za": "finance-za-en",
 }
+_NO_TERMINAL_REASON_ORDER = (
+    "no_entity_match",
+    "no_path",
+    "no_terminal_security",
+    "event_incompatible",
+    "low_tier",
+    "stale",
+    "conflicted",
+    "macro_gated",
+    "missing_country_pack",
+    "missing_source_lane",
+    "stale_artifact",
+)
+_NO_TERMINAL_REASON_MESSAGES = {
+    "no_entity_match": "No production entity match was available for terminal expansion.",
+    "no_path": "Recognized entities did not have a complete source-backed terminal path.",
+    "no_terminal_security": "Source entities were recognized, but no terminal security or tradable asset was produced.",
+    "event_incompatible": "Terminal candidates were rejected by event compatibility gates.",
+    "low_tier": "Only low-tier or proposal-only evidence was available.",
+    "stale": "A stale source or relationship warning affected terminal candidate generation.",
+    "conflicted": "A conflict warning affected terminal candidate generation.",
+    "macro_gated": "Currency, rates, or broad macro candidates were blocked by macro/FX/rates gating.",
+    "missing_country_pack": "A needed country finance pack was not installed or available.",
+    "missing_source_lane": "A needed source lane or impact expansion path was unavailable.",
+    "stale_artifact": "A stale artifact warning affected terminal candidate generation.",
+}
 _COUNTRY_ALIAS_TO_CODE: dict[str, str] = {}
 for _country in DEFAULT_CURATED_G20_COUNTRY_ENTITIES:
     entity_id = str(_country.get("entity_id", ""))
@@ -572,9 +598,7 @@ def _path_source_tiers(relationship_path: ImpactRelationshipPath) -> list[str]:
 
 
 def _path_effective_from(relationship_path: ImpactRelationshipPath) -> str | None:
-    values = _dedupe_string_values(
-        [_edge_effective_from(edge) for edge in relationship_path.edges]
-    )
+    values = _dedupe_string_values([_edge_effective_from(edge) for edge in relationship_path.edges])
     return max(values) if values else None
 
 
@@ -804,12 +828,77 @@ def _build_rejected_candidates(
     return rejected
 
 
+def _build_no_terminal_reasons(
+    *,
+    terminal_candidates: list[ImpactCandidate],
+    production_entities: list[EntityMatch],
+    entity_refs: list[str],
+    impact_paths: ImpactExpansionResult | None,
+    pre_gate_candidates: list[ImpactCandidate],
+    unresolved_entities: list[NewsAnalyzeUnresolvedEntity],
+    rejected_candidates: list[NewsAnalyzeRejectedCandidate],
+    pack_decisions: list[NewsAnalyzePackDecision],
+    warnings: list[str],
+) -> list[str]:
+    if terminal_candidates:
+        return []
+
+    warning_text = " ".join(warnings).casefold()
+    rejected_text = " ".join(
+        [candidate.reason_code for candidate in rejected_candidates]
+        + [candidate.reason for candidate in rejected_candidates]
+    ).casefold()
+    unresolved_reason_text = " ".join(
+        entity.missing_reason for entity in unresolved_entities
+    ).casefold()
+    reasons: set[str] = set()
+
+    if not production_entities and not entity_refs and impact_paths is None:
+        reasons.add("no_entity_match")
+    if unresolved_entities:
+        reasons.add("no_path")
+    if impact_paths is not None and impact_paths.source_entities and not pre_gate_candidates:
+        reasons.add("no_terminal_security")
+    if any(candidate.reason_code == "event_incompatible" for candidate in rejected_candidates):
+        reasons.add("event_incompatible")
+    if "event_signal_gate_filtered:missing_macro_fx_rates_event_signal" in warning_text:
+        reasons.add("macro_gated")
+    if "low_trust" in warning_text or "proposal_only" in warning_text:
+        reasons.add("low_tier")
+    if "conflict" in warning_text or "conflict" in rejected_text:
+        reasons.add("conflicted")
+    if "stale_artifact" in warning_text or "stale artifact" in warning_text:
+        reasons.add("stale_artifact")
+    if (
+        "stale" in warning_text or "stale" in rejected_text or "stale" in unresolved_reason_text
+    ) and "stale_artifact" not in reasons:
+        reasons.add("stale")
+    if any(decision.country_code and not decision.selected for decision in pack_decisions):
+        reasons.add("missing_country_pack")
+    if (entity_refs and impact_paths is None) or any(
+        token in warning_text
+        for token in (
+            "source_lane",
+            "pack_failed",
+            "pack_not_found",
+            "impact_expand_failed",
+        )
+    ):
+        reasons.add("missing_source_lane")
+
+    if not reasons:
+        reasons.add("no_path" if production_entities or entity_refs else "no_entity_match")
+
+    return [reason for reason in _NO_TERMINAL_REASON_ORDER if reason in reasons]
+
+
 def _build_diagnostics(
     *,
     warnings: list[str],
     quality_flags: list[str],
     unresolved_entities: list[NewsAnalyzeUnresolvedEntity],
     rejected_candidates: list[NewsAnalyzeRejectedCandidate],
+    no_terminal_reasons: list[str],
 ) -> list[NewsAnalyzeDiagnostic]:
     diagnostics: list[NewsAnalyzeDiagnostic] = []
     for flag in quality_flags:
@@ -846,10 +935,16 @@ def _build_diagnostics(
                 message=candidate.reason,
                 terminal_ref=candidate.terminal_ref,
                 event_type=(
-                    candidate.event_compatibility[0]
-                    if candidate.event_compatibility
-                    else None
+                    candidate.event_compatibility[0] if candidate.event_compatibility else None
                 ),
+            )
+        )
+    for reason in no_terminal_reasons:
+        diagnostics.append(
+            NewsAnalyzeDiagnostic(
+                code=f"no_terminal:{reason}",
+                severity="warning",
+                message=_NO_TERMINAL_REASON_MESSAGES.get(reason, reason),
             )
         )
     return diagnostics
@@ -3660,11 +3755,23 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             quality_flags.append("UNRESOLVED_MARKET_RELATIONSHIPS_PRESENT")
 
         deduped_warnings = _dedupe_string_values(warnings)[:32]
+        no_terminal_reasons = _build_no_terminal_reasons(
+            terminal_candidates=terminal_candidates,
+            production_entities=production_entities,
+            entity_refs=entity_refs,
+            impact_paths=impact_paths,
+            pre_gate_candidates=pre_gate_terminal_candidates,
+            unresolved_entities=unresolved_entities,
+            rejected_candidates=rejected_candidates,
+            pack_decisions=pack_decisions,
+            warnings=deduped_warnings,
+        )
         diagnostics = _build_diagnostics(
             warnings=deduped_warnings,
             quality_flags=quality_flags,
             unresolved_entities=unresolved_entities,
             rejected_candidates=rejected_candidates,
+            no_terminal_reasons=no_terminal_reasons,
         )
         source_lane_coverage = _build_source_lane_coverage(
             tag_responses=tag_responses,
@@ -3702,6 +3809,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             candidate_paths=candidate_paths,
             rejected_candidates=rejected_candidates,
             diagnostics=diagnostics,
+            no_terminal_reasons=no_terminal_reasons,
             event_signal=event_signals[0] if event_signals else None,
             source_lane_coverage=source_lane_coverage,
             tag_responses=(tag_responses if request.options.include_tag_responses else []),

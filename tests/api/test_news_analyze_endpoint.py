@@ -2248,12 +2248,9 @@ def test_news_analyze_returns_commodity_supply_chain_terminal_paths(
 
     assert response.status_code == 200
     payload = response.json()
-    assert "supply_disruption" in {
-        signal["event_type"] for signal in payload["event_signals"]
-    }
+    assert "supply_disruption" in {signal["event_type"] for signal in payload["event_signals"]}
     candidates_by_ref = {
-        candidate["entity_ref"]: candidate
-        for candidate in payload["terminal_impact_candidates"]
+        candidate["entity_ref"]: candidate for candidate in payload["terminal_impact_candidates"]
     }
     assert set(candidates_by_ref) == {
         "ades:impact:commodity:lithium",
@@ -3537,6 +3534,157 @@ def test_news_analyze_blocks_sector_graph_seeds_for_uninstalled_country_pack(
     assert payload["terminal_impact_candidates"] == []
     assert payload["candidate_paths"] == []
     assert "NO_TERMINAL_IMPACT_CANDIDATES" in payload["quality_flags"]
+    assert "no_entity_match" in payload["no_terminal_reasons"]
+    assert "missing_country_pack" in payload["no_terminal_reasons"]
+    assert any(
+        diagnostic["code"] == "no_terminal:missing_country_pack"
+        for diagnostic in payload["diagnostics"]
+    )
+
+
+def test_news_analyze_returns_stable_no_terminal_reason_codes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "news-no-terminal-reasons-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="United Kingdom",
+                    label="country",
+                    start=text.index("United Kingdom"),
+                    end=text.index("United Kingdom") + len("United Kingdom"),
+                    confidence=0.94,
+                    relevance=0.95,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="general",
+                    ),
+                    link=EntityLink(
+                        entity_id="country:uk",
+                        canonical_text="United Kingdom",
+                        provider="ades",
+                    ),
+                ),
+                EntityMatch(
+                    text="unverified GBP proxy",
+                    label="currency",
+                    start=text.index("unverified GBP proxy"),
+                    end=text.index("unverified GBP proxy") + len("unverified GBP proxy"),
+                    confidence=0.52,
+                    relevance=0.51,
+                    provenance=EntityProvenance(
+                        match_kind="proposal",
+                        match_path="news_llm_claim",
+                        match_source="llm",
+                        source_pack=pack or pack_id,
+                        source_domain="finance",
+                    ),
+                    link=EntityLink(
+                        entity_id="ades:impact:currency:gbp",
+                        canonical_text="British pound",
+                        provider="proposal",
+                    ),
+                ),
+            ],
+            topics=[TopicMatch(label="politics", score=0.86, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert "country:uk" in set(entity_refs)
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-06-30",
+            artifact_hash="sha256:no-terminal",
+            warnings=[
+                "stale_artifact:expected=sha256:new:observed=sha256:old",
+                "active_parent_conflict:issuer:example",
+            ],
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="country:uk",
+                    name="United Kingdom",
+                    entity_type="country",
+                    is_graph_seed=True,
+                    seed_degree=1,
+                )
+            ],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref="ades:impact:currency:gbp",
+                    name="British pound",
+                    entity_type="currency",
+                    evidence_level="shallow",
+                    confidence=0.72,
+                    source_entity_refs=["country:uk"],
+                    relationship_paths=[],
+                )
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "UK parliament approves mining permit rules",
+            "text": (
+                "United Kingdom parliament approved new mining permit rules. "
+                "Officials dismissed an unverified GBP proxy mentioned by analysts."
+            ),
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["terminal_candidates"] == []
+    assert payload["candidate_paths"] == []
+    assert payload["rejected_candidates"][0]["reason_code"] == "event_incompatible"
+    assert set(payload["no_terminal_reasons"]) >= {
+        "no_path",
+        "event_incompatible",
+        "low_tier",
+        "conflicted",
+        "macro_gated",
+        "stale_artifact",
+    }
+    diagnostic_codes = {diagnostic["code"] for diagnostic in payload["diagnostics"]}
+    assert {
+        "no_terminal:no_path",
+        "no_terminal:event_incompatible",
+        "no_terminal:low_tier",
+        "no_terminal:conflicted",
+        "no_terminal:macro_gated",
+        "no_terminal:stale_artifact",
+    } <= diagnostic_codes
 
 
 def test_news_analyze_uses_sector_graph_seeds_for_installed_country_pack(
@@ -4020,9 +4168,7 @@ def test_news_analyze_returns_legal_regulatory_action_terminal_paths(
             for edge in ticker_path["relationship_path"]["edges"]
         )
         assert (
-            candidate_paths_by_ref["ades:impact:index:us-semiconductor-index"][
-                "terminal_type"
-            ]
+            candidate_paths_by_ref["ades:impact:index:us-semiconductor-index"]["terminal_type"]
             == "index"
         )
         assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]

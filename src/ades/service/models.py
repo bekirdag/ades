@@ -2080,6 +2080,7 @@ class NewsAnalyzeResponse(BaseModel):
     candidate_paths: list[NewsAnalyzeCandidatePath] = Field(default_factory=list)
     rejected_candidates: list[NewsAnalyzeRejectedCandidate] = Field(default_factory=list)
     diagnostics: list[NewsAnalyzeDiagnostic] = Field(default_factory=list)
+    no_terminal_reasons: list[str] = Field(default_factory=list)
     event_signal: NewsEventSignal | None = None
     source_lane_coverage: list[NewsAnalyzeSourceLaneCoverage] = Field(default_factory=list)
     tag_responses: list[Any] = Field(default_factory=list)
