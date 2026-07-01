@@ -30,13 +30,22 @@ def _market_response(
         output_dir=str(output_dir),
         manifest_path=str(output_dir / "market_graph_store_manifest.json"),
         artifact_path=str(output_dir / "market_graph_store.sqlite"),
+        artifact_id="market_graph_store:sha256:test",
         graph_version="market-graph-v1",
         artifact_version="2026-05-13T00:00:00Z",
         artifact_hash="sha256:test",
         builder_version="market-graph-builder-v3",
+        build_timestamp="2026-05-13T00:00:00Z",
+        git_sha="test-git-sha",
+        build_host="test-host",
         node_count=2,
         edge_count=1,
+        row_count=1,
+        node_row_count=0,
+        edge_row_count=1,
         source_manifest_hash="sha256:test",
+        source_lanes=[],
+        lane_hashes={},
         node_tsv_paths=[],
         edge_tsv_paths=[],
         pack_ids=["finance-en"],
@@ -140,6 +149,14 @@ def test_cli_registry_build_market_graph_store_calls_public_api(
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["edge_count"] == 1
+    assert payload["artifact_id"] == "market_graph_store:sha256:test"
+    assert payload["build_timestamp"] == "2026-05-13T00:00:00Z"
+    assert payload["git_sha"] == "test-git-sha"
+    assert payload["build_host"] == "test-host"
+    assert payload["row_count"] == 1
+    assert payload["validation_summary"] == {}
+    assert payload["golden_summary"] == {}
+    assert payload["promotion_status"] == "unknown"
     assert captured["edge_tsv_paths"] == [edge_path]
     assert captured["node_tsv_paths"] == [node_path]
     assert captured["release_gate_commands"] == ["echo market-gate"]

@@ -2760,13 +2760,22 @@ class MarketGraphStoreBuildResponse(BaseModel):
     output_dir: str
     manifest_path: str
     artifact_path: str
+    artifact_id: str = ""
     graph_version: str
     artifact_version: str
     artifact_hash: str
     builder_version: str
+    build_timestamp: str = ""
+    git_sha: str = "unknown"
+    build_host: str = "unknown"
     node_count: int
     edge_count: int
+    row_count: int = 0
+    node_row_count: int = 0
+    edge_row_count: int = 0
     source_manifest_hash: str
+    source_lanes: list[str] = Field(default_factory=list)
+    lane_hashes: dict[str, str] = Field(default_factory=dict)
     node_tsv_paths: list[str] = Field(default_factory=list)
     edge_tsv_paths: list[str] = Field(default_factory=list)
     pack_ids: list[str] = Field(default_factory=list)
@@ -2779,4 +2788,7 @@ class MarketGraphStoreBuildResponse(BaseModel):
     release_gate_commands: list[str] = Field(default_factory=list)
     release_gate_working_dir: str | None = None
     release_gate_passed: bool = True
+    validation_summary: dict[str, Any] = Field(default_factory=dict)
+    golden_summary: dict[str, Any] = Field(default_factory=dict)
+    promotion_status: str = "unknown"
     warnings: list[str] = Field(default_factory=list)

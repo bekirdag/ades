@@ -8,7 +8,9 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import socket
 import sqlite3
+import subprocess
 from typing import Iterable
 
 from ..artifact_release import append_release_gate_warnings, run_release_gate_commands
@@ -155,6 +157,14 @@ class _EdgeRecord:
 
 def _sha256_text(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return "sha256:" + digest.hexdigest()
 
 
 def _normalize_text(value: object | None) -> str:
@@ -372,9 +382,10 @@ def _read_tsv_rows(path: Path) -> list[dict[str, str]]:
         return [dict(row) for row in reader]
 
 
-def _parse_node_rows(paths: Iterable[Path]) -> tuple[dict[str, _NodeRecord], list[str]]:
+def _parse_node_rows(paths: Iterable[Path]) -> tuple[dict[str, _NodeRecord], list[str], int]:
     nodes: dict[str, _NodeRecord] = {}
     warnings: list[str] = []
+    processed_row_count = 0
     for path in paths:
         rows = _read_tsv_rows(path)
         if not rows:
@@ -383,6 +394,7 @@ def _parse_node_rows(paths: Iterable[Path]) -> tuple[dict[str, _NodeRecord], lis
         if missing_columns:
             raise ValueError(f"Node TSV {path} is missing columns: {missing_columns}")
         for index, row in enumerate(rows, start=2):
+            processed_row_count += 1
             entity_ref = _normalize_text(row.get("entity_ref"))
             canonical_name = _normalize_text(row.get("canonical_name"))
             entity_type = _normalize_text(row.get("entity_type"))
@@ -401,7 +413,7 @@ def _parse_node_rows(paths: Iterable[Path]) -> tuple[dict[str, _NodeRecord], lis
             if entity_ref in nodes:
                 warnings.append(f"duplicate_node_replaced:{entity_ref}")
             nodes[entity_ref] = record
-    return nodes, warnings
+    return nodes, warnings, processed_row_count
 
 
 def _edge_id_for(row: dict[str, object]) -> str:
@@ -657,6 +669,32 @@ def _source_manifest_hash(
     return _sha256_text(json.dumps(payload, sort_keys=True, default=list, separators=(",", ":")))
 
 
+def _git_sha_for_path(path: Path) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return result.stdout.strip() or "unknown"
+
+
+def _build_host() -> str:
+    try:
+        return socket.gethostname() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+def _promotion_status(*, release_gate_passed: bool, warnings: list[str]) -> str:
+    if not release_gate_passed:
+        return "blocked"
+    return "warning" if warnings else "ready"
+
+
 def build_market_graph_store(
     *,
     edge_tsv_paths: Iterable[str | Path],
@@ -681,7 +719,7 @@ def build_market_graph_store(
         or datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     )
 
-    nodes, node_warnings = _parse_node_rows(resolved_node_paths)
+    nodes, node_warnings, processed_node_row_count = _parse_node_rows(resolved_node_paths)
     edges, edge_warnings, processed_edge_row_count = _parse_edge_rows(
         resolved_edge_paths,
         artifact_version=resolved_artifact_version,
@@ -857,6 +895,10 @@ def build_market_graph_store(
     source_tier_counts = _source_tier_counts(edges.values())
     source_warning_counts = _warning_code_counts(warnings, prefix="source_warning")
     relation_warning_counts = _warning_code_counts(warnings, prefix="relation_warning")
+    source_lanes = [str(path) for path in resolved_node_paths + resolved_edge_paths]
+    lane_hashes = {
+        str(path): _sha256_file(path) for path in resolved_node_paths + resolved_edge_paths
+    }
     (
         resolved_release_gate_commands,
         resolved_release_gate_working_dir,
@@ -866,18 +908,48 @@ def build_market_graph_store(
         working_dir=release_gate_working_dir,
         warnings=warnings,
     )
+    row_count = processed_node_row_count + processed_edge_row_count
+    validation_summary = {
+        "status": "passed" if release_gate_passed else "failed",
+        "release_gate_passed": release_gate_passed,
+        "warning_count": len(warnings),
+        "source_warning_counts": source_warning_counts,
+        "relation_warning_counts": relation_warning_counts,
+        "source_tier_counts": source_tier_counts,
+        "relation_counts": relation_counts,
+        "edge_family_counts": edge_family_counts,
+    }
+    golden_summary = {
+        "status": "not_run",
+        "case_count": 0,
+        "passed_case_count": 0,
+        "failed_case_count": 0,
+    }
+    promotion_status = _promotion_status(
+        release_gate_passed=release_gate_passed,
+        warnings=warnings,
+    )
 
     response = MarketGraphStoreBuildResponse(
         output_dir=str(resolved_output_dir),
         manifest_path=str(manifest_path),
         artifact_path=str(artifact_path),
+        artifact_id=f"market_graph_store:{artifact_hash}",
         graph_version=resolved_graph_version,
         artifact_version=resolved_artifact_version,
         artifact_hash=artifact_hash,
         builder_version=MARKET_GRAPH_BUILDER_VERSION,
+        build_timestamp=built_at,
+        git_sha=_git_sha_for_path(Path(__file__).resolve().parents[3]),
+        build_host=_build_host(),
         node_count=node_count,
         edge_count=edge_count,
+        row_count=row_count,
+        node_row_count=processed_node_row_count,
+        edge_row_count=processed_edge_row_count,
         source_manifest_hash=source_manifest_hash,
+        source_lanes=source_lanes,
+        lane_hashes=lane_hashes,
         node_tsv_paths=[str(path) for path in resolved_node_paths],
         edge_tsv_paths=[str(path) for path in resolved_edge_paths],
         pack_ids=pack_ids,
@@ -890,6 +962,9 @@ def build_market_graph_store(
         release_gate_commands=resolved_release_gate_commands,
         release_gate_working_dir=resolved_release_gate_working_dir,
         release_gate_passed=release_gate_passed,
+        validation_summary=validation_summary,
+        golden_summary=golden_summary,
+        promotion_status=promotion_status,
         warnings=warnings,
     )
     manifest_path.write_text(

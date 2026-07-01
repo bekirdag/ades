@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -114,6 +115,43 @@ def test_market_graph_builder_merges_edges_and_computes_seed_degree(tmp_path: Pa
     }
     assert response.relation_warning_counts == {}
     assert any(warning.startswith("duplicate_edge_merged") for warning in response.warnings)
+    assert response.artifact_id == f"market_graph_store:{response.artifact_hash}"
+    assert response.build_timestamp
+    assert response.git_sha
+    assert response.build_host
+    assert response.source_lanes == [str(node_path.resolve()), str(edge_path.resolve())]
+    assert set(response.lane_hashes) == set(response.source_lanes)
+    assert response.row_count == 10
+    assert response.node_row_count == 6
+    assert response.edge_row_count == 4
+    assert response.validation_summary["status"] == "passed"
+    assert response.validation_summary["warning_count"] == len(response.warnings)
+    assert response.golden_summary == {
+        "status": "not_run",
+        "case_count": 0,
+        "passed_case_count": 0,
+        "failed_case_count": 0,
+    }
+    assert response.promotion_status == "warning"
+    manifest = json.loads(Path(response.manifest_path).read_text(encoding="utf-8"))
+    for field in (
+        "artifact_id",
+        "artifact_version",
+        "artifact_hash",
+        "build_timestamp",
+        "git_sha",
+        "build_host",
+        "source_lanes",
+        "lane_hashes",
+        "row_count",
+        "edge_count",
+        "node_count",
+        "validation_summary",
+        "golden_summary",
+        "warnings",
+        "promotion_status",
+    ):
+        assert field in manifest
 
     with MarketGraphStore(response.artifact_path) as store:
         nodes = store.node_batch(["entity_hormuz", "entity_zero"])
