@@ -659,6 +659,28 @@
       ]
     },
     {
+      "name": "argentina_banco_patagonia_product_ticker_bridge",
+      "entity_refs": [
+        "ades:product:ar:patagonia-emprendimiento"
+      ],
+      "enabled_packs": [
+        "finance-ar-en",
+        "program-org-relationship-ar"
+      ],
+      "expected_candidate_refs": [
+        "finance-ar-ticker:BPAT"
+      ],
+      "expected_passive_refs": [
+        "ades:issuer:ar:banco-patagonia",
+        "ades:security:ar:banco-patagonia-common-share"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker",
+        "issuer_has_security",
+        "product_owned_by_org"
+      ]
+    },
+    {
       "name": "toyota_jpx_issuer_ticker_security_bridge",
       "entity_refs": [
         "finance-jp-issuer:7203",
