@@ -1935,6 +1935,7 @@ class NewsAnalyzeUnresolvedEntity(BaseModel):
 
     entity_ref: str
     name: str
+    entity_type: str | None = None
     mention_count: int = Field(default=1, ge=1)
     story_count: int = Field(default=1, ge=1)
     country_scope: str | None = None
@@ -2038,6 +2039,16 @@ class NewsAnalyzeDiagnostic(BaseModel):
     terminal_ref: str | None = None
     source_lane: str | None = None
     event_type: str | None = None
+    entity_text: str | None = None
+    normalized_ref: str | None = None
+    entity_type: str | None = None
+    jurisdiction: str | None = None
+    missing_relation: str | None = None
+    missing_node: str | None = None
+    nearest_known_node: str | None = None
+    source_lane_suggestion: str | None = None
+    review_priority: Literal["low", "medium", "high"] | None = None
+    replay_key: str | None = None
 
 
 class NewsAnalyzeSourceLaneCoverage(BaseModel):

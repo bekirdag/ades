@@ -3685,6 +3685,21 @@ def test_news_analyze_returns_stable_no_terminal_reason_codes(
         "no_terminal:macro_gated",
         "no_terminal:stale_artifact",
     } <= diagnostic_codes
+    unresolved_diagnostic = next(
+        diagnostic
+        for diagnostic in payload["diagnostics"]
+        if diagnostic["code"] == "country_scope_without_terminal_candidate"
+    )
+    assert unresolved_diagnostic["entity_text"] == "United Kingdom"
+    assert unresolved_diagnostic["normalized_ref"] == "country:uk"
+    assert unresolved_diagnostic["entity_type"] == "country"
+    assert unresolved_diagnostic["jurisdiction"] == "uk"
+    assert unresolved_diagnostic["missing_relation"] == "country_to_terminal_candidate"
+    assert unresolved_diagnostic["missing_node"] == "terminal_candidate"
+    assert unresolved_diagnostic["nearest_known_node"] == "country:uk"
+    assert unresolved_diagnostic["source_lane_suggestion"] == "finance-uk-en"
+    assert unresolved_diagnostic["review_priority"] == "high"
+    assert unresolved_diagnostic["replay_key"].startswith("unresolved-entity:")
 
 
 def test_news_analyze_uses_sector_graph_seeds_for_installed_country_pack(

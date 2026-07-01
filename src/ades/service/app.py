@@ -892,6 +892,88 @@ def _build_no_terminal_reasons(
     return [reason for reason in _NO_TERMINAL_REASON_ORDER if reason in reasons]
 
 
+def _known_unresolved_entity_ref(entity: NewsAnalyzeUnresolvedEntity) -> str | None:
+    entity_ref = entity.entity_ref.strip()
+    if not entity_ref or entity_ref.startswith("ades:news:unresolved:"):
+        return None
+    return entity_ref
+
+
+def _unresolved_missing_detail(
+    missing_reason: str,
+) -> tuple[str | None, str | None]:
+    if missing_reason == "impact_expansion_unavailable":
+        return "impact_expansion", "impact_graph"
+    if missing_reason == "country_scope_without_terminal_candidate":
+        return "country_to_terminal_candidate", "terminal_candidate"
+    if missing_reason == "passive_relationship_without_terminal_candidate":
+        return "source_backed_terminal_bridge", "terminal_candidate"
+    if missing_reason == "no_source_backed_market_relationship":
+        return "source_backed_market_relationship", "market_relationship"
+    if missing_reason == "no_market_event_signal":
+        return "market_event_signal", "event_signal"
+    return missing_reason, None
+
+
+def _unresolved_source_lane_suggestion(entity: NewsAnalyzeUnresolvedEntity) -> str:
+    country_code = (entity.country_scope or "").strip().casefold()
+    if (
+        entity.missing_reason
+        in {
+            "country_scope_without_terminal_candidate",
+            "no_source_backed_market_relationship",
+            "passive_relationship_without_terminal_candidate",
+        }
+        and country_code
+    ):
+        return f"finance-{country_code}-en"
+    if entity.missing_reason == "impact_expansion_unavailable":
+        return "impact_graph"
+    if entity.missing_reason == "no_market_event_signal":
+        return "news_event_signal_extraction"
+    entity_type = (entity.entity_type or "").strip().casefold()
+    if entity_type in {"country", "sector", "industry"} and country_code:
+        return f"finance-{country_code}-en"
+    if entity_type in {"organization", "company", "product", "brand", "program"}:
+        return "issuer_relationship_source_lane"
+    return "source_backed_market_relationship_lane"
+
+
+def _unresolved_review_priority(entity: NewsAnalyzeUnresolvedEntity) -> str:
+    if entity.candidate_proposals > 0 or entity.missing_reason in {
+        "country_scope_without_terminal_candidate",
+        "no_source_backed_market_relationship",
+        "passive_relationship_without_terminal_candidate",
+    }:
+        return "high"
+    if entity.event_types or entity.mention_count > 1:
+        return "medium"
+    return "low"
+
+
+def _unresolved_replay_key(entity: NewsAnalyzeUnresolvedEntity) -> str:
+    normalized_ref = _known_unresolved_entity_ref(entity) or entity.entity_ref
+    key_parts = [
+        normalized_ref.casefold(),
+        entity.missing_reason,
+        (entity.country_scope or "").casefold(),
+        ",".join(entity.event_types),
+    ]
+    digest = hashlib.sha256("|".join(key_parts).encode("utf-8")).hexdigest()[:16]
+    return f"unresolved-entity:{digest}"
+
+
+def _unresolved_nearest_known_node(entity: NewsAnalyzeUnresolvedEntity) -> str | None:
+    normalized_ref = _known_unresolved_entity_ref(entity)
+    if normalized_ref is not None:
+        return normalized_ref
+    if entity.country_scope:
+        return f"country:{entity.country_scope}"
+    if entity.topic_scope:
+        return f"topic:{entity.topic_scope}"
+    return None
+
+
 def _build_diagnostics(
     *,
     warnings: list[str],
@@ -918,6 +1000,8 @@ def _build_diagnostics(
             )
         )
     for entity in unresolved_entities:
+        missing_relation, missing_node = _unresolved_missing_detail(entity.missing_reason)
+        normalized_ref = _known_unresolved_entity_ref(entity)
         diagnostics.append(
             NewsAnalyzeDiagnostic(
                 code=entity.missing_reason,
@@ -925,6 +1009,16 @@ def _build_diagnostics(
                 message=entity.missing_reason,
                 entity_ref=entity.entity_ref,
                 event_type=entity.event_types[0] if entity.event_types else None,
+                entity_text=entity.name,
+                normalized_ref=normalized_ref,
+                entity_type=entity.entity_type,
+                jurisdiction=entity.country_scope,
+                missing_relation=missing_relation,
+                missing_node=missing_node,
+                nearest_known_node=_unresolved_nearest_known_node(entity),
+                source_lane_suggestion=_unresolved_source_lane_suggestion(entity),
+                review_priority=_unresolved_review_priority(entity),
+                replay_key=_unresolved_replay_key(entity),
             )
         )
     for candidate in rejected_candidates:
@@ -2184,6 +2278,7 @@ def _build_unresolved_entities(
             NewsAnalyzeUnresolvedEntity(
                 entity_ref=passive.entity_ref,
                 name=passive.name,
+                entity_type=passive.entity_type or passive.label,
                 mention_count=passive.mention_count,
                 story_count=1,
                 country_scope=country_scope.country_code if country_scope else None,
