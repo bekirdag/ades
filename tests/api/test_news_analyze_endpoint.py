@@ -2007,6 +2007,327 @@ def test_news_analyze_maps_program_mentions_to_operator_holding_security_paths(
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 
+def test_news_analyze_returns_commodity_supply_chain_terminal_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(
+        tmp_path,
+        "news-commodity-supply-terminal-en",
+        domain="finance",
+    )
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+    article_text = (
+        "A lithium supply disruption hit the battery supply chain and automakers "
+        "warned production could be cut."
+    )
+
+    def _entity(
+        surface: str,
+        label: str,
+        entity_ref: str,
+        canonical_text: str,
+    ) -> EntityMatch:
+        start = article_text.index(surface)
+        return EntityMatch(
+            text=surface,
+            label=label,
+            start=start,
+            end=start + len(surface),
+            confidence=0.94,
+            relevance=0.95,
+            provenance=EntityProvenance(
+                match_kind="alias",
+                match_path="aliases.json",
+                match_source="pack",
+                source_pack=pack_id,
+                source_domain="finance",
+            ),
+            link=EntityLink(
+                entity_id=entity_ref,
+                canonical_text=canonical_text,
+                provider="ades",
+            ),
+        )
+
+    def _edge(
+        source_ref: str,
+        target_ref: str,
+        relation: str,
+        *,
+        confidence: float,
+        source_tier: str,
+        source_name: str,
+        source_url: str,
+    ) -> ImpactPathEdge:
+        return ImpactPathEdge(
+            source_ref=source_ref,
+            target_ref=target_ref,
+            relation=relation,
+            evidence_level="direct",
+            confidence=confidence,
+            direction_hint="source_backed_commodity_supply_chain_path",
+            source_name=source_name,
+            source_url=source_url,
+            source_snapshot="2026-06-30",
+            source_year=2026,
+            source_tier=source_tier,
+            effective_from="2025-01-01",
+            compatible_event_types=["supply_disruption"],
+            direction_preconditions=["source_backed_relationship_evidence"],
+        )
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                _entity(
+                    "lithium",
+                    "commodity",
+                    "ades:impact:commodity:lithium",
+                    "Lithium",
+                ),
+                _entity(
+                    "battery supply chain",
+                    "supply_chain",
+                    "ades:impact:supply-chain:battery-materials",
+                    "Battery materials supply chain",
+                ),
+            ],
+            topics=[TopicMatch(label="finance", score=0.92, evidence_count=2)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert {
+            "ades:impact:commodity:lithium",
+            "ades:impact:supply-chain:battery-materials",
+        }.issubset(set(entity_refs))
+        supply_to_lithium = _edge(
+            "ades:impact:supply-chain:battery-materials",
+            "ades:impact:commodity:lithium",
+            "commodity_flow_affects_commodity",
+            confidence=0.95,
+            source_tier="industry_association",
+            source_name="International Lithium Association supply-chain review",
+            source_url="https://example.test/lithium-supply-review",
+        )
+        lithium_to_sector = _edge(
+            "ades:impact:commodity:lithium",
+            "ades:impact:sector:ev-batteries",
+            "battery_metal_affects_sector",
+            confidence=0.93,
+            source_tier="industry_association",
+            source_name="Battery Materials Industry Association",
+            source_url="https://example.test/battery-materials-sector",
+        )
+        sector_to_issuer = _edge(
+            "ades:impact:sector:ev-batteries",
+            "finance-us-issuer:ev-battery-technologies",
+            "sector_affects_issuer",
+            confidence=0.9,
+            source_tier="issuer_disclosed",
+            source_name="EV Battery Technologies annual report",
+            source_url="https://example.test/evbt-annual-report",
+        )
+        issuer_to_ticker = _edge(
+            "finance-us-issuer:ev-battery-technologies",
+            "finance-us-ticker:NASDAQ:EVBT",
+            "issuer_has_listed_ticker",
+            confidence=0.97,
+            source_tier="exchange",
+            source_name="NASDAQ issuer directory",
+            source_url="https://example.test/nasdaq-evbt",
+        )
+        commodity_path = ImpactRelationshipPath(
+            path_depth=1,
+            edges=[supply_to_lithium],
+        )
+        sector_path = ImpactRelationshipPath(
+            path_depth=2,
+            edges=[supply_to_lithium, lithium_to_sector],
+        )
+        issuer_path = ImpactRelationshipPath(
+            path_depth=4,
+            edges=[
+                supply_to_lithium,
+                lithium_to_sector,
+                sector_to_issuer,
+                issuer_to_ticker,
+            ],
+        )
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-06-30",
+            artifact_hash="sha256:commodity-supply-terminals",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="ades:impact:commodity:lithium",
+                    name="Lithium",
+                    entity_type="commodity",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=False,
+                ),
+                ImpactSourceEntity(
+                    entity_ref="ades:impact:supply-chain:battery-materials",
+                    name="Battery materials supply chain",
+                    entity_type="supply_chain",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=False,
+                ),
+            ],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref="ades:impact:commodity:lithium",
+                    name="Lithium",
+                    entity_type="commodity",
+                    evidence_level="shallow",
+                    confidence=0.94,
+                    source_entity_refs=["ades:impact:supply-chain:battery-materials"],
+                    relationship_paths=[commodity_path],
+                ),
+                ImpactCandidate(
+                    entity_ref="ades:impact:sector:ev-batteries",
+                    name="EV battery sector",
+                    entity_type="sector",
+                    evidence_level="shallow",
+                    confidence=0.91,
+                    source_entity_refs=[
+                        "ades:impact:commodity:lithium",
+                        "ades:impact:supply-chain:battery-materials",
+                    ],
+                    relationship_paths=[sector_path],
+                ),
+                ImpactCandidate(
+                    entity_ref="finance-us-ticker:NASDAQ:EVBT",
+                    name="EV Battery Technologies",
+                    entity_type="ticker",
+                    evidence_level="direct",
+                    confidence=0.89,
+                    source_entity_refs=[
+                        "ades:impact:commodity:lithium",
+                        "ades:impact:supply-chain:battery-materials",
+                    ],
+                    relationship_paths=[issuer_path],
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Lithium supply disruption hits battery supply chain",
+            "text": article_text,
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "supply_disruption" in {
+        signal["event_type"] for signal in payload["event_signals"]
+    }
+    candidates_by_ref = {
+        candidate["entity_ref"]: candidate
+        for candidate in payload["terminal_impact_candidates"]
+    }
+    assert set(candidates_by_ref) == {
+        "ades:impact:commodity:lithium",
+        "ades:impact:sector:ev-batteries",
+        "finance-us-ticker:NASDAQ:EVBT",
+    }
+    for candidate in candidates_by_ref.values():
+        assert candidate["compatible_event_types"] == ["supply_disruption"]
+
+    paths_by_ref = {
+        candidate_path["terminal_ref"]: candidate_path
+        for candidate_path in payload["candidate_paths"]
+    }
+    commodity_path = paths_by_ref["ades:impact:commodity:lithium"]
+    assert commodity_path["terminal_type"] == "commodity"
+    assert set(commodity_path["source_entity_refs"]) == {
+        "ades:impact:commodity:lithium",
+        "ades:impact:supply-chain:battery-materials",
+    }
+    assert commodity_path["source_tiers"] == ["industry_association"]
+    assert commodity_path["weakest_edge_ref"] == (
+        "ades:impact:supply-chain:battery-materials"
+        "->commodity_flow_affects_commodity->ades:impact:commodity:lithium"
+    )
+    assert commodity_path["weakest_edge"]["source_url"] == (
+        "https://example.test/lithium-supply-review"
+    )
+
+    sector_path = paths_by_ref["ades:impact:sector:ev-batteries"]
+    assert sector_path["terminal_type"] == "sector"
+    assert sector_path["source_entity_refs"] == [
+        "ades:impact:commodity:lithium",
+        "ades:impact:supply-chain:battery-materials",
+    ]
+    assert [edge["relation"] for edge in sector_path["relationship_path"]["edges"]] == [
+        "commodity_flow_affects_commodity",
+        "battery_metal_affects_sector",
+    ]
+    assert sector_path["source_tiers"] == ["industry_association"]
+
+    issuer_path = paths_by_ref["finance-us-ticker:NASDAQ:EVBT"]
+    assert issuer_path["terminal_type"] == "ticker"
+    assert issuer_path["jurisdiction"] == "us"
+    assert issuer_path["exchange"] == "NASDAQ"
+    assert issuer_path["ticker"] == "EVBT"
+    assert issuer_path["security_ids"] == {
+        "ades_ref": "finance-us-ticker:NASDAQ:EVBT",
+        "exchange_ticker": "NASDAQ:EVBT",
+        "ticker": "EVBT",
+    }
+    assert issuer_path["source_tiers"] == [
+        "industry_association",
+        "issuer_disclosed",
+        "exchange",
+    ]
+    assert issuer_path["weakest_edge_ref"] == (
+        "ades:impact:sector:ev-batteries"
+        "->sector_affects_issuer->finance-us-issuer:ev-battery-technologies"
+    )
+    assert issuer_path["weakest_edge_confidence"] == 0.9
+    assert [edge["relation"] for edge in issuer_path["relationship_path"]["edges"]] == [
+        "commodity_flow_affects_commodity",
+        "battery_metal_affects_sector",
+        "sector_affects_issuer",
+        "issuer_has_listed_ticker",
+    ]
+    for edge in issuer_path["relationship_path"]["edges"]:
+        assert edge["evidence_level"] == "direct"
+        assert edge["compatible_event_types"] == ["supply_disruption"]
+        assert edge["direction_preconditions"] == ["source_backed_relationship_evidence"]
+    assert issuer_path["artifact_ref"] == "sha256:commodity-supply-terminals"
+    assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
 def test_news_analyze_promotes_only_ades_confirmed_direct_tradable_mentions(
     tmp_path: Path,
     monkeypatch,
