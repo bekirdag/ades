@@ -681,6 +681,30 @@
       ]
     },
     {
+      "name": "japan_paypay_softbank_telecom_product_ownership_bridge",
+      "entity_refs": [
+        "ades:product:jp:paypay"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-jp-en"
+      ],
+      "expected_candidate_refs": [
+        "ades:security:jp:tse:jp3436100006-ordinary",
+        "finance-jp-ticker:9984"
+      ],
+      "expected_passive_refs": [
+        "ades:sector:jp:telecommunications",
+        "finance-jp-issuer:9984"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker",
+        "issuer_has_security",
+        "issuer_in_sector",
+        "product_owned_by_org"
+      ]
+    },
+    {
       "name": "toyota_jpx_issuer_ticker_security_bridge",
       "entity_refs": [
         "finance-jp-issuer:7203",

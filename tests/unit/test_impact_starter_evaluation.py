@@ -97,10 +97,11 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert "south_korea_sk_hynix_krx_bok_bridge" in case_names
     assert "argentina_banco_patagonia_product_ticker_bridge" in case_names
     assert "tesla_supercharger_product_org_bridge" in case_names
+    assert "japan_paypay_softbank_telecom_product_ownership_bridge" in case_names
     assert "turkiye_turk_telekom_bist_security_bridge" in case_names
     assert report.warnings == []
-    assert report.case_count == 37
-    assert report.empty_path_rate == 0.027
+    assert report.case_count == 38
+    assert report.empty_path_rate == 0.0263
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -115,6 +116,7 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert report.per_relation_family_recall["industrial_metal_affects_sector"] == 1.0
     assert report.per_relation_family_recall["issuer_has_listed_ticker"] == 1.0
     assert report.per_relation_family_recall["person_affects_employer_ticker"] == 1.0
+    assert report.per_relation_family_recall["product_owned_by_org"] == 1.0
     assert report.per_relation_family_recall["regulator_affects_sector"] == 1.0
     assert report.per_relation_family_recall["state_body_holds_ownership_stake"] == 1.0
     assert report.per_relation_family_recall["central_bank_sets_policy_rate"] == 1.0
