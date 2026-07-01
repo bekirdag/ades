@@ -240,6 +240,12 @@ Deployments are pipeline-owned.
   - verify local API health plus the live vector alias/tag smoke
   - verify public health endpoints
 
+The exact future approved deploy command, production artifact paths, and blocked
+approval gate for BDYA news story creation releases are documented in
+`docs/news_story_creation_ades_approved_deploy_runbook_2026-07-01.md`.
+Execution remains blocked until an explicit release/deploy approval names the
+target git SHA and artifact identity.
+
 The production API service is expected to be always running under the deploy-owned
 `systemd --user` unit `ades.service`, with the public API exposed on
 `https://api.adestool.com`. `https://adestool.com` may continue to proxy the same
