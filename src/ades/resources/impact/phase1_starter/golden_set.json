@@ -344,6 +344,32 @@
       ]
     },
     {
+      "name": "india_cci_antitrust_bharti_airtel_security",
+      "entity_refs": [
+        "ades:org:in:cci",
+        "finance-in-issuer:BHARTIARTL"
+      ],
+      "enabled_packs": [
+        "general-en",
+        "finance-in-en"
+      ],
+      "expected_candidate_refs": [
+        "finance-in-ticker:BHARTIARTL"
+      ],
+      "expected_passive_refs": [
+        "ades:sector:in:competition-policy",
+        "ades:sector:in:digital-platforms",
+        "ades:sector:in:telecom",
+        "finance-in:nse"
+      ],
+      "expected_relation_families": [
+        "issuer_has_listed_ticker",
+        "issuer_in_sector",
+        "regulator_affects_sector",
+        "ticker_listed_on_exchange"
+      ]
+    },
+    {
       "name": "saudi_sama_sar_repo_rate_bridge",
       "entity_refs": [
         "ades:org:sa:sama"

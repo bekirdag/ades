@@ -88,6 +88,7 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
 
     case_names = {str(case["name"]) for case in golden_payload["cases"]}
     assert "italy_banca_mediolanum_borsa_bridge" in case_names
+    assert "india_cci_antitrust_bharti_airtel_security" in case_names
     assert "india_oil_import_policy_reliance_commodity" in case_names
     assert "mexico_gfnorte_bmv_banxico_bridge" in case_names
     assert "russia_sber_moex_cbr_bridge" in case_names
@@ -97,8 +98,8 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert "tesla_supercharger_product_org_bridge" in case_names
     assert "turkiye_turk_telekom_bist_security_bridge" in case_names
     assert report.warnings == []
-    assert report.case_count == 35
-    assert report.empty_path_rate == 0.0286
+    assert report.case_count == 36
+    assert report.empty_path_rate == 0.0278
     assert report.unrelated_asset_rate == 0.0
     assert report.passed
     assert report.per_relation_family_recall["chokepoint_affects_commodity"] == 1.0
@@ -113,6 +114,7 @@ def test_starter_golden_set_evaluates_without_warnings(tmp_path):
     assert report.per_relation_family_recall["industrial_metal_affects_sector"] == 1.0
     assert report.per_relation_family_recall["issuer_has_listed_ticker"] == 1.0
     assert report.per_relation_family_recall["person_affects_employer_ticker"] == 1.0
+    assert report.per_relation_family_recall["regulator_affects_sector"] == 1.0
     assert report.per_relation_family_recall["state_body_holds_ownership_stake"] == 1.0
     assert report.per_relation_family_recall["central_bank_sets_policy_rate"] == 1.0
 
@@ -921,6 +923,7 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
                     'finance-in:bse',
                     'finance-in:nse',
                     'finance-in:sebi',
+                    'ades:org:in:cci',
                     'ades:org:in:rbi',
                     'ades:org:in:commerce'
                 )
@@ -947,6 +950,7 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
     }
     assert india_source_nodes == {
         "ades:org:in:commerce": ("government_body", 0, 1),
+        "ades:org:in:cci": ("regulator", 0, 1),
         "ades:org:in:rbi": ("government_body", 0, 1),
         "finance-in:bse": ("exchange", 0, 1),
         "finance-in:nse": ("exchange", 0, 1),
@@ -1051,6 +1055,56 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
         "ades:sector:in:public-sector-borrowers",
         "ades:sector:in:securities-markets",
     }.isdisjoint(oil_policy_passive_refs)
+
+    antitrust_expansion = expand_impact_paths(
+        [
+            "ades:org:in:cci",
+            "finance-in-issuer:BHARTIARTL",
+        ],
+        artifact_path=response.artifact_path,
+        settings=Settings(impact_expansion_enabled=True),
+        max_depth=4,
+        max_candidates=80,
+        include_passive_paths=True,
+    )
+    antitrust_candidate_refs = {
+        candidate.entity_ref for candidate in antitrust_expansion.candidates
+    }
+    antitrust_passive_refs = {
+        path.entity_ref for path in antitrust_expansion.passive_paths
+    }
+    antitrust_relation_families = {
+        edge.relation
+        for item in [
+            *antitrust_expansion.candidates,
+            *antitrust_expansion.passive_paths,
+        ]
+        for relationship_path in item.relationship_paths
+        for edge in relationship_path.edges
+    }
+    assert antitrust_candidate_refs == {"finance-in-ticker:BHARTIARTL"}
+    assert antitrust_passive_refs == {
+        "ades:sector:in:competition-policy",
+        "ades:sector:in:digital-platforms",
+        "ades:sector:in:telecom",
+        "finance-in:nse",
+    }
+    assert {
+        "issuer_has_listed_ticker",
+        "issuer_in_sector",
+        "regulator_affects_sector",
+        "ticker_listed_on_exchange",
+    }.issubset(antitrust_relation_families)
+    assert {
+        "ades:impact:currency:inr",
+        "ades:impact:rate:in-crr",
+        "ades:impact:rate:in-gsec-10y",
+        "ades:impact:rate:in-repo-rate",
+        "ades:impact:rate:in-slr",
+        "finance-in:nifty-50",
+        "finance-in-ticker:HUDCO",
+        "finance-in-ticker:RELIANCE",
+    }.isdisjoint(antitrust_candidate_refs)
 
 
 def test_starter_graph_includes_promoted_japan_relationships(tmp_path: Path) -> None:
