@@ -266,6 +266,62 @@ def test_market_graph_builder_records_release_gate_failure(tmp_path: Path) -> No
     assert '"release_gate_passed": false' in manifest
 
 
+def test_market_graph_builder_hash_is_stable_across_artifact_versions(
+    tmp_path: Path,
+) -> None:
+    node_path, edge_path = _write_market_graph_tsvs(tmp_path)
+    first = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact-one",
+        artifact_version="2026-05-05T00:00:00Z",
+    )
+    second = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact-two",
+        artifact_version="2026-05-06T00:00:00Z",
+    )
+
+    assert first.artifact_version != second.artifact_version
+    assert first.source_manifest_hash == second.source_manifest_hash
+    assert first.artifact_hash == second.artifact_hash
+    assert first.artifact_id == second.artifact_id
+    assert first.artifact_hash.startswith("sha256:")
+
+
+def test_market_graph_builder_hash_includes_explicit_source_versions(
+    tmp_path: Path,
+) -> None:
+    node_path, edge_path = _write_market_graph_tsvs(tmp_path)
+    edge_text = edge_path.read_text(encoding="utf-8")
+    edge_path.write_text(
+        edge_text.replace("\tpack_ids", "\tversion\tpack_ids", 1).replace(
+            "\tannual\t", "\tannual\tlane-v1\t"
+        ),
+        encoding="utf-8",
+    )
+    first = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact-one",
+        artifact_version="2026-05-05T00:00:00Z",
+    )
+    edge_path.write_text(
+        edge_path.read_text(encoding="utf-8").replace("lane-v1", "lane-v2"),
+        encoding="utf-8",
+    )
+    second = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "artifact-two",
+        artifact_version="2026-05-05T00:00:00Z",
+    )
+
+    assert first.source_manifest_hash != second.source_manifest_hash
+    assert first.artifact_hash != second.artifact_hash
+
+
 def test_market_graph_builder_requires_plan_edge_columns(tmp_path: Path) -> None:
     node_path, edge_path = _write_market_graph_tsvs(tmp_path)
     edge_path.write_text(

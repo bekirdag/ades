@@ -149,6 +149,7 @@ class _EdgeRecord:
     notes: str
     compatible_event_types: tuple[str, ...] = ()
     direction_preconditions: tuple[str, ...] = ()
+    version_from_source: bool = False
 
     @property
     def dedupe_key(self) -> tuple[str, str, str, str]:
@@ -465,7 +466,8 @@ def _parse_edge_rows(
                 raise ValueError(f"Invalid evidence_level at {path}:{index}: {evidence_level!r}")
             confidence = _parse_float(row.get("confidence"), name="confidence")
             source_year = _parse_int_or_none(row.get("source_year"), name="source_year")
-            edge_version = _normalize_text(row.get("version")) or artifact_version
+            source_version = _normalize_text(row.get("version"))
+            edge_version = source_version or artifact_version
             row_compatible_event_types = _parse_string_list(row.get("compatible_event_types"))
             row_direction_preconditions = _parse_string_list(row.get("direction_preconditions"))
             source_warning_codes = validate_source_attribution(
@@ -518,6 +520,7 @@ def _parse_edge_rows(
                     relation,
                     row_direction_preconditions,
                 ),
+                version_from_source=bool(source_version),
             )
             existing = edges.get(record.dedupe_key)
             if existing is None:
@@ -549,6 +552,7 @@ def _parse_edge_rows(
                 notes=winner.notes,
                 compatible_event_types=merged_compatible_event_types,
                 direction_preconditions=merged_direction_preconditions,
+                version_from_source=winner.version_from_source,
             )
             warnings.append(f"duplicate_edge_merged:{source_ref}:{relation}:{target_ref}")
     return edges, warnings, processed_row_count
@@ -654,17 +658,20 @@ def _source_manifest_hash(
     nodes: dict[str, _NodeRecord],
     edges: dict[tuple[str, str, str, str], _EdgeRecord],
     graph_version: str,
-    artifact_version: str,
 ) -> str:
+    edge_payloads: list[dict[str, object]] = []
+    for record in sorted(edges.values(), key=lambda item: item.edge_id):
+        payload = dict(record.__dict__)
+        version_from_source = bool(payload.pop("version_from_source", False))
+        if not version_from_source:
+            payload.pop("version", None)
+        edge_payloads.append(payload)
     payload = {
         "graph_version": graph_version,
-        "artifact_version": artifact_version,
         "nodes": [
             record.__dict__ for record in sorted(nodes.values(), key=lambda item: item.entity_ref)
         ],
-        "edges": [
-            record.__dict__ for record in sorted(edges.values(), key=lambda item: item.edge_id)
-        ],
+        "edges": edge_payloads,
     }
     return _sha256_text(json.dumps(payload, sort_keys=True, default=list, separators=(",", ":")))
 
@@ -731,7 +738,6 @@ def build_market_graph_store(
         nodes=nodes,
         edges=edges,
         graph_version=resolved_graph_version,
-        artifact_version=resolved_artifact_version,
     )
 
     artifact_path = resolved_output_dir / MARKET_GRAPH_STORE_FILENAME

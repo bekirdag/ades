@@ -403,6 +403,9 @@ def test_news_analyze_path_family_smoke_harness(
     assert case.terminal_ref in candidates_by_ref
     assert candidates_by_ref[case.terminal_ref]["source_entity_refs"]
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+    expected_artifact_hash = f"sha256:{case.family}-path-smoke"
+    assert payload["artifact_versions"]["impact_artifact_hash"] == expected_artifact_hash
+    assert payload["artifact_metadata"]["artifact_hash"] == expected_artifact_hash
 
     if case.path_relations:
         paths_by_ref = {
@@ -413,7 +416,7 @@ def test_news_analyze_path_family_smoke_harness(
         candidate_path = paths_by_ref[case.terminal_ref]
         assert candidate_path["terminal_type"] == case.terminal_type
         assert candidate_path["event_compatibility"] == [case.expected_event_type]
-        assert candidate_path["artifact_ref"] == f"sha256:{case.family}-path-smoke"
+        assert candidate_path["artifact_ref"] == expected_artifact_hash
         assert [edge["relation"] for edge in candidate_path["relationship_path"]["edges"]] == list(
             case.path_relations
         )
