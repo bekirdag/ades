@@ -852,6 +852,20 @@ def test_source_catalog_classifies_core_source_tiers() -> None:
     )
     assert (
         classify_source_tier(
+            "Bank Indonesia BI-Rate statistics",
+            "https://www.bi.go.id/id/statistik/indikator/bi-rate.aspx",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
+            "BPS Indonesia inflation release",
+            "https://www.bps.go.id/en/pressrelease/2026/05/04/2570/inflation.html",
+        )
+        == SOURCE_TIER_GOVERNMENT
+    )
+    assert (
+        classify_source_tier(
             "BRI investor relations corporate profile",
             "https://www.ir-bri.com/corporate_profile.html",
         )

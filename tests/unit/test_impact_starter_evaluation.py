@@ -10,6 +10,7 @@ from ades.impact.evaluation import (
     evaluate_impact_golden_set,
 )
 from ades.impact.expansion import expand_impact_paths
+from ades.impact.source_catalog import classify_source_tier
 from ades.impact.starter import (
     build_starter_market_graph_store,
     starter_golden_set_path,
@@ -1108,6 +1109,196 @@ def test_starter_graph_includes_promoted_india_relationships(tmp_path: Path) -> 
         "finance-in-ticker:HUDCO",
         "finance-in-ticker:RELIANCE",
     }.isdisjoint(antitrust_candidate_refs)
+
+
+def test_starter_graph_includes_promoted_indonesia_relationships(tmp_path: Path) -> None:
+    response = build_starter_market_graph_store(output_dir=tmp_path)
+    assert response.warnings == []
+
+    with sqlite3.connect(response.artifact_path) as connection:
+        indonesia_edge_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM impact_edges AS e
+                JOIN impact_edge_packs AS p ON p.edge_id = e.edge_id
+                WHERE p.pack_id = 'finance-id-en'
+                  AND (
+                    source_ref LIKE '%:id:%'
+                    OR target_ref LIKE '%:id:%'
+                    OR source_ref LIKE 'finance-id%'
+                    OR target_ref LIKE 'finance-id%'
+                  )
+                """
+            ).fetchone()[0]
+        )
+        indonesia_nodes = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT entity_ref
+                FROM impact_nodes
+                WHERE entity_ref IN (
+                  'ades:product:id:pnm-mekaar',
+                  'ades:program:id:ultra-micro-program',
+                  'finance-id-org:permodalan-nasional-madani',
+                  'ades:holding:id:ultra-micro-holding',
+                  'finance-id-issuer:bank-rakyat-indonesia',
+                  'ades:security:id:idx:bbri',
+                  'finance-id-ticker:BBRI',
+                  'ades:sector:id:financial-services',
+                  'ades:sector:id:microfinance',
+                  'ades:org:id:bank-indonesia',
+                  'ades:impact:currency:idr',
+                  'ades:impact:rate:id-bi-rate',
+                  'ades:org:id:badan-pusat-statistik',
+                  'ades:macro:id:cpi'
+                )
+                """
+            )
+        }
+        macro_preconditions = {
+            str(row[0]): set(json.loads(str(row[1])))
+            for row in connection.execute(
+                """
+                SELECT relation, direction_preconditions_json
+                FROM impact_edges
+                WHERE source_ref IN (
+                  'ades:org:id:bank-indonesia',
+                  'ades:org:id:badan-pusat-statistik'
+                )
+                """
+            )
+        }
+        source_tier_sources = {
+            (str(row[0]), str(row[1]))
+            for row in connection.execute(
+                """
+                SELECT DISTINCT source_name, source_url
+                FROM impact_edges
+                WHERE source_ref IN (
+                  'ades:product:id:pnm-mekaar',
+                  'ades:program:id:ultra-micro-program',
+                  'finance-id-org:permodalan-nasional-madani',
+                  'ades:holding:id:ultra-micro-holding',
+                  'finance-id-issuer:bank-rakyat-indonesia',
+                  'ades:sector:id:financial-services',
+                  'ades:sector:id:microfinance',
+                  'ades:org:id:bank-indonesia',
+                  'ades:org:id:badan-pusat-statistik'
+                )
+                """
+            )
+        }
+
+    assert indonesia_edge_count == 13
+    assert indonesia_nodes == {
+        "ades:product:id:pnm-mekaar",
+        "ades:program:id:ultra-micro-program",
+        "finance-id-org:permodalan-nasional-madani",
+        "ades:holding:id:ultra-micro-holding",
+        "finance-id-issuer:bank-rakyat-indonesia",
+        "ades:security:id:idx:bbri",
+        "finance-id-ticker:BBRI",
+        "ades:sector:id:financial-services",
+        "ades:sector:id:microfinance",
+        "ades:org:id:bank-indonesia",
+        "ades:impact:currency:idr",
+        "ades:impact:rate:id-bi-rate",
+        "ades:org:id:badan-pusat-statistik",
+        "ades:macro:id:cpi",
+    }
+    assert {
+        "central_bank_affects_currency",
+        "central_bank_sets_policy_rate",
+        "statistics_body_reports_macro_indicator",
+    }.issubset(macro_preconditions)
+    assert "fx_fixing_or_capital_flow_signal" in macro_preconditions[
+        "central_bank_affects_currency"
+    ]
+    assert "liquidity_or_policy_rate_signal" in macro_preconditions[
+        "central_bank_sets_policy_rate"
+    ]
+    assert "macro_statistics_release_signal" in macro_preconditions[
+        "statistics_body_reports_macro_indicator"
+    ]
+    source_tiers = {classify_source_tier(name, url) for name, url in source_tier_sources}
+    assert {"exchange", "government", "issuer_disclosed"}.issubset(source_tiers)
+
+    def expanded_refs(source_ref: str) -> tuple[set[str], set[str], set[str]]:
+        expansion = expand_impact_paths(
+            [source_ref],
+            artifact_path=response.artifact_path,
+            settings=Settings(impact_expansion_enabled=True),
+            max_depth=4,
+            max_candidates=40,
+            include_passive_paths=True,
+        )
+        relations = {
+            edge.relation
+            for item in [*expansion.candidates, *expansion.passive_paths]
+            for relationship_path in item.relationship_paths
+            for edge in relationship_path.edges
+        }
+        return (
+            {candidate.entity_ref for candidate in expansion.candidates},
+            {path.entity_ref for path in expansion.passive_paths},
+            relations,
+        )
+
+    product_candidate_refs, product_passive_refs, product_relations = expanded_refs(
+        "ades:product:id:pnm-mekaar"
+    )
+    assert {"ades:security:id:idx:bbri", "finance-id-ticker:BBRI"}.issubset(
+        product_candidate_refs
+    )
+    assert {
+        "finance-id-org:permodalan-nasional-madani",
+        "ades:holding:id:ultra-micro-holding",
+        "finance-id-issuer:bank-rakyat-indonesia",
+    }.issubset(product_passive_refs)
+    assert {
+        "product_owned_by_org",
+        "org_part_of_holding",
+        "holding_parent_is_issuer",
+        "issuer_has_security",
+        "issuer_has_listed_ticker",
+    }.issubset(product_relations)
+    assert {
+        "ades:impact:currency:idr",
+        "ades:impact:rate:id-bi-rate",
+        "ades:macro:id:cpi",
+    }.isdisjoint(product_candidate_refs)
+
+    program_candidate_refs, program_passive_refs, program_relations = expanded_refs(
+        "ades:program:id:ultra-micro-program"
+    )
+    assert {"ades:security:id:idx:bbri", "finance-id-ticker:BBRI"}.issubset(
+        program_candidate_refs
+    )
+    assert {
+        "finance-id-org:permodalan-nasional-madani",
+        "ades:holding:id:ultra-micro-holding",
+        "finance-id-issuer:bank-rakyat-indonesia",
+    }.issubset(program_passive_refs)
+    assert {
+        "program_operated_by_org",
+        "org_part_of_holding",
+        "holding_parent_is_issuer",
+        "issuer_has_security",
+        "issuer_has_listed_ticker",
+    }.issubset(program_relations)
+
+    sector_candidate_refs, sector_passive_refs, sector_relations = expanded_refs(
+        "ades:sector:id:microfinance"
+    )
+    assert {"ades:security:id:idx:bbri", "finance-id-ticker:BBRI"}.issubset(
+        sector_candidate_refs
+    )
+    assert "finance-id-issuer:bank-rakyat-indonesia" in sector_passive_refs
+    assert {"sector_affects_issuer", "issuer_has_listed_ticker"}.issubset(
+        sector_relations
+    )
 
 
 def test_starter_graph_includes_promoted_japan_relationships(tmp_path: Path) -> None:

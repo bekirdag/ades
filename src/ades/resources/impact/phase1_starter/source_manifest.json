@@ -500,6 +500,16 @@
       "notes": "Promotes reviewed India program/org/policy/market identity relationships for BDYA impact extraction guardrails."
     },
     {
+      "source_name": "Indonesia reviewed PNM/BRI/IDX/BI/BPS relationship source lane",
+      "source_url": "https://www.idx.co.id/id/perusahaan-tercatat/profil-perusahaan-tercatat/BBRI",
+      "source_snapshot": "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/program_org_relationship/20260629Tprogram-org-id-reviewed-pnm-bri-idx-bi-bps/manifest.json",
+      "source_year": "2026",
+      "refresh_policy": "manual reviewed source-lane refresh after official Indonesia source collection",
+      "normalized_output_allowed": true,
+      "license_notes": "Official issuer, exchange, central bank, statistics-agency, and reviewed source-lane evidence; starter package stores only normalized relationship metadata.",
+      "notes": "Promotes reviewed Indonesia first slice covering PNM Mekaar product, Ultra Micro program and holding paths to BRI/IDX:BBRI, bounded financial-services and microfinance sector paths, and Bank Indonesia/BPS macro rows with macro/FX/rates preconditions."
+    },
+    {
       "source_name": "Saudi Arabia reviewed Tadawul/SAMA/PIF/Vision relationship source lane",
       "source_url": "https://www.saudiexchange.sa/",
       "source_snapshot": "/mnt/githubActions/ades_big_data/pack_sources/impact_relationships/program_org_relationship/20260629Tprogram-org-sa-reviewed-tadawul-sama-opec-pif/manifest.json",

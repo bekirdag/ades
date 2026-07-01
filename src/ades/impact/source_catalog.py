@@ -108,6 +108,8 @@ _OFFICIAL_HOST_FRAGMENTS = (
     "setkab.go.id",
     "kemenkeu.go.id",
     "bumn.go.id",
+    "bi.go.id",
+    "bps.go.id",
     "boletinoficial.gob.ar",
     "datos.gob.ar",
     "indec.gob.ar",

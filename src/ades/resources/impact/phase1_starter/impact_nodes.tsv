@@ -1968,3 +1968,17 @@ ades:sector:eu:carbon-intensive-imports	EU carbon-intensive imports	sector	finan
 ades:sector:eu:sustainability-reporting	EU sustainability reporting	sector	finance-eu-en	false	true	"{""jurisdiction"":""EU""}"	finance-eu-en,general-en
 ades:sector:eu:eu-equity-market	EU equity market	sector	finance-eu-en	false	true	"{""jurisdiction"":""EU""}"	finance-eu-en,general-en
 finance-eu:euro-stoxx-50	EURO STOXX 50	market_index	finance-eu-en	true	false	"{""jurisdiction"":""EU"",""ticker_symbol"":""SX5E""}"	finance-eu-en,general-en
+ades:impact:currency:idr	Indonesian rupiah	currency	finance-id-en	true	false	"{""jurisdiction"": ""ID"", ""same_as_refs"": [""currency:IDR"", ""iso4217:IDR""]}"	finance-id-en,general-en
+ades:impact:rate:id-bi-rate	Bank Indonesia BI-Rate	rate	finance-id-en	true	false	"{""jurisdiction"": ""ID""}"	finance-id-en,general-en
+ades:macro:id:cpi	Indonesia CPI / inflation	macro_indicator	finance-id-en	false	true	"{""jurisdiction"": ""ID""}"	finance-id-en,general-en
+ades:holding:id:ultra-micro-holding	Ultra Micro Holding	holding_company	finance-id-en	false	true	"{""jurisdiction"": ""ID""}"	finance-id-en,general-en
+ades:org:id:badan-pusat-statistik	BPS-Statistics Indonesia	government_body	finance-id-en	false	true	"{""jurisdiction"": ""ID""}"	finance-id-en,general-en
+ades:org:id:bank-indonesia	Bank Indonesia	central_bank	finance-id-en	false	true	"{""jurisdiction"": ""ID""}"	finance-id-en,general-en
+ades:product:id:pnm-mekaar	PNM Mekaar	product	finance-id-en	false	true	"{""jurisdiction"": ""ID""}"	finance-id-en,general-en
+ades:program:id:ultra-micro-program	Ultra Micro Program	program	finance-id-en	false	true	"{""jurisdiction"": ""ID""}"	finance-id-en,general-en
+ades:sector:id:financial-services	Indonesia financial services sector	sector	finance-id-en	false	true	"{""jurisdiction"": ""ID""}"	finance-id-en,general-en
+ades:sector:id:microfinance	Indonesia microfinance and ultra-micro lending sector	sector	finance-id-en	false	true	"{""jurisdiction"": ""ID""}"	finance-id-en,general-en
+ades:security:id:idx:bbri	Bank Rakyat Indonesia ordinary share	security	finance-id-en	true	false	"{""exchange"": ""IDX"", ""jurisdiction"": ""ID"", ""mic"": ""XIDX"", ""ticker_symbol"": ""BBRI""}"	finance-id-en
+finance-id-issuer:bank-rakyat-indonesia	PT Bank Rakyat Indonesia (Persero) Tbk	issuer	finance-id-en	false	true	"{""jurisdiction"": ""ID""}"	finance-id-en,general-en
+finance-id-org:permodalan-nasional-madani	PT Permodalan Nasional Madani	organization	finance-id-en	false	true	"{""jurisdiction"": ""ID""}"	finance-id-en,general-en
+finance-id-ticker:BBRI	BBRI	ticker	finance-id-en	true	false	"{""exchange"": ""IDX"", ""jurisdiction"": ""ID"", ""mic"": ""XIDX"", ""ticker_symbol"": ""BBRI""}"	finance-id-en
