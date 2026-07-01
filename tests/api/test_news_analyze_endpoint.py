@@ -433,6 +433,85 @@ def _build_us_policy_terminal_graph(tmp_path: Path) -> tuple[str, str]:
     return graph.artifact_path, graph.artifact_hash
 
 
+def _build_direct_issuer_security_graph(tmp_path: Path) -> tuple[str, str]:
+    node_path = tmp_path / "direct_issuer_security_nodes.tsv"
+    edge_path = tmp_path / "direct_issuer_security_edges.tsv"
+    node_path.write_text(
+        "\t".join(
+            [
+                "entity_ref",
+                "canonical_name",
+                "entity_type",
+                "library_id",
+                "is_tradable",
+                "is_seed_eligible",
+                "identifiers_json",
+                "packs",
+            ]
+        )
+        + "\n"
+        + "\n".join(
+            [
+                (
+                    "finance-us-issuer:000EXM\tExample Manufacturing Inc\tissuer\t"
+                    'finance-us-en\t0\t1\t{"jurisdiction":"us","cik":"000EXM"}\t'
+                    "finance-us-en"
+                ),
+                (
+                    "ades:security:us:nasdaq:exm-common-stock\t"
+                    "Example Manufacturing Inc common stock\tsecurity\t"
+                    "finance-us-en\t1\t0\t"
+                    '{"jurisdiction":"us","exchange":"nasdaq","ticker_symbol":"EXM",'
+                    '"local_security_id":"exm-common-stock","cik":"000EXM"}\t'
+                    "finance-us-en"
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    edge_path.write_text(
+        "\t".join(
+            [
+                "source_ref",
+                "target_ref",
+                "relation",
+                "evidence_level",
+                "confidence",
+                "direction_hint",
+                "source_name",
+                "source_url",
+                "source_snapshot",
+                "source_year",
+                "refresh_policy",
+                "pack_ids",
+                "notes",
+                "compatible_event_types",
+                "direction_preconditions",
+            ]
+        )
+        + "\n"
+        + (
+            "finance-us-issuer:000EXM\tades:security:us:nasdaq:exm-common-stock\t"
+            "issuer_has_security\tdirect\t0.97\tlisted_equity\t"
+            "Nasdaq listed company directory\t"
+            "https://www.nasdaq.com/market-activity/stocks/exm\t"
+            "2026-06-30\t2026\tannual\tfinance-us-en\t"
+            "reviewed direct issuer security golden fixture\t"
+            "earnings_beat;earnings_miss;guidance_raise;guidance_cut\t"
+            "direct_issuer_or_security_mention\n"
+        ),
+        encoding="utf-8",
+    )
+    graph = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "direct-issuer-security-graph-artifact",
+        artifact_version="2026-07-01Tdirect-issuer-security-golden",
+    )
+    return graph.artifact_path, graph.artifact_hash
+
+
 def test_news_candidate_path_terminal_identity_supports_legacy_finance_refs() -> None:
     jurisdiction, exchange, ticker, security_ids = _terminal_identity_parts("finance-us:equity:EXM")
 
@@ -1733,6 +1812,145 @@ def test_news_analyze_maps_legal_entity_to_terminal_ticker_path(
     assert path["weakest_edge"]["source_url"] == "https://exchange.example/listings/exm"
     assert path["relationship_path"]["edges"][0]["relation"] == "issuer_has_listed_ticker"
     assert path["artifact_ref"] == "sha256:legal-entity-terminal"
+    assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
+def test_news_analyze_direct_issuer_story_reaches_listed_security(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    for pack_id, domain in (
+        ("general-en", "general"),
+        ("finance-en", "finance"),
+        ("finance-us-en", "finance"),
+    ):
+        _install_named_pack(tmp_path, pack_id, domain=domain)
+    graph_artifact_path, graph_artifact_hash = _build_direct_issuer_security_graph(tmp_path)
+
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ARTIFACT_PATH", graph_artifact_path)
+    client = TestClient(create_app(storage_root=tmp_path))
+    issuer_text = "Example Manufacturing"
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        entities = []
+        if pack == "finance-us-en":
+            start = text.index(issuer_text)
+            entities.append(
+                EntityMatch(
+                    text=issuer_text,
+                    label="issuer",
+                    start=start,
+                    end=start + len(issuer_text),
+                    confidence=0.95,
+                    relevance=0.96,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack,
+                        source_domain="finance",
+                    ),
+                    link=EntityLink(
+                        entity_id="finance-us-issuer:000EXM",
+                        canonical_text="Example Manufacturing Inc",
+                        provider="ades",
+                    ),
+                )
+            )
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=entities,
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Example Manufacturing beats earnings estimates",
+            "text": (
+                "Example Manufacturing beat earnings estimates and said demand "
+                "for its listed shares remained strong."
+            ),
+            "source": {"source_country": "US"},
+            "options": {
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "impact_max_depth": 2,
+                "max_country_finance_packs": 1,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["event_signal"]["event_type"] == "earnings_beat"
+    assert any(
+        source["entity_ref"] == "finance-us-issuer:000EXM"
+        and source["is_graph_seed"] is True
+        for source in payload["source_entities"]
+    )
+
+    terminal_candidates_by_ref = {
+        candidate["entity_ref"]: candidate
+        for candidate in payload["terminal_impact_candidates"]
+    }
+    security_ref = "ades:security:us:nasdaq:exm-common-stock"
+    assert security_ref in terminal_candidates_by_ref
+    security_candidate = terminal_candidates_by_ref[security_ref]
+    assert security_candidate["entity_type"] == "security"
+    assert security_candidate["compatible_event_types"] == ["earnings_beat"]
+    assert security_candidate["source_entity_refs"] == ["finance-us-issuer:000EXM"]
+    security_candidate_path = security_candidate["relationship_paths"][0]
+    assert [edge["relation"] for edge in security_candidate_path["edges"]] == [
+        "issuer_has_security"
+    ]
+    assert security_candidate_path["edges"][0]["source_tier"] == "exchange"
+    assert security_candidate_path["edges"][0]["source_url"] == (
+        "https://www.nasdaq.com/market-activity/stocks/exm"
+    )
+
+    candidate_paths_by_ref = {
+        candidate_path["terminal_ref"]: candidate_path
+        for candidate_path in payload["candidate_paths"]
+    }
+    security_path = candidate_paths_by_ref[security_ref]
+    assert security_path["terminal_type"] == "security"
+    assert security_path["terminal_name"] == "Example Manufacturing Inc common stock"
+    assert security_path["jurisdiction"] == "us"
+    assert security_path["exchange"] == "nasdaq"
+    assert security_path["ticker"] is None
+    assert security_path["security_ids"] == {
+        "ades_ref": security_ref,
+        "local_security_id": "exm-common-stock",
+    }
+    assert security_path["source_tiers"] == ["exchange"]
+    assert security_path["event_compatibility"] == ["earnings_beat"]
+    assert security_path["artifact_ref"] == graph_artifact_hash
+    assert security_path["weakest_edge_ref"] == (
+        "finance-us-issuer:000EXM->issuer_has_security->"
+        "ades:security:us:nasdaq:exm-common-stock"
+    )
+    assert security_path["weakest_edge_confidence"] == 0.97
+    assert [edge["relation"] for edge in security_path["relationship_path"]["edges"]] == [
+        "issuer_has_security"
+    ]
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 
