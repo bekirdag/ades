@@ -114,6 +114,25 @@ Expected result: the validator exits `0`; pytest exits `0`. Any source warning
 must be copied into the release note template with owner and mitigation before a
 separate release decision.
 
+## 2.1 Monthly Stale Relationship Audit
+
+Run this local-only audit once per month for the exact source-lane TSVs used by
+the current artifact candidate. It flags ownership, issuer/security, and source
+rows needing refresh before a separate release decision.
+
+```bash
+python scripts/audit_stale_relationships.py \
+  --node-tsv-path "${ADES_NODE_TSV}" \
+  --edge-tsv-path "${ADES_EDGE_TSV}" \
+  --sample-limit 100 \
+  | tee "${ADES_ARTIFACT_DIR}/monthly-stale-relationship-audit.json"
+```
+
+Expected result: the command exits `0` and emits JSON with
+`stale_relationship_warning_counts`, `source_refresh_warning_counts`, samples,
+and `action_items`. Any non-empty warning count must be assigned to Ops/ADES for
+source refresh or relationship re-verification before promotion.
+
 ## 3. Run Golden News-Analysis Checks
 
 Run repo-embedded golden coverage first. These tests cover the evaluator, the
@@ -209,4 +228,3 @@ changed relation is observed.
 - `local-news-analyze-smoke.json` exits `0` and has `"ok": true`.
 - No production deploy, production apply, object-storage publish, remote restart,
   or production pointer rewrite command was run.
-

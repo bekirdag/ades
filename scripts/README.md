@@ -15,6 +15,11 @@ Current review helpers:
   Batch `general-en` retained aliases through either a raw local reviewer command or a local mcoda agent via `--mcoda-agent <slug>`, persist JSONL/SQLite decisions, and render a markdown exclusion report.
 - `apply_general_alias_exclusions.py`
   Export reviewed drop decisions into `general-retained-alias-exclusions.jsonl` so `generate_pack_source()` can apply the curated exclusions deterministically.
+- `audit_stale_relationships.py`
+  Emit a local JSON audit for monthly ADES source-lane review. The report reuses
+  market-graph source-lane validation, surfaces stale ownership/security/issuer
+  relationship warnings, flags source rows whose dated snapshots exceed their
+  refresh policy, and writes action items for Ops/ADES follow-up.
 - `public_ades_news_smoke.py`
   Run read-only ADES smoke checks for `/healthz`, `/v0/status`, and
   `/v0/news/analyze` against either public ADES or a local `ades serve`
