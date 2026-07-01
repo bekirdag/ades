@@ -1,4 +1,8 @@
 from ades.news_events import (
+    EVENT_COMPATIBILITY_MATRIX,
+    REQUIRED_EVENT_COMPATIBILITY_FAMILIES,
+    _EVENT_RULES,
+    event_compatibility_families_for_event_type,
     extract_news_event_signals,
     gate_terminal_candidates_by_event_signals,
 )
@@ -7,6 +11,72 @@ from ades.service.models import (
     ImpactPathEdge,
     ImpactRelationshipPath,
 )
+
+
+def test_event_compatibility_matrix_covers_required_story_families() -> None:
+    assert tuple(EVENT_COMPATIBILITY_MATRIX) == REQUIRED_EVENT_COMPATIBILITY_FAMILIES
+
+    required_families = {
+        "company",
+        "sector",
+        "policy",
+        "legal_regulatory",
+        "commodity",
+        "supply_chain",
+        "macro",
+        "central_bank",
+        "product",
+        "program",
+    }
+    assert set(EVENT_COMPATIBILITY_MATRIX) == required_families
+
+    extracted_event_types = {rule.event_type for rule in _EVENT_RULES}
+    mapped_event_types: set[str] = set()
+    for family, definition in EVENT_COMPATIBILITY_MATRIX.items():
+        assert definition.family == family
+        assert definition.event_types
+        assert definition.compatible_asset_families
+        assert definition.terminal_types
+        assert definition.relation_families
+        assert set(definition.event_types) <= extracted_event_types
+        mapped_event_types.update(definition.event_types)
+
+    assert extracted_event_types <= mapped_event_types
+
+
+def test_event_compatibility_matrix_records_family_specific_terminals() -> None:
+    assert "earnings_beat" in EVENT_COMPATIBILITY_MATRIX["company"].event_types
+    assert "ticker" in EVENT_COMPATIBILITY_MATRIX["company"].terminal_types
+    assert "sector_index" in EVENT_COMPATIBILITY_MATRIX["sector"].terminal_types
+    assert "sector_policy_change" in EVENT_COMPATIBILITY_MATRIX["policy"].event_types
+    assert "regulatory_enforcement" in EVENT_COMPATIBILITY_MATRIX["legal_regulatory"].event_types
+    assert "commodity" in EVENT_COMPATIBILITY_MATRIX["commodity"].terminal_types
+    assert "supply_disruption" in EVENT_COMPATIBILITY_MATRIX["supply_chain"].event_types
+    assert "fx_intervention" in EVENT_COMPATIBILITY_MATRIX["macro"].event_types
+    assert "trade_balance_signal" in EVENT_COMPATIBILITY_MATRIX["macro"].event_types
+    assert "capital_flow_signal" in EVENT_COMPATIBILITY_MATRIX["macro"].event_types
+    assert "sovereign_debt_signal" in EVENT_COMPATIBILITY_MATRIX["macro"].event_types
+    assert "policy_rate_hike" in EVENT_COMPATIBILITY_MATRIX["central_bank"].event_types
+    assert "rates_proxy" in EVENT_COMPATIBILITY_MATRIX["central_bank"].terminal_types
+    assert "issuer" in EVENT_COMPATIBILITY_MATRIX["product"].terminal_types
+    assert "security" in EVENT_COMPATIBILITY_MATRIX["program"].terminal_types
+
+
+def test_event_compatibility_family_lookup_maps_shared_events() -> None:
+    assert event_compatibility_families_for_event_type("regulatory_enforcement") == (
+        "sector",
+        "legal_regulatory",
+        "product",
+        "program",
+    )
+    assert "commodity" in event_compatibility_families_for_event_type(
+        "shipping_chokepoint_disruption"
+    )
+    assert event_compatibility_families_for_event_type("POLICY_RATE_CUT") == (
+        "macro",
+        "central_bank",
+    )
+    assert event_compatibility_families_for_event_type("unknown_event") == ()
 
 
 def test_extract_news_event_signals_returns_evidence_spans_and_asset_families() -> None:
@@ -301,7 +371,9 @@ def test_gate_terminal_candidates_rejects_unsupported_broad_proxies() -> None:
     assert warnings == ["event_signal_gate_filtered:missing_macro_fx_rates_event_signal:3"]
 
 
-def test_gate_terminal_candidates_requires_macro_fx_rates_signal_for_direct_broad_market_asset() -> None:
+def test_gate_terminal_candidates_requires_macro_fx_rates_signal_for_direct_broad_market_asset() -> (
+    None
+):
     direct_dxy = ImpactCandidate(
         entity_ref="ades:impact:currency:dxy",
         name="US Dollar Index",
@@ -491,7 +563,9 @@ def test_gate_terminal_candidates_honors_relationship_edge_event_metadata() -> N
 
     with_signal, warnings = gate_terminal_candidates_by_event_signals(
         [country_risk_proxy],
-        extract_news_event_signals("Officials announced a fiscal support package after the dispute."),
+        extract_news_event_signals(
+            "Officials announced a fiscal support package after the dispute."
+        ),
     )
 
     assert warnings == []

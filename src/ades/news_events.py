@@ -21,6 +21,15 @@ class _EventRule:
 
 
 @dataclass(frozen=True)
+class EventCompatibilityFamily:
+    family: str
+    event_types: tuple[str, ...]
+    compatible_asset_families: tuple[str, ...]
+    terminal_types: tuple[str, ...]
+    relation_families: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class _SentenceSpan:
     text: str
     start: int
@@ -572,6 +581,372 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
 )
 
 
+REQUIRED_EVENT_COMPATIBILITY_FAMILIES = (
+    "company",
+    "sector",
+    "policy",
+    "legal_regulatory",
+    "commodity",
+    "supply_chain",
+    "macro",
+    "central_bank",
+    "product",
+    "program",
+)
+
+EVENT_COMPATIBILITY_MATRIX: dict[str, EventCompatibilityFamily] = {
+    "company": EventCompatibilityFamily(
+        family="company",
+        event_types=(
+            "earnings_beat",
+            "earnings_miss",
+            "guidance_raise",
+            "guidance_cut",
+            "acquisition",
+            "merger",
+            "divestiture",
+            "key_person_ownership_governance",
+            "default",
+            "bankruptcy",
+            "strike_labor_disruption",
+            "equity_listing",
+        ),
+        compatible_asset_families=("equity", "ticker", "credit", "bonds", "sector"),
+        terminal_types=("issuer", "security", "ticker", "index"),
+        relation_families=(
+            "identity_listing",
+            "person_to_issuer",
+            "organization_control",
+            "issuer_exposure",
+            "market_access_status",
+        ),
+    ),
+    "sector": EventCompatibilityFamily(
+        family="sector",
+        event_types=(
+            "sector_policy_change",
+            "regulatory_enforcement",
+            "tariff",
+            "export_control",
+            "sanctions",
+            "supply_disruption",
+            "production_decrease",
+            "production_increase",
+            "strike_labor_disruption",
+            "acquisition",
+            "merger",
+            "divestiture",
+            "equity_listing",
+        ),
+        compatible_asset_families=(
+            "sector",
+            "equity",
+            "equity_index",
+            "ticker",
+            "commodity",
+            "country_risk",
+        ),
+        terminal_types=("sector_index", "index", "issuer", "security", "ticker", "commodity"),
+        relation_families=(
+            "policy_sector_exposure",
+            "sector_exposure",
+            "global_equity_proxy",
+            "issuer_exposure",
+        ),
+    ),
+    "policy": EventCompatibilityFamily(
+        family="policy",
+        event_types=(
+            "sector_policy_change",
+            "fiscal_expansion",
+            "fiscal_austerity",
+            "tariff",
+            "export_control",
+            "sanctions",
+        ),
+        compatible_asset_families=(
+            "sector",
+            "equity",
+            "equity_index",
+            "commodity",
+            "currency",
+            "rates",
+            "bonds",
+            "country_risk",
+        ),
+        terminal_types=(
+            "sector_index",
+            "index",
+            "issuer",
+            "security",
+            "ticker",
+            "commodity",
+            "currency",
+            "rates_proxy",
+        ),
+        relation_families=(
+            "policy_sector_exposure",
+            "country_macro_policy",
+            "currency_proxy",
+            "global_equity_proxy",
+            "risk_proxy",
+        ),
+    ),
+    "legal_regulatory": EventCompatibilityFamily(
+        family="legal_regulatory",
+        event_types=(
+            "regulatory_enforcement",
+            "sector_policy_change",
+            "sanctions",
+            "export_control",
+            "default",
+            "bankruptcy",
+        ),
+        compatible_asset_families=(
+            "equity",
+            "ticker",
+            "sector",
+            "equity_index",
+            "country_risk",
+            "commodity",
+        ),
+        terminal_types=("issuer", "security", "ticker", "sector_index", "index", "commodity"),
+        relation_families=(
+            "policy_sector_exposure",
+            "market_access_status",
+            "sanctions",
+            "issuer_exposure",
+        ),
+    ),
+    "commodity": EventCompatibilityFamily(
+        family="commodity",
+        event_types=(
+            "commodity_price_move",
+            "safe_haven_commodity_move",
+            "supply_disruption",
+            "production_decrease",
+            "production_increase",
+            "shipping_chokepoint_disruption",
+            "strike_labor_disruption",
+            "sanctions",
+            "tariff",
+            "export_control",
+            "war_escalation",
+            "ceasefire_risk_relief",
+            "inflation_shock",
+            "currency_market_move",
+        ),
+        compatible_asset_families=(
+            "commodity",
+            "energy",
+            "agriculture",
+            "safe_haven",
+            "shipping",
+            "sector",
+            "currency",
+            "equity_index",
+            "country_risk",
+        ),
+        terminal_types=(
+            "commodity",
+            "sector_index",
+            "index",
+            "issuer",
+            "security",
+            "ticker",
+            "currency",
+        ),
+        relation_families=(
+            "geography_commodity",
+            "commodity_flow",
+            "issuer_exposure",
+            "supply_chain_counterparty",
+            "policy_sector_exposure",
+        ),
+    ),
+    "supply_chain": EventCompatibilityFamily(
+        family="supply_chain",
+        event_types=(
+            "supply_disruption",
+            "production_decrease",
+            "production_increase",
+            "shipping_chokepoint_disruption",
+            "tariff",
+            "export_control",
+            "sanctions",
+            "strike_labor_disruption",
+        ),
+        compatible_asset_families=(
+            "commodity",
+            "energy",
+            "agriculture",
+            "shipping",
+            "sector",
+            "equity",
+            "ticker",
+        ),
+        terminal_types=("commodity", "sector_index", "index", "issuer", "security", "ticker"),
+        relation_families=(
+            "supply_chain_counterparty",
+            "commodity_flow",
+            "infrastructure_asset",
+            "issuer_exposure",
+            "policy_sector_exposure",
+        ),
+    ),
+    "macro": EventCompatibilityFamily(
+        family="macro",
+        event_types=(
+            "policy_rate_cut",
+            "policy_rate_hike",
+            "policy_rate_hold",
+            "inflation_shock",
+            "future_policy_expectation",
+            "fiscal_expansion",
+            "fiscal_austerity",
+            "currency_market_move",
+            "fx_intervention",
+            "trade_balance_signal",
+            "capital_flow_signal",
+            "sovereign_debt_signal",
+            "sanctions",
+            "tariff",
+            "export_control",
+            "war_escalation",
+            "ceasefire_risk_relief",
+            "default",
+            "bankruptcy",
+        ),
+        compatible_asset_families=(
+            "currency",
+            "rates",
+            "bonds",
+            "equity_index",
+            "country_risk",
+            "safe_haven",
+            "commodity",
+            "equity",
+        ),
+        terminal_types=(
+            "currency",
+            "rates_proxy",
+            "index",
+            "commodity",
+            "issuer",
+            "security",
+            "ticker",
+        ),
+        relation_families=(
+            "country_macro_policy",
+            "currency_proxy",
+            "dxy_proxy",
+            "risk_proxy",
+            "global_equity_proxy",
+        ),
+    ),
+    "central_bank": EventCompatibilityFamily(
+        family="central_bank",
+        event_types=(
+            "policy_rate_cut",
+            "policy_rate_hike",
+            "policy_rate_hold",
+            "inflation_shock",
+            "future_policy_expectation",
+            "fx_intervention",
+            "currency_market_move",
+            "capital_flow_signal",
+            "sovereign_debt_signal",
+        ),
+        compatible_asset_families=(
+            "rates",
+            "currency",
+            "bonds",
+            "equity_index",
+            "banking",
+            "country_risk",
+        ),
+        terminal_types=("currency", "rates_proxy", "index", "sector_index"),
+        relation_families=("country_macro_policy", "currency_proxy"),
+    ),
+    "product": EventCompatibilityFamily(
+        family="product",
+        event_types=(
+            "sector_policy_change",
+            "regulatory_enforcement",
+            "earnings_beat",
+            "earnings_miss",
+            "guidance_raise",
+            "guidance_cut",
+            "acquisition",
+            "merger",
+            "divestiture",
+            "commodity_price_move",
+            "supply_disruption",
+            "production_decrease",
+            "production_increase",
+            "tariff",
+            "export_control",
+            "sanctions",
+        ),
+        compatible_asset_families=(
+            "equity",
+            "ticker",
+            "sector",
+            "commodity",
+            "energy",
+            "agriculture",
+        ),
+        terminal_types=("issuer", "security", "ticker", "sector_index", "commodity"),
+        relation_families=(
+            "program_org_relationship",
+            "policy_sector_exposure",
+            "issuer_exposure",
+            "supply_chain_counterparty",
+        ),
+    ),
+    "program": EventCompatibilityFamily(
+        family="program",
+        event_types=(
+            "sector_policy_change",
+            "regulatory_enforcement",
+            "fiscal_expansion",
+            "fiscal_austerity",
+            "tariff",
+            "export_control",
+            "sanctions",
+            "supply_disruption",
+            "production_decrease",
+            "production_increase",
+            "shipping_chokepoint_disruption",
+            "earnings_miss",
+            "default",
+            "bankruptcy",
+        ),
+        compatible_asset_families=("equity", "ticker", "sector", "country_risk", "commodity"),
+        terminal_types=("issuer", "security", "ticker", "sector_index", "index", "commodity"),
+        relation_families=(
+            "program_org_relationship",
+            "program_country_relationship",
+            "program_project_relationship",
+            "project_org_relationship",
+            "policy_sector_exposure",
+            "organization_control",
+        ),
+    ),
+}
+
+
+def event_compatibility_families_for_event_type(event_type: str) -> tuple[str, ...]:
+    """Return compatibility families that include an extracted event type."""
+
+    normalized = event_type.casefold()
+    return tuple(
+        family
+        for family, definition in EVENT_COMPATIBILITY_MATRIX.items()
+        if normalized in {event.casefold() for event in definition.event_types}
+    )
+
+
 _POLICY_SIGNAL_TYPES = {
     "policy_rate_cut",
     "policy_rate_hike",
@@ -846,10 +1221,7 @@ def _candidate_requires_macro_fx_rates_signal(
     candidate: ImpactCandidate,
     families: set[str],
 ) -> bool:
-    return (
-        bool(families & {"currency", "rates"})
-        or _candidate_is_broad_proxy(candidate, families)
-    )
+    return bool(families & {"currency", "rates"}) or _candidate_is_broad_proxy(candidate, families)
 
 
 def _candidate_edge_event_types(candidate: ImpactCandidate) -> set[str]:
