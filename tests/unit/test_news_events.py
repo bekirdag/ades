@@ -176,6 +176,24 @@ def test_extract_news_event_signals_covers_weekly_market_coverage_batch() -> Non
     assert "ticker" in by_type["equity_listing"].compatible_asset_families
 
 
+def test_extract_news_event_signals_covers_macro_fx_rates_gate_signals() -> None:
+    text = (
+        "The central bank intervened to support the currency after the trade deficit widened. "
+        "Portfolio outflows from local bonds accelerated as sovereign bond yields rose."
+    )
+
+    by_type = {signal.event_type: signal for signal in extract_news_event_signals(text)}
+
+    assert "fx_intervention" in by_type
+    assert "currency" in by_type["fx_intervention"].compatible_asset_families
+    assert "trade_balance_signal" in by_type
+    assert "currency" in by_type["trade_balance_signal"].compatible_asset_families
+    assert "capital_flow_signal" in by_type
+    assert "rates" in by_type["capital_flow_signal"].compatible_asset_families
+    assert "sovereign_debt_signal" in by_type
+    assert "bonds" in by_type["sovereign_debt_signal"].compatible_asset_families
+
+
 def test_extract_news_event_signals_covers_chokepoint_flow_decline() -> None:
     text = "Oil flows through Strait of Hormuz fall nearly 30% in first quarter."
 
@@ -231,7 +249,7 @@ def test_gate_terminal_candidates_requires_event_signal_for_policy_rate_proxy() 
     without_signal, warnings = gate_terminal_candidates_by_event_signals([policy_proxy], [])
 
     assert without_signal == []
-    assert warnings == ["event_signal_gate_filtered:missing_policy_event_signal:1"]
+    assert warnings == ["event_signal_gate_filtered:missing_macro_fx_rates_event_signal:1"]
 
     signals = extract_news_event_signals(
         "The central bank cut interest rates and said more easing could follow."
@@ -280,10 +298,10 @@ def test_gate_terminal_candidates_rejects_unsupported_broad_proxies() -> None:
     gated, warnings = gate_terminal_candidates_by_event_signals(broad_candidates, [])
 
     assert gated == []
-    assert warnings == ["event_signal_gate_filtered:missing_broad_proxy_macro_event_signal:3"]
+    assert warnings == ["event_signal_gate_filtered:missing_macro_fx_rates_event_signal:3"]
 
 
-def test_gate_terminal_candidates_keeps_directly_mentioned_broad_market_asset() -> None:
+def test_gate_terminal_candidates_requires_macro_fx_rates_signal_for_direct_broad_market_asset() -> None:
     direct_dxy = ImpactCandidate(
         entity_ref="ades:impact:currency:dxy",
         name="US Dollar Index",
@@ -296,8 +314,132 @@ def test_gate_terminal_candidates_keeps_directly_mentioned_broad_market_asset() 
 
     gated, warnings = gate_terminal_candidates_by_event_signals([direct_dxy], [])
 
+    assert gated == []
+    assert warnings == ["event_signal_gate_filtered:missing_macro_fx_rates_event_signal:1"]
+
+    fx_signals = extract_news_event_signals("The dollar index rose as FX volatility increased.")
+    gated, warnings = gate_terminal_candidates_by_event_signals([direct_dxy], fx_signals)
+
     assert warnings == []
     assert gated[0].entity_ref == "ades:impact:currency:dxy"
+    assert gated[0].compatible_event_types == ["currency_market_move"]
+
+
+def test_gate_terminal_candidates_rejects_broad_macro_proxy_for_narrow_policy_signal() -> None:
+    broad_index = ImpactCandidate(
+        entity_ref="ades:impact:equity-index:global-equity",
+        name="Global Equity Proxy",
+        entity_type="market_index",
+        evidence_level="shallow",
+        confidence=0.62,
+        source_entity_refs=["finance-uk-sector:housebuilders"],
+        relationship_paths=[],
+    )
+    currency = ImpactCandidate(
+        entity_ref="ades:impact:currency:gbp",
+        name="British Pound",
+        entity_type="currency",
+        evidence_level="shallow",
+        confidence=0.65,
+        source_entity_refs=["finance-uk-sector:housebuilders"],
+        relationship_paths=[],
+    )
+
+    signals = extract_news_event_signals(
+        "The competition regulator opened an antitrust probe into housebuilders."
+    )
+    gated, warnings = gate_terminal_candidates_by_event_signals([broad_index, currency], signals)
+
+    assert gated == []
+    assert warnings == ["event_signal_gate_filtered:missing_macro_fx_rates_event_signal:2"]
+
+
+def test_gate_terminal_candidates_rejects_broad_macro_proxy_for_geopolitical_signal() -> None:
+    broad_candidates = [
+        ImpactCandidate(
+            entity_ref="ades:impact:currency:dxy",
+            name="US Dollar Index",
+            entity_type="currency",
+            evidence_level="shallow",
+            confidence=0.62,
+            source_entity_refs=["country:us"],
+            relationship_paths=[],
+        ),
+        ImpactCandidate(
+            entity_ref="ades:impact:equity-index:global-equity",
+            name="Global Equity Proxy",
+            entity_type="market_index",
+            evidence_level="shallow",
+            confidence=0.62,
+            source_entity_refs=["country:us"],
+            relationship_paths=[],
+        ),
+    ]
+
+    signals = extract_news_event_signals("War escalation continued near the border.")
+    gated, warnings = gate_terminal_candidates_by_event_signals(broad_candidates, signals)
+
+    assert gated == []
+    assert warnings == ["event_signal_gate_filtered:missing_macro_fx_rates_event_signal:2"]
+
+
+def test_gate_terminal_candidates_keeps_broad_macro_proxy_for_trade_signal() -> None:
+    dxy = ImpactCandidate(
+        entity_ref="ades:impact:currency:dxy",
+        name="US Dollar Index",
+        entity_type="currency",
+        evidence_level="direct",
+        confidence=0.9,
+        source_entity_refs=["ades:impact:currency:dxy"],
+        relationship_paths=[],
+    )
+
+    signals = extract_news_event_signals("Officials announced new tariffs on imported goods.")
+    gated, warnings = gate_terminal_candidates_by_event_signals([dxy], signals)
+
+    assert warnings == []
+    assert gated[0].entity_ref == "ades:impact:currency:dxy"
+    assert gated[0].compatible_event_types == ["tariff"]
+
+
+def test_gate_terminal_candidates_keeps_sector_index_for_sector_policy_signal() -> None:
+    sector_index = ImpactCandidate(
+        entity_ref="finance-uk:index:housebuilders-sector",
+        name="UK Housebuilders Sector Index",
+        entity_type="sector_index",
+        evidence_level="shallow",
+        confidence=0.84,
+        source_entity_refs=["finance-uk-sector:housebuilders"],
+        relationship_paths=[
+            ImpactRelationshipPath(
+                path_depth=1,
+                edges=[
+                    ImpactPathEdge(
+                        source_ref="finance-uk-sector:housebuilders",
+                        target_ref="finance-uk:index:housebuilders-sector",
+                        relation="sector_affects_index",
+                        evidence_level="direct",
+                        confidence=0.88,
+                        direction_hint="sector_index",
+                        source_name="test",
+                        source_url="https://example.com",
+                        source_snapshot="test",
+                        compatible_event_types=["regulatory_enforcement"],
+                    )
+                ],
+            )
+        ],
+        compatible_event_types=["regulatory_enforcement"],
+    )
+
+    signals = extract_news_event_signals(
+        "The competition regulator opened an antitrust probe into housebuilders."
+    )
+    gated, warnings = gate_terminal_candidates_by_event_signals([sector_index], signals)
+
+    assert warnings == []
+    assert gated[0].entity_ref == "finance-uk:index:housebuilders-sector"
+    assert gated[0].compatible_event_types == ["regulatory_enforcement"]
 
 
 def test_gate_terminal_candidates_honors_relationship_edge_event_metadata() -> None:
@@ -345,15 +487,15 @@ def test_gate_terminal_candidates_honors_relationship_edge_event_metadata() -> N
     )
 
     assert without_signal == []
-    assert warnings == ["event_signal_gate_filtered:missing_relationship_event_compatibility:1"]
+    assert warnings == ["event_signal_gate_filtered:missing_macro_fx_rates_event_signal:1"]
 
     with_signal, warnings = gate_terminal_candidates_by_event_signals(
         [country_risk_proxy],
-        extract_news_event_signals("Officials imposed new sanctions after the dispute."),
+        extract_news_event_signals("Officials announced a fiscal support package after the dispute."),
     )
 
     assert warnings == []
-    assert with_signal[0].compatible_event_types == ["sanctions"]
+    assert with_signal[0].compatible_event_types == ["fiscal_expansion"]
 
 
 def test_gate_terminal_candidates_keeps_direct_ticker_without_event_signal() -> None:

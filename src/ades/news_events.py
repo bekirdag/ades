@@ -473,6 +473,58 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
         confidence=0.82,
     ),
     _EventRule(
+        event_type="fx_intervention",
+        patterns=(
+            _rx(
+                r"\b(?:central\s+bank|monetary\s+authority|finance\s+ministry|treasury)\b.{0,120}\b(?:interven(?:e|ed|es|ing|tion)|bought|sold|sell|buy|support(?:ed|s)?|defend(?:ed|s)?)\b.{0,120}\b(?:currency|currencies|fx|forex|dollar|euro|yen|yuan|real|lira|rupiah|peso|rupee|exchange\s+rate)\b"
+            ),
+            _rx(
+                r"\b(?:currency|currencies|fx|forex|dollar|euro|yen|yuan|real|lira|rupiah|peso|rupee|exchange\s+rate)\b.{0,120}\b(?:interven(?:e|ed|es|ing|tion)|support(?:ed|s)?|defend(?:ed|s)?)\b"
+            ),
+        ),
+        compatible_asset_families=("currency", "rates", "bonds", "equity_index", "country_risk"),
+        confidence=0.86,
+    ),
+    _EventRule(
+        event_type="trade_balance_signal",
+        patterns=(
+            _rx(
+                r"\b(?:trade\s+(?:balance|deficit|surplus)|current\s+account|exports?|imports?)\b.{0,120}\b(?:widen(?:ed|s|ing)?|narrow(?:ed|s|ing)?|surplus|deficit|fell|falls|fall|rose|rises|rise|jump(?:ed|s)?|drop(?:ped|s)?|declin(?:e|ed|es|ing)|increase(?:d|s|ing)?)\b"
+            ),
+            _rx(
+                r"\b(?:widen(?:ed|s|ing)?|narrow(?:ed|s|ing)?|surplus|deficit|fell|falls|fall|rose|rises|rise|jump(?:ed|s)?|drop(?:ped|s)?|declin(?:e|ed|es|ing)|increase(?:d|s|ing)?)\b.{0,120}\b(?:trade\s+(?:balance|deficit|surplus)|current\s+account|exports?|imports?)\b"
+            ),
+        ),
+        compatible_asset_families=("currency", "rates", "bonds", "equity_index", "country_risk"),
+        confidence=0.8,
+    ),
+    _EventRule(
+        event_type="capital_flow_signal",
+        patterns=(
+            _rx(
+                r"\b(?:capital|portfolio|foreign\s+investment|fund)\s+(?:inflows?|outflows?|flows?)\b.{0,120}\b(?:rise|rises|rose|jump(?:ed|s)?|surge(?:d|s)?|fall|falls|fell|drop(?:ped|s)?|accelerat(?:e|ed|es|ing)|reverse(?:d|s)?)\b"
+            ),
+            _rx(
+                r"\b(?:inflows?|outflows?)\b.{0,120}\b(?:bonds?|equities|stocks?|currency|fx|forex|emerging\s+markets?|foreign\s+investors?)\b"
+            ),
+        ),
+        compatible_asset_families=("currency", "rates", "bonds", "equity_index", "country_risk"),
+        confidence=0.82,
+    ),
+    _EventRule(
+        event_type="sovereign_debt_signal",
+        patterns=(
+            _rx(
+                r"\b(?:sovereign|government|treasury|gilt|bond|debt)\b.{0,120}\b(?:yield|yields|auction|issuance|issue|spread|spreads|default|downgrade|rating)\b"
+            ),
+            _rx(
+                r"\b(?:yield|yields|auction|issuance|issue|spread|spreads|default|downgrade|rating)\b.{0,120}\b(?:sovereign|government|treasury|gilt|bond|debt)\b"
+            ),
+        ),
+        compatible_asset_families=("rates", "currency", "bonds", "equity_index", "country_risk"),
+        confidence=0.83,
+    ),
+    _EventRule(
         event_type="equity_listing",
         patterns=(
             _rx(
@@ -573,13 +625,26 @@ _BROAD_PROXY_SIGNAL_TYPES = {
     "sanctions",
     "tariff",
     "export_control",
-    "sector_policy_change",
-    "regulatory_enforcement",
     "war_escalation",
     "ceasefire_risk_relief",
     "default",
     "bankruptcy",
     "currency_market_move",
+    "fx_intervention",
+    "trade_balance_signal",
+    "capital_flow_signal",
+    "sovereign_debt_signal",
+}
+
+_MACRO_FX_RATES_SIGNAL_TYPES = {
+    *_POLICY_SIGNAL_TYPES,
+    "currency_market_move",
+    "fx_intervention",
+    "tariff",
+    "export_control",
+    "trade_balance_signal",
+    "capital_flow_signal",
+    "sovereign_debt_signal",
 }
 
 _BROAD_PROXY_TEXT_TOKENS = (
@@ -744,6 +809,16 @@ def _candidate_has_direct_evidence(candidate: ImpactCandidate) -> bool:
     return candidate.evidence_level == "direct"
 
 
+def _candidate_has_sector_index_path(candidate: ImpactCandidate) -> bool:
+    text = _candidate_text(candidate)
+    if "sector" in text:
+        return True
+    for path in candidate.relationship_paths:
+        if any(edge.relation == "sector_affects_index" for edge in path.edges):
+            return True
+    return False
+
+
 def _candidate_has_direct_listing_path(candidate: ImpactCandidate) -> bool:
     for path in candidate.relationship_paths:
         for edge in path.edges:
@@ -762,11 +837,19 @@ def _candidate_is_broad_proxy(candidate: ImpactCandidate, families: set[str]) ->
         return True
     if "country_risk" in families:
         return True
-    if "currency" in families and candidate.evidence_level != "direct":
-        return True
-    if "equity_index" in families and candidate.evidence_level != "direct":
+    if "equity_index" in families and not _candidate_has_sector_index_path(candidate):
         return True
     return False
+
+
+def _candidate_requires_macro_fx_rates_signal(
+    candidate: ImpactCandidate,
+    families: set[str],
+) -> bool:
+    return (
+        bool(families & {"currency", "rates"})
+        or _candidate_is_broad_proxy(candidate, families)
+    )
 
 
 def _candidate_edge_event_types(candidate: ImpactCandidate) -> set[str]:
@@ -819,7 +902,12 @@ def gate_terminal_candidates_by_event_signals(
         keep = True
         reason: str | None = None
 
-        if edge_event_types and not (signal_types & edge_event_types):
+        if _candidate_requires_macro_fx_rates_signal(candidate, families) and not (
+            signal_types & _MACRO_FX_RATES_SIGNAL_TYPES
+        ):
+            keep = False
+            reason = "missing_macro_fx_rates_event_signal"
+        elif edge_event_types and not (signal_types & edge_event_types):
             operating_signal_types = signal_types & _DIRECT_LISTING_OPERATING_SIGNAL_TYPES
             if (
                 families & {"equity", "ticker"}
@@ -830,16 +918,6 @@ def gate_terminal_candidates_by_event_signals(
             else:
                 keep = False
                 reason = "missing_relationship_event_compatibility"
-        elif "rates" in families and not (signal_types & _POLICY_SIGNAL_TYPES):
-            keep = False
-            reason = "missing_policy_event_signal"
-        elif (
-            _candidate_is_broad_proxy(candidate, families)
-            and not direct_evidence
-            and not (signal_types & _BROAD_PROXY_SIGNAL_TYPES)
-        ):
-            keep = False
-            reason = "missing_broad_proxy_macro_event_signal"
         elif ("commodity" in families or "energy" in families) and not direct_evidence:
             if not (signal_types & _COMMODITY_SIGNAL_TYPES):
                 keep = False
