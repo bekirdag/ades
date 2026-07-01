@@ -114,6 +114,131 @@ def _build_uk_mining_sector_graph(tmp_path: Path) -> tuple[str, str]:
     return graph.artifact_path, graph.artifact_hash
 
 
+def _build_uk_housebuilder_legal_graph(tmp_path: Path) -> tuple[str, str]:
+    node_path = tmp_path / "uk_housebuilder_impact_nodes.tsv"
+    edge_path = tmp_path / "uk_housebuilder_impact_edges.tsv"
+    node_path.write_text(
+        "\t".join(
+            [
+                "entity_ref",
+                "canonical_name",
+                "entity_type",
+                "library_id",
+                "is_tradable",
+                "is_seed_eligible",
+                "identifiers_json",
+                "packs",
+            ]
+        )
+        + "\n"
+        + "\n".join(
+            [
+                (
+                    "ades:regulator:gb:cma\tCompetition and Markets Authority\t"
+                    'regulator\tfinance-uk-en\t0\t1\t{"jurisdiction":"GB"}\tfinance-uk-en'
+                ),
+                (
+                    "ades:sector:gb:homebuilders\tUK homebuilders\tsector\t"
+                    'finance-uk-en\t0\t1\t{"jurisdiction":"GB"}\tfinance-uk-en'
+                ),
+                (
+                    "finance-uk-issuer:00296805\tTaylor Wimpey PLC\tissuer\t"
+                    'finance-uk-en\t0\t1\t{"jurisdiction":"GB","isin":"GB0008782301"}\t'
+                    "finance-uk-en"
+                ),
+                (
+                    "ades:security:gb:lse:tw-ordinary-share\t"
+                    "Taylor Wimpey PLC ordinary share\tsecurity\tfinance-uk-en\t1\t0\t"
+                    '{"jurisdiction":"GB","exchange":"LSE","isin":"GB0008782301"}\t'
+                    "finance-uk-en"
+                ),
+                (
+                    "finance-uk-ticker:tw\tTW.L\tticker\tfinance-uk-en\t1\t0\t"
+                    '{"jurisdiction":"GB","exchange":"LSE","ticker_symbol":"TW.L"}\t'
+                    "finance-uk-en"
+                ),
+                (
+                    "ades:impact:currency:gbp\tPound sterling\tcurrency\t"
+                    'finance-uk-en\t1\t0\t{"jurisdiction":"GB"}\tfinance-uk-en'
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    edge_path.write_text(
+        "\t".join(
+            [
+                "source_ref",
+                "target_ref",
+                "relation",
+                "evidence_level",
+                "confidence",
+                "direction_hint",
+                "source_name",
+                "source_url",
+                "source_snapshot",
+                "source_year",
+                "refresh_policy",
+                "pack_ids",
+                "notes",
+                "compatible_event_types",
+                "direction_preconditions",
+            ]
+        )
+        + "\n"
+        + "\n".join(
+            [
+                (
+                    "ades:regulator:gb:cma\tades:sector:gb:homebuilders\t"
+                    "regulator_affects_sector\tdirect\t0.92\tregulatory_action\t"
+                    "Competition and Markets Authority housebuilding action\t"
+                    "https://www.gov.uk/government/organisations/competition-and-markets-authority\t"
+                    "2026-06-30\t2026\tannual\tfinance-uk-en\t"
+                    "reviewed UK housebuilder legal-sector fixture\t"
+                    "regulatory_enforcement\tjurisdiction_or_regulator_context"
+                ),
+                (
+                    "ades:sector:gb:homebuilders\tfinance-uk-issuer:00296805\t"
+                    "sector_affects_issuer\tdirect\t0.91\tlegal_action\t"
+                    "Taylor Wimpey annual report\t"
+                    "https://www.taylorwimpey.co.uk/corporate/investors/results-reports-and-presentations\t"
+                    "2026-06-30\t2026\tannual\tfinance-uk-en\t"
+                    "reviewed UK homebuilder sector-to-issuer exposure fixture\t"
+                    "regulatory_enforcement\tdirect_issuer_or_sector_membership_evidence"
+                ),
+                (
+                    "finance-uk-issuer:00296805\tades:security:gb:lse:tw-ordinary-share\t"
+                    "issuer_has_security\tdirect\t0.96\tlisted_equity\t"
+                    "London Stock Exchange Taylor Wimpey company page\t"
+                    "https://www.londonstockexchange.com/stock/TW./taylor-wimpey-plc/company-page\t"
+                    "2026-06-30\t2026\tannual\tfinance-uk-en\t"
+                    "reviewed issuer security fixture\t"
+                    "regulatory_enforcement\tdirect_issuer_or_security_mention"
+                ),
+                (
+                    "finance-uk-issuer:00296805\tfinance-uk-ticker:tw\t"
+                    "issuer_has_listed_ticker\tdirect\t0.96\tlisted_equity\t"
+                    "London Stock Exchange Taylor Wimpey company page\t"
+                    "https://www.londonstockexchange.com/stock/TW./taylor-wimpey-plc/company-page\t"
+                    "2026-06-30\t2026\tannual\tfinance-uk-en\t"
+                    "reviewed issuer ticker fixture\t"
+                    "regulatory_enforcement\tlisted_issuer"
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    graph = build_market_graph_store(
+        node_tsv_paths=[node_path],
+        edge_tsv_paths=[edge_path],
+        output_dir=tmp_path / "uk-housebuilder-graph-artifact",
+        artifact_version="2026-06-30Tuk-housebuilder-legal-test",
+    )
+    return graph.artifact_path, graph.artifact_hash
+
+
 def _build_us_policy_terminal_graph(tmp_path: Path) -> tuple[str, str]:
     node_path = tmp_path / "policy_impact_nodes.tsv"
     edge_path = tmp_path / "policy_impact_edges.tsv"
@@ -4253,6 +4378,153 @@ def test_news_analyze_returns_legal_regulatory_action_terminal_paths(
             == "index"
         )
         assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
+
+
+def test_news_analyze_uk_housebuilder_legal_golden_reaches_terminal_not_gbp(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    for pack_id, domain in (
+        ("general-en", "general"),
+        ("finance-en", "finance"),
+        ("finance-uk-en", "finance"),
+    ):
+        _install_named_pack(tmp_path, pack_id, domain=domain)
+    graph_artifact_path, graph_artifact_hash = _build_uk_housebuilder_legal_graph(tmp_path)
+
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ENABLED", "1")
+    monkeypatch.setenv("ADES_IMPACT_EXPANSION_ARTIFACT_PATH", graph_artifact_path)
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        entities = []
+        if pack == "finance-uk-en":
+            cma_text = "Competition and Markets Authority"
+            gbp_text = "GBP4bn"
+            entities.extend(
+                [
+                    EntityMatch(
+                        text=cma_text,
+                        label="regulator",
+                        start=text.index(cma_text),
+                        end=text.index(cma_text) + len(cma_text),
+                        confidence=0.94,
+                        relevance=0.96,
+                        provenance=EntityProvenance(
+                            match_kind="alias",
+                            match_path="aliases.json",
+                            match_source="pack",
+                            source_pack=pack,
+                            source_domain="finance",
+                        ),
+                        link=EntityLink(
+                            entity_id="ades:regulator:gb:cma",
+                            canonical_text=cma_text,
+                            provider="ades",
+                        ),
+                    ),
+                    EntityMatch(
+                        text=gbp_text,
+                        label="currency",
+                        start=text.index(gbp_text),
+                        end=text.index(gbp_text) + len(gbp_text),
+                        confidence=0.91,
+                        relevance=0.9,
+                        provenance=EntityProvenance(
+                            match_kind="alias",
+                            match_path="aliases.json",
+                            match_source="pack",
+                            source_pack=pack,
+                            source_domain="finance",
+                        ),
+                        link=EntityLink(
+                            entity_id="ades:impact:currency:gbp",
+                            canonical_text="Pound sterling",
+                            provider="ades",
+                        ),
+                    ),
+                ]
+            )
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=entities,
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "UK housebuilders face legal action",
+            "text": (
+                "The UK Competition and Markets Authority said a GBP4bn class action "
+                "lawsuit over price conduct claims could affect listed housebuilders "
+                "including Taylor Wimpey."
+            ),
+            "source": {"source_country": "GB"},
+            "options": {
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+                "impact_max_depth": 4,
+                "max_country_finance_packs": 1,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["event_signal"]["event_type"] == "regulatory_enforcement"
+    assert any(
+        decision["pack_id"] == "finance-uk-en"
+        and decision["selected"] is True
+        and decision["country_code"] == "uk"
+        for decision in payload["pack_decisions"]
+    )
+    assert any(
+        source["entity_ref"] == "ades:regulator:gb:cma" and source["is_graph_seed"] is True
+        for source in payload["source_entities"]
+    )
+
+    candidates_by_ref = {
+        candidate["entity_ref"]: candidate
+        for candidate in payload["terminal_impact_candidates"]
+    }
+    assert "finance-uk-ticker:tw" in candidates_by_ref
+    assert "ades:security:gb:lse:tw-ordinary-share" in candidates_by_ref
+    assert "ades:impact:currency:gbp" not in candidates_by_ref
+
+    ticker_path = {
+        candidate_path["terminal_ref"]: candidate_path
+        for candidate_path in payload["candidate_paths"]
+    }["finance-uk-ticker:tw"]
+    assert ticker_path["terminal_type"] == "ticker"
+    assert ticker_path["jurisdiction"] == "uk"
+    assert ticker_path["ticker"] == "tw"
+    assert ticker_path["event_compatibility"] == ["regulatory_enforcement"]
+    assert ticker_path["artifact_ref"] == graph_artifact_hash
+    assert [edge["relation"] for edge in ticker_path["relationship_path"]["edges"]] == [
+        "regulator_affects_sector",
+        "sector_affects_issuer",
+        "issuer_has_listed_ticker",
+    ]
+    assert "government" in ticker_path["source_tiers"]
+    assert "exchange" in ticker_path["source_tiers"]
+    assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 
 def test_news_analyze_default_pack_budget_allows_full_country_pack_budget(
