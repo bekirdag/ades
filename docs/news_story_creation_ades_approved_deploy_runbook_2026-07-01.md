@@ -95,24 +95,26 @@ The impact artifact uploaded by the workflow is:
 /mnt/ades/impact/releases/<release_id>/market_graph_store.sqlite
 ```
 
-During install, the workflow resolves the active impact root from
-`GET http://127.0.0.1:8734/v0/status` on the production host. If the service
-already reports an `impact_artifact.configured_path`, the active target is that
-path's parent directory. Otherwise the fallback active target is:
+During install, the workflow reads
+`GET http://127.0.0.1:8734/v0/status` on the production host only to discover a
+legacy active graph that may need to be preserved. The active target for new
+deploys is always the stable current path:
 
 ```text
 /home/deploy/.local/share/ades-artifacts/market-graph/current/market_graph_store.sqlite
 ```
 
-The public baseline captured for this pipeline currently reports this active
-production impact artifact path:
+If the legacy public baseline still reports this older production impact
+artifact path:
 
 ```text
 /home/deploy/.local/share/ades-artifacts/market-graph/20260513Tgeneric-market-relationship-r3/market_graph_store.sqlite
 ```
 
-After an approved deployment, verify the post-deploy active path from public
-status instead of assuming the fallback path:
+the workflow seeds `market-graph/current` from that larger legacy graph before
+merging starter rows, then writes the systemd drop-in to the stable current
+path. After an approved deployment, verify the post-deploy active path from
+public status:
 
 ```bash
 curl -fsS --connect-timeout 10 --max-time 30 https://api.adestool.com/v0/status
@@ -130,7 +132,9 @@ The workflow performs these production mutations after artifact upload:
 - Ensures `psycopg[binary]>=3.2,<4.0` is installed in that shared virtualenv.
 - Writes pack health settings under
   `/home/deploy/.config/systemd/user/ades.service.d/pack-health.conf`.
-- Copies or merges the release impact graph into the active impact artifact path.
+- Seeds the stable current impact graph from the older active graph if needed.
+- Copies or merges the release impact graph into the stable current impact
+  artifact path.
 - Writes
   `/home/deploy/.config/systemd/user/ades.service.d/zz-impact-expansion.conf`
   with the active `ADES_IMPACT_EXPANSION_ARTIFACT_PATH`.

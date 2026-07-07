@@ -563,15 +563,29 @@ jobs:
           Environment=ADES_PACK_HEALTH_DB_PATH=/mnt/ades/storage/registry/pack_health.sqlite3
           EOF
           impact_release_root="/mnt/ades/impact/releases/$release_id"
-          active_impact_root="$(active_service_impact_root)"
-          if [ -n "$active_impact_root" ]; then
-            impact_current_root="$active_impact_root"
-          else
-            impact_current_root="$HOME/.local/share/ades-artifacts/market-graph/current"
-          fi
+          legacy_impact_root="$(active_service_impact_root)"
+          impact_current_root="$HOME/.local/share/ades-artifacts/market-graph/current"
           if [ -f "$impact_release_root/market_graph_store.sqlite" ]; then
             mkdir -p "$impact_current_root" "$service_dropin_dir"
             switch_impact_current=1
+            current_root_resolved="$(readlink -f "$impact_current_root" 2>/dev/null || true)"
+            legacy_root_resolved=""
+            if [ -n "$legacy_impact_root" ]; then
+              legacy_root_resolved="$(readlink -f "$legacy_impact_root" 2>/dev/null || true)"
+            fi
+            if [ -n "$legacy_impact_root" ] \
+              && [ -f "$legacy_impact_root/market_graph_store.sqlite" ] \
+              && { [ -z "$legacy_root_resolved" ] || [ "$legacy_root_resolved" != "$current_root_resolved" ]; }; then
+              existing_current_edges="$(impact_edge_count "$impact_current_root")"
+              legacy_impact_edges="$(impact_edge_count "$legacy_impact_root")"
+              if [ "$legacy_impact_edges" -gt "$existing_current_edges" ]; then
+                echo "Seeding stable current impact graph from previously active root $legacy_impact_root ($legacy_impact_edges edges)."
+                cp "$legacy_impact_root/market_graph_store.sqlite" "$impact_current_root/market_graph_store.sqlite"
+                if [ -f "$legacy_impact_root/market_graph_store_manifest.json" ]; then
+                  cp "$legacy_impact_root/market_graph_store_manifest.json" "$impact_current_root/market_graph_store_manifest.json"
+                fi
+              fi
+            fi
             existing_impact_edges="$(impact_edge_count "$impact_current_root")"
             new_impact_edges="$(impact_edge_count "$impact_release_root")"
             if [ "$existing_impact_edges" -ge 1000000 ] && [ "$new_impact_edges" -lt 1000000 ]; then

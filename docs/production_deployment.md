@@ -209,9 +209,11 @@ return empty impact candidates with a warning instead of breaking extraction.
 
 The deploy workflow now builds the packaged starter market graph from
 `src/ades/resources/impact/phase1_starter`, uploads it under
-`/mnt/ades/impact/releases/<release_id>/`, copies it to
-`/home/deploy/.local/share/ades-artifacts/market-graph/current/`, and writes the
-`impact-expansion.conf` drop-in before restarting `ades.service`.
+`/mnt/ades/impact/releases/<release_id>/`, seeds
+`/home/deploy/.local/share/ades-artifacts/market-graph/current/` from any larger
+legacy active graph if needed, copies or merges the release graph into that
+stable current path, and writes the `zz-impact-expansion.conf` drop-in before
+restarting `ades.service`.
 
 Latest verified live smoke on `2026-04-21` using `/home/deploy/deleteme.txt`:
 
