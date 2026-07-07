@@ -742,37 +742,81 @@ jobs:
             -p "$ADES_DEPLOY_PORT"
             "$ADES_DEPLOY_USER@$ADES_DEPLOY_HOST"
           )
-          "${ssh_cmd[@]}" 'bash -s' <<'REMOTE_SCRIPT'
+          sync_status=1
+          for attempt in 1 2 3 4; do
+            if "${ssh_cmd[@]}" 'bash -s' <<'REMOTE_SCRIPT'
           set -euo pipefail
           impact_current_root="$HOME/.local/share/ades-artifacts/market-graph/current"
-          if ! command -v sudo >/dev/null 2>&1; then
+
+          if ! command -v sudo >/dev/null 2>&1 || ! sudo -n true >/dev/null 2>&1; then
+            echo "sudo is unavailable for root service sync; skipping root-level mirror."
             exit 0
           fi
-          for root_service in ades.service ades-api.service; do
-            if sudo -n systemctl list-unit-files "$root_service" --no-legend 2>/dev/null | grep -q "^$root_service" \
-              && sudo -n systemctl is-active --quiet "$root_service"; then
-              root_dropin_dir="/etc/systemd/system/$root_service.d"
-              sudo -n install -d -m 755 "$root_dropin_dir"
-              printf '%s\n' \
-                "[Service]" \
-                "Environment=ADES_IMPACT_EXPANSION_ENABLED=true" \
-                "Environment=ADES_IMPACT_EXPANSION_ARTIFACT_PATH=$impact_current_root/market_graph_store.sqlite" \
-                "Environment=ADES_IMPACT_EXPANSION_MAX_DEPTH=2" \
-                "Environment=ADES_IMPACT_EXPANSION_SEED_LIMIT=16" \
-                "Environment=ADES_IMPACT_EXPANSION_MAX_CANDIDATES=25" \
-                "Environment=ADES_IMPACT_EXPANSION_MAX_EDGES_PER_SEED=64" \
-                "Environment=ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE=3" \
-                "Environment=ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED=false" \
-                | sudo -n tee "$root_dropin_dir/zz-impact-expansion.conf" >/dev/null
-              printf '%s\n' \
-                "[Service]" \
-                "Environment=ADES_NEWS_ANALYZE_ENABLED=true" \
-                | sudo -n tee "$root_dropin_dir/zz-news-analyze.conf" >/dev/null
-              sudo -n systemctl daemon-reload
-              sudo -n systemctl restart "$root_service"
+
+          tmp_units="$(mktemp)"
+          trap 'rm -f "$tmp_units" "$tmp_units.running"' EXIT
+          printf '%s\n' "ades.service" "ades-api.service" > "$tmp_units"
+          if sudo -n systemctl list-units --type=service --state=running --no-legend --plain --no-pager 2>/dev/null > "$tmp_units.running"; then
+            awk '{print $1}' "$tmp_units.running" \
+              | while IFS= read -r unit; do
+                  [ -n "$unit" ] || continue
+                  case "$unit" in
+                    nginx.service|qdrant.service)
+                      continue
+                      ;;
+                  esac
+                  show="$(sudo -n systemctl show "$unit" -p ExecStart -p FragmentPath -p DropInPaths --no-pager 2>/dev/null || true)"
+                  if printf '%s\n%s\n' "$unit" "$show" | grep -Eiq '(ades|adestool|/mnt/ades|uvicorn.*ades|gunicorn.*ades)'; then
+                    printf '%s\n' "$unit"
+                  fi
+                done >> "$tmp_units"
+          fi
+
+          mapfile -t root_services < <(sort -u "$tmp_units")
+          mirrored=0
+          for root_service in "${root_services[@]}"; do
+            if ! sudo -n systemctl is-active --quiet "$root_service"; then
+              continue
             fi
+            root_dropin_dir="/etc/systemd/system/$root_service.d"
+            sudo -n install -d -m 755 "$root_dropin_dir"
+            printf '%s\n' \
+              "[Service]" \
+              "Environment=ADES_IMPACT_EXPANSION_ENABLED=true" \
+              "Environment=ADES_IMPACT_EXPANSION_ARTIFACT_PATH=$impact_current_root/market_graph_store.sqlite" \
+              "Environment=ADES_IMPACT_EXPANSION_MAX_DEPTH=2" \
+              "Environment=ADES_IMPACT_EXPANSION_SEED_LIMIT=16" \
+              "Environment=ADES_IMPACT_EXPANSION_MAX_CANDIDATES=25" \
+              "Environment=ADES_IMPACT_EXPANSION_MAX_EDGES_PER_SEED=64" \
+              "Environment=ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE=3" \
+              "Environment=ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED=false" \
+              | sudo -n tee "$root_dropin_dir/zz-impact-expansion.conf" >/dev/null
+            printf '%s\n' \
+              "[Service]" \
+              "Environment=ADES_NEWS_ANALYZE_ENABLED=true" \
+              | sudo -n tee "$root_dropin_dir/zz-news-analyze.conf" >/dev/null
+            mirrored=$((mirrored + 1))
           done
+
+          if [ "$mirrored" -eq 0 ]; then
+            echo "No active root-level ADES service found for impact drop-in mirror."
+          else
+            sudo -n systemctl daemon-reload
+            for root_service in "${root_services[@]}"; do
+              sudo -n systemctl is-active --quiet "$root_service" || continue
+              sudo -n systemctl restart "$root_service"
+            done
+          fi
           REMOTE_SCRIPT
+            then
+              sync_status=0
+              break
+            fi
+            sync_status=$?
+            echo "Sync public service SSH attempt ${attempt} failed with exit ${sync_status}." >&2
+            sleep $((attempt * 15))
+          done
+          exit "$sync_status"
 
       - name: Verify public endpoints
         run: |

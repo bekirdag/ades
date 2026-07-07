@@ -240,6 +240,8 @@ Deployments are pipeline-owned.
   - upload wheel and registry release
   - install wheel into `/mnt/ades/app/shared/.venv`
   - move `/mnt/ades/repo/current` to the new registry release
+  - retry SSH sync of impact/news drop-ins into any active root-level
+    ADES-related public service units
   - restart `ades.service`
   - verify local API health plus the live vector alias/tag smoke
   - verify public health endpoints
