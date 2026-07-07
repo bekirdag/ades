@@ -141,6 +141,9 @@ The workflow performs these production mutations after artifact upload:
 - Writes
   `/home/deploy/.config/systemd/user/ades.service.d/zz-news-analyze.conf`
   with `ADES_NEWS_ANALYZE_ENABLED=true`.
+- If an active root-level `ades.service` or `ades-api.service` exists, mirrors
+  the impact/news drop-ins under `/etc/systemd/system/<service>.d/` and
+  restarts that service so public nginx backends cannot stay on a stale graph.
 - Switches `/mnt/ades/repo/current` to the new registry release unless the
   workflow preserves a larger existing registry and merges only release packs.
 - Runs `systemctl --user daemon-reload`.

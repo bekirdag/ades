@@ -675,6 +675,30 @@ jobs:
           curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/v0/packs/available >/dev/null
           curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:6333/collections/ades-qids-current >/dev/null
           if command -v sudo >/dev/null 2>&1; then
+            for root_service in ades.service ades-api.service; do
+              if sudo -n systemctl list-unit-files "$root_service" --no-legend 2>/dev/null | grep -q "^$root_service" \
+                && sudo -n systemctl is-active --quiet "$root_service"; then
+                root_dropin_dir="/etc/systemd/system/$root_service.d"
+                sudo -n install -d -m 755 "$root_dropin_dir"
+                printf '%s\n' \
+                  "[Service]" \
+                  "Environment=ADES_IMPACT_EXPANSION_ENABLED=true" \
+                  "Environment=ADES_IMPACT_EXPANSION_ARTIFACT_PATH=$impact_current_root/market_graph_store.sqlite" \
+                  "Environment=ADES_IMPACT_EXPANSION_MAX_DEPTH=2" \
+                  "Environment=ADES_IMPACT_EXPANSION_SEED_LIMIT=16" \
+                  "Environment=ADES_IMPACT_EXPANSION_MAX_CANDIDATES=25" \
+                  "Environment=ADES_IMPACT_EXPANSION_MAX_EDGES_PER_SEED=64" \
+                  "Environment=ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE=3" \
+                  "Environment=ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED=false" \
+                  | sudo -n tee "$root_dropin_dir/zz-impact-expansion.conf" >/dev/null
+                printf '%s\n' \
+                  "[Service]" \
+                  "Environment=ADES_NEWS_ANALYZE_ENABLED=true" \
+                  | sudo -n tee "$root_dropin_dir/zz-news-analyze.conf" >/dev/null
+                sudo -n systemctl daemon-reload
+                sudo -n systemctl restart "$root_service"
+              fi
+            done
             sudo -n systemctl reload nginx >/dev/null 2>&1 || sudo -n systemctl restart nginx >/dev/null 2>&1 || true
           fi
           python3 - <<'PY'

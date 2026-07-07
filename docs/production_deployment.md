@@ -213,7 +213,9 @@ The deploy workflow now builds the packaged starter market graph from
 `/home/deploy/.local/share/ades-artifacts/market-graph/current/` from any larger
 legacy active graph if needed, copies or merges the release graph into that
 stable current path, and writes the `zz-impact-expansion.conf` drop-in before
-restarting `ades.service`.
+restarting `ades.service`. As a public-origin safeguard, the workflow also
+mirrors the impact/news drop-ins into active root-level `ades.service` or
+`ades-api.service` units when present before reloading nginx.
 
 Latest verified live smoke on `2026-04-21` using `/home/deploy/deleteme.txt`:
 
