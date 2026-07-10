@@ -83,6 +83,14 @@ def test_phase6_overlays_cover_bdya_market_news_primitives() -> None:
     assert reuters["alias_quality"] == "source_outlet"
     assert reuters["runtime_tier"] == "search_only"
     assert reuters["weak_alias"] is True
+    hormuz = next(
+        record
+        for record in BDYA_GENERAL_OVERLAY_ENTITIES
+        if record["canonical_text"] == "Strait of Hormuz"
+    )
+    assert {"Hormuz", "Estreito de Ormuz", "Estreito de Hormuz"} <= set(
+        hormuz["aliases"]
+    )
 
 
 def test_phase6_general_overlay_covers_g20_market_institutions_and_offices() -> None:

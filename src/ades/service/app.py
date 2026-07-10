@@ -346,6 +346,15 @@ _NEWS_ANALYZE_DEBUG_EVIDENCE_LIMIT = 24
 _NEWS_ANALYZE_DEBUG_EVIDENCE_CHAR_LIMIT = 240
 _NEWS_ANALYZE_DEBUG_ENTITY_REF_LIMIT = 64
 _COUNTRY_ALIAS_TO_CODE: dict[str, str] = {}
+for _code, _name in _COUNTRY_BY_CODE.items():
+    _normalized_name = str(_name).strip()
+    if not _normalized_name:
+        continue
+    _COUNTRY_ALIAS_TO_CODE[_normalized_name.casefold()] = _code
+    if "," in _normalized_name:
+        _short_name = _normalized_name.split(",", 1)[0].strip()
+        if _short_name:
+            _COUNTRY_ALIAS_TO_CODE[_short_name.casefold()] = _code
 for _country in DEFAULT_CURATED_G20_COUNTRY_ENTITIES:
     entity_id = str(_country.get("entity_id", ""))
     if not entity_id.startswith("country:"):
@@ -1687,6 +1696,55 @@ def _direct_terminal_entity_type(entity_ref: str, entity_type: str | None) -> st
     return entity_type
 
 
+def _direct_terminal_identity_terms(entity_ref: str) -> list[str]:
+    _jurisdiction, _exchange, ticker, security_ids = _terminal_identity_parts(entity_ref)
+    terms = [ticker]
+    terms.extend(security_ids.values())
+    if ":" in entity_ref:
+        terms.append(entity_ref.rsplit(":", 1)[1])
+    return _dedupe_string_values(terms)
+
+
+def _direct_terminal_entity_is_story_anchored(entity: EntityMatch, text: str) -> bool:
+    entity_ref = _entity_ref(entity)
+    if not _is_direct_terminal_ref(entity_ref):
+        return True
+    if not text.strip():
+        return False
+    terms = [
+        *_direct_terminal_identity_terms(entity_ref),
+        _entity_name(entity),
+        entity.text,
+        *entity.aliases,
+    ]
+    for term in _dedupe_string_values(terms):
+        normalized = re.sub(r"[^A-Za-z0-9]+", "", term)
+        if len(normalized) < 2:
+            continue
+        if _text_contains_entity_phrase(text, term):
+            return True
+    return False
+
+
+def _production_entity_ref_for_news_seed(
+    entity: EntityMatch,
+    *,
+    text: str,
+    warnings: list[str],
+) -> str | None:
+    entity_ref = entity.link.entity_id.strip() if entity.link else ""
+    if not entity_ref:
+        return None
+    if not _is_direct_terminal_ref(entity_ref):
+        return entity_ref
+    if _direct_terminal_entity_is_story_anchored(entity, text):
+        return entity_ref
+    warnings.append(
+        f"ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_DIRECT_TERMINAL:{entity_ref[:120]}"
+    )
+    return None
+
+
 def _is_direct_terminal_source_entity(source_entity: ImpactSourceEntity) -> bool:
     entity_ref = source_entity.entity_ref.strip()
     normalized_ref = entity_ref.casefold()
@@ -2122,50 +2180,51 @@ def _build_country_scope(
     settings: Settings | None = None,
     text: str | None = None,
 ) -> NewsAnalyzeCountryScope | None:
-    hinted_code = _country_code_from_text(country_hint)
-    if hinted_code:
-        hinted_name = _COUNTRY_BY_CODE.get(hinted_code)
+    def _scope_for_code(
+        code: str,
+        source: str,
+        preferred_name: str | None = None,
+    ) -> NewsAnalyzeCountryScope:
+        name = preferred_name or _COUNTRY_BY_CODE.get(code)
         for entity in entities:
             entity_name = _entity_name(entity)
             entity_code = _entity_ref_country_code(entity.link.entity_id if entity.link else None)
             entity_code = entity_code or _country_code_from_text(entity_name)
-            if entity_code == hinted_code:
-                hinted_name = entity_name
+            if entity_code == code:
+                name = entity_name
                 break
-        hinted_name = hinted_name or _country_name_from_impact_sources(
-            hinted_code,
+        name = name or _country_name_from_impact_sources(
+            code,
             impact_source_entities,
         )
-        hinted_name = hinted_name or _country_name_from_impact_graph(hinted_code, settings)
+        name = name or _country_name_from_impact_graph(code, settings)
         return NewsAnalyzeCountryScope(
-            country_code=hinted_code,
-            entity_ref=f"country:{hinted_code}",
-            name=hinted_name or hinted_code.upper(),
-            source=hint_source
-            if hint_source in {"country_hint", "source_hint"}
-            else "country_hint",
+            country_code=code,
+            entity_ref=f"country:{code}",
+            name=name or code.upper(),
+            source=source,
+        )
+
+    hinted_code = _country_code_from_text(country_hint)
+    if hinted_code and hint_source != "source_hint":
+        return _scope_for_code(
+            hinted_code,
+            hint_source if hint_source == "country_hint" else "country_hint",
         )
     for entity in entities:
         code = _entity_ref_country_code(entity.link.entity_id if entity.link else None)
         code = code or _country_code_from_text(_entity_name(entity))
         if code:
-            entity_name = _entity_name(entity)
-            return NewsAnalyzeCountryScope(
-                country_code=code,
-                entity_ref=f"country:{code}",
-                name=_COUNTRY_BY_CODE.get(code, entity_name or code.upper()),
-                source="entity_match",
-            )
+            return _scope_for_code(code, "entity_match", preferred_name=_entity_name(entity))
     if text:
         text_country_codes = _country_codes_from_text(text)
         if text_country_codes:
-            code = text_country_codes[0]
-            return NewsAnalyzeCountryScope(
-                country_code=code,
-                entity_ref=f"country:{code}",
-                name=_COUNTRY_BY_CODE.get(code, code.upper()),
-                source="text_country_mention",
-            )
+            return _scope_for_code(text_country_codes[0], "text_country_mention")
+    if hinted_code:
+        return _scope_for_code(
+            hinted_code,
+            hint_source if hint_source == "source_hint" else "country_hint",
+        )
     return None
 
 
@@ -2197,6 +2256,16 @@ def _hidden_artifact_reasons(
         return ["empty_text"]
     reasons: list[str] = []
     label = entity.label.strip().casefold() if entity else ""
+    if normalized.casefold() in {
+        "none",
+        "null",
+        "nil",
+        "n/a",
+        "na",
+        "not applicable",
+        "unknown",
+    }:
+        reasons.append("none_placeholder")
     for reason, pattern in _HIDDEN_PASSIVE_ARTIFACT_PATTERNS:
         if pattern.search(normalized):
             reasons.append(reason)
@@ -2209,6 +2278,19 @@ def _hidden_artifact_reasons(
             reasons.append(label)
     if re.fullmatch(r"[+-]?\d+(?:[.,]\d+)*", normalized):
         reasons.append("numeric_fragment")
+    if re.fullmatch(
+        r"[+-]?\d+(?:[.,]\d+)?\s*(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)",
+        normalized,
+        flags=re.IGNORECASE,
+    ):
+        reasons.append("duration_or_time_window")
+    if re.search(
+        r"(?:^|\b)(?:ap|associated press|reuters|getty images|afp|epa|shutterstock)"
+        r"\s+photo(?:\b|/)|\bphoto\s*(?:by|/|:|credit)\b",
+        normalized,
+        flags=re.IGNORECASE,
+    ):
+        reasons.append("photo_credit")
     if normalized.casefold() in {"read more", "click here", "subscribe", "advertisement"}:
         reasons.append("boilerplate")
     if source_outlet_artifact:
@@ -3879,7 +3961,14 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 f"{len(proposal_only_entity_refs)}"
             )
         entity_refs = _dedupe_string_values(
-            [entity.link.entity_id if entity.link else None for entity in production_entities]
+            [
+                _production_entity_ref_for_news_seed(
+                    entity,
+                    text=analysis_text,
+                    warnings=warnings,
+                )
+                for entity in production_entities
+            ]
         )
         graph_enabled_packs = _news_graph_enabled_packs(
             tag_responses=tag_responses,

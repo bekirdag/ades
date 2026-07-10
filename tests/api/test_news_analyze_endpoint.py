@@ -1810,6 +1810,87 @@ def test_news_analyze_promotes_tradable_source_entities_to_terminals(
     assert "NO_TERMINAL_IMPACT_CANDIDATES" not in payload["quality_flags"]
 
 
+def test_news_analyze_drops_unanchored_direct_ticker_entity_refs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(
+        tmp_path,
+        "news-unanchored-direct-ticker-en",
+        domain="finance",
+    )
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="BBBY",
+                    label="ticker",
+                    start=0,
+                    end=4,
+                    confidence=0.93,
+                    relevance=0.95,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="finance",
+                    ),
+                    link=EntityLink(
+                        entity_id="finance-us-ticker:BBBY",
+                        canonical_text="Bed Bath & Beyond",
+                        provider="ades",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="politics", score=0.82, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(*_: object, **__: object) -> ImpactExpansionResult:
+        raise AssertionError("unanchored direct ticker must not seed impact expansion")
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Pentagon labor talks continue",
+            "text": "Pentagon labor talks continued without a named listed company.",
+            "packs": [pack_id],
+            "options": {
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["terminal_impact_candidates"] == []
+    expected_warning = (
+        "ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_DIRECT_TERMINAL:finance-us-ticker:BBBY"
+    )
+    assert any(warning == expected_warning for warning in payload["warnings"])
+
+
 def test_news_analyze_maps_legal_entity_to_terminal_ticker_path(
     tmp_path: Path,
     monkeypatch,
@@ -3756,6 +3837,9 @@ def test_news_analyze_passive_classifier_hides_artifacts_and_forces_text_country
                 _entity("10%", "percentage"),
                 _entity("https://example.com", "url"),
                 _entity("<a>link</a>", "html"),
+                _entity("None", "organization"),
+                _entity("24 Hours", "organization"),
+                _entity("AP Photo/Terry Chea", "person"),
                 _entity(
                     "Federal Reserve",
                     "organization",
@@ -3775,7 +3859,8 @@ def test_news_analyze_passive_classifier_hides_artifacts_and_forces_text_country
             "title": "Canada inflation pressure rises",
             "text": (
                 "Canada inflation rose 10% after Reuters cited "
-                "https://example.com and <a>link</a> while the Federal Reserve responded."
+                "https://example.com and <a>link</a>. None and 24 Hours appeared "
+                "near AP Photo/Terry Chea while the Federal Reserve responded."
             ),
             "packs": [pack_id],
             "options": {
@@ -3810,6 +3895,59 @@ def test_news_analyze_passive_classifier_hides_artifacts_and_forces_text_country
     assert "percentage" in hidden_reasons_by_name["10%"]
     assert "url_or_link" in hidden_reasons_by_name["https://example.com"]
     assert "html_fragment" in hidden_reasons_by_name["<a>link</a>"]
+    assert "none_placeholder" in hidden_reasons_by_name["None"]
+    assert "duration_or_time_window" in hidden_reasons_by_name["24 Hours"]
+    assert "photo_credit" in hidden_reasons_by_name["AP Photo/Terry Chea"]
+
+
+def test_news_analyze_prefers_text_country_over_source_country_hint(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_news_pack(tmp_path)
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[],
+            topics=[TopicMatch(label="politics", score=0.84, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Iran shipping talks affect Gulf routes",
+            "text": (
+                "Iran said Strait of Hormuz shipping talks with Oman remained active "
+                "after regional security warnings."
+            ),
+            "source": {"publisher": "Example", "source_country": "TR"},
+            "packs": [pack_id],
+            "options": {"include_relationship_paths": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["country_scope"]["entity_ref"] == "country:ir"
+    assert payload["country_scope"]["source"] == "text_country_mention"
+    assert payload["country_scope"]["entity_ref"] != "country:tr"
 
 
 def test_news_analyze_source_outlet_subject_remains_display_eligible(

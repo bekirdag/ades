@@ -54,7 +54,13 @@ BDYA_GENERAL_OVERLAY_ENTITIES: tuple[dict[str, object], ...] = (
     _entity(
         "location",
         "Strait of Hormuz",
-        aliases=("Hormuz Strait", "Hormuz chokepoint"),
+        aliases=(
+            "Hormuz",
+            "Hormuz Strait",
+            "Hormuz chokepoint",
+            "Estreito de Ormuz",
+            "Estreito de Hormuz",
+        ),
         entity_id="ades:market-location:strait-of-hormuz",
         metadata={"category": "strategic_chokepoint", "asset_family": "energy"},
         alias_quality="strong",
