@@ -5702,3 +5702,424 @@ def test_news_analyze_default_pack_budget_allows_full_country_pack_budget(
         "finance-jp-en",
     }
     assert planned_country_packs.issubset(set(payload["packs_used"]))
+
+
+def test_news_analyze_story_quality_routes_topics_and_strips_internal_metadata(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "story-quality-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    cases = [
+        (
+            "Bitcoin rallied as crypto ETF flows increased.",
+            "Commodities, Energy & Agriculture",
+            "Trading & Markets",
+        ),
+        (
+            "A court penalty hit Trump-linked entities after a regulator enforcement action.",
+            "Economic & Macro",
+            "Regulatory & Legal",
+        ),
+        (
+            "Microsoft expanded AI infrastructure capacity for enterprise software customers.",
+            "Commodities, Energy & Agriculture",
+            "General / Mixed",
+        ),
+        (
+            "Sky made a takeover offer for ITV shares.",
+            "Regional & International",
+            "Trading & Markets",
+        ),
+    ]
+
+    for story_text, topic_label, expected_primary in cases:
+
+        def _fake_tag(
+            text: str,
+            *,
+            pack: str | None = None,
+            content_type: str = "text/plain",
+            **_: object,
+        ) -> TagResponse:
+            assert "Primary signal:" not in text
+            assert "Market exposure is concentrated around" not in text
+            return TagResponse(
+                version="0.1.0",
+                pack=pack or "unknown",
+                pack_version="0.1.0",
+                language="en",
+                content_type=content_type,
+                entities=[],
+                topics=[TopicMatch(label=topic_label, score=0.9, evidence_count=1)],
+                warnings=[],
+                timing_ms=1,
+            )
+
+        monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+        response = client.post(
+            "/v0/news/analyze",
+            json={
+                "packs": [pack_id],
+                "text": (
+                    "Primary signal: Seven & i Holdings internal routing note.\n"
+                    "Market exposure is concentrated around stale terminal refs.\n"
+                    f"{story_text}"
+                ),
+                "options": {"include_relationship_paths": False},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["topic_scope"]["primary"] == expected_primary
+        assert "ADES_NEWS_ANALYZE_STRIPPED_INTERNAL_METADATA" in payload["warnings"]
+
+
+def test_news_analyze_filters_matched_signal_sports_from_market_impacts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "sports-filter-en", domain="general")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="FIFA",
+                    label="organization",
+                    start=0,
+                    end=4,
+                    confidence=0.91,
+                    relevance=0.9,
+                    link=EntityLink(
+                        entity_id="ades:org:fifa",
+                        canonical_text="FIFA",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="general",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="Sports", score=0.95, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fail_expand(*_: object, **__: object) -> ImpactExpansionResult:
+        raise AssertionError("sports stories must not expand market impacts")
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fail_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": (
+                "matched_signal=sports Morningstar downgrades Barcelona after a "
+                "FIFA president investigation."
+            ),
+            "options": {
+                "include_relationship_paths": True,
+                "include_impact_paths": True,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["terminal_impact_candidates"] == []
+    assert "NON_MARKET_NEWS_DOMAIN" in payload["quality_flags"]
+    assert any(
+        warning.startswith("ADES_NEWS_ANALYZE_NON_MARKET_DOMAIN:matched_signal_sports")
+        for warning in payload["warnings"]
+    )
+
+
+def test_news_analyze_forces_primary_country_actor_passives(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "country-actor-en", domain="general")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[],
+            topics=[TopicMatch(label="Geopolitics", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": (
+                "The United States and Iran discussed Strait of Hormuz transit "
+                "with Oman while BP and Bayer briefed investors."
+            ),
+            "source": {"source_country": "TR"},
+            "options": {"include_relationship_paths": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    passive_refs = {entity["entity_ref"] for entity in payload["passive_entities"]}
+    assert {"country:us", "country:ir", "country:om", "country:uk", "country:de"}.issubset(
+        passive_refs
+    )
+    assert "country:tr" not in passive_refs
+
+
+def test_news_analyze_hides_raw_finance_ticker_alias_and_flags_cantarell_operator(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "passive-artifact-en", domain="general")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Finance Us Ticker HERE",
+                    label="organization",
+                    start=0,
+                    end=22,
+                    confidence=0.88,
+                    relevance=0.8,
+                    link=EntityLink(
+                        entity_id="ades:artifact:finance-us-ticker-here",
+                        canonical_text="Finance Us Ticker HERE",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="general",
+                    ),
+                )
+            ],
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": "Cantarell field operator Petrobras was cited in an energy story.",
+            "options": {"include_relationship_paths": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    ticker_alias = next(
+        entity
+        for entity in payload["passive_entities"]
+        if entity["name"] == "Finance Us Ticker HERE"
+    )
+    assert ticker_alias["display_eligible"] is False
+    assert "raw_ticker_identifier" in ticker_alias["quality_reasons"]
+    assert (
+        "ADES_NEWS_ANALYZE_FACTUAL_CONSISTENCY:CANTARELL_OPERATOR_PEMEX"
+        in payload["warnings"]
+    )
+
+
+def test_news_analyze_overrides_negative_cost_and_warning_directions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "direction-override-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="United States",
+                    label="country",
+                    start=0,
+                    end=13,
+                    confidence=0.9,
+                    relevance=0.8,
+                    link=EntityLink(
+                        entity_id="country:us",
+                        canonical_text="United States",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="finance",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="Trading & Markets", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _edge(target_ref: str, relation: str, event_type: str) -> ImpactPathEdge:
+        return ImpactPathEdge(
+            source_ref="country:us",
+            target_ref=target_ref,
+            relation=relation,
+            evidence_level="direct",
+            confidence=0.9,
+            direction_hint="positive",
+            source_name="Fixture",
+            source_url="https://example.test/source",
+            source_snapshot="2026-07-10",
+            compatible_event_types=[event_type],
+        )
+
+    def _candidate(entity_ref: str, name: str, edge: ImpactPathEdge) -> ImpactCandidate:
+        return ImpactCandidate(
+            entity_ref=entity_ref,
+            name=name,
+            entity_type="sector",
+            evidence_level="shallow",
+            confidence=0.86,
+            source_entity_refs=["country:us"],
+            relationship_paths=[
+                ImpactRelationshipPath(path_depth=1, edges=[edge]),
+            ],
+            compatible_event_types=edge.compatible_event_types,
+        )
+
+    def _fake_expand(*_: object, **__: object) -> ImpactExpansionResult:
+        return ImpactExpansionResult(
+            graph_version="fixture",
+            artifact_version="fixture",
+            artifact_hash="sha256:fixture",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="country:us",
+                    name="United States",
+                    entity_type="country",
+                )
+            ],
+            candidates=[
+                _candidate(
+                    "ades:sector:airlines",
+                    "Airlines sector",
+                    _edge("ades:sector:airlines", "commodity_affects_sector", "commodity_price_move"),
+                ),
+                _candidate(
+                    "ades:sector:semiconductors",
+                    "Semiconductors sector",
+                    _edge(
+                        "ades:sector:semiconductors",
+                        "analyst_warning_affects_sector",
+                        "guidance_cut",
+                    ),
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": (
+                "United States oil prices rose after a supply disruption, lifting "
+                "fuel costs for airlines. Morgan Stanley cut its semiconductor "
+                "outlook and warned chipmakers face weaker demand."
+            ),
+            "options": {
+                "include_relationship_paths": True,
+                "include_impact_paths": True,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    candidates = {
+        candidate["entity_ref"]: candidate
+        for candidate in payload["terminal_impact_candidates"]
+    }
+    assert (
+        candidates["ades:sector:airlines"]["relationship_paths"][0]["edges"][0][
+            "direction_hint"
+        ]
+        == "negative_cost_pressure"
+    )
+    assert (
+        candidates["ades:sector:semiconductors"]["relationship_paths"][0]["edges"][0][
+            "direction_hint"
+        ]
+        == "negative_analyst_warning"
+    )

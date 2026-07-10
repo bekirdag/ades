@@ -469,6 +469,19 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
         confidence=0.82,
     ),
     _EventRule(
+        event_type="crypto_market_move",
+        patterns=(
+            _rx(
+                r"\b(?:bitcoin|btc|ether|ethereum|crypto(?:currency|currencies)?|digital\s+assets?|tokens?)\b.{0,120}\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|trade(?:s|d|ing)?|etf|flows?)\b"
+            ),
+            _rx(
+                r"\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|trade(?:s|d|ing)?|etf|flows?)\b.{0,120}\b(?:bitcoin|btc|ether|ethereum|crypto(?:currency|currencies)?|digital\s+assets?|tokens?)\b"
+            ),
+        ),
+        compatible_asset_families=("crypto", "currency", "equity_index"),
+        confidence=0.82,
+    ),
+    _EventRule(
         event_type="currency_market_move",
         patterns=(
             _rx(
@@ -805,6 +818,7 @@ EVENT_COMPATIBILITY_MATRIX: dict[str, EventCompatibilityFamily] = {
             "fiscal_expansion",
             "fiscal_austerity",
             "currency_market_move",
+            "crypto_market_move",
             "fx_intervention",
             "trade_balance_signal",
             "capital_flow_signal",
@@ -819,6 +833,7 @@ EVENT_COMPATIBILITY_MATRIX: dict[str, EventCompatibilityFamily] = {
         ),
         compatible_asset_families=(
             "currency",
+            "crypto",
             "rates",
             "bonds",
             "equity_index",
@@ -829,6 +844,7 @@ EVENT_COMPATIBILITY_MATRIX: dict[str, EventCompatibilityFamily] = {
         ),
         terminal_types=(
             "currency",
+            "crypto",
             "rates_proxy",
             "index",
             "commodity",
@@ -1147,6 +1163,16 @@ def _candidate_families(candidate: ImpactCandidate) -> set[str]:
         families.add("commodity")
     if "energy" in text or "oil" in text or "gas" in text:
         families.add("energy")
+    if (
+        "crypto" in text
+        or "bitcoin" in text
+        or "btc" in text
+        or "ether" in text
+        or "ethereum" in text
+        or "digital-asset" in text
+        or "digital asset" in text
+    ):
+        families.add("crypto")
     if "currency" in text or "forex" in text or "fx" in text or "dxy" in text:
         families.add("currency")
     if "policy-rate" in text or "interest-rate" in text or "rate" in text:

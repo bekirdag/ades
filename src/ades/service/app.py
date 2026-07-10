@@ -389,6 +389,13 @@ _HIDDEN_PASSIVE_ARTIFACT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.IGNORECASE,
         ),
     ),
+    (
+        "raw_ticker_identifier",
+        re.compile(
+            r"\bfinance\s+[a-z]{2}\s+ticker(?:\s+[a-z0-9._:-]+)?\b",
+            re.IGNORECASE,
+        ),
+    ),
     ("html_fragment", re.compile(r"<[^>]+>")),
 )
 _PASSIVE_ARTIFACT_LABELS = {
@@ -476,9 +483,84 @@ _DIRECT_MARKET_TERMINAL_ENTITY_TYPES = {"commodity", "crypto"}
 _DIRECT_MARKET_TERMINAL_SIGNAL_FAMILIES = {
     "agriculture",
     "commodity",
+    "crypto",
     "energy",
     "safe_haven",
 }
+_INTERNAL_NEWS_METADATA_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"^\s*primary\s+signal\s*:\s*.*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(
+        r"^\s*market\s+exposure\s+is\s+concentrated\s+around\b.*$",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+)
+_NON_MARKET_SIGNAL_TERMS = {
+    "barcelona",
+    "celebrity",
+    "entertainment",
+    "fifa",
+    "football",
+    "gossip",
+    "league",
+    "soccer",
+    "sports",
+    "sports rights",
+    "tabloid",
+}
+_MARKET_CONTEXT_TERMS = {
+    "acquisition",
+    "bid",
+    "bond",
+    "buyout",
+    "company",
+    "earnings",
+    "equity",
+    "exchange",
+    "investor",
+    "issuer",
+    "market",
+    "merger",
+    "regulator",
+    "revenue",
+    "share",
+    "stock",
+    "takeover",
+    "ticker",
+}
+_CORPORATE_HQ_COUNTRY_CUES: tuple[tuple[str, re.Pattern[str], str], ...] = (
+    ("uk", re.compile(r"\b(?:bp|british\s+petroleum)\b", re.IGNORECASE), "BP"),
+    ("de", re.compile(r"\bbayer\b", re.IGNORECASE), "Bayer"),
+)
+_CRYPTO_TOPIC_PATTERN = re.compile(
+    r"\b(?:bitcoin|btc|ether|ethereum|crypto(?:currency|currencies)?|digital\s+assets?)\b",
+    re.IGNORECASE,
+)
+_LEGAL_TOPIC_PATTERN = re.compile(
+    r"\b(?:court|lawsuit|legal|penalt(?:y|ies)|fine|fined|settlement|regulator|regulatory|enforcement|probe)\b",
+    re.IGNORECASE,
+)
+_MA_TOPIC_PATTERN = re.compile(
+    r"\b(?:m&a|merger|takeover|acquisition|buyout|bid|offer|stake|shares?)\b",
+    re.IGNORECASE,
+)
+_TECH_TOPIC_PATTERN = re.compile(
+    r"\b(?:ai|artificial\s+intelligence|cloud|microsoft|semiconductor|chipmaker|software|technology|tech)\b",
+    re.IGNORECASE,
+)
+_NON_PHYSICAL_ASSET_PATTERN = re.compile(
+    r"\b(?:bitcoin|crypto(?:currency|currencies)?|digital\s+assets?|software|ai|artificial\s+intelligence)\b",
+    re.IGNORECASE,
+)
+_AIRLINE_NEGATIVE_COST_PATTERN = re.compile(
+    r"\b(?:oil|crude|brent|wti|fuel|jet\s+fuel)\b.{0,120}\b(?:rise|rises|rose|rising|jump|jumps|jumped|surge|surges|surged|hike|hikes|hiked|higher|costlier|spike|spikes|spiked)\b"
+    r"|\b(?:rise|rises|rose|rising|jump|jumps|jumped|surge|surges|surged|hike|hikes|hiked|higher|costlier|spike|spikes|spiked)\b.{0,120}\b(?:oil|crude|brent|wti|fuel|jet\s+fuel)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_SEMICONDUCTOR_NEGATIVE_WARNING_PATTERN = re.compile(
+    r"\b(?:semiconductor|semiconductors|chipmaker|chipmakers|chips?|morgan\s+stanley)\b.{0,140}\b(?:warn|warns|warned|warning|downgrade|downgrades|downgraded|cut|cuts|cutting|lower|lowers|lowered|weak|weaker|negative)\b"
+    r"|\b(?:warn|warns|warned|warning|downgrade|downgrades|downgraded|cut|cuts|cutting|lower|lowers|lowered|weak|weaker|negative)\b.{0,140}\b(?:semiconductor|semiconductors|chipmaker|chipmakers|chips?|morgan\s+stanley)\b",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 @dataclass(frozen=True)
@@ -2289,6 +2371,84 @@ def _news_analysis_text(request: NewsAnalyzeRequest) -> str:
     )
 
 
+def _clean_news_analysis_text(text: str) -> str:
+    cleaned = text
+    for pattern in _INTERNAL_NEWS_METADATA_PATTERNS:
+        cleaned = pattern.sub("", cleaned)
+    lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+    return "\n".join(lines).strip()
+
+
+def _story_quality_warnings(raw_text: str, analysis_text: str) -> list[str]:
+    warnings: list[str] = []
+    if any(pattern.search(raw_text) for pattern in _INTERNAL_NEWS_METADATA_PATTERNS):
+        warnings.append("ADES_NEWS_ANALYZE_STRIPPED_INTERNAL_METADATA")
+    factual_text = analysis_text.casefold()
+    if "cantarell" in factual_text and "petrobras" in factual_text and "pemex" not in factual_text:
+        warnings.append("ADES_NEWS_ANALYZE_FACTUAL_CONSISTENCY:CANTARELL_OPERATOR_PEMEX")
+    return warnings
+
+
+def _request_domain_terms(request: NewsAnalyzeRequest) -> list[str]:
+    terms: list[str] = []
+    for value in (request.domain_hint,):
+        if value:
+            terms.append(str(value))
+    if request.hints and request.hints.topics:
+        terms.extend(str(topic) for topic in request.hints.topics if str(topic).strip())
+    for raw_entity in [*request.raw_entities, *request.categorized_entities]:
+        for field_name in (
+            "text",
+            "name",
+            "canonical_text",
+            "label",
+            "entity_type",
+            "category",
+            "matched_signal",
+        ):
+            value = getattr(raw_entity, field_name, None)
+            if value and str(value).strip():
+                terms.append(str(value))
+    return terms
+
+
+def _has_market_context(text: str) -> bool:
+    folded = text.casefold()
+    return any(re.search(rf"\b{re.escape(term)}\b", folded) for term in _MARKET_CONTEXT_TERMS)
+
+
+def _has_non_market_signal(text: str) -> str | None:
+    if re.search(
+        r"\bmatched_signal\s*[:=]\s*(?:sports?|entertainment|celebrity|tabloid|match)\b",
+        text,
+        re.IGNORECASE,
+    ):
+        return "matched_signal_sports"
+    folded = text.casefold()
+    for term in sorted(_NON_MARKET_SIGNAL_TERMS, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(term)}\b", folded):
+            return f"non_market_{term.replace(' ', '_')}"
+    return None
+
+
+def _non_market_news_rejection_reasons(
+    *,
+    request: NewsAnalyzeRequest,
+    text: str,
+    event_signals: list[object],
+) -> list[str]:
+    domain_text = " ".join(_request_domain_terms(request))
+    combined_text = "\n".join(part for part in (domain_text, text) if part.strip())
+    reason = _has_non_market_signal(combined_text)
+    if not reason:
+        return []
+    if reason == "matched_signal_sports":
+        return [reason]
+    if event_signals and _has_market_context(text):
+        return []
+    return [reason]
+
+
 def _news_country_hint(request: NewsAnalyzeRequest) -> tuple[str | None, str | None]:
     if request.country_hint and request.country_hint.strip():
         return request.country_hint, "country_hint"
@@ -2415,6 +2575,38 @@ def _build_country_scope(
             hint_source if hint_source == "source_hint" else "country_hint",
         )
     return None
+
+
+def _additional_country_scopes_from_text(
+    *,
+    text: str | None,
+    primary_scope: NewsAnalyzeCountryScope | None,
+) -> list[NewsAnalyzeCountryScope]:
+    if not text:
+        return []
+    seen = {primary_scope.country_code.casefold()} if primary_scope else set()
+    scopes: list[NewsAnalyzeCountryScope] = []
+
+    def _append(code: str, source: Literal["entity_match", "text_country_mention"]) -> None:
+        normalized_code = code.casefold()
+        if not normalized_code or normalized_code in seen:
+            return
+        seen.add(normalized_code)
+        scopes.append(
+            NewsAnalyzeCountryScope(
+                country_code=normalized_code,
+                entity_ref=f"country:{normalized_code}",
+                name=_COUNTRY_BY_CODE.get(normalized_code, normalized_code.upper()),
+                source=source,
+            )
+        )
+
+    for code in _country_codes_from_text(text):
+        _append(code, "text_country_mention")
+    for code, pattern, _actor in _CORPORATE_HQ_COUNTRY_CUES:
+        if pattern.search(text):
+            _append(code, "entity_match")
+    return scopes
 
 
 def _text_contains_entity_phrase(text: str | None, name: str) -> bool:
@@ -2656,6 +2848,7 @@ def _build_passive_entities(
     entities: list[EntityMatch],
     terminal_candidates: list[object],
     country_scope: NewsAnalyzeCountryScope | None,
+    country_scopes: list[NewsAnalyzeCountryScope] | None = None,
     max_entities: int,
     request: NewsAnalyzeRequest,
 ) -> list[NewsAnalyzePassiveEntity]:
@@ -2715,15 +2908,27 @@ def _build_passive_entities(
                 quality_reasons=reasons,
             )
         )
-    if country_scope and not any(
-        passive.entity_ref.casefold() == country_scope.entity_ref.casefold()
-        for passive in passive_entities
-    ):
+    forced_country_scopes: list[NewsAnalyzeCountryScope] = []
+    for scope in [country_scope, *(country_scopes or [])]:
+        if not scope:
+            continue
+        if any(
+            existing.entity_ref.casefold() == scope.entity_ref.casefold()
+            for existing in passive_entities
+        ):
+            continue
+        if any(
+            existing.entity_ref.casefold() == scope.entity_ref.casefold()
+            for existing in forced_country_scopes
+        ):
+            continue
+        forced_country_scopes.append(scope)
+    for scope in reversed(forced_country_scopes):
         passive_entities.insert(
             0,
             NewsAnalyzePassiveEntity(
-                entity_ref=country_scope.entity_ref,
-                name=country_scope.name,
+                entity_ref=scope.entity_ref,
+                name=scope.name,
                 entity_type="country",
                 label="country",
                 role="country_scope",
@@ -2731,7 +2936,7 @@ def _build_passive_entities(
                 display_eligible=True,
                 aliases=[],
                 mention_count=1,
-                evidence_text=country_scope.name,
+                evidence_text=scope.name,
                 quality_reasons=["forced_country_scope"],
             ),
         )
@@ -2988,6 +3193,8 @@ def _build_topic_scope(
     *,
     topics: list[object],
     request: NewsAnalyzeRequest,
+    event_signals: list[object] | None = None,
+    text: str | None = None,
 ) -> NewsAnalyzeTopicScope | None:
     labels = _dedupe_string_values(
         [
@@ -2996,6 +3203,42 @@ def _build_topic_scope(
             *((request.hints.topics if request.hints else []) or []),
         ]
     )
+    signal_types = {
+        str(getattr(signal, "event_type", "")).strip().casefold()
+        for signal in event_signals or []
+        if str(getattr(signal, "event_type", "")).strip()
+    }
+    route_text = "\n".join([text or "", " ".join(labels)]).strip()
+    primary_override: str | None = None
+    if signal_types & {"regulatory_enforcement", "sanctions", "export_control"} or _LEGAL_TOPIC_PATTERN.search(
+        route_text
+    ):
+        primary_override = "Regulatory & Legal"
+    elif signal_types & {"acquisition", "merger", "divestiture", "equity_listing"} or _MA_TOPIC_PATTERN.search(
+        route_text
+    ):
+        primary_override = "Trading & Markets"
+    elif "crypto_market_move" in signal_types or _CRYPTO_TOPIC_PATTERN.search(route_text):
+        primary_override = "Trading & Markets"
+    elif _TECH_TOPIC_PATTERN.search(route_text) and any(
+        "commodit" in label.casefold() for label in labels
+    ):
+        primary_override = "General / Mixed"
+    elif _NON_PHYSICAL_ASSET_PATTERN.search(route_text) and any(
+        "commodit" in label.casefold() for label in labels
+    ):
+        primary_override = "General / Mixed"
+    if primary_override:
+        labels = _dedupe_string_values(
+            [
+                primary_override,
+                *[
+                    label
+                    for label in labels
+                    if label.casefold() != primary_override.casefold()
+                ],
+            ]
+        )
     if not labels:
         return None
 
@@ -3016,6 +3259,9 @@ def _build_topic_scope(
             "equity",
             "currency",
             "commodity",
+            "crypto",
+            "trading",
+            "markets",
         ),
         politics_relevant=_has_any(
             "politics",
@@ -3034,6 +3280,86 @@ def _build_topic_scope(
             "growth",
         ),
     )
+
+
+def _candidate_direction_context(candidate: ImpactCandidate) -> str:
+    parts: list[str] = [
+        candidate.entity_ref,
+        candidate.name,
+        candidate.entity_type or "",
+        *candidate.compatible_event_types,
+    ]
+    for path in candidate.relationship_paths:
+        for edge in path.edges:
+            parts.extend(
+                [
+                    edge.source_ref,
+                    edge.target_ref,
+                    edge.relation,
+                    edge.direction_hint,
+                    edge.source_name,
+                    *edge.compatible_event_types,
+                ]
+            )
+    return " ".join(part for part in parts if part).casefold()
+
+
+def _negative_direction_hint_for_candidate(
+    *,
+    candidate: ImpactCandidate,
+    text: str,
+) -> str | None:
+    candidate_context = _candidate_direction_context(candidate)
+    if "airline" in candidate_context and _AIRLINE_NEGATIVE_COST_PATTERN.search(text):
+        return "negative_cost_pressure"
+    if (
+        "semiconductor" in candidate_context
+        or "chipmaker" in candidate_context
+        or "chip" in candidate_context
+    ) and _SEMICONDUCTOR_NEGATIVE_WARNING_PATTERN.search(text):
+        return "negative_analyst_warning"
+    return None
+
+
+def _apply_story_direction_overrides(
+    *,
+    candidates: list[ImpactCandidate],
+    text: str,
+    warnings: list[str],
+) -> list[ImpactCandidate]:
+    updated_candidates: list[ImpactCandidate] = []
+    for candidate in candidates:
+        direction_hint = _negative_direction_hint_for_candidate(
+            candidate=candidate,
+            text=text,
+        )
+        if not direction_hint or not candidate.relationship_paths:
+            updated_candidates.append(candidate)
+            continue
+        updated_paths: list[ImpactRelationshipPath] = []
+        for path in candidate.relationship_paths:
+            updated_edges = [
+                edge.model_copy(
+                    update={
+                        "direction_hint": direction_hint,
+                        "direction_preconditions": _dedupe_string_values(
+                            [
+                                *edge.direction_preconditions,
+                                "story_negative_signal",
+                            ]
+                        ),
+                    }
+                )
+                for edge in path.edges
+            ]
+            updated_paths.append(path.model_copy(update={"edges": updated_edges}))
+        updated_candidates.append(
+            candidate.model_copy(update={"relationship_paths": updated_paths})
+        )
+        warnings.append(
+            f"ADES_NEWS_ANALYZE_DIRECTION_OVERRIDE:{candidate.entity_ref}:{direction_hint}"
+        )
+    return updated_candidates
 
 
 def _raise_configuration_http_exception(exc: Exception) -> None:
@@ -4116,11 +4442,22 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="ADES_NEWS_ANALYZE_DISABLED")
 
         started_at = time.perf_counter()
-        analysis_text = _news_analysis_text(request)
+        warnings: list[str] = []
+        raw_analysis_text = _news_analysis_text(request)
+        analysis_text = _clean_news_analysis_text(raw_analysis_text)
+        warnings.extend(_story_quality_warnings(raw_analysis_text, analysis_text))
         event_signals = extract_news_event_signals(analysis_text)
+        non_market_reasons = _non_market_news_rejection_reasons(
+            request=request,
+            text=analysis_text,
+            event_signals=event_signals,
+        )
+        warnings.extend(
+            f"ADES_NEWS_ANALYZE_NON_MARKET_DOMAIN:{reason}"
+            for reason in non_market_reasons
+        )
         country_hint, country_hint_source = _news_country_hint(request)
         tag_responses: list[TagResponse] = []
-        warnings: list[str] = []
         registry = runtime_state.ensure_registry()
         include_relationship_proposals = request.options.include_relationship_proposals
         include_related_entities = (
@@ -4224,25 +4561,33 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             tag_responses=tag_responses,
             pack_decisions=pack_decisions,
         )
-        direct_terminal_seed_refs = _direct_market_terminal_seed_refs(
-            text=analysis_text,
-            request=request,
-            event_signals=event_signals,
+        direct_terminal_seed_refs = (
+            []
+            if non_market_reasons
+            else _direct_market_terminal_seed_refs(
+                text=analysis_text,
+                request=request,
+                event_signals=event_signals,
+            )
         )
-        sector_seed_refs = _market_sector_seed_refs_from_graph(
-            text=analysis_text,
-            event_signals=event_signals,
-            country_codes=[
-                code
-                for code, _reason in _country_code_candidates_for_pack_plan(
-                    request=request,
-                    text=analysis_text,
-                    entities=entities,
-                )
-            ],
-            graph_enabled_packs=graph_enabled_packs,
-            settings=settings,
-            warnings=warnings,
+        sector_seed_refs = (
+            []
+            if non_market_reasons
+            else _market_sector_seed_refs_from_graph(
+                text=analysis_text,
+                event_signals=event_signals,
+                country_codes=[
+                    code
+                    for code, _reason in _country_code_candidates_for_pack_plan(
+                        request=request,
+                        text=analysis_text,
+                        entities=entities,
+                    )
+                ],
+                graph_enabled_packs=graph_enabled_packs,
+                settings=settings,
+                warnings=warnings,
+            )
         )
         entity_refs = _dedupe_string_values(
             [*entity_refs, *direct_terminal_seed_refs, *sector_seed_refs]
@@ -4253,6 +4598,7 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             request.options.include_impact_paths
             and request.options.include_relationship_paths
             and bool(entity_refs)
+            and not non_market_reasons
         )
         if include_relationships:
             try:
@@ -4321,6 +4667,22 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 impact_paths = impact_paths.model_copy(
                     update={"candidates": expanded_terminal_candidates}
                 )
+        if impact_paths is not None and expanded_terminal_candidates:
+            direction_adjusted_candidates = _apply_story_direction_overrides(
+                candidates=expanded_terminal_candidates,
+                text=analysis_text,
+                warnings=warnings,
+            )
+            if direction_adjusted_candidates != expanded_terminal_candidates:
+                expanded_terminal_candidates = direction_adjusted_candidates
+                impact_paths = impact_paths.model_copy(
+                    update={
+                        "candidates": expanded_terminal_candidates,
+                        "warnings": _dedupe_string_values(
+                            [*impact_paths.warnings, *warnings]
+                        ),
+                    }
+                )
         terminal_candidates = (
             expanded_terminal_candidates[: request.options.max_terminal_candidates]
             if request.options.include_terminal_candidates
@@ -4334,11 +4696,19 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             settings=settings,
             text=analysis_text,
         )
+        country_scopes = [
+            *([country_scope] if country_scope else []),
+            *_additional_country_scopes_from_text(
+                text=analysis_text,
+                primary_scope=country_scope,
+            ),
+        ]
         passive_entities = (
             _build_passive_entities(
                 entities=entities,
                 terminal_candidates=expanded_terminal_candidates,
                 country_scope=country_scope,
+                country_scopes=country_scopes,
                 max_entities=request.options.max_passive_entities,
                 request=request,
             )
@@ -4346,7 +4716,12 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             else []
         )
         topics = _merge_topic_matches(tag_responses)
-        topic_scope = _build_topic_scope(topics=topics, request=request)
+        topic_scope = _build_topic_scope(
+            topics=topics,
+            request=request,
+            event_signals=event_signals,
+            text=analysis_text,
+        )
         relationship_proposals = (
             _build_relationship_proposals(
                 tag_responses=tag_responses,
@@ -4390,6 +4765,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             artifact_ref=artifact_ref,
         )
         quality_flags: list[str] = []
+        if non_market_reasons:
+            quality_flags.append("NON_MARKET_NEWS_DOMAIN")
         if country_scope is None:
             quality_flags.append("COUNTRY_SCOPE_MISSING")
         if any(not passive.display_eligible for passive in passive_entities):
