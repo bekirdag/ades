@@ -1816,8 +1816,144 @@ def _direct_terminal_refs_from_source_entity(
     return _dedupe_string_values(refs)
 
 
+_DIRECT_TERMINAL_ANCHOR_SUFFIX_PATTERN = re.compile(
+    r"\b(?:"
+    r"inc|incorporated|corp|corporation|company|co|ltd|limited|llc|plc|"
+    r"holdings?|group|sa|s\.a\.|ag|nv|n\.v\.|spa|s\.p\.a\."
+    r")\.?$",
+    flags=re.IGNORECASE,
+)
+
+
+def _direct_terminal_anchor_name_variants(value: str) -> list[str]:
+    normalized = re.sub(r"\s+", " ", value).strip()
+    if not normalized:
+        return []
+    variants = [normalized]
+    stripped = normalized
+    while True:
+        updated = _DIRECT_TERMINAL_ANCHOR_SUFFIX_PATTERN.sub("", stripped).strip(" ,.-")
+        updated = re.sub(r"\s+", " ", updated).strip()
+        if not updated or updated.casefold() == stripped.casefold():
+            break
+        variants.append(updated)
+        stripped = updated
+    return _dedupe_string_values(variants)
+
+
+def _direct_terminal_source_entity_is_story_anchored(
+    source_entity: ImpactSourceEntity,
+    terminal_ref: str,
+    text: str,
+) -> bool:
+    if not text.strip():
+        return False
+    terms: list[str] = [*_direct_terminal_identity_terms(terminal_ref)]
+    terms.extend(_direct_terminal_anchor_name_variants(source_entity.name))
+    entity_ref = source_entity.entity_ref.strip()
+    if ":" in entity_ref:
+        terms.append(entity_ref.rsplit(":", 1)[1])
+    for same_as_ref in source_entity.same_as_refs:
+        same_as = same_as_ref.strip()
+        if same_as.casefold() == terminal_ref.strip().casefold():
+            terms.extend(_direct_terminal_identity_terms(same_as))
+    for term in _dedupe_string_values(terms):
+        normalized = re.sub(r"[^A-Za-z0-9]+", "", term)
+        if len(normalized) < 2:
+            continue
+        if _entity_phrase_occurs_in_story_context(text, term):
+            return True
+    return False
+
+
+def _source_entity_ref_index(
+    source_entities: list[ImpactSourceEntity],
+) -> dict[str, ImpactSourceEntity]:
+    by_ref: dict[str, ImpactSourceEntity] = {}
+    for source_entity in source_entities:
+        refs = [source_entity.entity_ref, *source_entity.same_as_refs]
+        for raw_ref in refs:
+            ref = raw_ref.strip()
+            if ref:
+                by_ref.setdefault(ref.casefold(), source_entity)
+    return by_ref
+
+
+def _source_entity_same_as_terminal_refs(
+    source_entity: ImpactSourceEntity,
+) -> set[str]:
+    return {
+        same_as_ref.strip().casefold()
+        for same_as_ref in source_entity.same_as_refs
+        if same_as_ref.strip() and _is_direct_terminal_ref(same_as_ref.strip())
+    }
+
+
+def _candidate_direct_terminal_source_entity(
+    candidate: ImpactCandidate,
+    source_entities_by_ref: dict[str, ImpactSourceEntity],
+) -> ImpactSourceEntity | None:
+    terminal_ref = candidate.entity_ref.strip()
+    if not terminal_ref or not _is_direct_terminal_ref(terminal_ref):
+        return None
+    related_refs = [*candidate.source_entity_refs]
+    for relationship_path in candidate.relationship_paths:
+        for edge in relationship_path.edges:
+            related_refs.extend([edge.source_ref, edge.target_ref])
+    related_refs.append(terminal_ref)
+    terminal_key = terminal_ref.casefold()
+    for raw_ref in related_refs:
+        ref = str(raw_ref).strip()
+        if not ref:
+            continue
+        source_entity = source_entities_by_ref.get(ref.casefold())
+        if source_entity is None:
+            continue
+        if terminal_key in _source_entity_same_as_terminal_refs(source_entity):
+            return source_entity
+    return None
+
+
+def _append_unanchored_direct_terminal_warning(
+    warnings: list[str] | None,
+    terminal_ref: str,
+) -> None:
+    if warnings is not None:
+        warnings.append(
+            f"ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_DIRECT_TERMINAL:{terminal_ref[:120]}"
+        )
+
+
+def _filter_unanchored_direct_terminal_candidates(
+    candidates: list[ImpactCandidate],
+    source_entities: list[ImpactSourceEntity],
+    *,
+    text: str,
+    warnings: list[str],
+) -> list[ImpactCandidate]:
+    source_entities_by_ref = _source_entity_ref_index(source_entities)
+    filtered: list[ImpactCandidate] = []
+    for candidate in candidates:
+        source_entity = _candidate_direct_terminal_source_entity(
+            candidate,
+            source_entities_by_ref,
+        )
+        if source_entity is None or _direct_terminal_source_entity_is_story_anchored(
+            source_entity,
+            candidate.entity_ref,
+            text,
+        ):
+            filtered.append(candidate)
+            continue
+        _append_unanchored_direct_terminal_warning(warnings, candidate.entity_ref)
+    return filtered
+
+
 def _direct_terminal_candidates_from_source_entities(
     source_entities: list[ImpactSourceEntity],
+    *,
+    text: str,
+    warnings: list[str] | None = None,
 ) -> list[ImpactCandidate]:
     candidates: list[ImpactCandidate] = []
     seen_refs: set[str] = set()
@@ -1825,6 +1961,17 @@ def _direct_terminal_candidates_from_source_entities(
         entity_ref = source_entity.entity_ref.strip()
         for terminal_ref in _direct_terminal_refs_from_source_entity(source_entity):
             if terminal_ref in seen_refs:
+                continue
+            is_same_as_shortcut = (
+                terminal_ref.casefold()
+                in _source_entity_same_as_terminal_refs(source_entity)
+            )
+            if is_same_as_shortcut and not _direct_terminal_source_entity_is_story_anchored(
+                source_entity,
+                terminal_ref,
+                text,
+            ):
+                _append_unanchored_direct_terminal_warning(warnings, terminal_ref)
                 continue
             seen_refs.add(terminal_ref)
             source_refs = [ref for ref in (entity_ref, terminal_ref) if ref]
@@ -4132,14 +4279,23 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
 
         expanded_terminal_candidates = impact_paths.candidates if impact_paths else []
         if impact_paths is not None:
+            expanded_terminal_candidates = _filter_unanchored_direct_terminal_candidates(
+                expanded_terminal_candidates,
+                impact_paths.source_entities,
+                text=analysis_text,
+                warnings=warnings,
+            )
             direct_terminal_candidates = _direct_terminal_candidates_from_source_entities(
-                impact_paths.source_entities
+                impact_paths.source_entities,
+                text=analysis_text,
+                warnings=warnings,
             )
             if direct_terminal_candidates:
                 expanded_terminal_candidates = _merge_direct_terminal_candidates(
                     direct_terminal_candidates,
                     expanded_terminal_candidates,
                 )
+            if expanded_terminal_candidates != impact_paths.candidates:
                 impact_paths = impact_paths.model_copy(
                     update={"candidates": expanded_terminal_candidates}
                 )

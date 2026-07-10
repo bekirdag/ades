@@ -1974,6 +1974,116 @@ def test_news_analyze_drops_direct_ticker_from_photo_credit_only(
     assert any(warning == expected_warning for warning in payload["warnings"])
 
 
+def test_news_analyze_drops_photo_credit_same_as_terminal_candidate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(
+        tmp_path,
+        "news-photo-credit-same-as-terminal-en",
+        domain="finance",
+    )
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        surface = "Getty Images"
+        start = text.index(surface)
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text=surface,
+                    label="organization",
+                    start=start,
+                    end=start + len(surface),
+                    confidence=0.93,
+                    relevance=0.95,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="finance",
+                    ),
+                    link=EntityLink(
+                        entity_id="wikidata:QGETTY",
+                        canonical_text="Getty Images Holdings",
+                        provider="ades",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="economy", score=0.82, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs, **_: object) -> ImpactExpansionResult:
+        assert "wikidata:QGETTY" in set(entity_refs)
+        return ImpactExpansionResult(
+            graph_version="test-graph",
+            artifact_version="2026-07-10",
+            artifact_hash="sha256:getty-same-as",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="wikidata:QGETTY",
+                    name="Getty Images Holdings",
+                    same_as_refs=["finance-us-ticker:GETY"],
+                    entity_type="organization",
+                    is_graph_seed=True,
+                    seed_degree=0,
+                    is_tradable=False,
+                )
+            ],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref="finance-us-ticker:GETY",
+                    name="Getty Images Holdings",
+                    entity_type="ticker",
+                    evidence_level="direct",
+                    confidence=0.91,
+                    source_entity_refs=["wikidata:QGETTY"],
+                    relationship_paths=[],
+                )
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Italian GDP growth was revised higher",
+            "text": "Italian GDP growth was revised higher by statistics officials. Photo: Getty Images.",
+            "packs": [pack_id],
+            "options": {
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["terminal_impact_candidates"] == []
+    expected_warning = (
+        "ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_DIRECT_TERMINAL:finance-us-ticker:GETY"
+    )
+    assert any(warning == expected_warning for warning in payload["warnings"])
+
+
 def test_news_analyze_maps_legal_entity_to_terminal_ticker_path(
     tmp_path: Path,
     monkeypatch,
