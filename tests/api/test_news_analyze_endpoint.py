@@ -1891,6 +1891,89 @@ def test_news_analyze_drops_unanchored_direct_ticker_entity_refs(
     assert any(warning == expected_warning for warning in payload["warnings"])
 
 
+def test_news_analyze_drops_direct_ticker_from_photo_credit_only(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(
+        tmp_path,
+        "news-photo-credit-direct-ticker-en",
+        domain="finance",
+    )
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        surface = "Getty Images"
+        start = text.index(surface)
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text=surface,
+                    label="ticker",
+                    start=start,
+                    end=start + len(surface),
+                    confidence=0.93,
+                    relevance=0.95,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="finance",
+                    ),
+                    link=EntityLink(
+                        entity_id="finance-us-ticker:GETY",
+                        canonical_text="Getty Images Holdings",
+                        provider="ades",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="economy", score=0.82, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(*_: object, **__: object) -> ImpactExpansionResult:
+        raise AssertionError("photo-credit direct ticker must not seed impact expansion")
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Italian GDP growth was revised higher",
+            "text": "Italian GDP growth was revised higher by statistics officials. Photo: Getty Images.",
+            "packs": [pack_id],
+            "options": {
+                "include_relationship_paths": True,
+                "include_terminal_candidates": True,
+                "include_tag_responses": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["terminal_impact_candidates"] == []
+    expected_warning = (
+        "ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_DIRECT_TERMINAL:finance-us-ticker:GETY"
+    )
+    assert any(warning == expected_warning for warning in payload["warnings"])
+
+
 def test_news_analyze_maps_legal_entity_to_terminal_ticker_path(
     tmp_path: Path,
     monkeypatch,
@@ -3898,6 +3981,86 @@ def test_news_analyze_passive_classifier_hides_artifacts_and_forces_text_country
     assert "none_placeholder" in hidden_reasons_by_name["None"]
     assert "duration_or_time_window" in hidden_reasons_by_name["24 Hours"]
     assert "photo_credit" in hidden_reasons_by_name["AP Photo/Terry Chea"]
+
+
+def test_news_analyze_marks_generic_finance_alias_passive_ineligible(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_news_pack(tmp_path)
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        surface = "The financial"
+        start = text.index(surface)
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text=surface,
+                    label="organization",
+                    start=start,
+                    end=start + len(surface),
+                    confidence=0.88,
+                    relevance=0.83,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="finance",
+                    ),
+                    link=EntityLink(
+                        entity_id="finance-us-issuer:FISI",
+                        canonical_text="FINANCIAL INSTITUTIONS INC",
+                        provider="ades",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="finance", score=0.82, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Regional lenders brace for rate volatility",
+            "text": (
+                "The financial sector prepared for a volatile rate decision, "
+                "without naming a listed issuer."
+            ),
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": False,
+                "max_passive_entities": 32,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    passive_by_ref = {entity["entity_ref"]: entity for entity in payload["passive_entities"]}
+    issuer = passive_by_ref["finance-us-issuer:FISI"]
+    assert issuer["name"] == "FINANCIAL INSTITUTIONS INC"
+    assert issuer["evidence_text"] == "The financial"
+    assert issuer["quality"] == "weak"
+    assert issuer["display_eligible"] is False
+    assert "unanchored_finance_alias" in issuer["quality_reasons"]
 
 
 def test_news_analyze_prefers_text_country_over_source_country_hint(

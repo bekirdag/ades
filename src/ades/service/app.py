@@ -430,6 +430,48 @@ _PASSIVE_COLLISION_SURFACE_REASONS = {
     "six": ("weak_alias", "ambiguous_acronym"),
     "lee": ("weak_alias", "homograph_alias"),
 }
+_PASSIVE_GENERIC_FINANCE_ALIAS_TERMS = {
+    "a",
+    "an",
+    "bank",
+    "banks",
+    "business",
+    "company",
+    "corp",
+    "corporation",
+    "finance",
+    "financial",
+    "financials",
+    "firm",
+    "group",
+    "holding",
+    "holdings",
+    "inc",
+    "industries",
+    "industry",
+    "institution",
+    "institutions",
+    "lender",
+    "lenders",
+    "limited",
+    "llc",
+    "ltd",
+    "market",
+    "markets",
+    "plc",
+    "sector",
+    "services",
+    "stock",
+    "stocks",
+    "the",
+}
+_DIRECT_TERMINAL_METADATA_CONTEXT_PATTERN = re.compile(
+    r"(?:^|[\s(/-])(?:ap|associated press|reuters|afp|epa|shutterstock|getty images)"
+    r"\s+photo(?:\b|/)|\b(?:file\s+)?(?:photo|image|picture|caption)"
+    r"\s*(?:by|/|:|credit|courtesy|provided by)?\b|"
+    r"\b(?:credit|courtesy|copyright|provided by|via)\s*(?:[:/-]|\b)",
+    re.IGNORECASE,
+)
 _DIRECT_MARKET_TERMINAL_ENTITY_TYPES = {"commodity", "crypto"}
 _DIRECT_MARKET_TERMINAL_SIGNAL_FAMILIES = {
     "agriculture",
@@ -1721,7 +1763,7 @@ def _direct_terminal_entity_is_story_anchored(entity: EntityMatch, text: str) ->
         normalized = re.sub(r"[^A-Za-z0-9]+", "", term)
         if len(normalized) < 2:
             continue
-        if _text_contains_entity_phrase(text, term):
+        if _entity_phrase_occurs_in_story_context(text, term):
             return True
     return False
 
@@ -2238,6 +2280,42 @@ def _text_contains_entity_phrase(text: str | None, name: str) -> bool:
     return bool(pattern.search(text))
 
 
+def _entity_phrase_occurs_in_story_context(text: str | None, name: str) -> bool:
+    if not text or not name.strip():
+        return False
+    pattern = re.compile(
+        rf"(?<![A-Za-z0-9]){re.escape(name.strip())}(?![A-Za-z0-9])",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(text):
+        line_start = text.rfind("\n", 0, match.start()) + 1
+        line_end = text.find("\n", match.end())
+        if line_end == -1:
+            line_end = len(text)
+        sentence_start = max(
+            line_start,
+            text.rfind(".", 0, match.start()) + 1,
+            text.rfind("!", 0, match.start()) + 1,
+            text.rfind("?", 0, match.start()) + 1,
+        )
+        next_boundaries = [
+            pos for pos in (
+                text.find(".", match.end()),
+                text.find("!", match.end()),
+                text.find("?", match.end()),
+            )
+            if pos != -1
+        ]
+        sentence_end = min([line_end, *next_boundaries]) if next_boundaries else line_end
+        context = text[sentence_start:sentence_end].strip()
+        if not context:
+            continue
+        if _DIRECT_TERMINAL_METADATA_CONTEXT_PATTERN.search(context):
+            continue
+        return True
+    return False
+
+
 def _source_outlet_is_story_subject(*, request: NewsAnalyzeRequest, name: str) -> bool:
     subject_text = "\n".join(
         part.strip() for part in (request.title, request.description) if part and part.strip()
@@ -2378,6 +2456,30 @@ def _passive_contextual_alias_reasons(
     return list(reasons)
 
 
+def _passive_finance_alias_reasons(
+    entity: EntityMatch,
+    request: NewsAnalyzeRequest,
+    canonical_name: str,
+) -> list[str]:
+    entity_ref = _entity_ref(entity).casefold()
+    if not entity_ref.startswith("finance-") or _is_direct_terminal_ref(entity_ref):
+        return []
+    surface = entity.text.strip()
+    if not surface or not canonical_name or surface.casefold() == canonical_name.casefold():
+        return []
+    if _text_contains_entity_phrase(_news_analysis_text(request), canonical_name):
+        return []
+    tokens = re.findall(r"[A-Za-z0-9]+", surface.casefold())
+    if not tokens:
+        return []
+    generic_tokens = [
+        token for token in tokens if token in _PASSIVE_GENERIC_FINANCE_ALIAS_TERMS
+    ]
+    if generic_tokens and (len(tokens) <= 3 or len(generic_tokens) == len(tokens)):
+        return ["weak_alias", "unanchored_finance_alias"]
+    return []
+
+
 def _passive_display_eligible(quality: str, weak_alias_reasons: list[str]) -> bool:
     if quality == "hidden_artifact":
         return False
@@ -2434,6 +2536,7 @@ def _build_passive_entities(
             [
                 *_passive_weak_alias_reasons(entity),
                 *_passive_contextual_alias_reasons(entity, request, name),
+                *_passive_finance_alias_reasons(entity, request, name),
             ]
         )
         quality = _passive_quality(entity, hidden_reasons, weak_alias_reasons)
