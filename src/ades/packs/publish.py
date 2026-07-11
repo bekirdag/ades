@@ -264,10 +264,12 @@ def build_static_registry(
             enforce_deploy_matcher_size_guard=enforce_deploy_matcher_size_guard,
         )
         artifact_sha256 = _sha256_file(artifact_path)
+        artifact_size_bytes = artifact_path.stat().st_size
         published_manifest = _build_published_manifest(
             source_manifest,
             artifact_relative_url=artifact_relative_url,
             artifact_sha256=artifact_sha256,
+            artifact_size_bytes=artifact_size_bytes,
         )
 
         published_pack_dir = packs_output_dir / source_manifest.pack_id
@@ -300,6 +302,7 @@ def build_static_registry(
             tags=list(source_manifest.tags),
             dependencies=list(source_manifest.dependencies),
             min_ades_version=source_manifest.min_ades_version,
+            artifact_size_bytes=artifact_size_bytes,
         )
         built_packs.append(
             RegistryBuildPackResult(
@@ -309,7 +312,7 @@ def build_static_registry(
                 manifest_path=str((published_pack_dir / "manifest.json").resolve()),
                 artifact_path=str(artifact_path.resolve()),
                 artifact_sha256=artifact_sha256,
-                artifact_size_bytes=artifact_path.stat().st_size,
+                artifact_size_bytes=artifact_size_bytes,
             )
         )
 
@@ -517,6 +520,7 @@ def _build_published_manifest(
     *,
     artifact_relative_url: str,
     artifact_sha256: str | None,
+    artifact_size_bytes: int | None = None,
 ) -> PackManifest:
     return PackManifest(
         schema_version=source_manifest.schema_version,
@@ -533,6 +537,7 @@ def _build_published_manifest(
                 name="pack",
                 url=artifact_relative_url,
                 sha256=artifact_sha256,
+                size_bytes=artifact_size_bytes,
             )
         ],
         models=list(source_manifest.models),
@@ -903,6 +908,7 @@ def _materialize_published_registry(
         artifact_bytes = _read_source_bytes(source_artifact.url)
         artifact_path.write_bytes(artifact_bytes)
         artifact_sha256 = hashlib.sha256(artifact_bytes).hexdigest()
+        artifact_size_bytes = len(artifact_bytes)
         if artifact_sha256 != source_artifact.sha256:
             raise ValueError(
                 f"Published artifact checksum mismatch for {source_manifest.pack_id}: "
@@ -917,6 +923,7 @@ def _materialize_published_registry(
             source_manifest,
             artifact_relative_url=f"../../artifacts/{artifact_name}",
             artifact_sha256=artifact_sha256,
+            artifact_size_bytes=artifact_size_bytes,
         )
         published_pack_dir = packs_output_dir / source_manifest.pack_id
         published_pack_dir.mkdir(parents=True, exist_ok=True)
@@ -936,6 +943,7 @@ def _materialize_published_registry(
             tags=list(source_manifest.tags),
             dependencies=list(source_manifest.dependencies),
             min_ades_version=source_manifest.min_ades_version,
+            artifact_size_bytes=artifact_size_bytes,
         )
         built_packs.append(
             RegistryBuildPackResult(
@@ -945,7 +953,7 @@ def _materialize_published_registry(
                 manifest_path=str(published_manifest_path.resolve()),
                 artifact_path=str(artifact_path.resolve()),
                 artifact_sha256=artifact_sha256,
-                artifact_size_bytes=artifact_path.stat().st_size,
+                artifact_size_bytes=artifact_size_bytes,
             )
         )
 

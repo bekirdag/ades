@@ -113,3 +113,4 @@ def test_public_api_lists_available_pack_metadata() -> None:
     finance_pack = next(pack for pack in available_packs if pack.pack_id == "finance-en")
     assert finance_pack.description is not None
     assert "finance" in finance_pack.tags
+    assert finance_pack.artifact_size_bytes == 646

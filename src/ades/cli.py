@@ -192,6 +192,32 @@ def _format_cli_cell(
     return text
 
 
+def _format_size_cell(size_bytes: object) -> str:
+    """Render a byte count as compact human-readable text."""
+
+    if size_bytes is None:
+        return "-"
+    try:
+        value = int(size_bytes)
+    except (TypeError, ValueError):
+        return "-"
+    if value < 0:
+        return "-"
+    units = ["B", "KB", "MB", "GB", "TB"]
+    amount = float(value)
+    unit_index = 0
+    while amount >= 1024 and unit_index < len(units) - 1:
+        amount /= 1024
+        unit_index += 1
+    if unit_index == 0:
+        return f"{value} B"
+    if amount >= 10:
+        formatted = f"{amount:.0f}"
+    else:
+        formatted = f"{amount:.1f}".rstrip("0").rstrip(".")
+    return f"{formatted} {units[unit_index]}"
+
+
 def _render_text_table(headers: list[str], rows: list[list[str]]) -> str:
     """Render one plain-text ASCII table."""
 
@@ -235,7 +261,7 @@ def _render_rich_pack_table(
     )
     for header in headers:
         column_kwargs: dict[str, object] = {}
-        if header in {"PACK ID", "VERSION", "DOMAIN", "TIER", "LANG", "ACTIVE"}:
+        if header in {"PACK ID", "VERSION", "DOMAIN", "TIER", "LANG", "SIZE", "ACTIVE"}:
             column_kwargs["no_wrap"] = True
         if header == "DESCRIPTION":
             column_kwargs["ratio"] = 3
@@ -308,27 +334,35 @@ def _echo_pack_listing_table(
                 )
             )
             return
+        include_details = _RICH_CONSOLE.width >= 120
         headers = [
             "PACK ID",
             "VERSION",
             "DOMAIN",
             "TIER",
             "LANG",
-            "DEPS",
-            "DESCRIPTION",
+            "SIZE",
         ]
-        rows = [
-            [
+        if include_details:
+            headers.extend(["DEPS", "DESCRIPTION"])
+        rows = []
+        for pack in packs:
+            row = [
                 _format_cli_cell(pack.get("pack_id")),
                 _format_cli_cell(pack.get("version")),
                 _format_cli_cell(pack.get("domain")),
                 _format_cli_cell(pack.get("tier")),
                 _format_cli_cell(pack.get("language")),
-                _format_cli_cell(pack.get("dependencies"), max_width=24),
-                _format_cli_cell(pack.get("description"), max_width=52),
+                _format_size_cell(pack.get("artifact_size_bytes")),
             ]
-            for pack in packs
-        ]
+            if include_details:
+                row.extend(
+                    [
+                        _format_cli_cell(pack.get("dependencies"), max_width=24),
+                        _format_cli_cell(pack.get("description"), max_width=52),
+                    ]
+                )
+            rows.append(row)
         subtitle = f"Registry: {registry_url}" if registry_url is not None else None
         _render_rich_pack_table(
             headers=headers,
@@ -466,7 +500,10 @@ def _render_pack_listing(
         try:
             packs = [
                 pack.model_dump(mode="json")
-                for pack in api_list_available_packs(registry_url=registry_url)
+                for pack in api_list_available_packs(
+                    registry_url=registry_url,
+                    resolve_artifact_sizes=True,
+                )
             ]
             effective_registry_url = registry_url or get_settings().registry_url
         except FileNotFoundError as exc:

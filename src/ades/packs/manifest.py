@@ -16,16 +16,19 @@ class PackArtifact:
     name: str
     url: str
     sha256: str | None = None
+    size_bytes: int | None = None
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize one artifact entry."""
 
-        payload = {
+        payload: dict[str, Any] = {
             "name": self.name,
             "url": self.url,
         }
         if self.sha256 is not None:
             payload["sha256"] = self.sha256
+        if self.size_bytes is not None:
+            payload["size_bytes"] = self.size_bytes
         return payload
 
 
@@ -104,6 +107,9 @@ class PackManifest:
                 name=str(item["name"]),
                 url=urljoin(base_url, str(item["url"])) if base_url else str(item["url"]),
                 sha256=item.get("sha256"),
+                size_bytes=(
+                    int(item["size_bytes"]) if item.get("size_bytes") is not None else None
+                ),
             )
             for item in data.get("artifacts", [])
         ]
@@ -234,6 +240,7 @@ class RegistryPack:
     tags: list[str] = field(default_factory=list)
     dependencies: list[str] = field(default_factory=list)
     min_ades_version: str = "0.1.0"
+    artifact_size_bytes: int | None = None
 
     def to_summary(self) -> dict[str, Any]:
         """Return a user-facing summary for one available registry pack."""
@@ -249,6 +256,7 @@ class RegistryPack:
             "dependencies": list(self.dependencies),
             "min_ades_version": self.min_ades_version,
             "manifest_url": self.manifest_url,
+            "artifact_size_bytes": self.artifact_size_bytes,
         }
 
 
@@ -287,6 +295,11 @@ class RegistryIndex:
                 tags=list(item.get("tags", [])),
                 dependencies=list(item.get("dependencies", [])),
                 min_ades_version=str(item.get("min_ades_version", "0.1.0")),
+                artifact_size_bytes=(
+                    int(item["artifact_size_bytes"])
+                    if item.get("artifact_size_bytes") is not None
+                    else None
+                ),
             )
             for pack_id, item in data.get("packs", {}).items()
         }
@@ -309,21 +322,25 @@ class RegistryIndex:
     def to_dict(self) -> dict[str, Any]:
         """Serialize the registry index into stable JSON-compatible data."""
 
+        packs: dict[str, dict[str, Any]] = {}
+        for pack_id, pack in sorted(self.packs.items()):
+            entry: dict[str, Any] = {
+                "version": pack.version,
+                "manifest_url": pack.manifest_url,
+                "language": pack.language,
+                "domain": pack.domain,
+                "tier": pack.tier,
+                "description": pack.description,
+                "tags": list(pack.tags),
+                "dependencies": list(pack.dependencies),
+                "min_ades_version": pack.min_ades_version,
+            }
+            if pack.artifact_size_bytes is not None:
+                entry["artifact_size_bytes"] = pack.artifact_size_bytes
+            packs[pack_id] = entry
+
         return {
             "schema_version": self.schema_version,
             "generated_at": self.generated_at,
-            "packs": {
-                pack_id: {
-                    "version": pack.version,
-                    "manifest_url": pack.manifest_url,
-                    "language": pack.language,
-                    "domain": pack.domain,
-                    "tier": pack.tier,
-                    "description": pack.description,
-                    "tags": list(pack.tags),
-                    "dependencies": list(pack.dependencies),
-                    "min_ades_version": pack.min_ades_version,
-                }
-                for pack_id, pack in sorted(self.packs.items())
-            },
+            "packs": packs,
         }

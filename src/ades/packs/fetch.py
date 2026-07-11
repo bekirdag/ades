@@ -37,3 +37,29 @@ def read_text(source_url: str) -> str:
     """Read UTF-8 text from a file or HTTP(S) URL."""
 
     return read_bytes(source_url).decode("utf-8")
+
+
+def read_content_length(source_url: str) -> int | None:
+    """Return a source size without downloading the full payload when possible."""
+
+    parsed = urlparse(source_url)
+    if parsed.scheme == "file":
+        path = Path(parsed.path)
+        return path.stat().st_size if path.exists() else None
+    if parsed.scheme in {"http", "https"}:
+        import httpx
+
+        try:
+            response = httpx.head(source_url, follow_redirects=True, timeout=10.0)
+        except httpx.HTTPError:
+            return None
+        if response.status_code < 200 or response.status_code >= 400:
+            return None
+        value = response.headers.get("content-length")
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None

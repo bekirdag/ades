@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable
+from urllib.parse import urlsplit, urlunsplit
 
 from .config import Settings, get_settings
 from .distribution import (
@@ -99,6 +100,8 @@ from .news_feedback import (
 )
 from .packs.refresh import refresh_generated_pack_registry as run_refresh_generated_pack_registry
 from .packs.reporting import report_generated_pack as run_report_generated_pack
+from .packs.fetch import read_content_length, read_text
+from .packs.manifest import PackManifest, RegistryPack
 from .packs.publish import (
     build_static_registry,
     prepare_registry_deploy_payload as run_prepare_registry_deploy_payload,
@@ -782,12 +785,72 @@ def list_packs(
 def list_available_packs(
     *,
     registry_url: str | None = None,
+    resolve_artifact_sizes: bool = False,
 ) -> list[AvailablePackSummary]:
     """List installable packs from the configured registry."""
 
     settings = _resolve_settings(registry_url=registry_url)
     index = load_registry_index(settings.registry_url)
-    return [AvailablePackSummary(**pack.to_summary()) for pack in index.list_packs()]
+    return [
+        AvailablePackSummary(
+            **_available_pack_summary(
+                pack,
+                resolve_artifact_size=resolve_artifact_sizes,
+            )
+        )
+        for pack in index.list_packs()
+    ]
+
+
+def _available_pack_summary(
+    pack: RegistryPack,
+    *,
+    resolve_artifact_size: bool,
+) -> dict[str, Any]:
+    summary = pack.to_summary()
+    if resolve_artifact_size and summary.get("artifact_size_bytes") is None:
+        summary["artifact_size_bytes"] = _resolve_pack_artifact_size_bytes(pack)
+    return summary
+
+
+def _resolve_pack_artifact_size_bytes(pack: RegistryPack) -> int | None:
+    try:
+        manifest_payload = json.loads(read_text(pack.manifest_url))
+        manifest = PackManifest.from_dict(manifest_payload, base_url=pack.manifest_url)
+    except Exception:
+        return None
+    if not manifest.artifacts:
+        return None
+    artifact = manifest.artifacts[0]
+    if artifact.size_bytes is not None:
+        return artifact.size_bytes
+    size_bytes = read_content_length(artifact.url)
+    if size_bytes is not None:
+        return size_bytes
+    legacy_url = _registry_version_artifact_url(artifact.url, pack)
+    if legacy_url is None:
+        return None
+    return read_content_length(legacy_url)
+
+
+def _registry_version_artifact_url(
+    artifact_url: str,
+    pack: RegistryPack,
+) -> str | None:
+    parsed = urlsplit(artifact_url)
+    if not parsed.path.endswith(".tar.zst"):
+        return None
+    base_path = parsed.path.rsplit("/", 1)[0]
+    artifact_name = f"{pack.pack_id}-{pack.version}.tar.zst"
+    return urlunsplit(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            f"{base_path}/{artifact_name}",
+            parsed.query,
+            parsed.fragment,
+        )
+    )
 
 
 def get_pack(

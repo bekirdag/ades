@@ -67,6 +67,7 @@ class AvailablePackSummary(BaseModel):
     dependencies: list[str] = Field(default_factory=list)
     min_ades_version: str = "0.1.0"
     manifest_url: str
+    artifact_size_bytes: int | None = None
 
 
 class ArtifactReadinessResponse(BaseModel):

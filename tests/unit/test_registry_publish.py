@@ -35,8 +35,10 @@ def test_build_static_registry_writes_consumable_manifest_and_artifact(tmp_path:
     assert index_payload["packs"]["general-en"]["manifest_url"] == "packs/general-en/manifest.json"
     assert index_payload["packs"]["general-en"]["description"] == "general-en pack for general tagging."
     assert index_payload["packs"]["general-en"]["tags"] == []
+    assert index_payload["packs"]["general-en"]["artifact_size_bytes"] == artifact_path.stat().st_size
     assert manifest_payload["artifacts"][0]["url"] == "../../artifacts/general-en-0.1.0.tar.zst"
     assert manifest_payload["artifacts"][0]["sha256"] == artifact_sha256
+    assert manifest_payload["artifacts"][0]["size_bytes"] == artifact_path.stat().st_size
 
     decompressor = zstandard.ZstdDecompressor()
     with decompressor.stream_reader(io.BytesIO(artifact_path.read_bytes())) as reader:
@@ -54,6 +56,7 @@ def test_build_static_registry_writes_consumable_manifest_and_artifact(tmp_path:
     assert packaged_manifest is not None
     assert packaged_manifest["artifacts"][0]["url"] == "../../artifacts/general-en-0.1.0.tar.zst"
     assert "sha256" not in packaged_manifest["artifacts"][0]
+    assert "size_bytes" not in packaged_manifest["artifacts"][0]
 
 
 def test_build_static_registry_excludes_build_only_analysis_artifacts(tmp_path: Path) -> None:

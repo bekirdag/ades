@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from urllib.parse import urlparse
 
 import click
 from typer.testing import CliRunner
@@ -44,10 +45,67 @@ def test_cli_list_packs_defaults_to_human_readable_table(tmp_path: Path) -> None
     assert "Available packs (2)" in result.stdout
     assert "╭" in result.stdout
     assert "PACK ID" in result.stdout
+    assert "SIZE" in result.stdout
+    assert " B" in result.stdout
     assert "Registry:" in result.stdout
     assert "finance-en" in result.stdout
     assert "general-en" in result.stdout
     assert '"mode"' not in result.stdout
+
+
+def test_cli_list_packs_resolves_legacy_available_pack_sizes(tmp_path: Path) -> None:
+    general_dir, finance_dir = create_finance_registry_sources(tmp_path / "sources")
+    registry_dir = tmp_path / "registry"
+    runner = CliRunner()
+
+    build_result = runner.invoke(
+        app,
+        [
+            "registry",
+            "build",
+            str(general_dir),
+            str(finance_dir),
+            "--output-dir",
+            str(registry_dir),
+        ],
+    )
+
+    assert build_result.exit_code == 0
+    registry_index = json.loads(build_result.stdout)["index_url"]
+    index_path = Path(urlparse(registry_index).path)
+    index_payload = json.loads(index_path.read_text(encoding="utf-8"))
+    for item in index_payload["packs"].values():
+        item.pop("artifact_size_bytes", None)
+    index_path.write_text(json.dumps(index_payload, indent=2) + "\n", encoding="utf-8")
+    for manifest_path in (registry_dir / "packs").glob("*/manifest.json"):
+        manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for artifact in manifest_payload.get("artifacts", []):
+            artifact.pop("size_bytes", None)
+        manifest_path.write_text(
+            json.dumps(manifest_payload, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    result = runner.invoke(
+        app,
+        [
+            "list",
+            "packs",
+            "--registry-url",
+            registry_index,
+            "--json",
+        ],
+        env={"ADES_STORAGE_ROOT": str(tmp_path / "install")},
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    sizes = {
+        item["pack_id"]: item["artifact_size_bytes"]
+        for item in payload["packs"]
+    }
+    assert sizes["finance-en"] > 0
+    assert sizes["general-en"] > 0
 
 
 def test_cli_list_group_defaults_to_available_pack_table(tmp_path: Path) -> None:
@@ -83,6 +141,8 @@ def test_cli_list_group_defaults_to_available_pack_table(tmp_path: Path) -> None
     assert result.exit_code == 0
     assert "Available packs (2)" in result.stdout
     assert "╭" in result.stdout
+    assert "SIZE" in result.stdout
+    assert " B" in result.stdout
     assert "finance-en" in result.stdout
     assert '"mode"' not in result.stdout
 

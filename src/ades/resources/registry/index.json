@@ -17,7 +17,8 @@
       "dependencies": [
         "general-en"
       ],
-      "min_ades_version": "0.1.0"
+      "min_ades_version": "0.1.0",
+      "artifact_size_bytes": 646
     },
     "general-en": {
       "version": "0.1.0",
@@ -32,7 +33,8 @@
         "english"
       ],
       "dependencies": [],
-      "min_ades_version": "0.1.0"
+      "min_ades_version": "0.1.0",
+      "artifact_size_bytes": 625
     },
     "medical-en": {
       "version": "0.1.0",
@@ -49,7 +51,8 @@
       "dependencies": [
         "general-en"
       ],
-      "min_ades_version": "0.1.0"
+      "min_ades_version": "0.1.0",
+      "artifact_size_bytes": 634
     }
   }
 }
