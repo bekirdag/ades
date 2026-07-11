@@ -364,6 +364,21 @@ for _country in DEFAULT_CURATED_G20_COUNTRY_ENTITIES:
     for _alias in _country.get("aliases", []):
         if isinstance(_alias, str):
             _COUNTRY_ALIAS_TO_CODE[_alias.casefold()] = code
+_COUNTRY_ALIAS_TO_CODE.update(
+    {
+        "u.s.": "us",
+        "u.s.a.": "us",
+        "united states of america": "us",
+        "u.k.": "uk",
+        "britain": "uk",
+        "great britain": "uk",
+        "uae": "ae",
+        "u.a.e.": "ae",
+        "emirati": "ae",
+        "emirates": "ae",
+        "turkiye": "tr",
+    }
+)
 
 _HIDDEN_PASSIVE_ARTIFACT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
@@ -472,6 +487,31 @@ _PASSIVE_GENERIC_FINANCE_ALIAS_TERMS = {
     "stocks",
     "the",
 }
+_CORPORATE_SUFFIX_TERMS = {
+    "ag",
+    "co",
+    "company",
+    "corp",
+    "corporation",
+    "inc",
+    "incorporated",
+    "limited",
+    "llc",
+    "ltd",
+    "nv",
+    "plc",
+    "sa",
+}
+_SPORTS_ENTITY_PATTERN = re.compile(
+    r"\b(?:baseball|basketball|football|hockey|soccer|"
+    r"athletics?|club|fc|league|team|falcons)\b",
+    re.IGNORECASE,
+)
+_SPORTS_CONTEXT_PATTERN = re.compile(
+    r"\b(?:baseball|basketball|football|hockey|soccer|"
+    r"match|game|season|coach|player|league|team|tournament)\b",
+    re.IGNORECASE,
+)
 _DIRECT_TERMINAL_METADATA_CONTEXT_PATTERN = re.compile(
     r"(?:^|[\s(/-])(?:ap|associated press|reuters|afp|epa|shutterstock|getty images)"
     r"\s+photo(?:\b|/)|\b(?:file\s+)?(?:photo|image|picture|caption)"
@@ -544,11 +584,26 @@ _MA_TOPIC_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _TECH_TOPIC_PATTERN = re.compile(
-    r"\b(?:ai|artificial\s+intelligence|cloud|microsoft|semiconductor|chipmaker|software|technology|tech)\b",
+    r"\b(?:ai|artificial\s+intelligence|cloud|microsoft|semiconductor|"
+    r"chipmaker|chips?|software|technology|tech|quantum(?:\s+computing)?|"
+    r"space|satellite|rocket|launch|nasa|spacex)\b",
     re.IGNORECASE,
 )
 _NON_PHYSICAL_ASSET_PATTERN = re.compile(
-    r"\b(?:bitcoin|crypto(?:currency|currencies)?|digital\s+assets?|software|ai|artificial\s+intelligence)\b",
+    r"\b(?:bitcoin|crypto(?:currency|currencies)?|digital\s+assets?|software|"
+    r"ai|artificial\s+intelligence|cloud|quantum(?:\s+computing)?|space|satellite)\b",
+    re.IGNORECASE,
+)
+_MARKET_OUTLOOK_TOPIC_PATTERN = re.compile(
+    r"\b(?:market\s+outlook|weekly\s+outlook|stocks?|equities|bonds?|yields?|"
+    r"rates?|fed|central\s+bank|inflation|risk\s+assets?|wall\s+street|"
+    r"nasdaq|s&p|dow|portfolio|investors?)\b",
+    re.IGNORECASE,
+)
+_PHYSICAL_COMMODITY_TOPIC_PATTERN = re.compile(
+    r"\b(?:oil|crude|brent|wti|gas|lng|diesel|fuel|energy|gold|silver|"
+    r"copper|iron\s+ore|wheat|corn|soy|soybean|agriculture|crops?|"
+    r"livestock|metals?|commodity|commodities)\b",
     re.IGNORECASE,
 )
 _AIRLINE_NEGATIVE_COST_PATTERN = re.compile(
@@ -1859,14 +1914,25 @@ def _production_entity_ref_for_news_seed(
     entity_ref = entity.link.entity_id.strip() if entity.link else ""
     if not entity_ref:
         return None
-    if not _is_direct_terminal_ref(entity_ref):
-        return entity_ref
-    if _direct_terminal_entity_is_story_anchored(entity, text):
-        return entity_ref
-    warnings.append(
-        f"ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_DIRECT_TERMINAL:{entity_ref[:120]}"
+    if _is_direct_terminal_ref(entity_ref):
+        if _direct_terminal_entity_is_story_anchored(entity, text):
+            return entity_ref
+        warnings.append(
+            f"ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_DIRECT_TERMINAL:{entity_ref[:120]}"
+        )
+        return None
+    contextual_reasons = _contextual_entity_artifact_reasons(
+        entity,
+        text=text,
+        canonical_name=_entity_name(entity),
     )
-    return None
+    if contextual_reasons:
+        warnings.append(
+            "ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_ENTITY_SEED:"
+            f"{entity_ref[:120]}:{','.join(contextual_reasons[:3])}"
+        )
+        return None
+    return entity_ref
 
 
 def _is_direct_terminal_source_entity(source_entity: ImpactSourceEntity) -> bool:
@@ -2028,6 +2094,89 @@ def _filter_unanchored_direct_terminal_candidates(
             filtered.append(candidate)
             continue
         _append_unanchored_direct_terminal_warning(warnings, candidate.entity_ref)
+    return filtered
+
+
+def _impact_source_entity_is_story_anchored(
+    source_entity: ImpactSourceEntity,
+    *,
+    text: str,
+) -> bool:
+    entity_ref = source_entity.entity_ref.strip()
+    normalized_ref = entity_ref.casefold()
+    if normalized_ref.startswith("country:"):
+        code = normalized_ref.split(":", 1)[1]
+        return code in _country_codes_from_text(text)
+    terms = [source_entity.name]
+    if ":" in entity_ref:
+        terms.append(entity_ref.rsplit(":", 1)[1])
+    for same_as_ref in source_entity.same_as_refs:
+        same_as = same_as_ref.strip()
+        if ":" in same_as:
+            terms.append(same_as.rsplit(":", 1)[1])
+    for term in _dedupe_string_values(terms):
+        normalized = re.sub(r"[^A-Za-z0-9]+", "", term)
+        if len(normalized) < 2:
+            continue
+        if _entity_name_occurs_in_story_context(text, term):
+            return True
+    text_key = text.casefold()
+    significant_tokens = [
+        token
+        for token in re.findall(r"[A-Za-z0-9]+", source_entity.name.casefold())
+        if len(token) >= 4
+        and token not in _CORPORATE_SUFFIX_TERMS
+        and token not in _PASSIVE_GENERIC_FINANCE_ALIAS_TERMS
+    ]
+    if any(
+        re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", text_key)
+        for token in significant_tokens
+    ):
+        return True
+    return False
+
+
+def _candidate_source_entity_refs(candidate: ImpactCandidate) -> list[str]:
+    refs = [*candidate.source_entity_refs]
+    for relationship_path in candidate.relationship_paths:
+        for edge in relationship_path.edges:
+            refs.extend([edge.source_ref, edge.target_ref])
+    return _dedupe_string_values(
+        [
+            ref
+            for ref in refs
+            if ref and ref.casefold() != candidate.entity_ref.casefold()
+        ]
+    )
+
+
+def _filter_unanchored_impact_candidates(
+    candidates: list[ImpactCandidate],
+    source_entities: list[ImpactSourceEntity],
+    *,
+    text: str,
+    warnings: list[str],
+) -> list[ImpactCandidate]:
+    if not candidates or not source_entities:
+        return candidates
+    source_entities_by_ref = _source_entity_ref_index(source_entities)
+    filtered: list[ImpactCandidate] = []
+    for candidate in candidates:
+        matched_source_entities = [
+            source_entities_by_ref[ref.casefold()]
+            for ref in _candidate_source_entity_refs(candidate)
+            if ref.casefold() in source_entities_by_ref
+        ]
+        if not matched_source_entities or any(
+            _impact_source_entity_is_story_anchored(source_entity, text=text)
+            for source_entity in matched_source_entities
+        ):
+            filtered.append(candidate)
+            continue
+        warnings.append(
+            "ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_IMPACT_CANDIDATE:"
+            f"{candidate.entity_ref[:120]}"
+        )
     return filtered
 
 
@@ -2315,13 +2464,13 @@ def _country_code_candidates_for_pack_plan(
 
     _append(request.country_hint, "country_hint")
     _append(request.hints.country if request.hints else None, "country_hint")
-    _append(request.source.source_country if request.source else None, "source_country")
     for code in _country_codes_from_text(text):
         if not any(existing == code for existing, _ in candidates):
             candidates.append((code, "text_country_mention"))
     for code in _country_codes_from_entities(entities):
         if not any(existing == code for existing, _ in candidates):
             candidates.append((code, "entity_country_match"))
+    _append(request.source.source_country if request.source else None, "source_country")
     return candidates
 
 
@@ -2655,6 +2804,106 @@ def _entity_phrase_occurs_in_story_context(text: str | None, name: str) -> bool:
     return False
 
 
+def _entity_name_variants(value: str) -> list[str]:
+    variants = _direct_terminal_anchor_name_variants(value)
+    if not variants and value.strip():
+        variants = [value.strip()]
+    return variants
+
+
+def _entity_name_occurs_in_story_context(text: str | None, name: str) -> bool:
+    return any(
+        _entity_phrase_occurs_in_story_context(text, variant)
+        for variant in _entity_name_variants(name)
+    )
+
+
+def _entity_surface_is_canonical_alias(entity: EntityMatch, canonical_name: str) -> bool:
+    surface = entity.text.strip()
+    if not surface:
+        return False
+    surface_key = surface.casefold()
+    if surface_key in {variant.casefold() for variant in _entity_name_variants(canonical_name)}:
+        return True
+    if surface_key in {alias.strip().casefold() for alias in entity.aliases if alias.strip()}:
+        return True
+    canonical_tokens = [
+        token
+        for token in re.findall(r"[A-Za-z0-9]+", canonical_name.casefold())
+        if token not in _CORPORATE_SUFFIX_TERMS
+    ]
+    if len(surface) >= 2 and surface.isupper() and canonical_tokens:
+        acronym = "".join(token[0] for token in canonical_tokens if token)
+        if surface_key == acronym:
+            return True
+    if len(surface) >= 3 and re.search(
+        rf"(?<![A-Za-z0-9]){re.escape(surface)}(?![A-Za-z0-9])",
+        canonical_name,
+        re.IGNORECASE,
+    ):
+        return True
+    return False
+
+
+def _contextual_entity_artifact_reasons(
+    entity: EntityMatch,
+    *,
+    text: str | None,
+    canonical_name: str,
+) -> list[str]:
+    label = entity.label.strip().casefold()
+    entity_ref = _entity_ref(entity).casefold()
+    if label in {"country", "location", "place", "city", "region"} or entity_ref.startswith(
+        "country:"
+    ):
+        return []
+
+    reasons: list[str] = []
+    surface = entity.text.strip()
+    normalized_surface = re.sub(r"[^A-Za-z0-9]+", "", surface)
+    canonical_anchored = _entity_name_occurs_in_story_context(text, canonical_name)
+    source_domain = (
+        entity.provenance.source_domain.strip().casefold()
+        if entity.provenance and entity.provenance.source_domain
+        else ""
+    )
+
+    if (
+        normalized_surface
+        and not _country_code_from_text(surface)
+        and re.fullmatch(r"[A-Z]{2,5}\d?", normalized_surface)
+        and (
+            any(character.isdigit() for character in normalized_surface)
+            or label in {"ticker", "security"}
+            or "ticker" in entity_ref
+            or (
+                source_domain == "finance"
+                and len(normalized_surface) >= 3
+                and not canonical_anchored
+            )
+        )
+    ):
+        reasons.append("raw_ticker_identifier")
+
+    sports_text = " ".join([canonical_name, entity_ref])
+    if _SPORTS_ENTITY_PATTERN.search(sports_text) and not _SPORTS_CONTEXT_PATTERN.search(
+        text or ""
+    ):
+        reasons.append("sports_entity_context_mismatch")
+
+    if (
+        label in {"organization", "company", "issuer", "government"}
+        and canonical_name
+        and surface
+        and surface.casefold() != canonical_name.casefold()
+        and not canonical_anchored
+        and not _entity_surface_is_canonical_alias(entity, canonical_name)
+    ):
+        reasons.append("unanchored_canonical_alias")
+
+    return _dedupe_string_values(reasons)
+
+
 def _source_outlet_is_story_subject(*, request: NewsAnalyzeRequest, name: str) -> bool:
     subject_text = "\n".join(
         part.strip() for part in (request.title, request.description) if part and part.strip()
@@ -2857,6 +3106,7 @@ def _build_passive_entities(
         for candidate in terminal_candidates
         if getattr(candidate, "entity_ref", "")
     }
+    analysis_text = _news_analysis_text(request)
     passive_entities: list[NewsAnalyzePassiveEntity] = []
     for entity in entities:
         if _is_tradable_entity(entity, terminal_refs):
@@ -2872,11 +3122,31 @@ def _build_passive_entities(
                 and not _source_outlet_is_story_subject(request=request, name=name)
             ),
         )
+        contextual_reasons = _contextual_entity_artifact_reasons(
+            entity,
+            text=analysis_text,
+            canonical_name=name,
+        )
+        hidden_reasons = _dedupe_string_values(
+            [
+                *hidden_reasons,
+                *[
+                    reason
+                    for reason in contextual_reasons
+                    if reason != "unanchored_canonical_alias"
+                ],
+            ]
+        )
         weak_alias_reasons = _dedupe_string_values(
             [
                 *_passive_weak_alias_reasons(entity),
                 *_passive_contextual_alias_reasons(entity, request, name),
                 *_passive_finance_alias_reasons(entity, request, name),
+                *[
+                    reason
+                    for reason in contextual_reasons
+                    if reason == "unanchored_canonical_alias"
+                ],
             ]
         )
         quality = _passive_quality(entity, hidden_reasons, weak_alias_reasons)
@@ -3228,6 +3498,12 @@ def _build_topic_scope(
         "commodit" in label.casefold() for label in labels
     ):
         primary_override = "General / Mixed"
+    elif (
+        _MARKET_OUTLOOK_TOPIC_PATTERN.search(route_text)
+        and any("commodit" in label.casefold() for label in labels)
+        and not _PHYSICAL_COMMODITY_TOPIC_PATTERN.search(text or "")
+    ):
+        primary_override = "Trading & Markets"
     if primary_override:
         labels = _dedupe_string_values(
             [
@@ -4641,6 +4917,12 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                     direct_terminal_candidates,
                     expanded_terminal_candidates,
                 )
+            expanded_terminal_candidates = _filter_unanchored_impact_candidates(
+                expanded_terminal_candidates,
+                impact_paths.source_entities,
+                text=analysis_text,
+                warnings=warnings,
+            )
             if expanded_terminal_candidates != impact_paths.candidates:
                 impact_paths = impact_paths.model_copy(
                     update={"candidates": expanded_terminal_candidates}

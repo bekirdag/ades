@@ -5729,6 +5729,21 @@ def test_news_analyze_story_quality_routes_topics_and_strips_internal_metadata(
             "General / Mixed",
         ),
         (
+            "A quantum computing launch expanded cloud security tools for developers.",
+            "Commodities, Energy & Agriculture",
+            "General / Mixed",
+        ),
+        (
+            "A space launch carried satellite broadband equipment for enterprise networks.",
+            "Commodities, Energy & Agriculture",
+            "General / Mixed",
+        ),
+        (
+            "Weekly market outlook: equities rallied as bond yields fell and investors rotated.",
+            "Commodities, Energy & Agriculture",
+            "Trading & Markets",
+        ),
+        (
             "Sky made a takeover offer for ITV shares.",
             "Regional & International",
             "Trading & Markets",
@@ -5907,6 +5922,172 @@ def test_news_analyze_forces_primary_country_actor_passives(
     assert "country:tr" not in passive_refs
 
 
+def test_news_analyze_forces_uae_and_cuba_text_country_scopes_without_source_bias(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "country-scope-alias-en", domain="general")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[],
+            topics=[TopicMatch(label="Geopolitics", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": (
+                "U.S. officials and UAE ministers discussed investment while "
+                "Cuba restored power after a nationwide outage."
+            ),
+            "source": {"source_country": "TR"},
+            "options": {"include_relationship_paths": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    passive_refs = {entity["entity_ref"] for entity in payload["passive_entities"]}
+    assert {"country:us", "country:ae", "country:cu"}.issubset(passive_refs)
+    assert "country:tr" not in passive_refs
+
+
+def test_news_analyze_hides_context_mismatched_passive_entities(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "passive-context-filter-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    story_text = (
+        "The Air Force awarded a defense contract after ALAB and VH2 were cited "
+        "in a raw market-data sidebar."
+    )
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Air Force",
+                    label="organization",
+                    start=text.index("Air Force"),
+                    end=text.index("Air Force") + len("Air Force"),
+                    confidence=0.92,
+                    relevance=0.9,
+                    link=EntityLink(
+                        entity_id="ades:sports:air-force-falcons-baseball",
+                        canonical_text="Air Force Falcons baseball",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="general",
+                    ),
+                ),
+                EntityMatch(
+                    text="ALAB",
+                    label="organization",
+                    start=text.index("ALAB"),
+                    end=text.index("ALAB") + len("ALAB"),
+                    confidence=0.88,
+                    relevance=0.77,
+                    aliases=["ALAB"],
+                    link=EntityLink(
+                        entity_id="finance-us-issuer:astera-labs",
+                        canonical_text="Astera Labs, Inc.",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="finance",
+                    ),
+                ),
+                EntityMatch(
+                    text="VH2",
+                    label="organization",
+                    start=text.index("VH2"),
+                    end=text.index("VH2") + len("VH2"),
+                    confidence=0.86,
+                    relevance=0.7,
+                    link=EntityLink(
+                        entity_id="ades:artifact:vh2",
+                        canonical_text="VH2",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="finance",
+                    ),
+                ),
+            ],
+            topics=[TopicMatch(label="Trading & Markets", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": story_text,
+            "options": {"include_relationship_paths": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    passive_by_ref = {entity["entity_ref"]: entity for entity in payload["passive_entities"]}
+    sports_team = passive_by_ref["ades:sports:air-force-falcons-baseball"]
+    assert sports_team["display_eligible"] is False
+    assert "sports_entity_context_mismatch" in sports_team["quality_reasons"]
+    unrelated_company = passive_by_ref["finance-us-issuer:astera-labs"]
+    assert unrelated_company["display_eligible"] is False
+    assert "raw_ticker_identifier" in unrelated_company["quality_reasons"]
+    raw_ticker = passive_by_ref["ades:artifact:vh2"]
+    assert raw_ticker["display_eligible"] is False
+    assert "raw_ticker_identifier" in raw_ticker["quality_reasons"]
+
+
 def test_news_analyze_hides_raw_finance_ticker_alias_and_flags_cantarell_operator(
     tmp_path: Path,
     monkeypatch,
@@ -5977,6 +6158,163 @@ def test_news_analyze_hides_raw_finance_ticker_alias_and_flags_cantarell_operato
     assert (
         "ADES_NEWS_ANALYZE_FACTUAL_CONSISTENCY:CANTARELL_OPERATOR_PEMEX"
         in payload["warnings"]
+    )
+
+
+def test_news_analyze_drops_unanchored_impact_candidates(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "impact-context-filter-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Reliance Home Finance",
+                    label="organization",
+                    start=text.index("Reliance Home Finance"),
+                    end=text.index("Reliance Home Finance") + len("Reliance Home Finance"),
+                    confidence=0.93,
+                    relevance=0.92,
+                    link=EntityLink(
+                        entity_id="finance-in-issuer:rhfl",
+                        canonical_text="Reliance Home Finance",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="finance",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="Regulatory & Legal", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _edge(source_ref: str, target_ref: str) -> ImpactPathEdge:
+        return ImpactPathEdge(
+            source_ref=source_ref,
+            target_ref=target_ref,
+            relation="regulatory_action_affects_security",
+            evidence_level="direct",
+            confidence=0.91,
+            direction_hint="negative",
+            source_name="Fixture",
+            source_url="https://example.test/source",
+            source_snapshot="2026-07-11",
+            compatible_event_types=["regulatory_enforcement"],
+        )
+
+    def _candidate(
+        entity_ref: str,
+        name: str,
+        entity_type: str,
+        source_ref: str,
+        target_ref: str,
+    ) -> ImpactCandidate:
+        return ImpactCandidate(
+            entity_ref=entity_ref,
+            name=name,
+            entity_type=entity_type,
+            evidence_level="shallow",
+            confidence=0.88,
+            source_entity_refs=[source_ref],
+            relationship_paths=[
+                ImpactRelationshipPath(
+                    path_depth=1,
+                    edges=[_edge(source_ref, target_ref)],
+                )
+            ],
+            compatible_event_types=["regulatory_enforcement"],
+        )
+
+    def _fake_expand(entity_refs: list[str], **_: object) -> ImpactExpansionResult:
+        assert "finance-in-issuer:rhfl" in entity_refs
+        return ImpactExpansionResult(
+            graph_version="fixture",
+            artifact_version="fixture",
+            artifact_hash="sha256:fixture",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="finance-in-issuer:rhfl",
+                    name="Reliance Home Finance",
+                    entity_type="organization",
+                    same_as_refs=["finance-in-ticker:rhfl"],
+                    is_graph_seed=True,
+                ),
+                ImpactSourceEntity(
+                    entity_ref="finance-in-issuer:metrobrand",
+                    name="METROBRAND",
+                    entity_type="organization",
+                    same_as_refs=["finance-in-ticker:metrobrand"],
+                    is_graph_seed=True,
+                ),
+            ],
+            candidates=[
+                _candidate(
+                    "finance-in-ticker:rhfl",
+                    "RHFL",
+                    "ticker",
+                    "finance-in-issuer:rhfl",
+                    "finance-in-ticker:rhfl",
+                ),
+                _candidate(
+                    "ades:sector:metrobrand-retail",
+                    "METROBRAND retail exposure",
+                    "sector",
+                    "finance-in-issuer:metrobrand",
+                    "ades:sector:metrobrand-retail",
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": (
+                "Reliance Home Finance faced a regulator enforcement action "
+                "after a debt restructuring dispute."
+            ),
+            "options": {
+                "include_relationship_paths": True,
+                "include_impact_paths": True,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    candidate_refs = {
+        candidate["entity_ref"] for candidate in payload["terminal_impact_candidates"]
+    }
+    assert "finance-in-ticker:rhfl" in candidate_refs
+    assert "ades:sector:metrobrand-retail" not in candidate_refs
+    assert any(
+        warning.startswith("ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_IMPACT_CANDIDATE")
+        for warning in payload["warnings"]
     )
 
 
