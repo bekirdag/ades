@@ -16,6 +16,67 @@ except Exception:
     print(0)
 PY
 }
+update_current_registry_index() {
+  local current_index="$1"
+  local release_index="$2"
+  shift 2
+  if [ "$#" -eq 0 ] || [ ! -f "$release_index" ]; then
+    return 0
+  fi
+  python3 - "$current_index" "$release_index" "$@" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+current_path = Path(sys.argv[1])
+release_path = Path(sys.argv[2])
+pack_ids = sys.argv[3:]
+
+if current_path.exists():
+    with current_path.open(encoding="utf-8") as handle:
+        current = json.load(handle)
+else:
+    current = {"packs": {}}
+with release_path.open(encoding="utf-8") as handle:
+    release = json.load(handle)
+
+current_packs = current.setdefault("packs", {})
+release_packs = release.get("packs") or {}
+for pack_id in pack_ids:
+    if pack_id in release_packs:
+        current_packs[pack_id] = release_packs[pack_id]
+
+current_path.write_text(json.dumps(current, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+}
+copy_release_pack_artifacts() {
+  local current_root="$1"
+  local release_root="$2"
+  local release_manifest="$3"
+  python3 - "$current_root" "$release_root" "$release_manifest" <<'PY'
+import json
+import shutil
+import sys
+from pathlib import Path
+
+current_root = Path(sys.argv[1]).resolve()
+release_root = Path(sys.argv[2]).resolve()
+manifest_path = Path(sys.argv[3]).resolve()
+
+with manifest_path.open(encoding="utf-8") as handle:
+    manifest = json.load(handle)
+
+for artifact in manifest.get("artifacts") or []:
+    url = str((artifact or {}).get("url") or "")
+    if not url or "://" in url or url.startswith("/"):
+        continue
+    source = (manifest_path.parent / url).resolve()
+    relative_source = source.relative_to(release_root)
+    destination = current_root / relative_source
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+PY
+}
 merge_release_packs_into_current() {
   local current_root="$1"
   local release_root="$2"
@@ -24,6 +85,7 @@ merge_release_packs_into_current() {
   local current_packs_root="$current_root/packs"
   local backup_root="$current_root/.pack-backups/$release_id"
   local merged_count=0
+  local merged_pack_ids=()
 
   if [ ! -d "$release_packs_root" ]; then
     return 0
@@ -66,15 +128,21 @@ merge_release_packs_into_current() {
     rm -rf "$tmp_pack_dir"
     mkdir -p "$tmp_pack_dir"
     cp -a "$release_pack_dir/." "$tmp_pack_dir/"
+    copy_release_pack_artifacts "$current_root" "$release_root" "$release_manifest"
     if [ -d "$current_pack_dir" ]; then
       rm -rf "$backup_root/$pack_id"
       mv "$current_pack_dir" "$backup_root/$pack_id"
     fi
     mv "$tmp_pack_dir" "$current_pack_dir"
     merged_count=$((merged_count + 1))
+    merged_pack_ids+=("$pack_id")
     echo "Merged release pack $pack_id into preserved current registry ($release_entries entries)."
   done
 
+  update_current_registry_index \
+    "$current_root/index.json" \
+    "$release_root/index.json" \
+    "${merged_pack_ids[@]}"
   echo "Merged $merged_count release pack(s) into preserved current registry."
 }
 impact_edge_count() {
