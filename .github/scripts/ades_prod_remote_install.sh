@@ -483,6 +483,10 @@ if [ -f "$impact_release_root/market_graph_store.sqlite" ]; then
       cp "$impact_release_root/market_graph_store_manifest.json" "$impact_current_root/market_graph_store_manifest.json"
     fi
   fi
+  touch "$impact_current_root/market_graph_store.sqlite"
+  if [ -f "$impact_current_root/market_graph_store_manifest.json" ]; then
+    touch "$impact_current_root/market_graph_store_manifest.json"
+  fi
   rm -f "$service_dropin_dir/impact-expansion.conf" "$service_dropin_dir/news-analyze.conf"
   cat > "$service_dropin_dir/zz-impact-expansion.conf" <<EOF
 [Service]
