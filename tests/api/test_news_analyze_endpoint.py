@@ -5793,6 +5793,64 @@ def test_news_analyze_story_quality_routes_topics_and_strips_internal_metadata(
         assert "ADES_NEWS_ANALYZE_STRIPPED_INTERNAL_METADATA" in payload["warnings"]
 
 
+def test_news_analyze_strips_placeholder_titles_and_additional_metadata_labels(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "metadata-hygiene-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        assert "Unclassified market-relevant update" not in text
+        assert "Primary action:" not in text
+        assert "Market exposure:" not in text
+        assert "Impact paths:" not in text
+        assert "Passive entities:" not in text
+        assert "Category:" not in text
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[],
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "title": "Unclassified market-relevant update",
+            "description": (
+                "Primary action: raw source text\n"
+                "Category: Commodities, Energy & Agriculture"
+            ),
+            "text": (
+                "Market exposure: finance-us-ticker:NFLX\n"
+                "Impact paths: short term\n"
+                "Passive entities: Anno Domini\n"
+                "A bank regulator fined a lender over capital controls."
+            ),
+            "options": {"include_relationship_paths": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "ADES_NEWS_ANALYZE_STRIPPED_INTERNAL_METADATA" in payload["warnings"]
+
+
 def test_news_analyze_filters_matched_signal_sports_from_market_impacts(
     tmp_path: Path,
     monkeypatch,
@@ -5968,6 +6026,99 @@ def test_news_analyze_forces_uae_and_cuba_text_country_scopes_without_source_bia
     passive_refs = {entity["entity_ref"] for entity in payload["passive_entities"]}
     assert {"country:us", "country:ae", "country:cu"}.issubset(passive_refs)
     assert "country:tr" not in passive_refs
+
+
+def test_news_analyze_normalizes_country_alias_passives_and_hides_date_artifacts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "passive-country-hygiene-en", domain="general")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    story_text = (
+        "Estados Unidos policymakers cited Anno Domini in a malformed source sidebar."
+    )
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Estados Unidos",
+                    label="country",
+                    start=text.index("Estados Unidos"),
+                    end=text.index("Estados Unidos") + len("Estados Unidos"),
+                    confidence=0.94,
+                    relevance=0.92,
+                    link=EntityLink(
+                        entity_id="country:us",
+                        canonical_text="Estados Unidos",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="general",
+                    ),
+                ),
+                EntityMatch(
+                    text="Anno Domini",
+                    label="organization",
+                    start=text.index("Anno Domini"),
+                    end=text.index("Anno Domini") + len("Anno Domini"),
+                    confidence=0.88,
+                    relevance=0.7,
+                    link=EntityLink(
+                        entity_id="ades:artifact:anno-domini",
+                        canonical_text="Anno Domini",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="general",
+                    ),
+                ),
+            ],
+            topics=[TopicMatch(label="Political & Policy", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": story_text,
+            "options": {"include_relationship_paths": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    passive_by_ref = {entity["entity_ref"]: entity for entity in payload["passive_entities"]}
+    country = passive_by_ref["country:us"]
+    assert country["name"] == "United States"
+    assert country["display_eligible"] is True
+    artifact = passive_by_ref["ades:artifact:anno-domini"]
+    assert artifact["display_eligible"] is False
+    assert "date_era_artifact" in artifact["quality_reasons"]
 
 
 def test_news_analyze_hides_context_mismatched_passive_entities(
@@ -6314,6 +6465,125 @@ def test_news_analyze_drops_unanchored_impact_candidates(
     assert "ades:sector:metrobrand-retail" not in candidate_refs
     assert any(
         warning.startswith("ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_IMPACT_CANDIDATE")
+        for warning in payload["warnings"]
+    )
+
+
+def test_news_analyze_drops_non_asset_terminal_identifier_candidates(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "impact-terminal-hygiene-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="United Kingdom",
+                    label="country",
+                    start=text.index("United Kingdom"),
+                    end=text.index("United Kingdom") + len("United Kingdom"),
+                    confidence=0.94,
+                    relevance=0.92,
+                    link=EntityLink(
+                        entity_id="country:uk",
+                        canonical_text="United Kingdom",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="general",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="Trading & Markets", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs: list[str], **_: object) -> ImpactExpansionResult:
+        assert "country:uk" in entity_refs
+        edge = ImpactPathEdge(
+            source_ref="country:uk",
+            target_ref="finance-uk-ticker:Gdp",
+            relation="macro_indicator_misread_as_ticker",
+            evidence_level="direct",
+            confidence=0.9,
+            direction_hint="macro",
+            source_name="Fixture",
+            source_url="https://example.test/source",
+            source_snapshot="2026-07-12",
+            compatible_event_types=["policy_rate_hold"],
+        )
+        return ImpactExpansionResult(
+            graph_version="fixture",
+            artifact_version="fixture",
+            artifact_hash="sha256:fixture",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="country:uk",
+                    name="United Kingdom",
+                    entity_type="country",
+                    is_graph_seed=True,
+                )
+            ],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref="finance-uk-ticker:Gdp",
+                    name="GDP",
+                    entity_type="ticker",
+                    evidence_level="shallow",
+                    confidence=0.9,
+                    source_entity_refs=["country:uk"],
+                    relationship_paths=[
+                        ImpactRelationshipPath(path_depth=1, edges=[edge])
+                    ],
+                    compatible_event_types=["policy_rate_hold"],
+                )
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": (
+                "The United Kingdom central bank held rates steady as GDP data slowed."
+            ),
+            "options": {
+                "include_relationship_paths": True,
+                "include_impact_paths": True,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    candidate_refs = {
+        candidate["entity_ref"] for candidate in payload["terminal_impact_candidates"]
+    }
+    assert "finance-uk-ticker:Gdp" not in candidate_refs
+    assert any(
+        warning.startswith("ADES_NEWS_ANALYZE_DROPPED_INVALID_TERMINAL")
         for warning in payload["warnings"]
     )
 

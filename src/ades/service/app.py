@@ -366,6 +366,8 @@ for _country in DEFAULT_CURATED_G20_COUNTRY_ENTITIES:
             _COUNTRY_ALIAS_TO_CODE[_alias.casefold()] = code
 _COUNTRY_ALIAS_TO_CODE.update(
     {
+        "ee.uu.": "us",
+        "estados unidos": "us",
         "u.s.": "us",
         "u.s.a.": "us",
         "united states of america": "us",
@@ -528,12 +530,21 @@ _DIRECT_MARKET_TERMINAL_SIGNAL_FAMILIES = {
     "safe_haven",
 }
 _INTERNAL_NEWS_METADATA_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"^\s*primary\s+signal\s*:\s*.*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(
+        r"^\s*(?:primary\s+(?:signal|action)|market\s+exposure|impact\s+paths?|"
+        r"passive\s+entities|affected\s+dimensions|source\s+groups?|category)\s*:.*$",
+        re.IGNORECASE | re.MULTILINE,
+    ),
     re.compile(
         r"^\s*market\s+exposure\s+is\s+concentrated\s+around\b.*$",
         re.IGNORECASE | re.MULTILINE,
     ),
+    re.compile(
+        r"^\s*(?:title\s*:\s*)?unclassified\s+market[-\s]+relevant\s+update\s*$",
+        re.IGNORECASE | re.MULTILINE,
+    ),
 )
+_NON_ASSET_TERMINAL_IDENTIFIER_KEYS = {"gdp", "grossdomesticproduct", "shortterm"}
 _NON_MARKET_SIGNAL_TERMS = {
     "barcelona",
     "celebrity",
@@ -2180,6 +2191,37 @@ def _filter_unanchored_impact_candidates(
     return filtered
 
 
+def _non_asset_terminal_candidate_reason(candidate: ImpactCandidate) -> str | None:
+    if not _is_direct_terminal_ref(candidate.entity_ref):
+        return None
+    terms = _dedupe_string_values(
+        [candidate.name, *_direct_terminal_identity_terms(candidate.entity_ref)]
+    )
+    for term in terms:
+        key = re.sub(r"[^a-z0-9]+", "", term.casefold())
+        if key in _NON_ASSET_TERMINAL_IDENTIFIER_KEYS:
+            return "non_asset_terminal_identifier"
+    return None
+
+
+def _filter_invalid_terminal_candidates(
+    candidates: list[ImpactCandidate],
+    *,
+    warnings: list[str],
+) -> list[ImpactCandidate]:
+    filtered: list[ImpactCandidate] = []
+    for candidate in candidates:
+        reason = _non_asset_terminal_candidate_reason(candidate)
+        if reason is None:
+            filtered.append(candidate)
+            continue
+        warnings.append(
+            "ADES_NEWS_ANALYZE_DROPPED_INVALID_TERMINAL:"
+            f"{reason}:{candidate.entity_ref[:120]}"
+        )
+    return filtered
+
+
 def _direct_terminal_candidates_from_source_entities(
     source_entities: list[ImpactSourceEntity],
     *,
@@ -2631,6 +2673,16 @@ def _country_code_from_text(value: str | None) -> str | None:
     return _COUNTRY_ALIAS_TO_CODE.get(normalized)
 
 
+def _canonical_country_name_for_ref(
+    entity_ref: str | None,
+    fallback: str | None = None,
+) -> str | None:
+    code = _entity_ref_country_code(entity_ref) or _country_code_from_text(fallback)
+    if not code:
+        return None
+    return _COUNTRY_BY_CODE.get(code)
+
+
 def _country_name_from_impact_sources(
     country_code: str,
     impact_source_entities: list[ImpactSourceEntity] | None,
@@ -2689,7 +2741,13 @@ def _build_country_scope(
             entity_code = _entity_ref_country_code(entity.link.entity_id if entity.link else None)
             entity_code = entity_code or _country_code_from_text(entity_name)
             if entity_code == code:
-                name = entity_name
+                name = (
+                    _canonical_country_name_for_ref(
+                        entity.link.entity_id if entity.link else None,
+                        entity_name,
+                    )
+                    or entity_name
+                )
                 break
         name = name or _country_name_from_impact_sources(
             code,
@@ -2922,6 +2980,8 @@ def _hidden_artifact_reasons(
         return ["empty_text"]
     reasons: list[str] = []
     label = entity.label.strip().casefold() if entity else ""
+    if normalized.casefold() in {"ad", "a.d.", "anno domini"}:
+        reasons.append("date_era_artifact")
     if normalized.casefold() in {
         "none",
         "null",
@@ -3111,8 +3171,9 @@ def _build_passive_entities(
     for entity in entities:
         if _is_tradable_entity(entity, terminal_refs):
             continue
-        name = _entity_name(entity)
         entity_ref = _entity_ref(entity)
+        raw_name = _entity_name(entity)
+        name = _canonical_country_name_for_ref(entity_ref, raw_name) or raw_name
         role = _passive_role(entity, name)
         hidden_reasons = _hidden_artifact_reasons(
             name,
@@ -4917,6 +4978,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                     direct_terminal_candidates,
                     expanded_terminal_candidates,
                 )
+            expanded_terminal_candidates = _filter_invalid_terminal_candidates(
+                expanded_terminal_candidates,
+                warnings=warnings,
+            )
             expanded_terminal_candidates = _filter_unanchored_impact_candidates(
                 expanded_terminal_candidates,
                 impact_paths.source_entities,
