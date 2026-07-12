@@ -1,21 +1,21 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-12T13:49:16.045653Z",
-  "bundle_dir": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/politics-vector-en-bundle",
-  "bundle_manifest_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/politics-vector-en-bundle/bundle.json",
+  "generated_at": "2026-07-12T20:27:55.246777Z",
+  "bundle_dir": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/politics-fix/regenerated-bundles/politics-vector-en-bundle",
+  "bundle_manifest_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/politics-fix/regenerated-bundles/politics-vector-en-bundle/bundle.json",
   "include_build_only": false,
-  "input_entity_count": 29,
+  "input_entity_count": 37,
   "input_rule_count": 12,
-  "included_entity_count": 24,
+  "included_entity_count": 32,
   "included_rule_count": 12,
   "dropped_record_count": 5,
-  "dropped_alias_count": 0,
+  "dropped_alias_count": 10,
   "ambiguous_alias_count": 0,
   "analysis_backend": "sqlite",
-  "analysis_db_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/politics-vector-en/analysis.sqlite",
-  "alias_analysis_report_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/politics-vector-en/alias-analysis.json",
-  "candidate_alias_count": 113,
-  "retained_alias_count": 101,
+  "analysis_db_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/politics-fix/registry-refresh/candidates/politics-vector-en/analysis.sqlite",
+  "alias_analysis_report_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/politics-fix/registry-refresh/candidates/politics-vector-en/alias-analysis.json",
+  "candidate_alias_count": 127,
+  "retained_alias_count": 115,
   "collision_blocked_alias_count": 0,
   "retained_alias_audit_scanned_alias_count": 0,
   "retained_alias_audit_removed_alias_count": 0,
@@ -31,24 +31,25 @@
   "exact_common_english_alias_removed_alias_count": 0,
   "exact_common_english_alias_source_path": null,
   "exact_identifier_alias_count": 0,
-  "natural_language_alias_count": 113,
+  "natural_language_alias_count": 127,
   "blocked_reason_counts": {},
   "retained_label_counts": {
-    "politics_concept": 101
+    "organization": 15,
+    "politics_concept": 100
   },
-  "label_count": 1,
-  "alias_count": 101,
+  "label_count": 2,
+  "alias_count": 115,
   "rule_count": 12,
   "matcher": {
     "algorithm": "token_trie_v1",
     "normalization": "normalize_lookup_text:v1",
-    "artifact_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/politics-vector-en/matcher/token-trie.bin",
-    "entries_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/politics-vector-en/matcher/entries.bin",
-    "entry_count": 100,
-    "state_count": 179,
-    "max_alias_length": 28,
-    "artifact_sha256": "16a41ce608f59286916da116a3e18b0ba6a0f9366d14c0d10e28055dd4444848",
-    "entries_sha256": "47e1005a10afa5cf86c8453425d2a39228b2fa08486931da388b7066cbe52c6c"
+    "artifact_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/politics-fix/registry-refresh/candidates/politics-vector-en/matcher/token-trie.bin",
+    "entries_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/politics-fix/registry-refresh/candidates/politics-vector-en/matcher/entries.bin",
+    "entry_count": 109,
+    "state_count": 209,
+    "max_alias_length": 34,
+    "artifact_sha256": "d8b3ac82193022d172c9c53d6e092d108c75b6744d23cbc72e7255b075674df7",
+    "entries_sha256": "4c0542be0cb55a0773cfa5b730cc002b992dfcb06189d643b809d4e26b6dc6e8"
   },
   "source_count": 20,
   "source_license_classes": {
@@ -58,9 +59,11 @@
   "restricted_source_count": 0,
   "publishable_sources_only": true,
   "entity_label_distribution": {
+    "organization": 8,
     "politics_concept": 24
   },
   "label_distribution": {
-    "politics_concept": 113
+    "organization": 15,
+    "politics_concept": 112
   }
 }

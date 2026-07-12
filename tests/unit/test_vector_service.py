@@ -1357,7 +1357,9 @@ def test_seed_entity_ids_for_collection_alias_caps_shared_location_only_fallback
     assert seed_ids == ["wikidata:Q145", "wikidata:Q23436"]
 
 
-def test_seed_entity_ids_for_collection_alias_keeps_routed_location_only_fallback_unbounded() -> None:
+def test_seed_entity_ids_for_collection_alias_keeps_routed_location_only_fallback_unbounded() -> (
+    None
+):
     response = _response_with_multiple_location_only_seeds()
     settings = Settings(
         runtime_target=RuntimeTarget.PRODUCTION_SERVER,
@@ -1959,6 +1961,118 @@ def test_graph_gate_vector_related_entities_rejects_org_only_no_direct_candidate
     assert admitted == []
 
 
+def test_sparse_graph_fallback_keeps_only_routed_supported_organizations() -> None:
+    response = TagResponse(
+        version="0.1.0",
+        pack="politics-vector-en",
+        pack_version="0.2.1",
+        language="en",
+        content_type="text/plain",
+        entities=[
+            EntityMatch(
+                text="United Nations",
+                label="organization",
+                start=0,
+                end=14,
+                confidence=0.9,
+                relevance=0.9,
+                link=EntityLink(
+                    entity_id="wikidata:Q1065",
+                    canonical_text="United Nations",
+                    provider="lookup.alias.exact",
+                ),
+            ),
+            EntityMatch(
+                text="U.S. State Department",
+                label="organization",
+                start=16,
+                end=37,
+                confidence=0.9,
+                relevance=0.9,
+                link=EntityLink(
+                    entity_id="wikidata:Q789915",
+                    canonical_text="U.S. State Department",
+                    provider="lookup.alias.exact",
+                ),
+            ),
+        ],
+        topics=[],
+        warnings=[],
+        timing_ms=5,
+        graph_support=GraphSupport(applied=True, coherence_score=0.7),
+    )
+    settings = Settings(
+        runtime_target=RuntimeTarget.PRODUCTION_SERVER,
+        metadata_backend=MetadataBackend.POSTGRESQL,
+        database_url="postgresql://local/test",
+        graph_context_min_supporting_seeds=2,
+        graph_context_related_limit=3,
+    )
+
+    admitted = vector_service._sparse_graph_fallback_vector_related_entities(
+        [
+            vector_service.RelatedEntityMatch(
+                entity_id="wikidata:Q10",
+                canonical_text="Foundation for Defense of Democracies",
+                score=0.25,
+                provider="qdrant.qid_graph",
+                entity_type="organization",
+                packs=["general-en", "politics-vector-en"],
+                seed_entity_ids=["wikidata:Q1065", "wikidata:Q789915"],
+                shared_seed_count=2,
+            ),
+            vector_service.RelatedEntityMatch(
+                entity_id="wikidata:Q11",
+                canonical_text="Constitution Avenue",
+                score=0.5,
+                provider="qdrant.qid_graph",
+                entity_type="location",
+                packs=["politics-vector-en"],
+                seed_entity_ids=["wikidata:Q1065", "wikidata:Q789915"],
+                shared_seed_count=2,
+            ),
+            vector_service.RelatedEntityMatch(
+                entity_id="wikidata:Q12",
+                canonical_text="Single Seed Agency",
+                score=0.5,
+                provider="qdrant.qid_graph",
+                entity_type="organization",
+                packs=["politics-vector-en"],
+                seed_entity_ids=["wikidata:Q1065"],
+                shared_seed_count=1,
+            ),
+            vector_service.RelatedEntityMatch(
+                entity_id="wikidata:Q13",
+                canonical_text="Low Score Organization",
+                score=0.19,
+                provider="qdrant.qid_graph",
+                entity_type="organization",
+                packs=["politics-vector-en"],
+                seed_entity_ids=["wikidata:Q1065", "wikidata:Q789915"],
+                shared_seed_count=2,
+            ),
+            vector_service.RelatedEntityMatch(
+                entity_id="wikidata:Q14",
+                canonical_text="Other Pack Organization",
+                score=0.5,
+                provider="qdrant.qid_graph",
+                entity_type="organization",
+                packs=["business-vector-en"],
+                seed_entity_ids=["wikidata:Q1065", "wikidata:Q789915"],
+                shared_seed_count=2,
+            ),
+        ],
+        response=response,
+        strong_seed_entity_ids=["wikidata:Q1065", "wikidata:Q789915"],
+        settings=settings,
+        domain_hint="politics",
+    )
+
+    assert [item.entity_id for item in admitted] == ["wikidata:Q10"]
+    assert admitted[0].seed_entity_ids == ["wikidata:Q1065", "wikidata:Q789915"]
+    assert admitted[0].shared_seed_count == 2
+
+
 def test_enrich_tag_response_with_related_entities_uses_graph_vector_fallback_for_missing_seed(
     monkeypatch,
     tmp_path: Path,
@@ -2186,7 +2300,9 @@ def test_enrich_tag_response_with_related_entities_allows_shared_fallback_for_hi
             filter_payload=None,
         ):
             observed_calls.append((collection_name, point_id, filter_payload))
-            assert filter_payload == {"packs": ["general-en", "business-vector-en", "finance-uk-en"]}
+            assert filter_payload == {
+                "packs": ["general-en", "business-vector-en", "finance-uk-en"]
+            }
             if collection_name == "ades-qids-business-current":
                 return []
             assert collection_name == "ades-qids-current"
@@ -2626,7 +2742,9 @@ def test_graph_context_strong_seed_entity_ids_supplements_filtered_anchor_subset
     ]
 
 
-def test_graph_context_strong_seed_entity_ids_supplements_low_coherence_anchor_subset_with_person_seed() -> None:
+def test_graph_context_strong_seed_entity_ids_supplements_low_coherence_anchor_subset_with_person_seed() -> (
+    None
+):
     response = TagResponse(
         version="0.1.0",
         pack="general-en",
@@ -2959,9 +3077,7 @@ def test_recent_news_propose_related_entities_requires_three_shared_seeds_when_l
     settings = Settings(
         runtime_target=RuntimeTarget.LOCAL,
         metadata_backend=MetadataBackend.SQLITE,
-        graph_context_artifact_path=_graph_context_artifact_with_party_affiliation(
-            tmp_path
-        ),
+        graph_context_artifact_path=_graph_context_artifact_with_party_affiliation(tmp_path),
         news_context_artifact_path=artifact_path,
         news_context_min_supporting_seeds=2,
         news_context_min_pair_count=2,
@@ -3525,9 +3641,7 @@ def test_recent_news_propose_related_entities_prefers_graph_supported_direct_can
     settings = Settings(
         runtime_target=RuntimeTarget.LOCAL,
         metadata_backend=MetadataBackend.SQLITE,
-        graph_context_artifact_path=_graph_context_artifact_with_party_affiliation(
-            tmp_path
-        ),
+        graph_context_artifact_path=_graph_context_artifact_with_party_affiliation(tmp_path),
         news_context_artifact_path=artifact_path,
         news_context_min_supporting_seeds=2,
         news_context_min_pair_count=2,
@@ -3651,9 +3765,7 @@ def test_recent_news_propose_related_entities_aligns_support_candidate_to_graph_
     settings = Settings(
         runtime_target=RuntimeTarget.LOCAL,
         metadata_backend=MetadataBackend.SQLITE,
-        graph_context_artifact_path=_graph_context_artifact_with_party_affiliation(
-            tmp_path
-        ),
+        graph_context_artifact_path=_graph_context_artifact_with_party_affiliation(tmp_path),
         news_context_artifact_path=artifact_path,
         news_context_min_supporting_seeds=2,
         news_context_min_pair_count=2,
@@ -3753,9 +3865,7 @@ def test_recent_news_propose_related_entities_uses_graph_affiliation_when_suppor
     settings = Settings(
         runtime_target=RuntimeTarget.LOCAL,
         metadata_backend=MetadataBackend.SQLITE,
-        graph_context_artifact_path=_graph_context_artifact_with_party_affiliation(
-            tmp_path
-        ),
+        graph_context_artifact_path=_graph_context_artifact_with_party_affiliation(tmp_path),
         news_context_artifact_path=artifact_path,
         news_context_min_supporting_seeds=2,
         news_context_min_pair_count=2,
@@ -3874,9 +3984,7 @@ def test_recent_news_propose_related_entities_rejects_single_person_graph_affili
     settings = Settings(
         runtime_target=RuntimeTarget.LOCAL,
         metadata_backend=MetadataBackend.SQLITE,
-        graph_context_artifact_path=_graph_context_artifact_with_party_affiliation(
-            tmp_path
-        ),
+        graph_context_artifact_path=_graph_context_artifact_with_party_affiliation(tmp_path),
         news_context_artifact_path=artifact_path,
         news_context_min_supporting_seeds=2,
         news_context_min_pair_count=2,
@@ -4983,6 +5091,7 @@ def test_recent_news_direct_fallback_seed_entity_ids_only_adds_org_extras(
     )
 
     assert fallback_seed_ids == ["wikidata:Q1", "wikidata:Q2", "wikidata:Q4", "wikidata:Q5"]
+
 
 def test_enrich_tag_response_with_related_entities_uses_recent_news_direct_candidates_when_vectors_are_empty(
     monkeypatch,

@@ -40,9 +40,7 @@ def _load_rules(path: str) -> list[dict[str, object]]:
 
 def _load_jsonl(path: Path) -> list[dict[str, object]]:
     return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
 
 
@@ -92,9 +90,7 @@ def test_phase6_overlays_cover_bdya_market_news_primitives() -> None:
     } <= finance_names
 
     reuters = next(
-        record
-        for record in BDYA_GENERAL_OVERLAY_ENTITIES
-        if record["canonical_text"] == "Reuters"
+        record for record in BDYA_GENERAL_OVERLAY_ENTITIES if record["canonical_text"] == "Reuters"
     )
     assert reuters["alias_quality"] == "source_outlet"
     assert reuters["runtime_tier"] == "search_only"
@@ -104,18 +100,14 @@ def test_phase6_overlays_cover_bdya_market_news_primitives() -> None:
         for record in BDYA_GENERAL_OVERLAY_ENTITIES
         if record["canonical_text"] == "Strait of Hormuz"
     )
-    assert {"Hormuz", "Estreito de Ormuz", "Estreito de Hormuz"} <= set(
-        hormuz["aliases"]
-    )
+    assert {"Hormuz", "Estreito de Ormuz", "Estreito de Hormuz"} <= set(hormuz["aliases"])
 
 
 def test_phase6_general_overlay_covers_g20_market_institutions_and_offices() -> None:
     categories_by_country = _categories_by_country(BDYA_GENERAL_OVERLAY_ENTITIES)
 
     for country_code in BDYA_G20_COUNTRY_CODES:
-        assert set(BDYA_G20_REQUIRED_GENERAL_CATEGORIES) <= categories_by_country[
-            country_code
-        ]
+        assert set(BDYA_G20_REQUIRED_GENERAL_CATEGORIES) <= categories_by_country[country_code]
         assert categories_by_country[country_code].intersection(
             BDYA_G20_TRADE_OR_CUSTOMS_CATEGORIES
         )
@@ -125,9 +117,7 @@ def test_phase6_general_overlay_covers_g20_market_institutions_and_offices() -> 
         metadata = record.get("metadata") or {}
         assert isinstance(metadata, dict)
         country_code = str(metadata["country_code"])
-        office_roles_by_country.setdefault(country_code, set()).add(
-            str(metadata["office_role"])
-        )
+        office_roles_by_country.setdefault(country_code, set()).add(str(metadata["office_role"]))
         assert metadata["category"] == "public_office"
         assert metadata["current_official_refresh_required"] is True
         assert record["alias_quality"] == "strong"
@@ -306,8 +296,7 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
     assert len(spec_by_pack_id["politics-vector-en"].rules) >= 6
 
     assert any(
-        alias["canonical_text"] == "Merger and acquisition"
-        and alias["text"] == "takeover bid"
+        alias["canonical_text"] == "Merger and acquisition" and alias["text"] == "takeover bid"
         for alias in business_aliases
     )
     assert any(alias["canonical_text"] == "Restructuring" for alias in business_aliases)
@@ -361,11 +350,16 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
     assert len(source_backed_entities) == 19
     assert len(shadow_entities) == 8
     assert all(item.get("build_only") is True for item in shadow_entities)
-    assert all(item.get("source_tier") in PROMOTION_ELIGIBLE_SOURCE_TIERS for item in source_backed_entities)
+    assert all(
+        item.get("source_tier") in PROMOTION_ELIGIBLE_SOURCE_TIERS
+        for item in source_backed_entities
+    )
     assert all(item.get("source_record_id") for item in source_backed_entities)
     assert all(item.get("source_span") for item in source_backed_entities)
     assert len(business_rules) == 9
-    assert all(item.get("source_tier") in PROMOTION_ELIGIBLE_SOURCE_TIERS for item in business_rules)
+    assert all(
+        item.get("source_tier") in PROMOTION_ELIGIBLE_SOURCE_TIERS for item in business_rules
+    )
     assert all(item.get("source_record_id") for item in business_rules)
     assert all(item.get("source_span") for item in business_rules)
 
@@ -381,8 +375,7 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
     }.isdisjoint(business_alias_texts)
     shadow_canonical_texts = {str(item["canonical_text"]) for item in shadow_entities}
     assert all(
-        str(alias["canonical_text"]) not in shadow_canonical_texts
-        for alias in business_aliases
+        str(alias["canonical_text"]) not in shadow_canonical_texts for alias in business_aliases
     )
     assert any(alias["canonical_text"] == "Inflation" for alias in economics_aliases)
     assert any(alias["canonical_text"] == "Economic growth" for alias in economics_aliases)
@@ -401,9 +394,7 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
         "english",
     ]
     assert economics_sources_lock["source_count"] == len(economics_bundle_manifest["sources"])
-    economics_lock_sources = {
-        item["name"]: item for item in economics_sources_lock["sources"]
-    }
+    economics_lock_sources = {item["name"]: item for item in economics_sources_lock["sources"]}
     assert "curated-economics-bdya-phase6" not in economics_lock_sources
     assert set(economics_lock_sources) == {
         "bea-national-accounts-glossary",
@@ -439,9 +430,7 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
         if item.get("promotion_status") == "source_backed_candidate"
     ]
     economics_shadow_entities = [
-        item
-        for item in economics_entities
-        if item.get("promotion_status") == "shadow_only"
+        item for item in economics_entities if item.get("promotion_status") == "shadow_only"
     ]
     assert len(economics_source_backed_entities) == 23
     assert len(economics_shadow_entities) == 5
@@ -454,8 +443,7 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
     assert all(item.get("source_span") for item in economics_source_backed_entities)
     assert len(economics_rules) == 13
     assert all(
-        item.get("source_tier") in PROMOTION_ELIGIBLE_SOURCE_TIERS
-        for item in economics_rules
+        item.get("source_tier") in PROMOTION_ELIGIBLE_SOURCE_TIERS for item in economics_rules
     )
     assert all(item.get("source_record_id") for item in economics_rules)
     assert all(item.get("source_span") for item in economics_rules)
@@ -486,7 +474,7 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
     )
     assert generated["politics-vector-en"].publishable_sources_only is True
     assert generated["politics-vector-en"].source_count == 20
-    assert generated["politics-vector-en"].included_entity_count == 24
+    assert generated["politics-vector-en"].included_entity_count == 32
     assert generated["politics-vector-en"].included_rule_count == 12
     assert politics_bundle_manifest["tags"] == [
         "politics",
@@ -496,9 +484,7 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
         "english",
     ]
     assert politics_sources_lock["source_count"] == len(politics_bundle_manifest["sources"])
-    politics_lock_sources = {
-        item["name"]: item for item in politics_sources_lock["sources"]
-    }
+    politics_lock_sources = {item["name"]: item for item in politics_sources_lock["sources"]}
     assert "curated-politics-bdya-phase6" not in politics_lock_sources
     assert set(politics_lock_sources) == {
         "bis-entity-list-ear",
@@ -547,7 +533,7 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
     politics_shadow_entities = [
         item for item in politics_entities if item.get("promotion_status") == "shadow_only"
     ]
-    assert len(politics_source_backed_entities) == 24
+    assert len(politics_source_backed_entities) == 32
     assert len(politics_shadow_entities) == 5
     assert all(item.get("build_only") is True for item in politics_shadow_entities)
     assert all(
@@ -558,8 +544,7 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
     assert all(item.get("source_span") for item in politics_source_backed_entities)
     assert len(politics_rules) == 12
     assert all(
-        item.get("source_tier") in PROMOTION_ELIGIBLE_SOURCE_TIERS
-        for item in politics_rules
+        item.get("source_tier") in PROMOTION_ELIGIBLE_SOURCE_TIERS for item in politics_rules
     )
     assert all(item.get("source_record_id") for item in politics_rules)
     assert all(item.get("source_span") for item in politics_rules)
@@ -570,6 +555,20 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
     assert any(alias["canonical_text"] == "Cabinet reshuffle" for alias in politics_aliases)
     assert any(alias["canonical_text"] == "Maritime security" for alias in politics_aliases)
     assert any(alias["canonical_text"] == "Mining policy" for alias in politics_aliases)
+    assert {
+        "wikidata:Q7184",
+        "wikidata:Q1065",
+        "wikidata:Q789915",
+        "wikidata:Q455289",
+        "wikidata:Q11010",
+        "wikidata:Q20647202",
+        "wikidata:Q826700",
+        "wikidata:Q193755",
+    } <= {
+        str(item["entity_id"])
+        for item in politics_source_backed_entities
+        if item.get("entity_type") == "organization"
+    }
     politics_alias_texts = {str(alias["text"]) for alias in politics_aliases}
     assert {
         "administration",
@@ -603,9 +602,7 @@ def test_bdya_domain_source_bundles_generate_runtime_packs(tmp_path: Path) -> No
 
     politics_generated_rules = _load_rules(generated["politics-vector-en"].rules_path)
     assert any(rule["name"] == "sanctions_phrase" for rule in politics_generated_rules)
-    assert any(
-        rule["name"] == "resource_policy_phrase" for rule in politics_generated_rules
-    )
+    assert any(rule["name"] == "resource_policy_phrase" for rule in politics_generated_rules)
 
     matcher = load_runtime_matcher(
         generated["business-vector-en"].matcher_artifact_path,

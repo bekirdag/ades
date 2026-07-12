@@ -30,6 +30,29 @@ DEFAULT_POLITICS_SMOKE_QUALITY_CASES: tuple[PackQualityCase, ...] = (
         ),
     ),
     PackQualityCase(
+        name="wikidata-organization-anchors",
+        text=(
+            "The North Atlantic Treaty Organization, United Nations, the U.S. "
+            "State Department, the Bureau of Industry and Security, UK "
+            "Parliament, the Electoral Commission, the International Energy "
+            "Agency, and the United States Geological Survey issued public "
+            "updates."
+        ),
+        expected_entities=(
+            PackQualityEntity(
+                text="North Atlantic Treaty Organization",
+                label="organization",
+            ),
+            PackQualityEntity(text="United Nations", label="organization"),
+            PackQualityEntity(text="U.S. State Department", label="organization"),
+            PackQualityEntity(text="Bureau of Industry and Security", label="organization"),
+            PackQualityEntity(text="UK Parliament", label="organization"),
+            PackQualityEntity(text="Electoral Commission", label="organization"),
+            PackQualityEntity(text="International Energy Agency", label="organization"),
+            PackQualityEntity(text="United States Geological Survey", label="organization"),
+        ),
+    ),
+    PackQualityCase(
         name="blocked-noisy-politics-language",
         text=(
             "The article mentioned a kitchen cabinet, a network border, shipping "
@@ -43,6 +66,7 @@ DEFAULT_POLITICS_SMOKE_QUALITY_CASES: tuple[PackQualityCase, ...] = (
 
 DEFAULT_POLITICS_BENCHMARK_QUALITY_CASES: tuple[PackQualityCase, ...] = (
     DEFAULT_POLITICS_SMOKE_QUALITY_CASES[0],
+    DEFAULT_POLITICS_SMOKE_QUALITY_CASES[1],
     PackQualityCase(
         name="government-stability-and-shutdown",
         text=(
@@ -84,7 +108,7 @@ DEFAULT_POLITICS_BENCHMARK_QUALITY_CASES: tuple[PackQualityCase, ...] = (
             PackQualityEntity(text="mining regulation", label="politics_concept"),
         ),
     ),
-    DEFAULT_POLITICS_SMOKE_QUALITY_CASES[1],
+    DEFAULT_POLITICS_SMOKE_QUALITY_CASES[2],
 )
 
 

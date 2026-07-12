@@ -14,17 +14,21 @@ from pathlib import Path
 
 root = Path(sys.argv[1]).resolve()
 index_path = root / "index.json"
-target_packs = ("business-vector-en", "economics-vector-en", "politics-vector-en")
+target_versions = {
+    "business-vector-en": "0.2.0",
+    "economics-vector-en": "0.2.0",
+    "politics-vector-en": "0.2.1",
+}
 required = ["index.json"]
 
 with index_path.open(encoding="utf-8") as handle:
     index = json.load(handle)
 packs = index.get("packs") or {}
-for pack_id in target_packs:
+for pack_id, expected_version in target_versions.items():
     entry = packs.get(pack_id) or {}
     version = entry.get("version")
     tier = entry.get("tier")
-    if version != "0.2.0" or tier != "domain":
+    if version != expected_version or tier != "domain":
         raise SystemExit(f"{pack_id} is not promoted in {index_path}: version={version!r}, tier={tier!r}")
     manifest_path = root / "packs" / pack_id / "manifest.json"
     if not manifest_path.is_file():
@@ -135,13 +139,17 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1]).resolve()
-target_packs = ("business-vector-en", "economics-vector-en", "politics-vector-en")
+target_versions = {
+    "business-vector-en": "0.2.0",
+    "economics-vector-en": "0.2.0",
+    "politics-vector-en": "0.2.1",
+}
 with (root / "index.json").open(encoding="utf-8") as handle:
     index = json.load(handle)
 packs = index.get("packs") or {}
-for pack_id in target_packs:
+for pack_id, expected_version in target_versions.items():
     entry = packs.get(pack_id) or {}
-    if entry.get("version") != "0.2.0" or entry.get("tier") != "domain":
+    if entry.get("version") != expected_version or entry.get("tier") != "domain":
         raise SystemExit(f"{pack_id} was not promoted in public root {root}")
     manifest_path = root / "packs" / pack_id / "manifest.json"
     if not manifest_path.is_file():

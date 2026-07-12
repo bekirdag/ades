@@ -30,6 +30,8 @@ from .qdrant import QdrantNearestPoint, QdrantVectorSearchClient, QdrantVectorSe
 _PROVIDER_NAME = "qdrant.qid_graph"
 _REFINEMENT_STRATEGY = "qid_graph_coherence_v1"
 _HYBRID_VECTOR_PROPOSAL_MIN_COHERENCE = 0.12
+_HYBRID_VECTOR_SPARSE_GRAPH_FALLBACK_MIN_SCORE = 0.2
+_HYBRID_VECTOR_SPARSE_GRAPH_FALLBACK_MIN_SHARED_SEEDS = 2
 _HYBRID_VECTOR_ORG_ONLY_NO_DIRECT_MIN_SHARED_CONTEXT = 3
 _ROUTED_VECTOR_PRIMARY_SEED_LABELS = frozenset({"organization", "person"})
 _ROUTED_VECTOR_SECONDARY_SEED_LABELS = frozenset({"product"})
@@ -194,16 +196,14 @@ def _recent_news_low_coherence_allows_strong_non_anchor_org(
     return (
         coherence_score is not None
         and coherence_score <= max_coherence
-        and
-        candidate_type == "organization"
+        and candidate_type == "organization"
         and support.shared_seed_count
         >= _RECENT_NEWS_DIRECT_LOW_COHERENCE_NON_ANCHOR_MIN_SHARED_SEEDS
         and support.total_support_count
         >= _RECENT_NEWS_DIRECT_LOW_COHERENCE_NON_ANCHOR_MIN_TOTAL_SUPPORT
         and support.max_pair_count
         >= _RECENT_NEWS_DIRECT_LOW_COHERENCE_NON_ANCHOR_MIN_MAX_PAIR_COUNT
-        and document_count
-        >= min_document_count
+        and document_count >= min_document_count
     )
 
 
@@ -222,8 +222,7 @@ def _recent_news_low_coherence_allows_person_only_org(
         >= _RECENT_NEWS_DIRECT_LOW_COHERENCE_NON_ANCHOR_MIN_TOTAL_SUPPORT
         and support.max_pair_count
         >= _RECENT_NEWS_DIRECT_LOW_COHERENCE_NON_ANCHOR_MIN_MAX_PAIR_COUNT
-        and document_count
-        >= _RECENT_NEWS_DIRECT_LOW_COHERENCE_PERSON_NON_ANCHOR_MIN_DOCUMENT_COUNT
+        and document_count >= _RECENT_NEWS_DIRECT_LOW_COHERENCE_PERSON_NON_ANCHOR_MIN_DOCUMENT_COUNT
     )
 
 
@@ -233,11 +232,7 @@ def _recent_news_canonical_key(value: str | None) -> str:
 
 
 def _shared_location_seed_sort_key(entity) -> tuple[int, float, int, str]:
-    mention_count = (
-        int(entity.mention_count)
-        if isinstance(entity.mention_count, int)
-        else 1
-    )
+    mention_count = int(entity.mention_count) if isinstance(entity.mention_count, int) else 1
     baseline_score = _entity_baseline_score(entity)
     start = int(entity.start) if isinstance(entity.start, int) else 0
     entity_id = entity.link.entity_id.strip() if entity.link is not None else ""
@@ -346,9 +341,7 @@ def _routed_pack_ids(
         pack_ids.append(response.pack)
     normalized_domain_hint = _normalized_hint(domain_hint)
     if normalized_domain_hint is not None:
-        routed_domain_pack = settings.vector_search_domain_pack_routes.get(
-            normalized_domain_hint
-        )
+        routed_domain_pack = settings.vector_search_domain_pack_routes.get(normalized_domain_hint)
         if routed_domain_pack is not None:
             pack_ids.append(routed_domain_pack)
     canonical_country_hint = _canonical_country_hint(
@@ -437,9 +430,7 @@ def _collection_alias_candidates(
         domain_hint=domain_hint,
         country_hint=country_hint,
     ):
-        routed_alias = str(
-            settings.vector_search_pack_collection_aliases.get(pack_id, "")
-        ).strip()
+        routed_alias = str(settings.vector_search_pack_collection_aliases.get(pack_id, "")).strip()
         if not routed_alias or routed_alias == shared_alias or routed_alias in aliases:
             continue
         aliases.append(routed_alias)
@@ -449,11 +440,7 @@ def _collection_alias_candidates(
 
 
 def _seed_labels(response: TagResponse) -> set[str]:
-    return {
-        entity.label.strip()
-        for entity in response.entities
-        if entity.label.strip()
-    }
+    return {entity.label.strip() for entity in response.entities if entity.label.strip()}
 
 
 def _build_seed_support(
@@ -677,10 +664,7 @@ def _query_vector_results_by_seed(
     domain_hint: str | None = None,
     country_hint: str | None = None,
 ) -> tuple[dict[str, list[QdrantNearestPoint]], list[str]]:
-    if (
-        not allow_non_production
-        and settings.runtime_target is not RuntimeTarget.PRODUCTION_SERVER
-    ):
+    if not allow_non_production and settings.runtime_target is not RuntimeTarget.PRODUCTION_SERVER:
         return {}, ["vector_search_production_only"]
     if not settings.vector_search_enabled:
         return {}, ["vector_search_disabled"]
@@ -702,14 +686,8 @@ def _query_vector_results_by_seed(
         country_hint=country_hint,
     )
     shared_alias = str(settings.vector_search_collection_alias or "").strip()
-    if (
-        not allow_shared_fallback
-        and shared_alias
-        and len(collection_aliases) > 1
-    ):
-        collection_aliases = [
-            alias for alias in collection_aliases if alias != shared_alias
-        ]
+    if not allow_shared_fallback and shared_alias and len(collection_aliases) > 1:
+        collection_aliases = [alias for alias in collection_aliases if alias != shared_alias]
     eligible_seed_ids_by_alias = {
         collection_alias: set(
             _seed_entity_ids_for_collection_alias(
@@ -726,9 +704,7 @@ def _query_vector_results_by_seed(
         for seed_entity_id in alias_seed_ids
     }
     query_seed_entity_ids = [
-        seed_entity_id
-        for seed_entity_id in seed_entity_ids
-        if seed_entity_id in eligible_seed_ids
+        seed_entity_id for seed_entity_id in seed_entity_ids if seed_entity_id in eligible_seed_ids
     ]
     graph_store: QidGraphStore | None = None
     try:
@@ -745,8 +721,7 @@ def _query_vector_results_by_seed(
                 seed_collection_aliases = [
                     collection_alias
                     for collection_alias in collection_aliases
-                    if seed_entity_id
-                    in eligible_seed_ids_by_alias.get(collection_alias, set())
+                    if seed_entity_id in eligible_seed_ids_by_alias.get(collection_alias, set())
                 ]
                 shared_fallback_aliases = [
                     collection_alias
@@ -823,8 +798,7 @@ def _query_vector_results_by_seed(
                     seed_collection_aliases = [
                         collection_alias
                         for collection_alias in collection_aliases
-                        if seed_entity_id
-                        in eligible_seed_ids_by_alias.get(collection_alias, set())
+                        if seed_entity_id in eligible_seed_ids_by_alias.get(collection_alias, set())
                     ]
                     shared_fallback_aliases = [
                         collection_alias
@@ -884,9 +858,7 @@ def _query_vector_results_by_seed(
                             )
                         else:
                             results_by_seed[seed_entity_id] = []
-                        warnings.append(
-                            f"vector_search_seed_graph_fallback:{seed_entity_id}"
-                        )
+                        warnings.append(f"vector_search_seed_graph_fallback:{seed_entity_id}")
                         continue
                 warnings.append(f"vector_search_seed_missing:{seed_entity_id}")
     except QdrantVectorSearchError as exc:
@@ -956,8 +928,7 @@ def _graph_context_strong_seed_entity_ids(response: TagResponse) -> list[str]:
             should_supplement_anchor_seed_ids = bool(filtered_anchor_seed_ids) or (
                 graph_support is not None
                 and graph_support.coherence_score is not None
-                and graph_support.coherence_score
-                < _HYBRID_VECTOR_PROPOSAL_MIN_COHERENCE
+                and graph_support.coherence_score < _HYBRID_VECTOR_PROPOSAL_MIN_COHERENCE
             )
             supplemental_non_location_seed_ids: list[str] = []
             supplemental_location_seed_ids: list[str] = []
@@ -995,12 +966,8 @@ def _graph_context_strong_seed_entity_ids(response: TagResponse) -> list[str]:
             if strong_seed_ids:
                 return strong_seed_ids
     graph_support = response.graph_support
-    suppressed = (
-        set(graph_support.suppressed_entity_ids) if graph_support is not None else set()
-    )
-    downgraded = (
-        set(graph_support.downgraded_entity_ids) if graph_support is not None else set()
-    )
+    suppressed = set(graph_support.suppressed_entity_ids) if graph_support is not None else set()
+    downgraded = set(graph_support.downgraded_entity_ids) if graph_support is not None else set()
     strong_seed_ids: list[str] = []
     for entity_id in _linked_seed_entity_ids(response):
         if _is_probable_source_outlet_seed(entity_id):
@@ -1037,9 +1004,7 @@ def _graph_gate_vector_related_entities(
     seed_label_by_entity_id = {
         entity.link.entity_id: entity.label.strip().casefold()
         for entity in response.entities
-        if entity.link is not None
-        and entity.link.entity_id
-        and entity.label.strip()
+        if entity.link is not None and entity.link.entity_id and entity.label.strip()
     }
     existing_related_ids = {item.entity_id for item in response.related_entities}
     candidate_qids = tuple(
@@ -1077,9 +1042,7 @@ def _graph_gate_vector_related_entities(
         for seed_qid in strong_seed_qids
     }
     graph_related_neighbor_sets = {
-        related_qid: {
-            neighbor.qid for neighbor in neighbors_by_qid.get(related_qid, [])
-        }
+        related_qid: {neighbor.qid for neighbor in neighbors_by_qid.get(related_qid, [])}
         for related_qid in graph_related_qids
     }
     admitted: list[RelatedEntityMatch] = []
@@ -1110,10 +1073,10 @@ def _graph_gate_vector_related_entities(
             direct_support = (
                 candidate_qid in seed_neighbor_set or seed_qid in candidate_neighbor_set
             )
-            shared_neighbors = (
-                candidate_neighbor_set.intersection(seed_neighbor_set)
-                - {candidate_qid, seed_qid}
-            )
+            shared_neighbors = candidate_neighbor_set.intersection(seed_neighbor_set) - {
+                candidate_qid,
+                seed_qid,
+            }
             if not direct_support and not shared_neighbors:
                 continue
             supporting_seed_ids.append(seed_entity_id)
@@ -1124,10 +1087,9 @@ def _graph_gate_vector_related_entities(
             has_graph_related_overlap = False
             for related_qid in graph_related_qids:
                 related_neighbor_set = graph_related_neighbor_sets.get(related_qid, set())
-                shared_related_neighbors = (
-                    candidate_neighbor_set.intersection(related_neighbor_set)
-                    - {candidate_qid, related_qid}
-                )
+                shared_related_neighbors = candidate_neighbor_set.intersection(
+                    related_neighbor_set
+                ) - {candidate_qid, related_qid}
                 if (
                     candidate_qid in related_neighbor_set
                     or related_qid in candidate_neighbor_set
@@ -1154,8 +1116,7 @@ def _graph_gate_vector_related_entities(
                 continue
             if (
                 candidate_type == "organization"
-                and len(shared_context_qids)
-                < _HYBRID_VECTOR_ORG_ONLY_NO_DIRECT_MIN_SHARED_CONTEXT
+                and len(shared_context_qids) < _HYBRID_VECTOR_ORG_ONLY_NO_DIRECT_MIN_SHARED_CONTEXT
             ):
                 continue
         if (
@@ -1197,6 +1158,90 @@ def _graph_gate_vector_related_entities(
     return admitted[: settings.graph_context_related_limit]
 
 
+def _sparse_graph_fallback_vector_related_entities(
+    vector_related_entities: list[RelatedEntityMatch],
+    *,
+    response: TagResponse,
+    strong_seed_entity_ids: list[str],
+    settings: Settings,
+    domain_hint: str | None = None,
+    country_hint: str | None = None,
+) -> list[RelatedEntityMatch]:
+    graph_support = response.graph_support
+    if not vector_related_entities:
+        return []
+    if graph_support is None or not graph_support.applied:
+        return []
+    if graph_support.coherence_score is None:
+        return []
+    if graph_support.coherence_score < _HYBRID_VECTOR_PROPOSAL_MIN_COHERENCE:
+        return []
+
+    required_shared_seed_count = max(
+        _HYBRID_VECTOR_SPARSE_GRAPH_FALLBACK_MIN_SHARED_SEEDS,
+        settings.graph_context_min_supporting_seeds,
+    )
+    if len(strong_seed_entity_ids) < required_shared_seed_count:
+        return []
+
+    allowed_packs = set(
+        _routed_pack_ids(
+            response,
+            settings=settings,
+            domain_hint=domain_hint,
+            country_hint=country_hint,
+        )
+    )
+    if not allowed_packs and response.pack:
+        allowed_packs = {response.pack}
+    if not allowed_packs:
+        return []
+
+    min_score = max(
+        _HYBRID_VECTOR_SPARSE_GRAPH_FALLBACK_MIN_SCORE,
+        settings.vector_search_score_threshold or 0.0,
+    )
+    strong_seed_set = set(strong_seed_entity_ids)
+    extracted_entity_ids = {
+        entity.link.entity_id
+        for entity in response.entities
+        if entity.link is not None and entity.link.entity_id
+    }
+    existing_related_ids = {item.entity_id for item in response.related_entities}
+    admitted: list[RelatedEntityMatch] = []
+    for item in vector_related_entities:
+        if item.entity_id in extracted_entity_ids or item.entity_id in existing_related_ids:
+            continue
+        if not set(item.packs).intersection(allowed_packs):
+            continue
+        if item.score < min_score:
+            continue
+        if (item.entity_type or "").strip().casefold() != "organization":
+            continue
+        supporting_seed_ids = [
+            seed_id for seed_id in item.seed_entity_ids if seed_id in strong_seed_set
+        ]
+        if len(supporting_seed_ids) < required_shared_seed_count:
+            continue
+        admitted.append(
+            item.model_copy(
+                update={
+                    "seed_entity_ids": supporting_seed_ids,
+                    "shared_seed_count": len(supporting_seed_ids),
+                }
+            )
+        )
+    admitted.sort(
+        key=lambda related: (
+            -related.score,
+            -related.shared_seed_count,
+            related.canonical_text.casefold(),
+            related.entity_id,
+        )
+    )
+    return admitted[: settings.graph_context_related_limit]
+
+
 def _recent_news_gate_vector_related_entities(
     vector_related_entities: list[RelatedEntityMatch],
     *,
@@ -1221,9 +1266,7 @@ def _recent_news_gate_vector_related_entities(
     seed_label_by_entity_id = {
         entity.link.entity_id: entity.label.strip().casefold()
         for entity in response.entities
-        if entity.link is not None
-        and entity.link.entity_id
-        and entity.label.strip()
+        if entity.link is not None and entity.link.entity_id and entity.label.strip()
     }
     admitted: list[RelatedEntityMatch] = []
     for item in vector_related_entities:
@@ -1360,7 +1403,7 @@ def _recent_news_direct_fallback_seed_entity_ids(
             and _seed_entity_label(entity) == "person"
             and float(entity.relevance or 0.0)
             >= _RECENT_NEWS_DIRECT_EXTRA_PERSON_SEED_MIN_RELEVANCE
-        ][: _RECENT_NEWS_DIRECT_EXTRA_PERSON_LIMIT]
+        ][:_RECENT_NEWS_DIRECT_EXTRA_PERSON_LIMIT]
     for entity_id in extra_person_ids:
         seen.add(entity_id)
 
@@ -1385,7 +1428,7 @@ def _recent_news_direct_fallback_seed_entity_ids(
         )
         and float(entity.relevance or 0.0)
         >= _RECENT_NEWS_DIRECT_EXTRA_NON_LOCATION_SEED_MIN_RELEVANCE
-    ][: _RECENT_NEWS_DIRECT_EXTRA_NON_LOCATION_LIMIT]
+    ][:_RECENT_NEWS_DIRECT_EXTRA_NON_LOCATION_LIMIT]
     for entity_id in extra_non_location_ids:
         seen.add(entity_id)
 
@@ -1402,9 +1445,7 @@ def _recent_news_direct_fallback_seed_entity_ids(
                 key=lambda item: (
                     -float(item.relevance or 0.0),
                     -(item.mention_count or 0),
-                    (
-                        item.link.canonical_text if item.link is not None else item.text
-                    ).casefold(),
+                    (item.link.canonical_text if item.link is not None else item.text).casefold(),
                     item.text.casefold(),
                 ),
             )
@@ -1413,7 +1454,7 @@ def _recent_news_direct_fallback_seed_entity_ids(
             and _seed_entity_label(entity) == "location"
             and float(entity.relevance or 0.0)
             >= _RECENT_NEWS_DIRECT_EXTRA_LOCATION_SEED_MIN_RELEVANCE
-        ][: _RECENT_NEWS_DIRECT_EXTRA_LOCATION_LIMIT]
+        ][:_RECENT_NEWS_DIRECT_EXTRA_LOCATION_LIMIT]
 
     return [
         *base_seed_ids,
@@ -1444,9 +1485,7 @@ def _recent_news_propose_related_entities(
     existing_related_ids = {item.entity_id for item in response.related_entities}
     direct_candidates: list[RelatedEntityMatch] = []
     coherence_score = (
-        response.graph_support.coherence_score
-        if response.graph_support is not None
-        else None
+        response.graph_support.coherence_score if response.graph_support is not None else None
     )
     seed_entity_by_id: dict[str, object] = {}
     for entity in response.entities:
@@ -1455,11 +1494,10 @@ def _recent_news_propose_related_entities(
         entity_id = entity.link.entity_id.strip()
         existing = seed_entity_by_id.get(entity_id)
         if existing is None or float(entity.relevance or 0.0) > float(existing.relevance or 0.0):
-                seed_entity_by_id[entity_id] = entity
+            seed_entity_by_id[entity_id] = entity
     limit = max(settings.graph_context_related_limit * 4, settings.graph_context_related_limit)
     low_coherence_recent_news = (
-        coherence_score is not None
-        and coherence_score < _HYBRID_VECTOR_PROPOSAL_MIN_COHERENCE
+        coherence_score is not None and coherence_score < _HYBRID_VECTOR_PROPOSAL_MIN_COHERENCE
     )
 
     def _graph_supported_person_only_affiliations(
@@ -1502,7 +1540,10 @@ def _recent_news_propose_related_entities(
                     }
                     continue
                 supporting_seed_ids = entry.get("supporting_seed_ids")
-                if isinstance(supporting_seed_ids, list) and seed_entity_id not in supporting_seed_ids:
+                if (
+                    isinstance(supporting_seed_ids, list)
+                    and seed_entity_id not in supporting_seed_ids
+                ):
                     supporting_seed_ids.append(seed_entity_id)
         return affiliations
 
@@ -1530,9 +1571,7 @@ def _recent_news_propose_related_entities(
                 _recent_news_canonical_key(display_text)
             )
             if aligned_affiliation is not None:
-                candidate_entity_id = str(
-                    aligned_affiliation.get("entity_id") or ""
-                ).strip()
+                candidate_entity_id = str(aligned_affiliation.get("entity_id") or "").strip()
                 if candidate_entity_id:
                     if (
                         candidate_entity_id in extracted_entity_ids
@@ -1545,9 +1584,9 @@ def _recent_news_propose_related_entities(
                     ).strip()
             candidate_type = str(metadata.entity_type or "").strip().casefold()
             if aligned_affiliation is not None:
-                candidate_type = str(
-                    aligned_affiliation.get("entity_type") or candidate_type
-                ).strip().casefold()
+                candidate_type = (
+                    str(aligned_affiliation.get("entity_type") or candidate_type).strip().casefold()
+                )
             document_count = max(int(metadata.document_count), 0)
             has_anchor_support = False
             has_person_support = False
@@ -1665,9 +1704,7 @@ def _recent_news_propose_related_entities(
     person_seed_entity_ids = [
         seed_entity_id
         for seed_entity_id in strong_seed_entity_ids
-        if (
-            seed_entity := seed_entity_by_id.get(seed_entity_id)
-        ) is not None
+        if (seed_entity := seed_entity_by_id.get(seed_entity_id)) is not None
         and _seed_entity_label(seed_entity) == "person"
     ]
     graph_supported_affiliations = (
@@ -1676,9 +1713,7 @@ def _recent_news_propose_related_entities(
         else None
     )
     graph_supported_candidate_ids = (
-        set(graph_supported_affiliations)
-        if graph_supported_affiliations is not None
-        else None
+        set(graph_supported_affiliations) if graph_supported_affiliations is not None else None
     )
     graph_supported_affiliation_by_name: dict[str, dict[str, object]] = {}
     if graph_supported_affiliations:
@@ -1707,16 +1742,11 @@ def _recent_news_propose_related_entities(
     direct_candidates = _collect_direct_candidates(supports)
     if low_coherence_recent_news and graph_supported_candidate_ids:
         graph_supported_direct_candidates = [
-            item
-            for item in direct_candidates
-            if item.entity_id in graph_supported_candidate_ids
+            item for item in direct_candidates if item.entity_id in graph_supported_candidate_ids
         ]
         if graph_supported_direct_candidates:
             direct_candidates = graph_supported_direct_candidates
-    if (
-        not direct_candidates
-        and low_coherence_recent_news
-    ):
+    if not direct_candidates and low_coherence_recent_news:
         if person_seed_entity_ids:
             person_only_supports = artifact.candidate_supports_for_seeds(
                 person_seed_entity_ids,
@@ -1731,17 +1761,10 @@ def _recent_news_propose_related_entities(
             )
             if not direct_candidates and graph_supported_affiliations:
                 for entity_id, affiliation in graph_supported_affiliations.items():
-                    if (
-                        entity_id in extracted_entity_ids
-                        or entity_id in existing_related_ids
-                    ):
+                    if entity_id in extracted_entity_ids or entity_id in existing_related_ids:
                         continue
-                    display_text = str(
-                        affiliation.get("canonical_text") or entity_id
-                    ).strip()
-                    candidate_type = str(
-                        affiliation.get("entity_type") or ""
-                    ).strip().casefold()
+                    display_text = str(affiliation.get("canonical_text") or entity_id).strip()
+                    candidate_type = str(affiliation.get("entity_type") or "").strip().casefold()
                     if (
                         not display_text
                         or display_text == entity_id
@@ -1752,9 +1775,7 @@ def _recent_news_propose_related_entities(
                         )
                     ):
                         continue
-                    supporting_seed_ids = list(
-                        affiliation.get("supporting_seed_ids") or []
-                    )
+                    supporting_seed_ids = list(affiliation.get("supporting_seed_ids") or [])
                     if not supporting_seed_ids:
                         continue
                     if (
@@ -1772,8 +1793,7 @@ def _recent_news_propose_related_entities(
                             provider="qid_graph.affiliation",
                             entity_type=str(affiliation.get("entity_type") or ""),
                             source_name=str(
-                                affiliation.get("source_name")
-                                or "wikidata-general-entities"
+                                affiliation.get("source_name") or "wikidata-general-entities"
                             ),
                             packs=list(affiliation.get("packs") or []),
                             seed_entity_ids=supporting_seed_ids,
@@ -1801,9 +1821,7 @@ def _should_probe_recent_news_direct_support(
     ):
         return False
     graph_support = response.graph_support
-    coherence_score = (
-        graph_support.coherence_score if graph_support is not None else None
-    )
+    coherence_score = graph_support.coherence_score if graph_support is not None else None
     if coherence_score is None:
         return False
     if coherence_score < _HYBRID_VECTOR_PROPOSAL_MIN_COHERENCE:
@@ -1836,9 +1854,7 @@ def _merge_related_entities(
                 "seed_entity_ids": sorted(
                     set(existing.seed_entity_ids).union(item.seed_entity_ids)
                 ),
-                "shared_seed_count": len(
-                    set(existing.seed_entity_ids).union(item.seed_entity_ids)
-                ),
+                "shared_seed_count": len(set(existing.seed_entity_ids).union(item.seed_entity_ids)),
             }
         )
     ranked = sorted(
@@ -1889,12 +1905,10 @@ def _enrich_graph_context_response_with_vector_proposals(
     # reject every proposal anyway.
     if graph_support.coherence_score is None:
         return response
-    low_coherence_recent_news_probe = (
-        _should_probe_low_coherence_recent_news_support(
-            graph_support=graph_support,
-            strong_seed_entity_ids=strong_seed_entity_ids,
-            settings=settings,
-        )
+    low_coherence_recent_news_probe = _should_probe_low_coherence_recent_news_support(
+        graph_support=graph_support,
+        strong_seed_entity_ids=strong_seed_entity_ids,
+        settings=settings,
     )
     if (
         graph_support.coherence_score < _HYBRID_VECTOR_PROPOSAL_MIN_COHERENCE
@@ -1942,6 +1956,7 @@ def _enrich_graph_context_response_with_vector_proposals(
         strong_seed_entity_ids=strong_seed_entity_ids,
         settings=settings,
     )
+    sparse_graph_candidates: list[RelatedEntityMatch] = []
     recent_news_candidates: list[RelatedEntityMatch] = []
     recent_news_direct_candidates: list[RelatedEntityMatch] = []
     if settings.news_context_artifact_path is not None:
@@ -1971,12 +1986,10 @@ def _enrich_graph_context_response_with_vector_proposals(
                         domain_hint=domain_hint,
                     )
                     if fallback_seed_entity_ids != strong_seed_entity_ids:
-                        recent_news_direct_candidates = (
-                            _recent_news_propose_related_entities(
-                                response=response,
-                                strong_seed_entity_ids=fallback_seed_entity_ids,
-                                settings=settings,
-                            )
+                        recent_news_direct_candidates = _recent_news_propose_related_entities(
+                            response=response,
+                            strong_seed_entity_ids=fallback_seed_entity_ids,
+                            settings=settings,
                         )
         except (OSError, ValueError) as exc:
             warning = f"news_context_failed:{exc}"
@@ -1992,6 +2005,24 @@ def _enrich_graph_context_response_with_vector_proposals(
         recent_news_direct_candidates,
         limit=settings.graph_context_related_limit,
     )
+    if not response.related_entities and not combined_candidates:
+        sparse_graph_candidates = _sparse_graph_fallback_vector_related_entities(
+            vector_candidates,
+            response=response,
+            strong_seed_entity_ids=strong_seed_entity_ids,
+            settings=settings,
+            domain_hint=domain_hint,
+            country_hint=country_hint,
+        )
+        if sparse_graph_candidates:
+            warning = "vector_search_sparse_graph_fallback"
+            if warning not in merged_graph_support.warnings:
+                merged_graph_support.warnings.append(warning)
+            combined_candidates = _merge_related_entities(
+                combined_candidates,
+                sparse_graph_candidates,
+                limit=settings.graph_context_related_limit,
+            )
     merged_related_entities = _merge_related_entities(
         response.related_entities,
         combined_candidates,
@@ -2076,7 +2107,14 @@ def _enrich_tag_response_with_vector_search(
         results_by_seed,
         seed_entity_ids=_linked_seed_entity_set(response),
     )
-    refined_entities, refinement_applied, boosted_entity_ids, downgraded_entity_ids, refinement_score, refinement_debug = _refine_entities(
+    (
+        refined_entities,
+        refinement_applied,
+        boosted_entity_ids,
+        downgraded_entity_ids,
+        refinement_score,
+        refinement_debug,
+    ) = _refine_entities(
         response,
         support_by_seed=support_by_seed,
         seed_entity_ids=seed_entity_ids,
@@ -2138,10 +2176,7 @@ def enrich_tag_response_with_related_entities(
 
     if graph_context_response is not None and graph_context_response.graph_support is not None:
         if graph_context_response.graph_support.applied:
-            if (
-                include_related_entities
-                and settings.graph_context_vector_proposals_enabled
-            ):
+            if include_related_entities and settings.graph_context_vector_proposals_enabled:
                 return _enrich_graph_context_response_with_vector_proposals(
                     graph_context_response,
                     settings=settings,

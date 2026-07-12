@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "pack_id": "politics-vector-en",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "language": "en",
   "domain": "politics",
   "tier": "domain",
@@ -16,9 +16,9 @@
   "artifacts": [
     {
       "name": "pack",
-      "url": "../../artifacts/politics-vector-en-0.2.0.tar.zst",
-      "sha256": "8ac8ac02e148ccf1acf4011a7246b4e5000094e9c99401c2466df91b0e1d7026",
-      "size_bytes": 9391
+      "url": "../../artifacts/politics-vector-en-0.2.1.tar.zst",
+      "sha256": "d678e1420c4b336ad829368f04abb275841d567540ab55522d3278abdba22935",
+      "size_bytes": 10423
     }
   ],
   "models": [],
@@ -35,11 +35,11 @@
     "normalization": "normalize_lookup_text:v1",
     "artifact_path": "matcher/token-trie.bin",
     "entries_path": "matcher/entries.bin",
-    "entry_count": 100,
-    "state_count": 179,
-    "max_alias_length": 28,
-    "artifact_sha256": "16a41ce608f59286916da116a3e18b0ba6a0f9366d14c0d10e28055dd4444848",
-    "entries_sha256": "47e1005a10afa5cf86c8453425d2a39228b2fa08486931da388b7066cbe52c6c"
+    "entry_count": 109,
+    "state_count": 209,
+    "max_alias_length": 34,
+    "artifact_sha256": "d8b3ac82193022d172c9c53d6e092d108c75b6744d23cbc72e7255b075674df7",
+    "entries_sha256": "4c0542be0cb55a0773cfa5b730cc002b992dfcb06189d643b809d4e26b6dc6e8"
   },
   "description": "Source-backed BDYA politics concept/entity pack for policy, sanctions, and geopolitical news routing."
 }

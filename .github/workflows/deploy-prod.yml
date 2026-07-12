@@ -369,9 +369,14 @@ jobs:
 
           registry_index = get_json("https://repo.adestool.com/index.json")
           registry_packs = registry_index.get("packs") or {}
-          for pack_id in ("business-vector-en", "economics-vector-en", "politics-vector-en"):
+          expected_pack_versions = {
+              "business-vector-en": "0.2.0",
+              "economics-vector-en": "0.2.0",
+              "politics-vector-en": "0.2.1",
+          }
+          for pack_id, expected_version in expected_pack_versions.items():
               pack = registry_packs.get(pack_id) or {}
-              if pack.get("version") != "0.2.0" or pack.get("tier") != "domain":
+              if pack.get("version") != expected_version or pack.get("tier") != "domain":
                   raise SystemExit(f"public registry did not promote {pack_id}: {pack}")
 
           options = {

@@ -91,7 +91,7 @@
       "artifact_size_bytes": 634
     },
     "politics-vector-en": {
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest_url": "packs/politics-vector-en/manifest.json",
       "language": "en",
       "domain": "politics",
@@ -106,7 +106,7 @@
       ],
       "dependencies": [],
       "min_ades_version": "0.1.0",
-      "artifact_size_bytes": 9391
+      "artifact_size_bytes": 10423
     }
   }
 }
