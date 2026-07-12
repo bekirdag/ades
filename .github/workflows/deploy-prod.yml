@@ -211,6 +211,22 @@ jobs:
               print(0)
           PY
           }
+          pack_manifest_field() {
+            local manifest_path="$1"
+            local field_name="$2"
+            python3 - "$manifest_path" "$field_name" <<'PY'
+          import json
+          import sys
+
+          try:
+              with open(sys.argv[1], encoding="utf-8") as handle:
+                  payload = json.load(handle)
+              value = payload.get(sys.argv[2])
+              print("" if value is None else str(value))
+          except Exception:
+              print("")
+          PY
+          }
           merge_release_packs_into_current() {
             local current_root="$1"
             local release_root="$2"
@@ -234,16 +250,32 @@ jobs:
               local current_manifest="$current_pack_dir/manifest.json"
               local release_entries
               local current_entries
+              local release_tier
+              local current_tier
               release_entries="$(pack_entry_count "$release_manifest")"
               current_entries="$(pack_entry_count "$current_manifest")"
+              release_tier="$(pack_manifest_field "$release_manifest" tier)"
+              current_tier="$(pack_manifest_field "$current_manifest" tier)"
 
               if [ "$release_entries" -le 0 ]; then
                 echo "Skipping release pack $pack_id because it has no matcher entries."
                 continue
               fi
-              if [ -f "$current_manifest" ] && [ "$current_entries" -gt "$release_entries" ]; then
+              local allow_experimental_promotion=0
+              if [ "$current_tier" = "experimental" ] \
+                && [ -n "$release_tier" ] \
+                && [ "$release_tier" != "experimental" ]; then
+                allow_experimental_promotion=1
+              fi
+              if [ -f "$current_manifest" ] \
+                && [ "$current_entries" -gt "$release_entries" ] \
+                && [ "$allow_experimental_promotion" -ne 1 ]; then
                 echo "Skipping release pack $pack_id because current has $current_entries entries and release has $release_entries."
                 continue
+              fi
+              if [ "$allow_experimental_promotion" -eq 1 ] \
+                && [ "$current_entries" -gt "$release_entries" ]; then
+                echo "Promoting release pack $pack_id from experimental to $release_tier despite entry-count decrease ($current_entries -> $release_entries)."
               fi
 
               local tmp_pack_dir="$current_packs_root/.${pack_id}.tmp-$release_id"
