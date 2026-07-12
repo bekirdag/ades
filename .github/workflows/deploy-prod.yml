@@ -301,6 +301,8 @@ jobs:
               "Environment=ADES_IMPACT_EXPANSION_MAX_EDGES_PER_SEED=64" \
               "Environment=ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE=3" \
               "Environment=ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED=false" \
+              "Environment=ADES_GRAPH_CONTEXT_VECTOR_PROPOSALS_ENABLED=true" \
+              "Environment=ADES_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT=8" \
               | sudo -n tee "$root_dropin_dir/zz-impact-expansion.conf" >/dev/null
             printf '%s\n' \
               "[Service]" \
@@ -392,6 +394,48 @@ jobs:
               pack = available_by_id.get(pack_id) or {}
               if pack.get("version") != expected_version or pack.get("tier") != "domain":
                   raise SystemExit(f"public API did not promote {pack_id}: {pack}")
+              installed_pack = get_json(f"https://api.adestool.com/v0/packs/{pack_id}")
+              if installed_pack.get("version") != expected_version or installed_pack.get("tier") != "domain":
+                  raise SystemExit(
+                      f"public installed pack metadata did not promote {pack_id}: {installed_pack}"
+                  )
+
+          politics_response = post_json(
+              "https://api.adestool.com/v0/tag",
+              {
+                  "text": (
+                      "The North Atlantic Treaty Organization, United Nations, the U.S. State "
+                      "Department, the Bureau of Industry and Security, UK Parliament, the "
+                      "Electoral Commission, the International Energy Agency, and the United "
+                      "States Geological Survey issued public updates."
+                  ),
+                  "pack": "politics-vector-en",
+                  "options": {
+                      "include_related_entities": True,
+                      "include_graph_support": True,
+                  },
+              },
+          )
+          if politics_response.get("pack_version") != expected_pack_versions["politics-vector-en"]:
+              raise SystemExit(
+                  f"politics vector smoke used stale pack version: {politics_response.get('pack_version')!r}"
+              )
+          graph_support = politics_response.get("graph_support") or {}
+          if not graph_support.get("applied"):
+              raise SystemExit(f"politics vector graph support was not applied: {graph_support}")
+          if not politics_response.get("related_entities"):
+              raise SystemExit(f"politics vector smoke returned no related entities: {politics_response}")
+          politics_qids = {
+              str(((entity.get("link") or {}).get("entity_id") or ""))
+              for entity in politics_response.get("entities") or []
+          }
+          required_politics_qids = {"Q7184", "Q1065", "Q789915", "Q455289"}
+          missing_politics_qids = sorted(required_politics_qids - politics_qids)
+          if missing_politics_qids:
+              raise SystemExit(
+                  f"politics vector smoke missing expected QIDs {missing_politics_qids}; "
+                  f"qids={sorted(politics_qids)}"
+              )
 
           options = {
               "include_passive_entities": True,

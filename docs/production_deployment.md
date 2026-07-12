@@ -98,6 +98,8 @@ Required runtime values:
   - `graph_context_seed_neighbor_limit = 24`
   - `graph_context_candidate_limit = 128`
   - `graph_context_min_supporting_seeds = 2`
+  - `graph_context_vector_proposals_enabled = true`
+  - `graph_context_vector_proposal_limit = 8`
   - `graph_context_genericity_penalty_enabled = true`
 
 Operational notes:
@@ -117,6 +119,8 @@ Environment=ADES_GRAPH_CONTEXT_RELATED_LIMIT=5
 Environment=ADES_GRAPH_CONTEXT_SEED_NEIGHBOR_LIMIT=24
 Environment=ADES_GRAPH_CONTEXT_CANDIDATE_LIMIT=128
 Environment=ADES_GRAPH_CONTEXT_MIN_SUPPORTING_SEEDS=2
+Environment=ADES_GRAPH_CONTEXT_VECTOR_PROPOSALS_ENABLED=true
+Environment=ADES_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT=8
 Environment=ADES_GRAPH_CONTEXT_GENERICITY_PENALTY_ENABLED=true
 ```
 
@@ -202,6 +206,8 @@ Environment=ADES_IMPACT_EXPANSION_MAX_CANDIDATES=25
 Environment=ADES_IMPACT_EXPANSION_MAX_EDGES_PER_SEED=64
 Environment=ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE=3
 Environment=ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED=false
+Environment=ADES_GRAPH_CONTEXT_VECTOR_PROPOSALS_ENABLED=true
+Environment=ADES_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT=8
 ```
 
 The artifact is read-only at request time. Missing or unreadable artifacts should

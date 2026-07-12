@@ -26,6 +26,7 @@ update_current_registry_index() {
   python3 - "$current_index" "$release_index" "$@" <<'PY'
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 current_path = Path(sys.argv[1])
@@ -46,6 +47,8 @@ for pack_id in pack_ids:
     if pack_id in release_packs:
         current_packs[pack_id] = release_packs[pack_id]
 
+current["generated_at"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+current["pack_count"] = len(current_packs)
 current_path.write_text(json.dumps(current, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 }
@@ -498,6 +501,8 @@ Environment=ADES_IMPACT_EXPANSION_MAX_CANDIDATES=25
 Environment=ADES_IMPACT_EXPANSION_MAX_EDGES_PER_SEED=64
 Environment=ADES_IMPACT_EXPANSION_MAX_PATHS_PER_CANDIDATE=3
 Environment=ADES_IMPACT_EXPANSION_VECTOR_PROPOSALS_ENABLED=false
+Environment=ADES_GRAPH_CONTEXT_VECTOR_PROPOSALS_ENABLED=true
+Environment=ADES_GRAPH_CONTEXT_VECTOR_PROPOSAL_LIMIT=8
 EOF
   cat > "$service_dropin_dir/zz-news-analyze.conf" <<EOF
 [Service]
@@ -508,20 +513,28 @@ fi
 previous_repo_current="$(readlink -f /mnt/ades/repo/current 2>/dev/null || true)"
 switch_repo_current=1
 if [ -n "$previous_repo_current" ] \
-  && [ -f "$previous_repo_current/packs/general-en/manifest.json" ] \
-  && [ -f "$release_root/packs/general-en/manifest.json" ]; then
-  existing_general_entries="$(pack_entry_count "$previous_repo_current/packs/general-en/manifest.json")"
-  new_general_entries="$(pack_entry_count "$release_root/packs/general-en/manifest.json")"
-  if [ "$existing_general_entries" -ge 1000000 ] && [ "$new_general_entries" -lt 1000000 ]; then
-    echo "Prepared deploy registry has starter general-en ($new_general_entries entries); preserving existing repo current with $existing_general_entries entries."
+  && [ -f "$previous_repo_current/packs/general-en/manifest.json" ]; then
+  if [ ! -f "$release_root/packs/general-en/manifest.json" ]; then
+    echo "Prepared deploy registry is partial; preserving existing repo current and merging release packs."
     merge_release_packs_into_current "$previous_repo_current" "$release_root" "$release_id"
     switch_repo_current=0
+  else
+    existing_general_entries="$(pack_entry_count "$previous_repo_current/packs/general-en/manifest.json")"
+    new_general_entries="$(pack_entry_count "$release_root/packs/general-en/manifest.json")"
+    if [ "$existing_general_entries" -ge 1000000 ] && [ "$new_general_entries" -lt 1000000 ]; then
+      echo "Prepared deploy registry has starter general-en ($new_general_entries entries); preserving existing repo current with $existing_general_entries entries."
+      merge_release_packs_into_current "$previous_repo_current" "$release_root" "$release_id"
+      switch_repo_current=0
+    fi
   fi
 fi
 if [ "$switch_repo_current" -eq 1 ]; then
   ln -sfn "$release_root" /mnt/ades/repo/current
 fi
 /mnt/ades/app/shared/.venv/bin/python - <<'PY'
+import os
+from pathlib import Path
+
 from ades.config import get_settings
 from ades.packs.registry import PackRegistry
 
@@ -532,25 +545,51 @@ expected_versions = {
 }
 
 settings = get_settings()
-registry = PackRegistry(
-    settings.storage_root,
-    runtime_target=settings.runtime_target,
-    metadata_backend=settings.metadata_backend,
-    database_url=settings.database_url,
-)
-for pack_id, expected_version in expected_versions.items():
-    manifest_path = settings.storage_root / "packs" / pack_id / "manifest.json"
-    if not manifest_path.is_file():
-        raise SystemExit(f"missing promoted pack manifest after deploy: {manifest_path}")
-    if not registry.sync_pack_from_disk(pack_id, active=True):
-        raise SystemExit(f"failed to sync promoted pack metadata: {pack_id}")
-    refreshed = registry.get_pack(pack_id, active_only=False)
-    if refreshed is None or refreshed.version != expected_version:
-        raise SystemExit(
-            "promoted pack metadata mismatch after sync: "
-            f"{pack_id} expected={expected_version!r} got={getattr(refreshed, 'version', None)!r}"
+
+storage_roots: list[Path] = []
+for raw_root in (
+    os.environ.get("ADES_STORAGE_ROOT"),
+    "/mnt/ades/repo/current",
+    str(settings.storage_root),
+):
+    if not raw_root:
+        continue
+    root = Path(raw_root).expanduser()
+    if root not in storage_roots:
+        storage_roots.append(root)
+
+synced_root: Path | None = None
+for storage_root in storage_roots:
+    if not all(
+        (storage_root / "packs" / pack_id / "manifest.json").is_file()
+        for pack_id in expected_versions
+    ):
+        continue
+    registry = PackRegistry(
+        storage_root,
+        runtime_target=settings.runtime_target,
+        metadata_backend=settings.metadata_backend,
+        database_url=settings.database_url,
+    )
+    for pack_id, expected_version in expected_versions.items():
+        if not registry.sync_pack_from_disk(pack_id, active=True):
+            raise SystemExit(f"failed to sync promoted pack metadata: {pack_id}")
+        refreshed = registry.get_pack(pack_id, active_only=False)
+        if refreshed is None or refreshed.version != expected_version:
+            raise SystemExit(
+                "promoted pack metadata mismatch after sync: "
+                f"{pack_id} expected={expected_version!r} got={getattr(refreshed, 'version', None)!r}"
+            )
+        print(f"Synced promoted pack metadata: {pack_id} {expected_version} from {storage_root}")
+    synced_root = storage_root
+    break
+
+if synced_root is None:
+    probed = ", ".join(str(root) for root in storage_roots)
+    raise SystemExit(
+        "missing promoted pack manifests after deploy in candidate storage roots: "
+        f"{probed}"
         )
-    print(f"Synced promoted pack metadata: {pack_id} {expected_version}")
 PY
 XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user daemon-reload
 XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user restart ades.service
