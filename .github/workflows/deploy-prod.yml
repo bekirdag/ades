@@ -197,6 +197,46 @@ jobs:
 
           retry 5 run_remote_install
 
+      - name: Sync public registry static root
+        shell: bash
+        run: |
+          set -euo pipefail
+          retry() {
+            local attempts="$1"
+            shift
+            local try=1
+            while true; do
+              if "$@"; then
+                return 0
+              fi
+              local exit_code=$?
+              if [ "$try" -ge "$attempts" ]; then
+                return "$exit_code"
+              fi
+              echo "Command failed with exit code $exit_code; retrying in 15s ($try/$attempts)..." >&2
+              try=$((try + 1))
+              sleep 15
+            done
+          }
+          ssh_cmd=(
+            ssh
+            -i ~/.ssh/id_ed25519
+            -o BatchMode=yes
+            -o ConnectTimeout=30
+            -o IdentitiesOnly=yes
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=4
+            -o StrictHostKeyChecking=yes
+            -p "$ADES_DEPLOY_PORT"
+            "$ADES_DEPLOY_USER@$ADES_DEPLOY_HOST"
+          )
+          public_registry_sync_script=".github/scripts/ades_sync_public_registry.sh"
+          run_public_registry_sync() {
+            "${ssh_cmd[@]}" "bash -s" < "$public_registry_sync_script"
+          }
+
+          retry 4 run_public_registry_sync
+
       - name: Sync public service impact config
         shell: bash
         run: |
@@ -326,6 +366,13 @@ jobs:
           age_seconds = float(artifact.get("age_seconds") or 1_000_000_000)
           if age_seconds > 7200:
               raise SystemExit(f"public impact artifact is stale after deploy: {artifact}")
+
+          registry_index = get_json("https://repo.adestool.com/index.json")
+          registry_packs = registry_index.get("packs") or {}
+          for pack_id in ("business-vector-en", "economics-vector-en", "politics-vector-en"):
+              pack = registry_packs.get(pack_id) or {}
+              if pack.get("version") != "0.2.0" or pack.get("tier") != "domain":
+                  raise SystemExit(f"public registry did not promote {pack_id}: {pack}")
 
           options = {
               "include_passive_entities": True,
