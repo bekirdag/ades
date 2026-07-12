@@ -972,14 +972,10 @@ def test_enrich_tag_response_with_related_entities_routes_hint_packs_to_qdrant_f
     assert observed_filters == [
         {"packs": ["general-en", "business-vector-en", "finance-uk-en"]},
         {"packs": ["general-en", "business-vector-en", "finance-uk-en"]},
-        {"packs": ["general-en", "business-vector-en", "finance-uk-en"]},
-        {"packs": ["general-en", "business-vector-en", "finance-uk-en"]},
     ]
     assert observed_collections == [
         "ades-qids-business-current",
-        "ades-qids-current",
         "ades-qids-business-current",
-        "ades-qids-current",
     ]
     assert {item.entity_id for item in enriched.related_entities} == {
         "wikidata:Q4",
@@ -1080,7 +1076,7 @@ def test_enrich_tag_response_with_related_entities_falls_back_to_shared_alias_wh
     assert [item.entity_id for item in enriched.related_entities] == ["wikidata:Q9"]
 
 
-def test_enrich_tag_response_with_related_entities_merges_shared_alias_results_when_routed_alias_is_non_empty(
+def test_enrich_tag_response_with_related_entities_skips_shared_alias_when_routed_alias_is_non_empty(
     monkeypatch,
 ) -> None:
     response = _response_with_linked_entities()
@@ -1129,20 +1125,7 @@ def test_enrich_tag_response_with_related_entities_merges_shared_alias_results_w
                         },
                     ),
                 ]
-            assert collection_name == "ades-qids-current"
-            return [
-                vector_service.QdrantNearestPoint(point_id, 1.0, {}),
-                vector_service.QdrantNearestPoint(
-                    "wikidata:Q9",
-                    0.82 if point_id == "wikidata:Q1" else 0.84,
-                    {
-                        "canonical_text": "Sam Altman",
-                        "entity_type": "person",
-                        "packs": ["general-en"],
-                        "source_name": "wikidata-general-entities",
-                    },
-                ),
-            ]
+            raise AssertionError("shared alias should not be queried when routed alias has results")
 
     monkeypatch.setattr(vector_service, "QdrantVectorSearchClient", _FakeClient)
 
@@ -1159,16 +1142,13 @@ def test_enrich_tag_response_with_related_entities_merges_shared_alias_results_w
             "wikidata:Q1",
             {"packs": ["general-en", "business-vector-en"]},
         ),
-        ("ades-qids-current", "wikidata:Q1", {"packs": ["general-en", "business-vector-en"]}),
         (
             "ades-qids-business-current",
             "wikidata:Q2",
             {"packs": ["general-en", "business-vector-en"]},
         ),
-        ("ades-qids-current", "wikidata:Q2", {"packs": ["general-en", "business-vector-en"]}),
     ]
     assert [item.entity_id for item in enriched.related_entities] == [
-        "wikidata:Q9",
         "wikidata:Q8",
     ]
 

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "pack_id": "business-vector-en",
+  "version": "0.2.0",
+  "language": "en",
+  "domain": "business",
+  "tier": "domain",
+  "tags": [
+    "business",
+    "bdya",
+    "phase6",
+    "source-backed",
+    "english"
+  ],
+  "dependencies": [],
+  "artifacts": [
+    {
+      "name": "pack",
+      "url": "../../artifacts/business-vector-en-0.2.0.tar.zst",
+      "sha256": "2a300bf4e45b399742866075935f5e1a18827f88a7aa785ac85848fabbac46fe",
+      "size_bytes": 7670
+    }
+  ],
+  "models": [],
+  "rules": [
+    "rules.json"
+  ],
+  "labels": [
+    "labels.json"
+  ],
+  "min_ades_version": "0.1.0",
+  "matcher": {
+    "schema_version": 1,
+    "algorithm": "token_trie_v1",
+    "normalization": "normalize_lookup_text:v1",
+    "artifact_path": "matcher/token-trie.bin",
+    "entries_path": "matcher/entries.bin",
+    "entry_count": 78,
+    "state_count": 136,
+    "max_alias_length": 31,
+    "artifact_sha256": "82d8d56802b77f705d528b191ef85ac229364ab2fccddad53b637b5a66373e4d",
+    "entries_sha256": "c8e50d2b5f2afd45b3449d4a1f34911055c1d76ce167ff7e3a37f6be1806c358"
+  },
+  "description": "Source-backed BDYA business concept/entity pack for market news routing."
+}

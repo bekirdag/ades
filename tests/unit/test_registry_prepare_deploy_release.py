@@ -32,11 +32,14 @@ def test_prepare_registry_deploy_payload_builds_bundled_registry_when_no_promoti
     assert result.mode == "bundled"
     assert result.promoted_registry_url is None
     assert result.consumer_smoke is None
-    assert result.pack_count == 3
+    assert result.pack_count == 6
     assert [pack.pack_id for pack in result.packs] == [
+        "business-vector-en",
+        "economics-vector-en",
         "finance-en",
         "general-en",
         "medical-en",
+        "politics-vector-en",
     ]
     assert Path(result.index_path).exists()
 

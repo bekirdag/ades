@@ -7,8 +7,14 @@ from ades.packs.finance_bundle import build_finance_source_bundle
 from ades.packs.alias_analysis import build_retained_alias_review_key
 from ades.packs.generation import (
     _iter_entity_alias_candidates,
+    SourceSnapshot,
     generate_pack_source,
     refresh_pack_from_analysis_db,
+    summarize_source_governance,
+)
+from ades.impact.source_catalog import (
+    SOURCE_TIER_LOCAL_PACK_METADATA,
+    SOURCE_TIER_OFFICIAL,
 )
 from tests.finance_bundle_helpers import create_finance_raw_snapshots
 from tests.pack_generation_helpers import (
@@ -126,6 +132,31 @@ def test_generate_pack_source_writes_runtime_compatible_pack(tmp_path: Path) -> 
     sources_metadata = json.loads((pack_dir / "sources.json").read_text(encoding="utf-8"))
     assert sources_metadata["publishable_sources_only"] is False
     assert sources_metadata["source_license_classes"] == {"build-only": 1, "ship-now": 1}
+
+
+def test_source_governance_blocks_proposal_only_source_tiers() -> None:
+    summary = summarize_source_governance(
+        [
+            SourceSnapshot(
+                name="official-taxonomy",
+                license_class="ship-now",
+                source_tier=SOURCE_TIER_OFFICIAL,
+                source_url="https://www.sec.gov/files/form8-k.pdf",
+            ),
+            SourceSnapshot(
+                name="curated-seed",
+                license_class="ship-now",
+                source_tier=SOURCE_TIER_LOCAL_PACK_METADATA,
+                source_url="https://example.test/curated-seed",
+            ),
+        ]
+    )
+
+    assert summary.publishable_source_count == 1
+    assert summary.restricted_source_count == 1
+    assert summary.publishable_sources_only is False
+    assert summary.source_license_classes == {"ship-now": 2}
+    assert any("local_pack_metadata" in warning for warning in summary.warnings)
 
 
 def test_refresh_pack_from_analysis_db_rebuilds_alias_artifacts(tmp_path: Path) -> None:

@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T13:49:15.712447Z",
+  "bundle_dir": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle",
+  "bundle_manifest_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/bundle.json",
+  "include_build_only": false,
+  "input_entity_count": 28,
+  "input_rule_count": 13,
+  "included_entity_count": 23,
+  "included_rule_count": 13,
+  "dropped_record_count": 5,
+  "dropped_alias_count": 0,
+  "ambiguous_alias_count": 0,
+  "analysis_backend": "sqlite",
+  "analysis_db_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/economics-vector-en/analysis.sqlite",
+  "alias_analysis_report_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/economics-vector-en/alias-analysis.json",
+  "candidate_alias_count": 115,
+  "retained_alias_count": 95,
+  "collision_blocked_alias_count": 0,
+  "retained_alias_audit_scanned_alias_count": 0,
+  "retained_alias_audit_removed_alias_count": 0,
+  "retained_alias_audit_chunk_size": 0,
+  "retained_alias_audit_reason_counts": {},
+  "retained_alias_audit_mode": "heuristic",
+  "retained_alias_audit_reviewer_name": null,
+  "retained_alias_audit_review_cache_path": null,
+  "retained_alias_audit_invoked_review_count": 0,
+  "retained_alias_audit_cached_review_count": 0,
+  "retained_alias_exclusion_removed_alias_count": 0,
+  "retained_alias_exclusion_source_path": null,
+  "exact_common_english_alias_removed_alias_count": 0,
+  "exact_common_english_alias_source_path": null,
+  "exact_identifier_alias_count": 0,
+  "natural_language_alias_count": 115,
+  "blocked_reason_counts": {},
+  "retained_label_counts": {
+    "economics_concept": 95
+  },
+  "label_count": 1,
+  "alias_count": 95,
+  "rule_count": 13,
+  "matcher": {
+    "algorithm": "token_trie_v1",
+    "normalization": "normalize_lookup_text:v1",
+    "artifact_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/economics-vector-en/matcher/token-trie.bin",
+    "entries_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/economics-vector-en/matcher/entries.bin",
+    "entry_count": 91,
+    "state_count": 163,
+    "max_alias_length": 29,
+    "artifact_sha256": "7082c504360f0384e0515e937a151555ecfb319b7f1e9b57c320f385fbdb582b",
+    "entries_sha256": "c1d09381146bd2ad22e0cc42d5b217f8f296d0b889e6f02a5e298b2fb03ef59e"
+  },
+  "source_count": 9,
+  "source_license_classes": {
+    "ship-now": 9
+  },
+  "publishable_source_count": 9,
+  "restricted_source_count": 0,
+  "publishable_sources_only": true,
+  "entity_label_distribution": {
+    "economics_concept": 23
+  },
+  "label_distribution": {
+    "economics_concept": 108
+  }
+}

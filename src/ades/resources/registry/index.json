@@ -1,7 +1,43 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-04-11T13:44:00Z",
+  "generated_at": "2026-07-12T13:49:24Z",
   "packs": {
+    "business-vector-en": {
+      "version": "0.2.0",
+      "manifest_url": "packs/business-vector-en/manifest.json",
+      "language": "en",
+      "domain": "business",
+      "tier": "domain",
+      "description": "Source-backed BDYA business concept/entity pack for market news routing.",
+      "tags": [
+        "business",
+        "bdya",
+        "phase6",
+        "source-backed",
+        "english"
+      ],
+      "dependencies": [],
+      "min_ades_version": "0.1.0",
+      "artifact_size_bytes": 7670
+    },
+    "economics-vector-en": {
+      "version": "0.2.0",
+      "manifest_url": "packs/economics-vector-en/manifest.json",
+      "language": "en",
+      "domain": "economics",
+      "tier": "domain",
+      "description": "Source-backed BDYA economics concept pack for macro and policy news routing.",
+      "tags": [
+        "economics",
+        "bdya",
+        "phase6",
+        "source-backed",
+        "english"
+      ],
+      "dependencies": [],
+      "min_ades_version": "0.1.0",
+      "artifact_size_bytes": 8276
+    },
     "finance-en": {
       "version": "0.1.0",
       "manifest_url": "packs/finance-en/manifest.json",
@@ -53,6 +89,24 @@
       ],
       "min_ades_version": "0.1.0",
       "artifact_size_bytes": 634
+    },
+    "politics-vector-en": {
+      "version": "0.2.0",
+      "manifest_url": "packs/politics-vector-en/manifest.json",
+      "language": "en",
+      "domain": "politics",
+      "tier": "domain",
+      "description": "Source-backed BDYA politics concept/entity pack for policy, sanctions, and geopolitical news routing.",
+      "tags": [
+        "politics",
+        "bdya",
+        "phase6",
+        "source-backed",
+        "english"
+      ],
+      "dependencies": [],
+      "min_ades_version": "0.1.0",
+      "artifact_size_bytes": 9391
     }
   }
 }

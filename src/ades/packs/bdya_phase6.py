@@ -4,12 +4,171 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
 import json
 from pathlib import Path
 import shutil
 from typing import Any
 
 from .source_lock import build_bundle_source_entry, write_sources_lock
+
+
+_SOURCE_TIER_OFFICIAL = "official"
+_SOURCE_TIER_REGULATOR = "regulator"
+_SOURCE_TIER_GOVERNMENT = "government"
+_SOURCE_TIER_LOCAL_PACK_METADATA = "local_pack_metadata"
+_BUSINESS_SOURCE_BACKED_STATUS = "source_backed_candidate"
+_BUSINESS_SHADOW_STATUS = "shadow_only"
+_BUSINESS_SOURCE_EVIDENCE_ADAPTER = "bdya_business_source_family_evidence"
+_BUSINESS_SOURCE_EVIDENCE_KEYS = (
+    "source_family_id",
+    "source_name",
+    "source_tier",
+    "source_license_class",
+    "source_url",
+    "source_version",
+    "source_record_id",
+    "source_record_type",
+    "source_field_path",
+    "source_span",
+    "source_term",
+    "source_definition",
+    "evidence_role",
+    "promotion_status",
+)
+
+_BUSINESS_SOURCE_FAMILIES: dict[str, dict[str, object]] = {
+    "sec-form-8k": {
+        "source_name": "sec-form-8k",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.sec.gov/files/form8-k.pdf",
+        "source_version": "2026-03",
+        "source_definition": "SEC Form 8-K current-report item vocabulary for issuer events.",
+    },
+    "investor-sec-8k-bulletin": {
+        "source_name": "investor-sec-8k-bulletin",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.sec.gov/resources-for-investors/investor-alerts-bulletins/how-read-8-k",
+        "source_version": "investor-bulletin",
+        "source_definition": "SEC investor bulletin describing Form 8-K event categories.",
+    },
+    "sec-share-repurchase": {
+        "source_name": "sec-share-repurchase",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.sec.gov/corpfin/secg-share-repurchase-disclosure-modernization",
+        "source_version": "share-repurchase-disclosure-modernization",
+        "source_definition": "SEC share repurchase disclosure guidance for issuer buybacks.",
+    },
+    "us-product-recall-regulators": {
+        "source_name": "us-product-recall-regulators",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.cpsc.gov/Recalls",
+        "additional_urls": [
+            "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts",
+            "https://www.nhtsa.gov/recalls",
+        ],
+        "source_version": "public-recall-pages",
+        "source_definition": "U.S. CPSC, FDA, and NHTSA public recall pages for product safety recalls.",
+    },
+    "ftc-merger-review": {
+        "source_name": "ftc-merger-review",
+        "source_tier": _SOURCE_TIER_REGULATOR,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.ftc.gov/news-events/topics/competition-enforcement/merger-review",
+        "source_version": "merger-review-topic",
+        "source_definition": "FTC competition enforcement topic page for merger review and antitrust scrutiny.",
+    },
+    "bls-work-stoppages": {
+        "source_name": "bls-work-stoppages",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.bls.gov/wsp/",
+        "source_version": "work-stoppages-program",
+        "source_definition": "BLS work stoppages program covering strikes and lockouts.",
+    },
+    "govinfo-reg-sk-303": {
+        "source_name": "govinfo-reg-sk-303",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.govinfo.gov/link/cfr/17/229?link-type=pdf&sectionnum=303&year=mostrecent",
+        "source_version": "17-cfr-229.303",
+        "source_definition": "Regulation S-K Item 303 capital resources disclosure requirements.",
+    },
+    "investor-gov-ipo": {
+        "source_name": "investor-gov-ipo",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.investor.gov/introduction-investing/investing-basics/glossary/initial-public-offering-ipo",
+        "source_version": "investor-glossary",
+        "source_definition": "Investor.gov glossary definition for initial public offering.",
+    },
+    "finra-public-offerings": {
+        "source_name": "finra-public-offerings",
+        "source_tier": _SOURCE_TIER_REGULATOR,
+        "license_class": "ship-now",
+        "license": "public-regulator-website",
+        "source_url": "https://www.finra.org/rules-guidance/rulebooks/finra-rules/5110",
+        "source_version": "finra-rule-5110",
+        "source_definition": "FINRA public offering rule terminology for primary and secondary offerings.",
+    },
+    "investor-gov-dividend": {
+        "source_name": "investor-gov-dividend",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.investor.gov/introduction-investing/investing-basics/glossary/dividend",
+        "source_version": "investor-glossary",
+        "source_definition": "Investor.gov glossary definition for dividend distributions.",
+    },
+    "sec-nrsro-rating-history": {
+        "source_name": "sec-nrsro-rating-history",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.sec.gov/data-research/structured-data/rating-history-files-publication-guide",
+        "source_version": "rating-history-guide",
+        "source_definition": "SEC NRSRO rating history guide describing rating action records.",
+    },
+    "dol-warn": {
+        "source_name": "dol-warn",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.dol.gov/agencies/eta/layoffs/warn",
+        "source_version": "warn-act-topic",
+        "source_definition": "U.S. Department of Labor WARN Act topic page for plant closings and mass layoffs.",
+    },
+    "govinfo-reg-sk-103": {
+        "source_name": "govinfo-reg-sk-103",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.govinfo.gov/content/pkg/CFR-2014-title17-vol3/pdf/CFR-2014-title17-vol3-sec229-103.pdf",
+        "source_version": "17-cfr-229.103",
+        "source_definition": "Regulation S-K Item 103 legal proceedings disclosure requirements.",
+    },
+    "investor-gov-spin-offs": {
+        "source_name": "investor-gov-spin-offs",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.investor.gov/introduction-investing/investing-basics/glossary/spin-offs",
+        "source_version": "investor-glossary",
+        "source_definition": "Investor.gov glossary discussion of spin-offs and SEC registration statements.",
+    },
+}
 
 
 def _entity(
@@ -48,6 +207,1339 @@ def _entity(
     if quality_reasons:
         record["quality_reasons"] = list(quality_reasons)
     return record
+
+
+def _business_entity(
+    canonical_text: str,
+    *,
+    aliases: tuple[str, ...],
+    entity_id: str,
+    source_family_id: str,
+    source_record_id: str,
+    source_record_type: str,
+    source_field_path: str,
+    source_span: str,
+    source_term: str,
+    source_definition: str,
+    evidence_role: str = "taxonomy_term",
+    blocked_aliases: tuple[str, ...] = (),
+    direct_mention_required: bool | None = None,
+    quality_reasons: tuple[str, ...] = (),
+    normalization_notes: str | None = None,
+) -> dict[str, object]:
+    source_family = _BUSINESS_SOURCE_FAMILIES[source_family_id]
+    record = _entity(
+        "business_concept",
+        canonical_text,
+        aliases=aliases,
+        entity_id=entity_id,
+        source_name=str(source_family["source_name"]),
+        metadata={
+            "source_family_id": source_family_id,
+            "source_record_id": source_record_id,
+            "source_term": source_term,
+            "evidence_role": evidence_role,
+        },
+        alias_quality="strong",
+        direct_mention_required=direct_mention_required,
+        quality_reasons=quality_reasons,
+    )
+    record.update(
+        {
+            "source_family_id": source_family_id,
+            "source_tier": source_family["source_tier"],
+            "source_license_class": source_family["license_class"],
+            "source_url": source_family["source_url"],
+            "source_version": source_family["source_version"],
+            "source_record_id": source_record_id,
+            "source_record_type": source_record_type,
+            "source_field_path": source_field_path,
+            "source_span": source_span,
+            "source_term": source_term,
+            "source_definition": source_definition,
+            "evidence_role": evidence_role,
+            "jurisdiction": "US",
+            "market": "public_company_disclosure",
+            "adapter": "bdya_business_source_evidence",
+            "adapter_version": "1",
+            "promotion_status": _BUSINESS_SOURCE_BACKED_STATUS,
+        }
+    )
+    if source_family.get("additional_urls"):
+        record["source_additional_urls"] = list(source_family["additional_urls"])
+    if blocked_aliases:
+        record["blocked_aliases"] = list(blocked_aliases)
+    if normalization_notes:
+        record["normalization_notes"] = normalization_notes
+    return record
+
+
+def _business_shadow_entity(
+    canonical_text: str,
+    *,
+    aliases: tuple[str, ...],
+    entity_id: str,
+    reason: str,
+) -> dict[str, object]:
+    record = _entity(
+        "business_concept",
+        canonical_text,
+        aliases=aliases,
+        entity_id=entity_id,
+        source_name="curated-business-bdya-phase6",
+        metadata={
+            "source_family_id": "curated-business-bdya-phase6",
+            "evidence_role": "seed_overlay",
+        },
+        alias_quality="shadow_seed",
+        quality_reasons=(reason,),
+    )
+    record.update(
+        {
+            "build_only": True,
+            "source_family_id": "curated-business-bdya-phase6",
+            "source_tier": _SOURCE_TIER_LOCAL_PACK_METADATA,
+            "source_license_class": "build-only",
+            "evidence_role": "seed_overlay",
+            "promotion_status": _BUSINESS_SHADOW_STATUS,
+            "quality_reasons": [reason],
+            "normalization_notes": (
+                "Curated BDYA seed retained for shadow evaluation; not included in "
+                "production runtime without eligible source-backed evidence."
+            ),
+        }
+    )
+    return record
+
+
+def _business_rule(
+    name: str,
+    pattern: str,
+    *,
+    source_family_id: str,
+    source_record_id: str,
+    source_record_type: str,
+    source_field_path: str,
+    source_span: str,
+    source_term: str,
+    source_definition: str,
+    evidence_role: str = "taxonomy_term",
+    quality_reasons: tuple[str, ...] = (),
+) -> dict[str, object]:
+    source_family = _BUSINESS_SOURCE_FAMILIES[source_family_id]
+    record = _rule(name, "business_concept", pattern)
+    record.update(
+        {
+            "source_family_id": source_family_id,
+            "source_name": source_family["source_name"],
+            "source_tier": source_family["source_tier"],
+            "source_license_class": source_family["license_class"],
+            "source_url": source_family["source_url"],
+            "source_version": source_family["source_version"],
+            "source_record_id": source_record_id,
+            "source_record_type": source_record_type,
+            "source_field_path": source_field_path,
+            "source_span": source_span,
+            "source_term": source_term,
+            "source_definition": source_definition,
+            "evidence_role": evidence_role,
+            "jurisdiction": "US",
+            "market": "public_company_disclosure",
+            "adapter": "bdya_business_source_evidence",
+            "adapter_version": "1",
+            "promotion_status": _BUSINESS_SOURCE_BACKED_STATUS,
+        }
+    )
+    if source_family.get("additional_urls"):
+        record["source_additional_urls"] = list(source_family["additional_urls"])
+    if quality_reasons:
+        record["quality_reasons"] = list(quality_reasons)
+    return record
+
+
+def _build_business_source_entries(
+    *,
+    spec: "DomainPackSpec",
+    source_dir: Path,
+) -> list[dict[str, object]]:
+    records_by_family: dict[str, list[dict[str, object]]] = {}
+    for record in (*spec.entities, *spec.rules):
+        if record.get("build_only") is True:
+            continue
+        source_family_id = str(record.get("source_family_id") or "")
+        if source_family_id not in _BUSINESS_SOURCE_FAMILIES:
+            continue
+        records_by_family.setdefault(source_family_id, []).append(record)
+
+    if not records_by_family:
+        return []
+
+    source_family_dir = source_dir / "source_families"
+    source_family_dir.mkdir(parents=True, exist_ok=True)
+
+    source_entries: list[dict[str, object]] = []
+    for source_family_id in sorted(records_by_family):
+        source_family = _BUSINESS_SOURCE_FAMILIES[source_family_id]
+        evidence_records = sorted(
+            (
+                _business_source_evidence_record(record)
+                for record in records_by_family[source_family_id]
+            ),
+            key=lambda item: (
+                str(item["record_kind"]),
+                str(item["record_ref"]),
+                str(item.get("source_record_id", "")),
+            ),
+        )
+        snapshot_path = source_family_dir / f"{source_family_id}.json"
+        snapshot_payload = {
+            "schema_version": 1,
+            "pack_id": spec.pack_id,
+            "source_family_id": source_family_id,
+            "source_name": source_family["source_name"],
+            "source_tier": source_family["source_tier"],
+            "source_url": source_family["source_url"],
+            "source_additional_urls": source_family.get("additional_urls", []),
+            "source_version": source_family["source_version"],
+            "source_definition": source_family["source_definition"],
+            "license_class": source_family["license_class"],
+            "license": source_family["license"],
+            "adapter": _BUSINESS_SOURCE_EVIDENCE_ADAPTER,
+            "adapter_version": "1",
+            "record_count": len(evidence_records),
+            "records": evidence_records,
+        }
+        snapshot_path.write_text(
+            json.dumps(snapshot_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        source_entries.append(
+            build_bundle_source_entry(
+                name=str(source_family["source_name"]),
+                snapshot_path=snapshot_path,
+                record_count=len(evidence_records),
+                adapter=_BUSINESS_SOURCE_EVIDENCE_ADAPTER,
+                license_class=str(source_family["license_class"]),
+                license_name=str(source_family["license"]),
+                adapter_version="1",
+                version=str(source_family["source_version"]),
+                source_tier=str(source_family["source_tier"]),
+                source_url=str(source_family["source_url"]),
+                extra_notes=f"source_family_id={source_family_id}",
+            )
+        )
+    return source_entries
+
+
+def _business_source_evidence_record(record: dict[str, object]) -> dict[str, object]:
+    record_kind = "rule" if "pattern" in record else "entity"
+    record_ref = str(
+        record.get("entity_id")
+        or record.get("name")
+        or record.get("canonical_text")
+        or record.get("source_record_id")
+    )
+    payload: dict[str, object] = {
+        "record_kind": record_kind,
+        "record_ref": record_ref,
+    }
+    if record_kind == "entity":
+        payload["canonical_text"] = str(record.get("canonical_text") or record_ref)
+        payload["aliases"] = [str(item) for item in record.get("aliases", [])]
+        if record.get("blocked_aliases"):
+            payload["blocked_aliases"] = [
+                str(item) for item in record.get("blocked_aliases", [])
+            ]
+    else:
+        payload["rule_name"] = str(record.get("name") or record_ref)
+        payload["pattern"] = str(record.get("pattern") or "")
+
+    for key in _BUSINESS_SOURCE_EVIDENCE_KEYS:
+        if record.get(key) is not None:
+            payload[key] = record[key]
+
+    fingerprint_payload = dict(payload)
+    payload["normalized_record_sha256"] = sha256(
+        json.dumps(
+            fingerprint_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    return payload
+
+
+_ECONOMICS_SOURCE_BACKED_STATUS = "source_backed_candidate"
+_ECONOMICS_SHADOW_STATUS = "shadow_only"
+_ECONOMICS_SOURCE_EVIDENCE_ADAPTER = "bdya_economics_source_family_evidence"
+_ECONOMICS_SOURCE_EVIDENCE_KEYS = (
+    "source_family_id",
+    "source_name",
+    "source_tier",
+    "source_license_class",
+    "source_url",
+    "source_version",
+    "source_record_id",
+    "source_record_type",
+    "source_field_path",
+    "source_span",
+    "source_term",
+    "source_definition",
+    "indicator_code",
+    "dataset_id",
+    "release_id",
+    "frequency",
+    "jurisdiction",
+    "market",
+    "country_or_area",
+    "release_calendar_url",
+    "evidence_role",
+    "promotion_status",
+)
+
+_ECONOMICS_SOURCE_FAMILIES: dict[str, dict[str, object]] = {
+    "bea-national-accounts-glossary": {
+        "source_name": "bea-national-accounts-glossary",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.bea.gov/help/glossary",
+        "additional_urls": [
+            "https://www.bea.gov/data/personal-consumption-expenditures-price-index",
+            "https://www.bea.gov/data/personal-consumption-expenditures-price-index-excluding-food-and-energy",
+        ],
+        "source_version": "bea-glossary-and-pce-price-index-pages",
+        "source_definition": "BEA glossary and price-index pages for GDP, economic growth, PCE, and PCE price-index terminology.",
+    },
+    "bls-price-labor-glossaries": {
+        "source_name": "bls-price-labor-glossaries",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.bls.gov/bls/glossary.htm",
+        "additional_urls": [
+            "https://www.bls.gov/cpi/",
+            "https://www.bls.gov/ppi/",
+            "https://www.bls.gov/ces/",
+            "https://www.bls.gov/cps/definitions.htm",
+        ],
+        "source_version": "bls-glossary-cpi-ppi-ces-cps-pages",
+        "source_definition": "BLS glossary and statistical-program pages for CPI, PPI, unemployment, payroll employment, wages, and earnings.",
+    },
+    "census-economic-indicators": {
+        "source_name": "census-economic-indicators",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.census.gov/economic-indicators/",
+        "additional_urls": [
+            "https://www.census.gov/foreign-trade/data/",
+            "https://www.census.gov/construction/nrc/",
+            "https://www.census.gov/retail/",
+        ],
+        "source_version": "census-economic-indicators-pages",
+        "source_definition": "Census economic indicator pages for international trade, new residential construction, retail trade, and manufacturing data.",
+    },
+    "federal-reserve-policy-statistics": {
+        "source_name": "federal-reserve-policy-statistics",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-federal-reserve-website",
+        "source_url": "https://www.federalreserve.gov/monetarypolicy.htm",
+        "additional_urls": [
+            "https://www.federalreserve.gov/releases/g17/",
+            "https://www.federalreserve.gov/releases/h6/",
+            "https://www.federalreserve.gov/monetarypolicy/reservereq.htm",
+        ],
+        "source_version": "federal-reserve-policy-g17-h6-reserve-requirements",
+        "source_definition": "Federal Reserve monetary-policy, industrial production, money stock, and reserve-requirement materials.",
+    },
+    "fred-yield-curve": {
+        "source_name": "fred-yield-curve",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-federal-reserve-bank-data",
+        "source_url": "https://fred.stlouisfed.org/series/T10Y2Y",
+        "additional_urls": [
+            "https://fred.stlouisfed.org/docs/api/fred/",
+            "https://fred.stlouisfed.org/series/T10Y3M",
+        ],
+        "source_version": "fred-treasury-constant-maturity-spread-series",
+        "source_definition": "FRED series metadata for Treasury constant-maturity spreads used as yield-curve indicators.",
+    },
+    "treasurydirect-auctions": {
+        "source_name": "treasurydirect-auctions",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.treasurydirect.gov/auctions/announcements-data-results/",
+        "additional_urls": [
+            "https://www.treasurydirect.gov/auctions/when-auctions-happen/",
+            "https://www.treasurydirect.gov/research-center/history-of-marketable-securities/auctions/",
+        ],
+        "source_version": "treasurydirect-auction-pages",
+        "source_definition": "TreasuryDirect auction announcements, schedules, and results pages for Treasury marketable securities.",
+    },
+    "treasury-fiscaldata": {
+        "source_name": "treasury-fiscaldata",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/",
+        "additional_urls": [
+            "https://fiscaldata.treasury.gov/americas-finance-guide/national-debt/",
+            "https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/",
+        ],
+        "source_version": "fiscaldata-debt-to-the-penny-and-national-debt-pages",
+        "source_definition": "U.S. Treasury Fiscal Data pages for public debt, national debt, federal debt, and government debt terminology.",
+    },
+    "wto-tariff-trade-glossary": {
+        "source_name": "wto-tariff-trade-glossary",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-international-organization-website",
+        "source_url": "https://www.wto.org/english/tratop_e/tariffs_e/tariffs_e.htm",
+        "additional_urls": [
+            "https://www.wto.org/english/tratop_e/tariffs_e/tariff_data_e.htm",
+            "https://www.wto.org/english/thewto_e/minist_e/min99_e/english/about_e/23glos_e.htm",
+            "https://www.wto.org/english/docs_e/legal_e/24-scm.pdf",
+        ],
+        "source_version": "wto-tariff-glossary-and-scm-agreement",
+        "source_definition": "WTO tariff, trade-data, glossary, and subsidy/countervailing-measure materials.",
+    },
+    "imf-bop-fiscal-glossary": {
+        "source_name": "imf-bop-fiscal-glossary",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-international-organization-website",
+        "source_url": "https://www.imf.org/en/about/glossary",
+        "additional_urls": [
+            "https://www.imf.org/en/publications/fandd/issues/series/back-to-basics/current-account-deficits",
+            "https://www.imf.org/external/pubs/ft/pam/pam49/pam4901.htm",
+        ],
+        "source_version": "imf-glossary-current-account-fiscal-adjustment-pages",
+        "source_definition": "IMF glossary and Back-to-Basics/Fiscal Adjustment pages for BOP, current account, fiscal policy, and fiscal contraction terminology.",
+    },
+}
+
+
+def _economics_entity(
+    canonical_text: str,
+    *,
+    aliases: tuple[str, ...],
+    entity_id: str,
+    source_family_id: str,
+    source_record_id: str,
+    source_record_type: str,
+    source_field_path: str,
+    source_span: str,
+    source_term: str,
+    source_definition: str,
+    evidence_role: str = "taxonomy_term",
+    blocked_aliases: tuple[str, ...] = (),
+    indicator_code: str | None = None,
+    dataset_id: str | None = None,
+    release_id: str | None = None,
+    frequency: str | None = None,
+    jurisdiction: str = "US",
+    country_or_area: str | None = "US",
+    market: str = "macroeconomic_indicator",
+    release_calendar_url: str | None = None,
+    direct_mention_required: bool | None = None,
+    quality_reasons: tuple[str, ...] = (),
+    normalization_notes: str | None = None,
+) -> dict[str, object]:
+    source_family = _ECONOMICS_SOURCE_FAMILIES[source_family_id]
+    metadata: dict[str, object] = {
+        "source_family_id": source_family_id,
+        "source_record_id": source_record_id,
+        "source_term": source_term,
+        "evidence_role": evidence_role,
+    }
+    if indicator_code is not None:
+        metadata["indicator_code"] = indicator_code
+    if dataset_id is not None:
+        metadata["dataset_id"] = dataset_id
+    if release_id is not None:
+        metadata["release_id"] = release_id
+
+    record = _entity(
+        "economics_concept",
+        canonical_text,
+        aliases=aliases,
+        entity_id=entity_id,
+        source_name=str(source_family["source_name"]),
+        metadata=metadata,
+        alias_quality="strong",
+        direct_mention_required=direct_mention_required,
+        quality_reasons=quality_reasons,
+    )
+    record.update(
+        {
+            "source_family_id": source_family_id,
+            "source_tier": source_family["source_tier"],
+            "source_license_class": source_family["license_class"],
+            "source_url": source_family["source_url"],
+            "source_version": source_family["source_version"],
+            "source_record_id": source_record_id,
+            "source_record_type": source_record_type,
+            "source_field_path": source_field_path,
+            "source_span": source_span,
+            "source_term": source_term,
+            "source_definition": source_definition,
+            "evidence_role": evidence_role,
+            "jurisdiction": jurisdiction,
+            "market": market,
+            "adapter": "bdya_economics_source_evidence",
+            "adapter_version": "1",
+            "promotion_status": _ECONOMICS_SOURCE_BACKED_STATUS,
+        }
+    )
+    if source_family.get("additional_urls"):
+        record["source_additional_urls"] = list(source_family["additional_urls"])
+    if blocked_aliases:
+        record["blocked_aliases"] = list(blocked_aliases)
+    if indicator_code is not None:
+        record["indicator_code"] = indicator_code
+    if dataset_id is not None:
+        record["dataset_id"] = dataset_id
+    if release_id is not None:
+        record["release_id"] = release_id
+    if frequency is not None:
+        record["frequency"] = frequency
+    if country_or_area is not None:
+        record["country_or_area"] = country_or_area
+    if release_calendar_url is not None:
+        record["release_calendar_url"] = release_calendar_url
+    if normalization_notes:
+        record["normalization_notes"] = normalization_notes
+    return record
+
+
+def _economics_shadow_entity(
+    canonical_text: str,
+    *,
+    aliases: tuple[str, ...],
+    entity_id: str,
+    reason: str,
+) -> dict[str, object]:
+    record = _entity(
+        "economics_concept",
+        canonical_text,
+        aliases=aliases,
+        entity_id=entity_id,
+        source_name="curated-economics-bdya-phase6",
+        metadata={
+            "source_family_id": "curated-economics-bdya-phase6",
+            "evidence_role": "seed_overlay",
+        },
+        alias_quality="shadow_seed",
+        quality_reasons=(reason,),
+    )
+    record.update(
+        {
+            "build_only": True,
+            "source_family_id": "curated-economics-bdya-phase6",
+            "source_tier": _SOURCE_TIER_LOCAL_PACK_METADATA,
+            "source_license_class": "build-only",
+            "evidence_role": "seed_overlay",
+            "promotion_status": _ECONOMICS_SHADOW_STATUS,
+            "quality_reasons": [reason],
+            "normalization_notes": (
+                "Curated BDYA seed retained for shadow evaluation; not included in "
+                "production runtime without eligible source-backed evidence."
+            ),
+        }
+    )
+    return record
+
+
+def _economics_rule(
+    name: str,
+    pattern: str,
+    *,
+    source_family_id: str,
+    source_record_id: str,
+    source_record_type: str,
+    source_field_path: str,
+    source_span: str,
+    source_term: str,
+    source_definition: str,
+    evidence_role: str = "taxonomy_term",
+    indicator_code: str | None = None,
+    dataset_id: str | None = None,
+    release_id: str | None = None,
+    jurisdiction: str = "US",
+    market: str = "macroeconomic_indicator",
+    quality_reasons: tuple[str, ...] = (),
+) -> dict[str, object]:
+    source_family = _ECONOMICS_SOURCE_FAMILIES[source_family_id]
+    record = _rule(name, "economics_concept", pattern)
+    record.update(
+        {
+            "source_family_id": source_family_id,
+            "source_name": source_family["source_name"],
+            "source_tier": source_family["source_tier"],
+            "source_license_class": source_family["license_class"],
+            "source_url": source_family["source_url"],
+            "source_version": source_family["source_version"],
+            "source_record_id": source_record_id,
+            "source_record_type": source_record_type,
+            "source_field_path": source_field_path,
+            "source_span": source_span,
+            "source_term": source_term,
+            "source_definition": source_definition,
+            "evidence_role": evidence_role,
+            "jurisdiction": jurisdiction,
+            "market": market,
+            "adapter": "bdya_economics_source_evidence",
+            "adapter_version": "1",
+            "promotion_status": _ECONOMICS_SOURCE_BACKED_STATUS,
+        }
+    )
+    if source_family.get("additional_urls"):
+        record["source_additional_urls"] = list(source_family["additional_urls"])
+    if indicator_code is not None:
+        record["indicator_code"] = indicator_code
+    if dataset_id is not None:
+        record["dataset_id"] = dataset_id
+    if release_id is not None:
+        record["release_id"] = release_id
+    if quality_reasons:
+        record["quality_reasons"] = list(quality_reasons)
+    return record
+
+
+def _build_economics_source_entries(
+    *,
+    spec: "DomainPackSpec",
+    source_dir: Path,
+) -> list[dict[str, object]]:
+    records_by_family: dict[str, list[dict[str, object]]] = {}
+    for record in (*spec.entities, *spec.rules):
+        if record.get("build_only") is True:
+            continue
+        source_family_id = str(record.get("source_family_id") or "")
+        if source_family_id not in _ECONOMICS_SOURCE_FAMILIES:
+            continue
+        records_by_family.setdefault(source_family_id, []).append(record)
+
+    if not records_by_family:
+        return []
+
+    source_family_dir = source_dir / "source_families"
+    source_family_dir.mkdir(parents=True, exist_ok=True)
+
+    source_entries: list[dict[str, object]] = []
+    for source_family_id in sorted(records_by_family):
+        source_family = _ECONOMICS_SOURCE_FAMILIES[source_family_id]
+        evidence_records = sorted(
+            (
+                _economics_source_evidence_record(record)
+                for record in records_by_family[source_family_id]
+            ),
+            key=lambda item: (
+                str(item["record_kind"]),
+                str(item["record_ref"]),
+                str(item.get("source_record_id", "")),
+            ),
+        )
+        snapshot_path = source_family_dir / f"{source_family_id}.json"
+        snapshot_payload = {
+            "schema_version": 1,
+            "pack_id": spec.pack_id,
+            "source_family_id": source_family_id,
+            "source_name": source_family["source_name"],
+            "source_tier": source_family["source_tier"],
+            "source_url": source_family["source_url"],
+            "source_additional_urls": source_family.get("additional_urls", []),
+            "source_version": source_family["source_version"],
+            "source_definition": source_family["source_definition"],
+            "license_class": source_family["license_class"],
+            "license": source_family["license"],
+            "adapter": _ECONOMICS_SOURCE_EVIDENCE_ADAPTER,
+            "adapter_version": "1",
+            "record_count": len(evidence_records),
+            "records": evidence_records,
+        }
+        snapshot_path.write_text(
+            json.dumps(snapshot_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        source_entries.append(
+            build_bundle_source_entry(
+                name=str(source_family["source_name"]),
+                snapshot_path=snapshot_path,
+                record_count=len(evidence_records),
+                adapter=_ECONOMICS_SOURCE_EVIDENCE_ADAPTER,
+                license_class=str(source_family["license_class"]),
+                license_name=str(source_family["license"]),
+                adapter_version="1",
+                version=str(source_family["source_version"]),
+                source_tier=str(source_family["source_tier"]),
+                source_url=str(source_family["source_url"]),
+                extra_notes=f"source_family_id={source_family_id}",
+            )
+        )
+    return source_entries
+
+
+def _economics_source_evidence_record(record: dict[str, object]) -> dict[str, object]:
+    record_kind = "rule" if "pattern" in record else "entity"
+    record_ref = str(
+        record.get("entity_id")
+        or record.get("name")
+        or record.get("canonical_text")
+        or record.get("source_record_id")
+    )
+    payload: dict[str, object] = {
+        "record_kind": record_kind,
+        "record_ref": record_ref,
+    }
+    if record_kind == "entity":
+        payload["canonical_text"] = str(record.get("canonical_text") or record_ref)
+        payload["aliases"] = [str(item) for item in record.get("aliases", [])]
+        if record.get("blocked_aliases"):
+            payload["blocked_aliases"] = [
+                str(item) for item in record.get("blocked_aliases", [])
+            ]
+    else:
+        payload["rule_name"] = str(record.get("name") or record_ref)
+        payload["pattern"] = str(record.get("pattern") or "")
+
+    for key in _ECONOMICS_SOURCE_EVIDENCE_KEYS:
+        if record.get(key) is not None:
+            payload[key] = record[key]
+
+    fingerprint_payload = dict(payload)
+    payload["normalized_record_sha256"] = sha256(
+        json.dumps(
+            fingerprint_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    return payload
+
+
+_POLITICS_SOURCE_BACKED_STATUS = "source_backed_candidate"
+_POLITICS_SHADOW_STATUS = "shadow_only"
+_POLITICS_SOURCE_EVIDENCE_ADAPTER = "bdya_politics_source_family_evidence"
+_POLITICS_SOURCE_EVIDENCE_KEYS = (
+    "source_family_id",
+    "source_name",
+    "source_tier",
+    "source_license_class",
+    "source_url",
+    "source_version",
+    "source_record_id",
+    "source_record_type",
+    "source_field_path",
+    "source_span",
+    "source_term",
+    "source_definition",
+    "jurisdiction",
+    "country_or_area",
+    "issuing_authority",
+    "legal_basis",
+    "measure_type",
+    "sanctions_program",
+    "list_entry_id",
+    "office_id",
+    "election_id",
+    "body_id",
+    "treaty_registration_number",
+    "agreement_id",
+    "security_council_resolution",
+    "policy_instrument",
+    "sector",
+    "commodity_or_sector",
+    "context_requirements",
+    "evidence_role",
+    "promotion_status",
+)
+
+_POLITICS_SOURCE_FAMILIES: dict[str, dict[str, object]] = {
+    "ofac-sanctions-list-service": {
+        "source_name": "ofac-sanctions-list-service",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://ofac.treasury.gov/sanctions-list-service",
+        "source_version": "sls-current",
+        "source_definition": "U.S. Treasury OFAC Sanctions List Service for sanctions-list terminology and Specially Designated Nationals records.",
+    },
+    "un-security-council-consolidated-list": {
+        "source_name": "un-security-council-consolidated-list",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-international-organization-website",
+        "source_url": "https://main.un.org/securitycouncil/en/content/un-sc-consolidated-list",
+        "additional_urls": [
+            "https://main.un.org/securitycouncil/en/sanctions/information",
+        ],
+        "source_version": "un-sc-consolidated-list-current",
+        "source_definition": "UN Security Council consolidated sanctions list and sanctions-measure pages.",
+    },
+    "bis-entity-list-ear": {
+        "source_name": "bis-entity-list-ear",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.bis.gov/entity-list",
+        "additional_urls": [
+            "https://www.bis.gov/licensing/guidance-on-end-user-and-end-use-controls-and-us-person-controls",
+        ],
+        "source_version": "bis-entity-list-and-ear-guidance",
+        "source_definition": "U.S. Bureau of Industry and Security Entity List and export-control guidance.",
+    },
+    "cia-world-leaders": {
+        "source_name": "cia-world-leaders",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.cia.gov/resources/world-leaders/",
+        "source_version": "world-leaders-current",
+        "source_definition": "CIA World Leaders and Cabinet Members of Foreign Governments directory.",
+    },
+    "govuk-ministerial-appointments": {
+        "source_name": "govuk-ministerial-appointments",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "open-government-licence",
+        "source_url": "https://www.gov.uk/government/ministers",
+        "additional_urls": [
+            "https://www.gov.uk/government/news/ministerial-appointments-5-september-2025",
+        ],
+        "source_version": "govuk-ministers-and-appointments-pages",
+        "source_definition": "GOV.UK minister and ministerial appointment pages for cabinet and ministerial-change terminology.",
+    },
+    "uk-electoral-commission-registers": {
+        "source_name": "uk-electoral-commission-registers",
+        "source_tier": _SOURCE_TIER_REGULATOR,
+        "license_class": "ship-now",
+        "license": "public-regulator-website",
+        "source_url": "https://search.electoralcommission.org.uk/",
+        "additional_urls": [
+            "https://www.electoralcommission.org.uk/about-us/our-role-and-responsibilities/what-we-do-referendums",
+            "https://www.electoralcommission.org.uk/research-reports-and-data/our-reports-and-data-past-elections-and-referendums/eu-referendum",
+        ],
+        "source_version": "electoral-commission-registers-current",
+        "source_definition": "UK Electoral Commission registers of political parties, non-party campaigners, referendum participants, and referendum materials.",
+    },
+    "eac-election-administration": {
+        "source_name": "eac-election-administration",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.eac.gov/",
+        "additional_urls": [
+            "https://www.eac.gov/research-and-data/datasets-codebooks-and-surveys-old",
+        ],
+        "source_version": "eac-eavs-and-election-administration-pages",
+        "source_definition": "U.S. Election Assistance Commission election-administration and survey materials.",
+    },
+    "un-treaty-collection": {
+        "source_name": "un-treaty-collection",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-international-organization-website",
+        "source_url": "https://treaties.un.org/",
+        "source_version": "un-treaty-collection-current",
+        "source_definition": "United Nations Treaty Collection and Article 102 treaty-registration materials.",
+    },
+    "wto-regional-trade-agreements": {
+        "source_name": "wto-regional-trade-agreements",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-international-organization-website",
+        "source_url": "https://rtais.wto.org/",
+        "additional_urls": [
+            "https://www.wto.org/english/tratop_e/region_e/region_e.htm",
+        ],
+        "source_version": "wto-rta-database-current",
+        "source_definition": "WTO Regional Trade Agreements database and regional trade agreement gateway.",
+    },
+    "ustr-trade-agreements": {
+        "source_name": "ustr-trade-agreements",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://ustr.gov/trade-agreements",
+        "additional_urls": [
+            "https://ustr.gov/about-us/policy-offices/press-office/press-releases",
+        ],
+        "source_version": "ustr-trade-agreement-pages-current",
+        "source_definition": "Office of the U.S. Trade Representative trade agreement and negotiation pages.",
+    },
+    "nato-defense-expenditure": {
+        "source_name": "nato-defense-expenditure",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-international-organization-website",
+        "source_url": "https://www.nato.int/en/what-we-do/introduction-to-nato/defence-expenditures-and-natos-5-commitment",
+        "additional_urls": [
+            "https://www.nato.int/en",
+        ],
+        "source_version": "nato-defense-expenditure-current",
+        "source_definition": "NATO alliance and defence expenditure pages for security alliance, defence pact, and defence spending terms.",
+    },
+    "un-peacemaker-agreements": {
+        "source_name": "un-peacemaker-agreements",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-international-organization-website",
+        "source_url": "https://peacemaker.un.org/en/areas-of-work/peace-agreements-database-and-language-of-peace-tool",
+        "additional_urls": [
+            "https://peacemaker.un.org/en/thematic-areas/ceasefires-security-arrangements",
+        ],
+        "source_version": "un-peacemaker-agreements-current",
+        "source_definition": "UN Peacemaker peace agreements database and ceasefire/security-arrangement materials.",
+    },
+    "uk-parliament-confidence": {
+        "source_name": "uk-parliament-confidence",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "open-parliament-licence",
+        "source_url": "https://www.parliament.uk/about/how/elections-and-voting/general/hung-parliament/",
+        "additional_urls": [
+            "https://www.parliament.uk/site-information/glossary/motion-of-no-confidence/?id=32625",
+        ],
+        "source_version": "uk-parliament-confidence-and-hung-parliament-pages",
+        "source_definition": "UK Parliament pages for confidence, supply, coalition, and no-confidence government-formation terms.",
+    },
+    "opm-shutdown-furlough": {
+        "source_name": "opm-shutdown-furlough",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.opm.gov/policy-data-oversight/pay-leave/furlough-guidance/",
+        "additional_urls": [
+            "https://www.opm.gov/policy-data-oversight/pay-leave/furlough-guidance/guidance-for-shutdown-furloughs.pdf",
+        ],
+        "source_version": "opm-shutdown-furlough-guidance-current",
+        "source_definition": "U.S. Office of Personnel Management shutdown furlough guidance for lapse-of-appropriations shutdown terms.",
+    },
+    "fema-disaster-declarations": {
+        "source_name": "fema-disaster-declarations",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.fema.gov/disaster/declarations",
+        "additional_urls": [
+            "https://www.fema.gov/disaster/how-declared",
+        ],
+        "source_version": "fema-emergency-declarations-current",
+        "source_definition": "FEMA disaster declaration pages for emergency declaration and state emergency terminology.",
+    },
+    "state-department-diplomatic-history": {
+        "source_name": "state-department-diplomatic-history",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://history.state.gov/countries/belarus",
+        "additional_urls": [
+            "https://history.state.gov/historicaldocuments/frus1945v04/d1138",
+        ],
+        "source_version": "state-office-of-historian-diplomatic-relations-pages",
+        "source_definition": "U.S. State Department Office of the Historian pages covering diplomatic relations and ambassador recall events.",
+    },
+    "cbp-border-restrictions": {
+        "source_name": "cbp-border-restrictions",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.cbp.gov/newsroom/local-media-release/customs-and-border-protection-temporarily-close-monticello-maine-port",
+        "additional_urls": [
+            "https://www.cbp.gov/travel",
+        ],
+        "source_version": "cbp-border-restrictions-and-closure-notices",
+        "source_definition": "U.S. Customs and Border Protection notices for border restrictions and temporary port-of-entry closures.",
+    },
+    "imo-maritime-security": {
+        "source_name": "imo-maritime-security",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-international-organization-website",
+        "source_url": "https://www.imo.org/en/ourwork/security/pages/solas-xi-2%20isps%20code.aspx",
+        "additional_urls": [
+            "https://www.imo.org/en/ourwork/security/pages/guidemaritimesecuritydefault.aspx",
+        ],
+        "source_version": "imo-isps-code-current",
+        "source_definition": "International Maritime Organization maritime security and ISPS Code materials.",
+    },
+    "iea-energy-policies": {
+        "source_name": "iea-energy-policies",
+        "source_tier": _SOURCE_TIER_OFFICIAL,
+        "license_class": "ship-now",
+        "license": "public-international-organization-website",
+        "source_url": "https://www.iea.org/policies",
+        "additional_urls": [
+            "https://www.iea.org/policies/about",
+            "https://www.iea.org/data-and-statistics/data-tools/global-energy-policies-hub",
+        ],
+        "source_version": "iea-policies-database-current",
+        "source_definition": "IEA policies database and Global Energy Policies Hub for government energy policy records.",
+    },
+    "usgs-mineral-commodity-summaries": {
+        "source_name": "usgs-mineral-commodity-summaries",
+        "source_tier": _SOURCE_TIER_GOVERNMENT,
+        "license_class": "ship-now",
+        "license": "public-domain-us-government",
+        "source_url": "https://www.usgs.gov/centers/national-minerals-information-center/mineral-commodity-summaries",
+        "additional_urls": [
+            "https://www.usgs.gov/centers/national-minerals-information-center",
+        ],
+        "source_version": "mineral-commodity-summaries-2026",
+        "source_definition": "USGS National Minerals Information Center and Mineral Commodity Summaries for mining and critical-minerals policy context.",
+    },
+}
+
+
+def _politics_entity(
+    canonical_text: str,
+    *,
+    aliases: tuple[str, ...],
+    entity_id: str,
+    source_family_id: str,
+    source_record_id: str,
+    source_record_type: str,
+    source_field_path: str,
+    source_span: str,
+    source_term: str,
+    source_definition: str,
+    evidence_role: str = "official_term",
+    blocked_aliases: tuple[str, ...] = (),
+    jurisdiction: str = "multi_jurisdiction",
+    country_or_area: str | None = None,
+    issuing_authority: str | None = None,
+    legal_basis: str | None = None,
+    measure_type: str | None = None,
+    sanctions_program: str | None = None,
+    list_entry_id: str | None = None,
+    office_id: str | None = None,
+    election_id: str | None = None,
+    body_id: str | None = None,
+    treaty_registration_number: str | None = None,
+    agreement_id: str | None = None,
+    security_council_resolution: str | None = None,
+    policy_instrument: str | None = None,
+    sector: str | None = None,
+    commodity_or_sector: str | None = None,
+    context_requirements: tuple[str, ...] = (),
+    direct_mention_required: bool | None = None,
+    quality_reasons: tuple[str, ...] = (),
+    normalization_notes: str | None = None,
+) -> dict[str, object]:
+    source_family = _POLITICS_SOURCE_FAMILIES[source_family_id]
+    metadata: dict[str, object] = {
+        "source_family_id": source_family_id,
+        "source_record_id": source_record_id,
+        "source_term": source_term,
+        "evidence_role": evidence_role,
+    }
+    for key, value in (
+        ("jurisdiction", jurisdiction),
+        ("country_or_area", country_or_area),
+        ("issuing_authority", issuing_authority),
+        ("measure_type", measure_type),
+        ("sector", sector),
+        ("commodity_or_sector", commodity_or_sector),
+    ):
+        if value is not None:
+            metadata[key] = value
+
+    record = _entity(
+        "politics_concept",
+        canonical_text,
+        aliases=aliases,
+        entity_id=entity_id,
+        source_name=str(source_family["source_name"]),
+        metadata=metadata,
+        alias_quality="strong",
+        direct_mention_required=direct_mention_required,
+        quality_reasons=quality_reasons,
+    )
+    record.update(
+        {
+            "source_family_id": source_family_id,
+            "source_tier": source_family["source_tier"],
+            "source_license_class": source_family["license_class"],
+            "source_url": source_family["source_url"],
+            "source_version": source_family["source_version"],
+            "source_record_id": source_record_id,
+            "source_record_type": source_record_type,
+            "source_field_path": source_field_path,
+            "source_span": source_span,
+            "source_term": source_term,
+            "source_definition": source_definition,
+            "evidence_role": evidence_role,
+            "jurisdiction": jurisdiction,
+            "adapter": "bdya_politics_source_evidence",
+            "adapter_version": "1",
+            "promotion_status": _POLITICS_SOURCE_BACKED_STATUS,
+        }
+    )
+    if source_family.get("additional_urls"):
+        record["source_additional_urls"] = list(source_family["additional_urls"])
+    for key, value in (
+        ("country_or_area", country_or_area),
+        ("issuing_authority", issuing_authority),
+        ("legal_basis", legal_basis),
+        ("measure_type", measure_type),
+        ("sanctions_program", sanctions_program),
+        ("list_entry_id", list_entry_id),
+        ("office_id", office_id),
+        ("election_id", election_id),
+        ("body_id", body_id),
+        ("treaty_registration_number", treaty_registration_number),
+        ("agreement_id", agreement_id),
+        ("security_council_resolution", security_council_resolution),
+        ("policy_instrument", policy_instrument),
+        ("sector", sector),
+        ("commodity_or_sector", commodity_or_sector),
+    ):
+        if value is not None:
+            record[key] = value
+    if context_requirements:
+        record["context_requirements"] = list(context_requirements)
+    if blocked_aliases:
+        record["blocked_aliases"] = list(blocked_aliases)
+    if normalization_notes:
+        record["normalization_notes"] = normalization_notes
+    return record
+
+
+def _politics_shadow_entity(
+    canonical_text: str,
+    *,
+    aliases: tuple[str, ...],
+    entity_id: str,
+    reason: str,
+) -> dict[str, object]:
+    record = _entity(
+        "politics_concept",
+        canonical_text,
+        aliases=aliases,
+        entity_id=entity_id,
+        source_name="curated-politics-bdya-phase6",
+        metadata={
+            "source_family_id": "curated-politics-bdya-phase6",
+            "evidence_role": "seed_overlay",
+        },
+        alias_quality="shadow_seed",
+        quality_reasons=(reason,),
+    )
+    record.update(
+        {
+            "build_only": True,
+            "source_family_id": "curated-politics-bdya-phase6",
+            "source_tier": _SOURCE_TIER_LOCAL_PACK_METADATA,
+            "source_license_class": "build-only",
+            "evidence_role": "seed_overlay",
+            "promotion_status": _POLITICS_SHADOW_STATUS,
+            "quality_reasons": [reason],
+            "normalization_notes": (
+                "Curated BDYA politics seed retained for shadow evaluation; not "
+                "included in production runtime without eligible source-backed evidence."
+            ),
+        }
+    )
+    return record
+
+
+def _politics_rule(
+    name: str,
+    pattern: str,
+    *,
+    source_family_id: str,
+    source_record_id: str,
+    source_record_type: str,
+    source_field_path: str,
+    source_span: str,
+    source_term: str,
+    source_definition: str,
+    evidence_role: str = "official_term",
+    jurisdiction: str = "multi_jurisdiction",
+    country_or_area: str | None = None,
+    issuing_authority: str | None = None,
+    legal_basis: str | None = None,
+    measure_type: str | None = None,
+    sanctions_program: str | None = None,
+    list_entry_id: str | None = None,
+    office_id: str | None = None,
+    election_id: str | None = None,
+    body_id: str | None = None,
+    treaty_registration_number: str | None = None,
+    agreement_id: str | None = None,
+    security_council_resolution: str | None = None,
+    policy_instrument: str | None = None,
+    sector: str | None = None,
+    commodity_or_sector: str | None = None,
+    context_requirements: tuple[str, ...] = (),
+    quality_reasons: tuple[str, ...] = (),
+) -> dict[str, object]:
+    source_family = _POLITICS_SOURCE_FAMILIES[source_family_id]
+    record = _rule(name, "politics_concept", pattern)
+    record.update(
+        {
+            "source_family_id": source_family_id,
+            "source_name": source_family["source_name"],
+            "source_tier": source_family["source_tier"],
+            "source_license_class": source_family["license_class"],
+            "source_url": source_family["source_url"],
+            "source_version": source_family["source_version"],
+            "source_record_id": source_record_id,
+            "source_record_type": source_record_type,
+            "source_field_path": source_field_path,
+            "source_span": source_span,
+            "source_term": source_term,
+            "source_definition": source_definition,
+            "evidence_role": evidence_role,
+            "jurisdiction": jurisdiction,
+            "adapter": "bdya_politics_source_evidence",
+            "adapter_version": "1",
+            "promotion_status": _POLITICS_SOURCE_BACKED_STATUS,
+        }
+    )
+    if source_family.get("additional_urls"):
+        record["source_additional_urls"] = list(source_family["additional_urls"])
+    for key, value in (
+        ("country_or_area", country_or_area),
+        ("issuing_authority", issuing_authority),
+        ("legal_basis", legal_basis),
+        ("measure_type", measure_type),
+        ("sanctions_program", sanctions_program),
+        ("list_entry_id", list_entry_id),
+        ("office_id", office_id),
+        ("election_id", election_id),
+        ("body_id", body_id),
+        ("treaty_registration_number", treaty_registration_number),
+        ("agreement_id", agreement_id),
+        ("security_council_resolution", security_council_resolution),
+        ("policy_instrument", policy_instrument),
+        ("sector", sector),
+        ("commodity_or_sector", commodity_or_sector),
+    ):
+        if value is not None:
+            record[key] = value
+    if context_requirements:
+        record["context_requirements"] = list(context_requirements)
+    if quality_reasons:
+        record["quality_reasons"] = list(quality_reasons)
+    return record
+
+
+def _build_politics_source_entries(
+    *,
+    spec: "DomainPackSpec",
+    source_dir: Path,
+) -> list[dict[str, object]]:
+    records_by_family: dict[str, list[dict[str, object]]] = {}
+    for record in (*spec.entities, *spec.rules):
+        if record.get("build_only") is True:
+            continue
+        source_family_id = str(record.get("source_family_id") or "")
+        if source_family_id not in _POLITICS_SOURCE_FAMILIES:
+            continue
+        records_by_family.setdefault(source_family_id, []).append(record)
+
+    if not records_by_family:
+        return []
+
+    source_family_dir = source_dir / "source_families"
+    source_family_dir.mkdir(parents=True, exist_ok=True)
+
+    source_entries: list[dict[str, object]] = []
+    for source_family_id in sorted(records_by_family):
+        source_family = _POLITICS_SOURCE_FAMILIES[source_family_id]
+        evidence_records = sorted(
+            (
+                _politics_source_evidence_record(record)
+                for record in records_by_family[source_family_id]
+            ),
+            key=lambda item: (
+                str(item["record_kind"]),
+                str(item["record_ref"]),
+                str(item.get("source_record_id", "")),
+            ),
+        )
+        snapshot_path = source_family_dir / f"{source_family_id}.json"
+        snapshot_payload = {
+            "schema_version": 1,
+            "pack_id": spec.pack_id,
+            "source_family_id": source_family_id,
+            "source_name": source_family["source_name"],
+            "source_tier": source_family["source_tier"],
+            "source_url": source_family["source_url"],
+            "source_additional_urls": source_family.get("additional_urls", []),
+            "source_version": source_family["source_version"],
+            "source_definition": source_family["source_definition"],
+            "license_class": source_family["license_class"],
+            "license": source_family["license"],
+            "adapter": _POLITICS_SOURCE_EVIDENCE_ADAPTER,
+            "adapter_version": "1",
+            "record_count": len(evidence_records),
+            "records": evidence_records,
+        }
+        snapshot_path.write_text(
+            json.dumps(snapshot_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        source_entries.append(
+            build_bundle_source_entry(
+                name=str(source_family["source_name"]),
+                snapshot_path=snapshot_path,
+                record_count=len(evidence_records),
+                adapter=_POLITICS_SOURCE_EVIDENCE_ADAPTER,
+                license_class=str(source_family["license_class"]),
+                license_name=str(source_family["license"]),
+                adapter_version="1",
+                version=str(source_family["source_version"]),
+                source_tier=str(source_family["source_tier"]),
+                source_url=str(source_family["source_url"]),
+                extra_notes=f"source_family_id={source_family_id}",
+            )
+        )
+    return source_entries
+
+
+def _politics_source_evidence_record(record: dict[str, object]) -> dict[str, object]:
+    record_kind = "rule" if "pattern" in record else "entity"
+    record_ref = str(
+        record.get("entity_id")
+        or record.get("name")
+        or record.get("canonical_text")
+        or record.get("source_record_id")
+    )
+    payload: dict[str, object] = {
+        "record_kind": record_kind,
+        "record_ref": record_ref,
+    }
+    if record_kind == "entity":
+        payload["canonical_text"] = str(record.get("canonical_text") or record_ref)
+        payload["aliases"] = [str(item) for item in record.get("aliases", [])]
+        if record.get("blocked_aliases"):
+            payload["blocked_aliases"] = [
+                str(item) for item in record.get("blocked_aliases", [])
+            ]
+    else:
+        payload["rule_name"] = str(record.get("name") or record_ref)
+        payload["pattern"] = str(record.get("pattern") or "")
+
+    for key in _POLITICS_SOURCE_EVIDENCE_KEYS:
+        if record.get(key) is not None:
+            payload[key] = record[key]
+
+    fingerprint_payload = dict(payload)
+    payload["normalized_record_sha256"] = sha256(
+        json.dumps(
+            fingerprint_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    return payload
 
 
 BDYA_GENERAL_OVERLAY_ENTITIES: tuple[dict[str, object], ...] = (
@@ -1520,7 +3012,7 @@ class DomainPackSpec:
     domain: str
     description: str
     entities: tuple[dict[str, object], ...]
-    rules: tuple[dict[str, str], ...]
+    rules: tuple[dict[str, object], ...]
 
 
 @dataclass(frozen=True)
@@ -1535,7 +3027,7 @@ class DomainSourceBundleResult:
     rule_record_count: int
 
 
-def _rule(name: str, label: str, pattern: str) -> dict[str, str]:
+def _rule(name: str, label: str, pattern: str) -> dict[str, object]:
     return {"name": name, "label": label, "kind": "regex", "pattern": pattern}
 
 
@@ -1543,76 +3035,775 @@ BDYA_DOMAIN_PACK_SPECS: tuple[DomainPackSpec, ...] = (
     DomainPackSpec(
         pack_id="business-vector-en",
         domain="business",
-        description="Curated BDYA business concept/entity pack for market news routing.",
+        description="Source-backed BDYA business concept/entity pack for market news routing.",
         entities=(
-            _entity("business_concept", "Merger and acquisition", aliases=("M&A", "takeover bid", "acquisition offer"), entity_id="ades:business:concept:m-and-a"),
-            _entity("business_concept", "Bankruptcy", aliases=("chapter 11", "insolvency filing", "debt restructuring"), entity_id="ades:business:concept:bankruptcy"),
-            _entity("business_concept", "Restructuring", aliases=("corporate restructuring", "debt workout"), entity_id="ades:business:concept:restructuring"),
-            _entity("business_concept", "Earnings guidance", aliases=("guidance cut", "guidance raise", "profit warning"), entity_id="ades:business:concept:earnings-guidance"),
-            _entity("business_concept", "Product launch", aliases=("new product launch", "product rollout"), entity_id="ades:business:concept:product-launch"),
-            _entity("business_concept", "Product recall", aliases=("recall", "product recall"), entity_id="ades:business:concept:product-recall"),
-            _entity("business_concept", "Share buyback", aliases=("stock buyback", "repurchase program"), entity_id="ades:business:concept:buyback"),
-            _entity("business_concept", "Business regulation", aliases=("regulatory approval", "regulatory restriction"), entity_id="ades:business:concept:regulation"),
-            _entity("business_concept", "Antitrust investigation", aliases=("competition probe", "antitrust probe"), entity_id="ades:business:concept:antitrust"),
-            _entity("business_concept", "Supply-chain disruption", aliases=("supply chain disruption", "supply disruption"), entity_id="ades:business:concept:supply-chain-disruption"),
-            _entity("business_concept", "Labor strike", aliases=("strike action", "walkout", "labor disruption"), entity_id="ades:business:concept:labor-strike"),
-            _entity("business_concept", "Capital expenditure", aliases=("capex", "investment spending"), entity_id="ades:business:concept:capex"),
+            _business_entity(
+                "Merger and acquisition",
+                aliases=("merger", "acquisition", "takeover bid", "acquisition offer", "asset sale"),
+                entity_id="ades:business:concept:m-and-a",
+                source_family_id="sec-form-8k",
+                source_record_id="form-8-k:item-2.01",
+                source_record_type="form_item",
+                source_field_path="items[2.01].caption",
+                source_span="Item 2.01 Completion of Acquisition or Disposition of Assets",
+                source_term="acquisition or disposition of assets",
+                source_definition="Issuer event class for completed acquisitions, disposals, takeovers, or asset sales.",
+                blocked_aliases=("M&A",),
+                quality_reasons=("standalone_m_and_a_shortform_blocked",),
+            ),
+            _business_entity(
+                "Bankruptcy",
+                aliases=("chapter 11", "bankruptcy filing", "insolvency filing"),
+                entity_id="ades:business:concept:bankruptcy",
+                source_family_id="sec-form-8k",
+                source_record_id="form-8-k:item-1.03",
+                source_record_type="form_item",
+                source_field_path="items[1.03].caption",
+                source_span="Item 1.03 Bankruptcy or Receivership",
+                source_term="bankruptcy or receivership",
+                source_definition="Issuer bankruptcy, receivership, or insolvency disclosure event.",
+            ),
+            _business_entity(
+                "Restructuring",
+                aliases=("corporate restructuring", "restructuring plan", "exit or disposal activities"),
+                entity_id="ades:business:concept:restructuring",
+                source_family_id="investor-sec-8k-bulletin",
+                source_record_id="investor-bulletin:form-8-k:item-2.05",
+                source_record_type="investor_bulletin_item",
+                source_field_path="form_8k.items[2.05]",
+                source_span="Item 2.05 requires companies to disclose costs associated with exit or disposal activities, including restructuring plans.",
+                source_term="restructuring plan",
+                source_definition="Issuer restructuring or exit/disposal activity disclosure event.",
+            ),
+            _business_entity(
+                "Earnings guidance",
+                aliases=("guidance cut", "guidance raise", "profit warning", "earnings outlook"),
+                entity_id="ades:business:concept:earnings-guidance",
+                source_family_id="sec-form-8k",
+                source_record_id="form-8-k:item-2.02",
+                source_record_type="form_item",
+                source_field_path="items[2.02].caption",
+                source_span="Item 2.02 Results of Operations and Financial Condition",
+                source_term="results of operations and financial condition",
+                source_definition="Issuer results, outlook, or guidance disclosure event.",
+            ),
+            _business_shadow_entity(
+                "Product launch",
+                aliases=("new product launch", "product rollout"),
+                entity_id="ades:business:concept:product-launch",
+                reason="product_launch_lacks_stable_eligible_event_taxonomy",
+            ),
+            _business_entity(
+                "Product recall",
+                aliases=("product recall", "safety recall", "FDA recall", "vehicle recall"),
+                entity_id="ades:business:concept:product-recall",
+                source_family_id="us-product-recall-regulators",
+                source_record_id="us-recall-regulators:public-recall-pages",
+                source_record_type="regulator_recall_index",
+                source_field_path="recalls.topic_pages",
+                source_span="Public recall pages for CPSC consumer products, FDA regulated products, and NHTSA vehicle/equipment recalls.",
+                source_term="recall",
+                source_definition="Regulator-disclosed product, food/drug, vehicle, or equipment recall event.",
+                blocked_aliases=("recall",),
+                quality_reasons=("generic_recall_alias_blocked",),
+            ),
+            _business_entity(
+                "Share buyback",
+                aliases=("stock buyback", "share repurchase", "repurchase program"),
+                entity_id="ades:business:concept:buyback",
+                source_family_id="sec-share-repurchase",
+                source_record_id="sec:share-repurchase-disclosure",
+                source_record_type="sec_guidance",
+                source_field_path="issuer_repurchase_disclosure",
+                source_span="Issuer share repurchase disclosure requirements for companies conducting buybacks.",
+                source_term="share repurchase",
+                source_definition="Issuer share repurchase, stock buyback, or repurchase program disclosure event.",
+            ),
+            _business_shadow_entity(
+                "Business regulation",
+                aliases=("regulatory approval", "regulatory restriction"),
+                entity_id="ades:business:concept:regulation",
+                reason="business_regulation_is_too_broad_without_split_source_evidence",
+            ),
+            _business_entity(
+                "Antitrust investigation",
+                aliases=("competition probe", "antitrust probe", "merger review"),
+                entity_id="ades:business:concept:antitrust",
+                source_family_id="ftc-merger-review",
+                source_record_id="ftc:competition-enforcement:merger-review",
+                source_record_type="regulator_topic",
+                source_field_path="competition_enforcement.merger_review",
+                source_span="FTC merger review and competition enforcement topics for scrutinizing mergers and acquisitions.",
+                source_term="merger review",
+                source_definition="Regulator competition review, antitrust probe, or merger scrutiny event.",
+            ),
+            _business_shadow_entity(
+                "Supply-chain disruption",
+                aliases=("supply chain disruption", "supply disruption"),
+                entity_id="ades:business:concept:supply-chain-disruption",
+                reason="supply_chain_disruption_needs_licensed_or_official_operational_source",
+            ),
+            _business_entity(
+                "Labor strike",
+                aliases=("labor strike", "strike action", "work stoppage", "labor disruption"),
+                entity_id="ades:business:concept:labor-strike",
+                source_family_id="bls-work-stoppages",
+                source_record_id="bls:wsp:concepts",
+                source_record_type="government_statistical_program",
+                source_field_path="work_stoppages.concepts",
+                source_span="BLS work stoppages data cover major strikes and lockouts.",
+                source_term="work stoppage",
+                source_definition="Strike, lockout, or labor stoppage event affecting company operations.",
+                blocked_aliases=("walkout",),
+                quality_reasons=("informal_walkout_alias_blocked",),
+            ),
+            _business_entity(
+                "Capital expenditure",
+                aliases=("capital expenditures", "capex", "capital spending", "capital investment"),
+                entity_id="ades:business:concept:capex",
+                source_family_id="govinfo-reg-sk-303",
+                source_record_id="17-cfr-229.303:b1iiA",
+                source_record_type="regulation_item",
+                source_field_path="item_303.capital_resources",
+                source_span="Describe material cash requirements, including commitments for capital expenditures.",
+                source_term="capital expenditures",
+                source_definition="Issuer capital expenditure, capital resources, or capital spending disclosure concept.",
+            ),
         ),
         rules=(
-            _rule("earnings_guidance_phrase", "business_concept", r"\b(?:guidance|profit outlook|earnings outlook)\b.{0,80}\b(?:cut|raise|raised|lowered|miss|beat|warning)\b"),
-            _rule("mna_phrase", "business_concept", r"\b(?:merger|acquisition|takeover|divestiture|asset sale)\b"),
-            _rule("bankruptcy_phrase", "business_concept", r"\b(?:bankruptcy|insolvency|chapter 11|debt restructuring)\b"),
+            _business_rule(
+                "earnings_guidance_phrase",
+                r"\b(?:guidance|profit outlook|earnings outlook)\b.{0,80}\b(?:cut|raise|raised|lowered|miss|beat|warning)\b",
+                source_family_id="sec-form-8k",
+                source_record_id="form-8-k:item-2.02",
+                source_record_type="form_item",
+                source_field_path="items[2.02].caption",
+                source_span="Item 2.02 Results of Operations and Financial Condition",
+                source_term="results of operations and financial condition",
+                source_definition="Source-backed earnings outlook and guidance phrase rule.",
+            ),
+            _business_rule(
+                "acquisition_disposition_phrase",
+                r"\b(?:merger|acquisition|takeover|disposition of assets|asset sale)\b",
+                source_family_id="sec-form-8k",
+                source_record_id="form-8-k:item-2.01",
+                source_record_type="form_item",
+                source_field_path="items[2.01].caption",
+                source_span="Item 2.01 Completion of Acquisition or Disposition of Assets",
+                source_term="acquisition or disposition of assets",
+                source_definition="Source-backed acquisition, merger, takeover, and asset-sale phrase rule.",
+                quality_reasons=("standalone_m_and_a_shortform_excluded",),
+            ),
+            _business_rule(
+                "bankruptcy_phrase",
+                r"\b(?:bankruptcy|receivership|insolvency|chapter 11)\b",
+                source_family_id="sec-form-8k",
+                source_record_id="form-8-k:item-1.03",
+                source_record_type="form_item",
+                source_field_path="items[1.03].caption",
+                source_span="Item 1.03 Bankruptcy or Receivership",
+                source_term="bankruptcy or receivership",
+                source_definition="Source-backed bankruptcy or receivership phrase rule.",
+            ),
         ),
     ),
     DomainPackSpec(
         pack_id="economics-vector-en",
         domain="economics",
-        description="Curated BDYA economics concept pack for macro and policy news routing.",
+        description="Source-backed BDYA economics concept pack for macro and policy news routing.",
         entities=(
-            _entity("economics_concept", "Inflation", aliases=("consumer inflation", "price pressures", "inflation shock"), entity_id="ades:economics:concept:inflation"),
-            _entity("economics_concept", "Economic growth", aliases=("growth outlook", "GDP growth"), entity_id="ades:economics:concept:growth"),
-            _entity("economics_concept", "Recession", aliases=("economic contraction", "downturn"), entity_id="ades:economics:concept:recession"),
-            _entity("economics_concept", "Monetary policy", aliases=("rate policy", "policy tightening", "policy easing"), entity_id="ades:economics:concept:monetary-policy"),
-            _entity("economics_concept", "Fiscal policy", aliases=("fiscal stimulus", "fiscal tightening", "budget plan"), entity_id="ades:economics:concept:fiscal-policy"),
-            _entity("economics_concept", "Tariffs", aliases=("import tariff", "trade tariff", "tariff hike"), entity_id="ades:economics:concept:tariffs"),
-            _entity("economics_concept", "Trade deficit", aliases=("trade surplus", "current account gap"), entity_id="ades:economics:concept:trade-balance"),
-            _entity("economics_concept", "Labor market", aliases=("jobs report", "wage growth", "unemployment rate"), entity_id="ades:economics:concept:labor-market"),
-            _entity("economics_concept", "Wages", aliases=("wage inflation", "pay growth"), entity_id="ades:economics:concept:wages"),
-            _entity("economics_concept", "Housing market", aliases=("home prices", "housing starts", "mortgage rates"), entity_id="ades:economics:concept:housing"),
-            _entity("economics_concept", "Industrial output", aliases=("factory output", "industrial production"), entity_id="ades:economics:concept:industrial-output"),
-            _entity("economics_concept", "Supply chain", aliases=("supply-chain bottleneck", "logistics bottleneck"), entity_id="ades:economics:concept:supply-chain"),
-            _entity("economics_concept", "Imports and exports", aliases=("import growth", "export decline", "trade flows"), entity_id="ades:economics:concept:imports-exports"),
+            _economics_entity(
+                "Inflation",
+                aliases=("consumer inflation", "inflation rate"),
+                entity_id="ades:economics:concept:inflation",
+                source_family_id="bls-price-labor-glossaries",
+                source_record_id="bls:price-programs:cpi-ppi",
+                source_record_type="statistical_program",
+                source_field_path="price_programs.cpi_ppi",
+                source_span="BLS price programs include Consumer Price Index and Producer Price Index measures.",
+                source_term="CPI and PPI",
+                source_definition="Consumer and producer price index terminology used as inflation indicators.",
+                blocked_aliases=("price pressures",),
+                indicator_code="CPI,PPI",
+                dataset_id="BLS-CPI-PPI",
+                release_id="bls-price-programs",
+                release_calendar_url="https://www.bls.gov/schedule/news_release/",
+                quality_reasons=("weak_price_pressures_alias_blocked",),
+            ),
+            _economics_entity(
+                "Economic growth",
+                aliases=("GDP growth", "gross domestic product", "real GDP"),
+                entity_id="ades:economics:concept:growth",
+                source_family_id="bea-national-accounts-glossary",
+                source_record_id="bea:glossary:gross-domestic-product",
+                source_record_type="glossary_entry",
+                source_field_path="glossary.gross_domestic_product",
+                source_span="BEA glossary entries describe gross domestic product and GDP price-index measures.",
+                source_term="gross domestic product",
+                source_definition="GDP and real GDP terminology used for economic output and growth routing.",
+                blocked_aliases=("growth outlook",),
+                indicator_code="GDP",
+                dataset_id="BEA-NIPA",
+                release_id="gross-domestic-product",
+                release_calendar_url="https://www.bea.gov/news/schedule",
+                quality_reasons=("weak_growth_outlook_alias_blocked",),
+            ),
+            _economics_shadow_entity(
+                "Recession",
+                aliases=("economic contraction", "downturn"),
+                entity_id="ades:economics:concept:recession",
+                reason="recession_seed_needs_official_business_cycle_or_indicator_split",
+            ),
+            _economics_entity(
+                "Monetary policy",
+                aliases=("monetary policy", "policy tightening", "policy easing", "federal funds rate"),
+                entity_id="ades:economics:concept:monetary-policy",
+                source_family_id="federal-reserve-policy-statistics",
+                source_record_id="fed:monetary-policy:goals-actions",
+                source_record_type="official_policy_page",
+                source_field_path="monetary_policy.goals_and_actions",
+                source_span="Federal Reserve monetary policy promotes maximum employment, stable prices, and moderate long-term interest rates.",
+                source_term="monetary policy",
+                source_definition="Central-bank policy action and communication terminology.",
+                blocked_aliases=("rate policy",),
+                release_id="federal-reserve-monetary-policy",
+                quality_reasons=("generic_rate_policy_alias_blocked",),
+            ),
+            _economics_entity(
+                "Fiscal policy",
+                aliases=("fiscal policy", "fiscal consolidation", "fiscal tightening", "budget deficit"),
+                entity_id="ades:economics:concept:fiscal-policy",
+                source_family_id="imf-bop-fiscal-glossary",
+                source_record_id="imf:fiscal-adjustment:fiscal-contraction",
+                source_record_type="official_explainer",
+                source_field_path="fiscal_adjustment.fiscal_contraction",
+                source_span="IMF fiscal-adjustment materials discuss fiscal contraction, surplus, and budget balance.",
+                source_term="fiscal policy",
+                source_definition="Government budget, deficit, consolidation, and demand-management policy terminology.",
+                blocked_aliases=("budget plan",),
+                jurisdiction="multi_jurisdiction",
+                country_or_area=None,
+                market="fiscal_policy",
+                quality_reasons=("generic_budget_plan_alias_blocked",),
+            ),
+            _economics_entity(
+                "Tariffs",
+                aliases=("tariff", "tariffs", "import tariff", "customs duties", "import duties", "tariff hike"),
+                entity_id="ades:economics:concept:tariffs",
+                source_family_id="wto-tariff-trade-glossary",
+                source_record_id="wto:tariffs:customs-duties",
+                source_record_type="official_glossary_page",
+                source_field_path="tariffs.customs_duties",
+                source_span="WTO defines tariffs as customs duties on merchandise imports.",
+                source_term="tariffs",
+                source_definition="Tariff and customs-duty terminology for trade-policy routing.",
+                jurisdiction="multi_jurisdiction",
+                country_or_area=None,
+                market="trade_policy",
+            ),
+            _economics_entity(
+                "Trade deficit",
+                aliases=("trade deficit", "trade surplus", "trade balance"),
+                entity_id="ades:economics:concept:trade-balance",
+                source_family_id="imf-bop-fiscal-glossary",
+                source_record_id="imf:current-account-deficits:trade-balance",
+                source_record_type="official_explainer",
+                source_field_path="current_account.trade_balance",
+                source_span="IMF explains trade balance as exports of goods and services minus imports.",
+                source_term="trade balance",
+                source_definition="Trade deficit, trade surplus, and trade balance terminology.",
+                blocked_aliases=("current account gap",),
+                jurisdiction="multi_jurisdiction",
+                country_or_area=None,
+                market="external_balance",
+                quality_reasons=("informal_current_account_gap_alias_blocked",),
+            ),
+            _economics_entity(
+                "Labor market",
+                aliases=("labor market", "unemployment rate", "nonfarm payrolls", "payroll employment"),
+                entity_id="ades:economics:concept:labor-market",
+                source_family_id="bls-price-labor-glossaries",
+                source_record_id="bls:ces-cps:employment-unemployment",
+                source_record_type="statistical_program",
+                source_field_path="labor_programs.ces_cps",
+                source_span="BLS CES estimates employment, hours, and earnings; CPS definitions cover unemployment concepts.",
+                source_term="employment and unemployment",
+                source_definition="Employment, unemployment, payroll, and labor-market indicator terminology.",
+                blocked_aliases=("jobs report",),
+                indicator_code="CES,CPS",
+                dataset_id="BLS-CES-CPS",
+                release_id="employment-situation",
+                release_calendar_url="https://www.bls.gov/schedule/news_release/empsit.htm",
+                quality_reasons=("generic_jobs_report_alias_blocked",),
+            ),
+            _economics_entity(
+                "Wages",
+                aliases=("wages", "wage growth", "pay growth", "average hourly earnings"),
+                entity_id="ades:economics:concept:wages",
+                source_family_id="bls-price-labor-glossaries",
+                source_record_id="bls:ces:national-earnings",
+                source_record_type="statistical_program",
+                source_field_path="ces.national_estimates.hours_and_earnings",
+                source_span="BLS CES produces estimates of employment, hours, and earnings of workers on payrolls.",
+                source_term="earnings",
+                source_definition="Wage, pay-growth, and earnings terminology for labor-cost routing.",
+                indicator_code="AHE",
+                dataset_id="BLS-CES",
+                release_id="employment-situation",
+                release_calendar_url="https://www.bls.gov/schedule/news_release/empsit.htm",
+            ),
+            _economics_entity(
+                "Housing market",
+                aliases=("housing starts", "new residential construction", "new home sales"),
+                entity_id="ades:economics:concept:housing",
+                source_family_id="census-economic-indicators",
+                source_record_id="census:economic-indicators:new-residential-construction",
+                source_record_type="statistical_program",
+                source_field_path="economic_indicators.new_residential_construction",
+                source_span="Census economic indicators include New Residential Construction and New Residential Sales.",
+                source_term="new residential construction",
+                source_definition="Housing starts, construction, and new-home-sales indicator terminology.",
+                blocked_aliases=("home prices", "mortgage rates"),
+                indicator_code="RESCONST,NRS",
+                dataset_id="CENSUS-HOUSING",
+                release_id="new-residential-construction",
+                release_calendar_url="https://www.census.gov/economic-indicators/",
+                quality_reasons=("home_prices_and_mortgage_rates_blocked_until_source_split",),
+            ),
+            _economics_entity(
+                "Industrial output",
+                aliases=("industrial output", "factory output", "industrial production", "capacity utilization"),
+                entity_id="ades:economics:concept:industrial-output",
+                source_family_id="federal-reserve-policy-statistics",
+                source_record_id="fed:g17:industrial-production-capacity-utilization",
+                source_record_type="statistical_release",
+                source_field_path="g17.industrial_production_capacity_utilization",
+                source_span="Federal Reserve G.17 publishes Industrial Production and Capacity Utilization statistics.",
+                source_term="industrial production",
+                source_definition="Industrial production, factory output, and capacity utilization terminology.",
+                indicator_code="G17",
+                dataset_id="FED-G17",
+                release_id="industrial-production-capacity-utilization",
+                release_calendar_url="https://www.federalreserve.gov/feeds/datadownload.html",
+            ),
+            _economics_shadow_entity(
+                "Supply chain",
+                aliases=("supply-chain bottleneck", "logistics bottleneck"),
+                entity_id="ades:economics:concept:supply-chain",
+                reason="supply_chain_seed_needs_official_or_licensed_operational_indicator_split",
+            ),
+            _economics_entity(
+                "Imports and exports",
+                aliases=("imports", "exports", "import growth", "export decline"),
+                entity_id="ades:economics:concept:imports-exports",
+                source_family_id="census-economic-indicators",
+                source_record_id="census:foreign-trade:data-definitions",
+                source_record_type="statistical_program",
+                source_field_path="foreign_trade.imports_exports",
+                source_span="Census foreign-trade pages provide international trade data, definitions, and time series.",
+                source_term="imports and exports",
+                source_definition="Import, export, and international trade-flow indicator terminology.",
+                blocked_aliases=("trade flows",),
+                indicator_code="FTD",
+                dataset_id="CENSUS-FOREIGN-TRADE",
+                release_id="international-trade",
+                release_calendar_url="https://www.census.gov/foreign-trade/data/",
+                market="external_balance",
+                quality_reasons=("generic_trade_flows_alias_blocked",),
+            ),
         ),
         rules=(
-            _rule("central_bank_policy_phrase", "economics_concept", r"\b(?:central bank|monetary authority|policy makers?)\b.{0,100}\b(?:rate|inflation|tighten|ease|hawkish|dovish)\b"),
-            _rule("tariff_trade_phrase", "economics_concept", r"\b(?:tariff|tariffs|import duties|trade restrictions?|export controls?)\b"),
-            _rule("macro_indicator_phrase", "economics_concept", r"\b(?:CPI|PPI|GDP|PMI|payrolls?|unemployment|trade balance|budget deficit)\b"),
+            _economics_rule(
+                "central_bank_policy_phrase",
+                r"\b(?:central bank|monetary authority|Federal Reserve|FOMC)\b.{0,100}\b(?:rate|inflation|tighten|ease|federal funds|stable prices)\b",
+                source_family_id="federal-reserve-policy-statistics",
+                source_record_id="fed:monetary-policy:goals-actions",
+                source_record_type="official_policy_page",
+                source_field_path="monetary_policy.goals_and_actions",
+                source_span="Federal Reserve monetary policy promotes maximum employment, stable prices, and moderate long-term interest rates.",
+                source_term="monetary policy",
+                source_definition="Source-backed central-bank monetary-policy phrase rule excluding hawkish/dovish language.",
+                release_id="federal-reserve-monetary-policy",
+                quality_reasons=("hawkish_dovish_and_policy_makers_subterms_excluded",),
+            ),
+            _economics_rule(
+                "tariff_trade_phrase",
+                r"\b(?:tariff|tariffs|customs duties|import duties|trade restrictions?)\b",
+                source_family_id="wto-tariff-trade-glossary",
+                source_record_id="wto:tariffs:customs-duties",
+                source_record_type="official_glossary_page",
+                source_field_path="tariffs.customs_duties",
+                source_span="WTO defines tariffs as customs duties on merchandise imports.",
+                source_term="tariffs",
+                source_definition="Source-backed tariff and import-duty phrase rule excluding export controls.",
+                jurisdiction="multi_jurisdiction",
+                market="trade_policy",
+                quality_reasons=("export_controls_excluded_from_economics_trade_rule",),
+            ),
+            _economics_rule(
+                "price_labor_indicator_phrase",
+                r"\b(?:CPI|PPI|payrolls?|unemployment rate|average hourly earnings|wage growth)\b",
+                source_family_id="bls-price-labor-glossaries",
+                source_record_id="bls:price-labor:indicator-terms",
+                source_record_type="statistical_program",
+                source_field_path="price_and_labor_programs.indicators",
+                source_span="BLS publishes price, employment, unemployment, pay, and benefits data.",
+                source_term="price and labor indicators",
+                source_definition="Source-backed CPI, PPI, payroll, unemployment, and wage phrase rule.",
+                indicator_code="CPI,PPI,CES,CPS",
+                dataset_id="BLS-PRICE-LABOR",
+            ),
+            _economics_rule(
+                "national_accounts_growth_phrase",
+                r"\b(?:GDP|gross domestic product|real GDP|PCE price index|core PCE)\b",
+                source_family_id="bea-national-accounts-glossary",
+                source_record_id="bea:national-accounts:gdp-pce-price-index",
+                source_record_type="official_data_page",
+                source_field_path="national_accounts.gdp_pce_price_indexes",
+                source_span="BEA GDP and PCE price-index pages define national-account output and price measures.",
+                source_term="GDP and PCE price index",
+                source_definition="Source-backed national accounts and price-index phrase rule.",
+                indicator_code="GDP,PCEPI",
+                dataset_id="BEA-NIPA",
+            ),
+            _economics_rule(
+                "external_balance_phrase",
+                r"\b(?:trade balance|trade deficit|trade surplus|current-account|current account|imports|exports)\b",
+                source_family_id="imf-bop-fiscal-glossary",
+                source_record_id="imf:bop:current-account-trade-balance",
+                source_record_type="official_glossary_page",
+                source_field_path="bop.current_account.trade_balance",
+                source_span="IMF glossary divides BOP into current account and capital and financial account.",
+                source_term="current account",
+                source_definition="Source-backed current-account and trade-balance phrase rule.",
+                jurisdiction="multi_jurisdiction",
+                market="external_balance",
+            ),
+            _economics_rule(
+                "treasury_auction_phrase",
+                r"\b(?:bond auction|treasury auction|Treasury auction|government bond auction)\b",
+                source_family_id="treasurydirect-auctions",
+                source_record_id="treasurydirect:announcements-data-results",
+                source_record_type="government_data_page",
+                source_field_path="auctions.announcements_data_results",
+                source_span="Treasury sells bills, notes, bonds, FRNs, and TIPS at regularly scheduled auctions.",
+                source_term="Treasury auctions",
+                source_definition="Source-backed government securities auction phrase rule.",
+                release_id="treasury-auctions",
+                market="sovereign_rates",
+            ),
+            _economics_rule(
+                "yield_curve_phrase",
+                r"\b(?:yield curve|yield-curve inversion|yield-curve steepening|10-year minus 2-year)\b",
+                source_family_id="fred-yield-curve",
+                source_record_id="fred:T10Y2Y",
+                source_record_type="series_metadata",
+                source_field_path="series.T10Y2Y.notes",
+                source_span="FRED T10Y2Y is the spread between 10-Year and 2-Year Treasury Constant Maturity rates.",
+                source_term="yield curve spread",
+                source_definition="Source-backed Treasury yield-curve spread phrase rule.",
+                indicator_code="T10Y2Y",
+                dataset_id="FRED",
+                market="sovereign_rates",
+            ),
+            _economics_rule(
+                "sovereign_debt_phrase",
+                r"\b(?:sovereign debt|public debt|government debt|national debt|federal debt)\b",
+                source_family_id="treasury-fiscaldata",
+                source_record_id="treasury:fiscaldata:debt-to-the-penny",
+                source_record_type="government_dataset",
+                source_field_path="datasets.debt_to_the_penny",
+                source_span="Debt to the Penny provides total outstanding public debt reported each day.",
+                source_term="public debt",
+                source_definition="Source-backed sovereign, public, government, national, and federal debt phrase rule.",
+                dataset_id="TREASURY-DEBT-TO-THE-PENNY",
+                release_id="debt-to-the-penny",
+                market="fiscal_policy",
+            ),
+            _economics_rule(
+                "money_reserves_phrase",
+                r"\b(?:money supply|money stock|M2 money supply|M2|reserve requirement|reserve requirements|required reserves|reserve ratio)\b",
+                source_family_id="federal-reserve-policy-statistics",
+                source_record_id="fed:h6-reserve-requirements",
+                source_record_type="statistical_release",
+                source_field_path="h6_and_reserve_requirements.money_stock_reserves",
+                source_span="Federal Reserve H.6 provides M1 and M2 monetary aggregates and reserve-balance terms.",
+                source_term="money stock and reserve requirements",
+                source_definition="Source-backed money stock and reserve-requirement phrase rule.",
+                indicator_code="H6,M2",
+                dataset_id="FED-H6",
+                market="monetary_policy",
+            ),
         ),
     ),
     DomainPackSpec(
         pack_id="politics-vector-en",
         domain="politics",
-        description="Curated BDYA politics concept/entity pack for policy, sanctions, and geopolitical news routing.",
+        description="Source-backed BDYA politics concept/entity pack for policy, sanctions, and geopolitical news routing.",
         entities=(
-            _entity("politics_concept", "Sanctions regime", aliases=("economic sanctions", "sanctions package", "sanctions list"), entity_id="ades:politics:concept:sanctions-regime"),
-            _entity("politics_concept", "Government", aliases=("cabinet", "administration"), entity_id="ades:politics:concept:government"),
-            _entity("politics_concept", "Ministry", aliases=("government ministry", "finance ministry"), entity_id="ades:politics:concept:ministry"),
-            _entity("politics_concept", "Political party", aliases=("ruling party", "opposition party"), entity_id="ades:politics:concept:political-party"),
-            _entity("politics_concept", "Treaty", aliases=("bilateral treaty", "security treaty"), entity_id="ades:politics:concept:treaty"),
-            _entity("politics_concept", "Export controls", aliases=("technology export controls", "export restrictions"), entity_id="ades:politics:concept:export-controls"),
-            _entity("politics_concept", "Disputed region", aliases=("territorial dispute", "breakaway region"), entity_id="ades:politics:concept:disputed-region"),
-            _entity("politics_concept", "Election body", aliases=("electoral commission", "election board"), entity_id="ades:politics:concept:election-body"),
-            _entity("politics_concept", "Ceasefire", aliases=("cease-fire", "truce agreement", "risk relief"), entity_id="ades:politics:concept:ceasefire"),
-            _entity("politics_concept", "Conflict escalation", aliases=("war escalation", "military escalation", "security crisis"), entity_id="ades:politics:concept:conflict-escalation"),
-            _entity("politics_concept", "Election risk", aliases=("election uncertainty", "snap election", "vote recount"), entity_id="ades:politics:concept:election-risk"),
-            _entity("politics_concept", "Trade bloc", aliases=("customs union", "trade agreement", "free trade agreement"), entity_id="ades:politics:concept:trade-bloc"),
-            _entity("politics_concept", "Geopolitical alliance", aliases=("security alliance", "defense pact"), entity_id="ades:politics:concept:geopolitical-alliance"),
-            _entity("politics_concept", "Regulatory crackdown", aliases=("regulatory probe", "government crackdown"), entity_id="ades:politics:concept:regulatory-crackdown"),
+            _politics_entity(
+                "Sanctions regime",
+                aliases=(
+                    "economic sanctions",
+                    "sanctions package",
+                    "sanctions list",
+                    "OFAC sanctions",
+                    "UN sanctions",
+                    "asset freeze",
+                    "travel ban",
+                ),
+                entity_id="ades:politics:concept:sanctions-regime",
+                source_family_id="ofac-sanctions-list-service",
+                source_record_id="ofac:sls:sanctions-list-service",
+                source_record_type="government_sanctions_list_service",
+                source_field_path="sanctions_list_service.current_lists",
+                source_span="OFAC Sanctions List Service provides current sanctions lists and Specially Designated Nationals records.",
+                source_term="sanctions list",
+                source_definition="Government or intergovernmental sanctions-list and sanctions-program terminology.",
+                jurisdiction="US",
+                country_or_area="US",
+                issuing_authority="U.S. Treasury Office of Foreign Assets Control",
+                measure_type="sanctions",
+                blocked_aliases=("sanction", "blacklist"),
+                context_requirements=("government_or_igo_sanctions_context",),
+                quality_reasons=("singular_sanction_and_blacklist_blocked_as_noisy",),
+            ),
+            _politics_shadow_entity(
+                "Government",
+                aliases=("cabinet", "administration"),
+                entity_id="ades:politics:concept:government",
+                reason="government_seed_needs_split_between_office_body_cabinet_and_administration_records",
+            ),
+            _politics_entity(
+                "Ministry",
+                aliases=("government ministry", "finance ministry", "ministry of finance"),
+                entity_id="ades:politics:concept:ministry",
+                source_family_id="cia-world-leaders",
+                source_record_id="cia:world-leaders:cabinet-members",
+                source_record_type="government_directory",
+                source_field_path="world_leaders.cabinet_members",
+                source_span="CIA World Leaders is an online directory of World Leaders and Cabinet Members of Foreign Governments.",
+                source_term="Cabinet Members of Foreign Governments",
+                source_definition="Official government office and ministry-directory terminology for ministries and cabinet offices.",
+                issuing_authority="Central Intelligence Agency",
+                office_id="world-leaders-cabinet-members",
+                context_requirements=("official_office_or_ministry_context",),
+            ),
+            _politics_entity(
+                "Political party",
+                aliases=("registered political party", "political party register"),
+                entity_id="ades:politics:concept:political-party",
+                source_family_id="uk-electoral-commission-registers",
+                source_record_id="electoral-commission:registered-political-parties",
+                source_record_type="regulator_register",
+                source_field_path="registrations.political_parties",
+                source_span="The Electoral Commission search covers registers of Political Parties, Non-party campaigners, and Referendum Participants.",
+                source_term="Political party",
+                source_definition="Regulator-registered political party terminology without role-descriptor aliases.",
+                jurisdiction="UK",
+                country_or_area="UK",
+                issuing_authority="UK Electoral Commission",
+                body_id="uk-electoral-commission",
+                blocked_aliases=("ruling party", "opposition party"),
+                quality_reasons=("role_descriptor_party_aliases_blocked",),
+            ),
+            _politics_entity(
+                "Treaty",
+                aliases=("bilateral treaty", "security treaty", "registered treaty"),
+                entity_id="ades:politics:concept:treaty",
+                source_family_id="un-treaty-collection",
+                source_record_id="un:treaty-collection:article-102",
+                source_record_type="treaty_registry",
+                source_field_path="treaty_collection.registration_publication",
+                source_span="The United Nations Treaty Collection supports registration and publication of treaties under Article 102.",
+                source_term="treaty",
+                source_definition="UN treaty registration and treaty-status terminology.",
+                issuing_authority="United Nations",
+                treaty_registration_number="article-102",
+                context_requirements=("legal_or_intergovernmental_agreement_context",),
+            ),
+            _politics_entity(
+                "Export controls",
+                aliases=(
+                    "export controls",
+                    "technology export controls",
+                    "export restrictions",
+                    "Entity List",
+                    "end-user restrictions",
+                ),
+                entity_id="ades:politics:concept:export-controls",
+                source_family_id="bis-entity-list-ear",
+                source_record_id="bis:entity-list:end-user-controls",
+                source_record_type="government_export_control_list",
+                source_field_path="entity_list.license_requirements_and_end_user_controls",
+                source_span="BIS Entity List guidance covers license requirements, end-user controls, and export restrictions.",
+                source_term="export controls",
+                source_definition="Government export-control, Entity List, and end-user restriction terminology.",
+                jurisdiction="US",
+                country_or_area="US",
+                issuing_authority="U.S. Bureau of Industry and Security",
+                legal_basis="Export Administration Regulations",
+                measure_type="export_control",
+                context_requirements=("trade_or_export_control_context",),
+            ),
+            _politics_shadow_entity(
+                "Disputed region",
+                aliases=("territorial dispute", "breakaway region"),
+                entity_id="ades:politics:concept:disputed-region",
+                reason="disputed_region_seed_needs_specific_igo_treaty_sanctions_or_official_jurisdiction_records",
+            ),
+            _politics_entity(
+                "Election body",
+                aliases=(
+                    "election commission",
+                    "electoral commission",
+                    "election board",
+                    "election administration",
+                ),
+                entity_id="ades:politics:concept:election-body",
+                source_family_id="eac-election-administration",
+                source_record_id="eac:mission:election-officials-administration",
+                source_record_type="government_commission_page",
+                source_field_path="mission.election_officials_administration",
+                source_span="The EAC helps election officials improve the administration of elections.",
+                source_term="election administration",
+                source_definition="Election-management body and election-administration terminology.",
+                jurisdiction="US",
+                country_or_area="US",
+                issuing_authority="U.S. Election Assistance Commission",
+                body_id="us-election-assistance-commission",
+                context_requirements=("election_management_context",),
+            ),
+            _politics_entity(
+                "Ceasefire",
+                aliases=("cease-fire", "ceasefire agreement", "truce agreement"),
+                entity_id="ades:politics:concept:ceasefire",
+                source_family_id="un-peacemaker-agreements",
+                source_record_id="un-peacemaker:ceasefires-security-arrangements",
+                source_record_type="official_thematic_guidance",
+                source_field_path="thematic_areas.ceasefires_security_arrangements",
+                source_span="UN Peacemaker guidance addresses ceasefires and security arrangements in peacebuilding processes.",
+                source_term="ceasefire",
+                source_definition="Official peace agreement, ceasefire, and truce terminology.",
+                issuing_authority="United Nations",
+                agreement_id="un-peacemaker-ceasefires-security-arrangements",
+                blocked_aliases=("risk relief",),
+                context_requirements=("conflict_or_peace_process_context",),
+                quality_reasons=("risk_relief_alias_blocked_as_market_metaphor",),
+            ),
+            _politics_shadow_entity(
+                "Conflict escalation",
+                aliases=("war escalation", "military escalation", "security crisis"),
+                entity_id="ades:politics:concept:conflict-escalation",
+                reason="conflict_escalation_seed_contains_broad_war_military_and_security_terms_without_official_event_source",
+            ),
+            _politics_entity(
+                "Election risk",
+                aliases=("snap election", "vote recount", "recount"),
+                entity_id="ades:politics:concept:election-risk",
+                source_family_id="eac-election-administration",
+                source_record_id="eac:eavs:election-administration-survey",
+                source_record_type="government_election_survey",
+                source_field_path="eavs.datasets_codebooks_surveys",
+                source_span="EAC research materials include election administration datasets, codebooks, and surveys.",
+                source_term="election administration",
+                source_definition="Election administration and recount/snap-election routing terminology.",
+                jurisdiction="US",
+                country_or_area="US",
+                issuing_authority="U.S. Election Assistance Commission",
+                election_id="eavs",
+                blocked_aliases=("election uncertainty",),
+                context_requirements=("official_election_or_recount_context",),
+                quality_reasons=("election_uncertainty_alias_blocked_as_noisy",),
+            ),
+            _politics_entity(
+                "Trade bloc",
+                aliases=(
+                    "customs union",
+                    "regional trade agreement",
+                    "trade agreement",
+                    "free trade agreement",
+                ),
+                entity_id="ades:politics:concept:trade-bloc",
+                source_family_id="wto-regional-trade-agreements",
+                source_record_id="wto:rta:database",
+                source_record_type="intergovernmental_database",
+                source_field_path="rta_database.agreements_in_force",
+                source_span="The WTO Regional Trade Agreements database tracks RTAs including customs unions and free trade agreements.",
+                source_term="regional trade agreement",
+                source_definition="WTO regional trade agreement, customs union, and free trade agreement terminology.",
+                issuing_authority="World Trade Organization",
+                agreement_id="wto-rta",
+                context_requirements=("government_or_intergovernmental_trade_agreement_context",),
+            ),
+            _politics_entity(
+                "Geopolitical alliance",
+                aliases=("security alliance", "defense pact", "defence pact"),
+                entity_id="ades:politics:concept:geopolitical-alliance",
+                source_family_id="nato-defense-expenditure",
+                source_record_id="nato:alliance:defence-expenditures",
+                source_record_type="intergovernmental_organization_page",
+                source_field_path="nato.alliance_defence_expenditures",
+                source_span="NATO pages describe alliance commitments and defence expenditure data for member countries.",
+                source_term="alliance",
+                source_definition="Recognized security alliance and defence-pact terminology.",
+                issuing_authority="NATO",
+                sector="defense",
+                context_requirements=("recognized_security_organization_context",),
+            ),
+            _politics_shadow_entity(
+                "Regulatory crackdown",
+                aliases=("regulatory probe", "government crackdown"),
+                entity_id="ades:politics:concept:regulatory-crackdown",
+                reason="regulatory_crackdown_seed_overlaps_business_regulator_lane_without_specific_official_action_source",
+            ),
         ),
         rules=(
-            _rule("sanctions_phrase", "politics_concept", r"\b(?:sanction|sanctions|blacklist|asset freeze|travel ban)\b"),
-            _rule("export_control_phrase", "politics_concept", r"\b(?:export control|export controls|export ban|technology restrictions?)\b"),
-            _rule("geopolitical_risk_phrase", "politics_concept", r"\b(?:war|conflict|ceasefire|missile|military|border tensions?|chokepoint)\b"),
+            _politics_rule(
+                "sanctions_phrase",
+                r"\b(?:sanctions|sanctions list|OFAC sanctions|UN sanctions|asset freeze|travel ban)\b",
+                source_family_id="un-security-council-consolidated-list",
+                source_record_id="un-sc:consolidated-list:sanctions-measures",
+                source_record_type="intergovernmental_sanctions_list",
+                source_field_path="consolidated_list.individuals_entities_measures",
+                source_span="The UN Security Council Consolidated List includes individuals and entities subject to sanctions measures.",
+                source_term="sanctions measures",
+                source_definition="Source-backed sanctions phrase rule excluding permission/approval uses of sanction.",
+                issuing_authority="United Nations Security Council",
+                measure_type="sanctions",
+                security_council_resolution="sanctions-committee-measures",
+                quality_reasons=("singular_sanction_and_blacklist_excluded",),
+            ),
+            _politics_rule(
+                "export_control_phrase",
+                r"\b(?:export control|export controls|export ban|technology restrictions?|Entity List|end-user restrictions?)\b",
+                source_family_id="bis-entity-list-ear",
+                source_record_id="bis:entity-list:end-user-controls-rule",
+                source_record_type="government_export_control_list",
+                source_field_path="entity_list.license_requirements_and_end_user_controls",
+                source_span="BIS Entity List guidance covers license requirements, end-user controls, and export restrictions.",
+                source_term="export controls",
+                source_definition="Source-backed export control and restricted-party phrase rule.",
+                jurisdiction="US",
+                country_or_area="US",
+                issuing_authority="U.S. Bureau of Industry and Security",
+                legal_basis="Export Administration Regulations",
+                measure_type="export_control",
+            ),
+            _politics_rule(
+                "geopolitical_risk_phrase",
+                r"\b(?:ceasefire agreement|cease-fire|truce agreement|peace process|security alliance|defen[cs]e pact)\b",
+                source_family_id="un-peacemaker-agreements",
+                source_record_id="un-peacemaker:peace-and-security-terms",
+                source_record_type="official_thematic_guidance",
+                source_field_path="peace_agreements.ceasefires_security_arrangements",
+                source_span="UN Peacemaker materials cover peace agreements, ceasefires, and security arrangements.",
+                source_term="peace and security arrangements",
+                source_definition="Source-backed geopolitical risk phrase rule with standalone war, military, missile, and chokepoint terms excluded.",
+                issuing_authority="United Nations",
+                agreement_id="un-peacemaker-agreements",
+                quality_reasons=("broad_war_military_missile_and_chokepoint_terms_excluded",),
+            ),
         ),
     ),
 )
@@ -1620,74 +3811,890 @@ BDYA_DOMAIN_PACK_SPECS: tuple[DomainPackSpec, ...] = (
 
 BDYA_DOMAIN_PACK_ENTITY_EXTENSIONS: dict[str, tuple[dict[str, object], ...]] = {
     "business-vector-en": (
-        _entity("business_concept", "Initial public offering", aliases=("IPO", "stock-market debut", "share listing"), entity_id="ades:business:concept:ipo"),
-        _entity("business_concept", "Secondary offering", aliases=("follow-on offering", "share sale"), entity_id="ades:business:concept:secondary-offering"),
-        _entity("business_concept", "Dividend policy", aliases=("dividend cut", "dividend increase", "special dividend"), entity_id="ades:business:concept:dividend-policy"),
-        _entity("business_concept", "Credit rating action", aliases=("rating downgrade", "rating upgrade", "credit outlook"), entity_id="ades:business:concept:credit-rating-action"),
-        _entity("business_concept", "Layoffs", aliases=("job cuts", "workforce reduction", "headcount reduction"), entity_id="ades:business:concept:layoffs"),
-        _entity("business_concept", "Factory shutdown", aliases=("plant shutdown", "production halt", "factory closure"), entity_id="ades:business:concept:factory-shutdown"),
-        _entity("business_concept", "Capacity expansion", aliases=("production expansion", "new factory", "capacity increase"), entity_id="ades:business:concept:capacity-expansion"),
-        _entity("business_concept", "Raw material shortage", aliases=("input shortage", "material shortage", "component shortage"), entity_id="ades:business:concept:raw-material-shortage"),
-        _entity("business_concept", "Cybersecurity incident", aliases=("cyber attack", "data breach", "ransomware attack"), entity_id="ades:business:concept:cybersecurity-incident"),
-        _entity("business_concept", "Litigation", aliases=("lawsuit", "legal claim", "court ruling"), entity_id="ades:business:concept:litigation"),
-        _entity("business_concept", "Joint venture", aliases=("strategic partnership", "joint-venture agreement"), entity_id="ades:business:concept:joint-venture"),
-        _entity("business_concept", "Spin-off", aliases=("spinoff", "business separation"), entity_id="ades:business:concept:spin-off"),
-        _entity("business_concept", "Market share", aliases=("market-share gains", "market-share loss"), entity_id="ades:business:concept:market-share"),
-        _entity("business_concept", "Pricing power", aliases=("price increases", "price cuts", "margin pressure"), entity_id="ades:business:concept:pricing-power"),
-        _entity("business_concept", "Inventory build", aliases=("inventory glut", "inventory drawdown"), entity_id="ades:business:concept:inventory"),
+        _business_entity(
+            "Initial public offering",
+            aliases=("initial public offering", "stock-market debut", "share listing"),
+            entity_id="ades:business:concept:ipo",
+            source_family_id="investor-gov-ipo",
+            source_record_id="investor-glossary:initial-public-offering-ipo",
+            source_record_type="investor_glossary_entry",
+            source_field_path="glossary.initial_public_offering",
+            source_span="An initial public offering, or IPO, generally refers to when a company first sells its shares to the public.",
+            source_term="initial public offering",
+            source_definition="Company first-sale public share offering event.",
+            blocked_aliases=("IPO",),
+            quality_reasons=("standalone_ipo_shortform_blocked",),
+        ),
+        _business_entity(
+            "Secondary offering",
+            aliases=("secondary offering", "follow-on offering", "share sale"),
+            entity_id="ades:business:concept:secondary-offering",
+            source_family_id="finra-public-offerings",
+            source_record_id="finra-rule-5110:public-offering-definition",
+            source_record_type="self_regulatory_rule",
+            source_field_path="rule_5110.public_offering",
+            source_span="The term public offering means any primary or secondary offering of securities.",
+            source_term="secondary offering",
+            source_definition="Post-IPO public offering, follow-on offering, or secondary securities offering.",
+        ),
+        _business_entity(
+            "Dividend policy",
+            aliases=("dividend declaration", "dividend cut", "dividend increase", "special dividend"),
+            entity_id="ades:business:concept:dividend-policy",
+            source_family_id="investor-gov-dividend",
+            source_record_id="investor-glossary:dividend",
+            source_record_type="investor_glossary_entry",
+            source_field_path="glossary.dividend",
+            source_span="A dividend is a portion of a company's profit paid to shareholders.",
+            source_term="dividend",
+            source_definition="Issuer dividend declaration, cut, increase, or special dividend event.",
+        ),
+        _business_entity(
+            "Credit rating action",
+            aliases=("credit rating action", "rating downgrade", "rating upgrade", "credit outlook"),
+            entity_id="ades:business:concept:credit-rating-action",
+            source_family_id="sec-nrsro-rating-history",
+            source_record_id="sec:nrsro-rating-history:rating-action",
+            source_record_type="publication_guide_field",
+            source_field_path="rating_history.rating_action",
+            source_span="NRSRO rating history files include ratings, upgrades, downgrades, withdrawals, and other rating actions.",
+            source_term="rating action",
+            source_definition="Credit rating upgrade, downgrade, outlook, withdrawal, or other rating action event.",
+        ),
+        _business_entity(
+            "Layoffs",
+            aliases=("mass layoff", "job cuts", "workforce reduction", "headcount reduction"),
+            entity_id="ades:business:concept:layoffs",
+            source_family_id="dol-warn",
+            source_record_id="dol:warn:mass-layoffs",
+            source_record_type="government_topic",
+            source_field_path="warn.plant_closings_and_mass_layoffs",
+            source_span="WARN protects workers, families, and communities by requiring advance notice of plant closings and mass layoffs.",
+            source_term="mass layoff",
+            source_definition="Company workforce reduction, mass layoff, or job-cut event.",
+        ),
+        _business_entity(
+            "Factory shutdown",
+            aliases=("plant closing", "plant shutdown", "factory closure"),
+            entity_id="ades:business:concept:factory-shutdown",
+            source_family_id="dol-warn",
+            source_record_id="dol:warn:plant-closings",
+            source_record_type="government_topic",
+            source_field_path="warn.plant_closings_and_mass_layoffs",
+            source_span="WARN protects workers, families, and communities by requiring advance notice of plant closings and mass layoffs.",
+            source_term="plant closing",
+            source_definition="Plant, factory, or facility shutdown/closure event.",
+        ),
+        _business_shadow_entity(
+            "Capacity expansion",
+            aliases=("production expansion", "new factory", "capacity increase"),
+            entity_id="ades:business:concept:capacity-expansion",
+            reason="capacity_expansion_needs_issuer_or_industry_source_split",
+        ),
+        _business_shadow_entity(
+            "Raw material shortage",
+            aliases=("input shortage", "material shortage", "component shortage"),
+            entity_id="ades:business:concept:raw-material-shortage",
+            reason="raw_material_shortage_needs_licensed_or_official_operational_source",
+        ),
+        _business_entity(
+            "Cybersecurity incident",
+            aliases=("material cybersecurity incident", "cybersecurity incident", "data breach", "ransomware attack"),
+            entity_id="ades:business:concept:cybersecurity-incident",
+            source_family_id="sec-form-8k",
+            source_record_id="form-8-k:item-1.05",
+            source_record_type="form_item",
+            source_field_path="items[1.05].caption",
+            source_span="Item 1.05 Material Cybersecurity Incidents",
+            source_term="material cybersecurity incident",
+            source_definition="Issuer-disclosed material cybersecurity incident or data breach event.",
+        ),
+        _business_entity(
+            "Litigation",
+            aliases=("legal proceeding", "material litigation", "legal claim"),
+            entity_id="ades:business:concept:litigation",
+            source_family_id="govinfo-reg-sk-103",
+            source_record_id="17-cfr-229.103:legal-proceedings",
+            source_record_type="regulation_item",
+            source_field_path="item_103.legal_proceedings",
+            source_span="Describe briefly any material pending legal proceedings, other than ordinary routine litigation incidental to the business.",
+            source_term="legal proceedings",
+            source_definition="Material legal proceeding, litigation, or legal claim disclosure event.",
+            blocked_aliases=("lawsuit", "court ruling"),
+            quality_reasons=("generic_lawsuit_and_court_ruling_aliases_blocked",),
+        ),
+        _business_entity(
+            "Joint venture",
+            aliases=("joint venture", "joint-venture agreement", "material partnership agreement"),
+            entity_id="ades:business:concept:joint-venture",
+            source_family_id="sec-form-8k",
+            source_record_id="form-8-k:item-1.01",
+            source_record_type="form_item",
+            source_field_path="items[1.01].caption",
+            source_span="Item 1.01 Entry into a Material Definitive Agreement",
+            source_term="material definitive agreement",
+            source_definition="Material joint venture, partnership, or definitive agreement event.",
+            blocked_aliases=("strategic partnership",),
+            quality_reasons=("generic_strategic_partnership_alias_blocked",),
+        ),
+        _business_entity(
+            "Spin-off",
+            aliases=("spin-off", "spinoff", "business separation"),
+            entity_id="ades:business:concept:spin-off",
+            source_family_id="investor-gov-spin-offs",
+            source_record_id="investor-glossary:spin-offs",
+            source_record_type="investor_glossary_entry",
+            source_field_path="glossary.spin_offs",
+            source_span="When registration is required, the spin-off company must file a registration statement with the SEC.",
+            source_term="spin-off",
+            source_definition="Company spin-off, spinoff, or business separation event.",
+        ),
+        _business_shadow_entity(
+            "Market share",
+            aliases=("market-share gains", "market-share loss"),
+            entity_id="ades:business:concept:market-share",
+            reason="market_share_needs_industry_dataset_or_issuer_context",
+        ),
+        _business_shadow_entity(
+            "Pricing power",
+            aliases=("price increases", "price cuts", "margin pressure"),
+            entity_id="ades:business:concept:pricing-power",
+            reason="pricing_power_aliases_are_noisy_without_source_split_and_context",
+        ),
+        _business_shadow_entity(
+            "Inventory build",
+            aliases=("inventory glut", "inventory drawdown"),
+            entity_id="ades:business:concept:inventory",
+            reason="inventory_build_needs_operational_or_filing_source_split",
+        ),
     ),
     "economics-vector-en": (
-        _entity("economics_concept", "Core inflation", aliases=("core CPI", "underlying inflation"), entity_id="ades:economics:concept:core-inflation"),
-        _entity("economics_concept", "Retail sales", aliases=("consumer spending", "retail spending"), entity_id="ades:economics:concept:retail-sales"),
-        _entity("economics_concept", "Consumer confidence", aliases=("consumer sentiment", "confidence index"), entity_id="ades:economics:concept:consumer-confidence"),
-        _entity("economics_concept", "Current account", aliases=("current-account deficit", "current-account surplus"), entity_id="ades:economics:concept:current-account"),
-        _entity("economics_concept", "Currency intervention", aliases=("FX intervention", "foreign-exchange intervention"), entity_id="ades:economics:concept:currency-intervention"),
-        _entity("economics_concept", "Devaluation", aliases=("currency devaluation", "currency depreciation"), entity_id="ades:economics:concept:devaluation"),
-        _entity("economics_concept", "Yield curve", aliases=("yield-curve steepening", "yield-curve inversion"), entity_id="ades:economics:concept:yield-curve"),
-        _entity("economics_concept", "Bond auction", aliases=("government bond auction", "treasury auction"), entity_id="ades:economics:concept:bond-auction"),
-        _entity("economics_concept", "Sovereign debt", aliases=("public debt", "government debt"), entity_id="ades:economics:concept:sovereign-debt"),
-        _entity("economics_concept", "Tax policy", aliases=("tax hike", "tax cut", "tax reform"), entity_id="ades:economics:concept:tax-policy"),
-        _entity("economics_concept", "Subsidies", aliases=("subsidy cuts", "government subsidies"), entity_id="ades:economics:concept:subsidies"),
-        _entity("economics_concept", "Austerity", aliases=("spending cuts", "fiscal austerity"), entity_id="ades:economics:concept:austerity"),
-        _entity("economics_concept", "Fiscal stimulus", aliases=("stimulus package", "government stimulus"), entity_id="ades:economics:concept:fiscal-stimulus"),
-        _entity("economics_concept", "Money supply", aliases=("M2 money supply", "liquidity growth"), entity_id="ades:economics:concept:money-supply"),
-        _entity("economics_concept", "Reserve requirement", aliases=("reserve ratio", "required reserves"), entity_id="ades:economics:concept:reserve-requirement"),
+        _economics_entity(
+            "Core inflation",
+            aliases=("core CPI", "core inflation", "core PCE", "PCE excluding food and energy"),
+            entity_id="ades:economics:concept:core-inflation",
+            source_family_id="bea-national-accounts-glossary",
+            source_record_id="bea:pce-price-index:excluding-food-energy",
+            source_record_type="official_data_page",
+            source_field_path="pce_price_index.excluding_food_energy",
+            source_span="BEA identifies the PCE Price Index Excluding Food and Energy as the core PCE price index.",
+            source_term="core PCE price index",
+            source_definition="Core inflation and core CPI/PCE terminology for underlying price pressure measures.",
+            indicator_code="CORE-PCE,CPI-CORE",
+            dataset_id="BEA-PCE",
+            release_id="personal-income-and-outlays",
+            release_calendar_url="https://www.bea.gov/news/schedule",
+        ),
+        _economics_entity(
+            "Retail sales",
+            aliases=("retail sales", "monthly retail trade", "consumer spending", "retail spending"),
+            entity_id="ades:economics:concept:retail-sales",
+            source_family_id="census-economic-indicators",
+            source_record_id="census:economic-indicators:retail-trade",
+            source_record_type="statistical_program",
+            source_field_path="economic_indicators.retail_trade",
+            source_span="Census economic indicators include retail trade and services statistics.",
+            source_term="retail trade",
+            source_definition="Retail sales, monthly retail trade, and consumer-spending indicator terminology.",
+            indicator_code="MRTS",
+            dataset_id="CENSUS-RETAIL",
+            release_id="monthly-retail-trade",
+            release_calendar_url="https://www.census.gov/economic-indicators/",
+        ),
+        _economics_shadow_entity(
+            "Consumer confidence",
+            aliases=("consumer sentiment", "confidence index"),
+            entity_id="ades:economics:concept:consumer-confidence",
+            reason="consumer_confidence_seed_needs_licensed_or_official_survey_source",
+        ),
+        _economics_entity(
+            "Current account",
+            aliases=("current account", "current-account deficit", "current-account surplus"),
+            entity_id="ades:economics:concept:current-account",
+            source_family_id="imf-bop-fiscal-glossary",
+            source_record_id="imf:glossary:balance-of-payments-current-account",
+            source_record_type="official_glossary_entry",
+            source_field_path="glossary.balance_of_payments.current_account",
+            source_span="IMF glossary divides balance of payments into current account and capital and financial account.",
+            source_term="current account",
+            source_definition="Current-account deficit, surplus, and BOP current-account terminology.",
+            jurisdiction="multi_jurisdiction",
+            country_or_area=None,
+            market="external_balance",
+        ),
+        _economics_entity(
+            "Currency intervention",
+            aliases=("currency intervention", "FX intervention", "foreign exchange intervention"),
+            entity_id="ades:economics:concept:currency-intervention",
+            source_family_id="imf-bop-fiscal-glossary",
+            source_record_id="imf:foreign-exchange-intervention:policy-explainer",
+            source_record_type="official_research_page",
+            source_field_path="foreign_exchange_intervention.policy_terms",
+            source_span="IMF materials discuss intervention in the foreign exchange market by policymakers.",
+            source_term="foreign exchange intervention",
+            source_definition="Central-bank or official foreign-exchange intervention terminology.",
+            jurisdiction="multi_jurisdiction",
+            country_or_area=None,
+            market="external_balance",
+        ),
+        _economics_shadow_entity(
+            "Devaluation",
+            aliases=("currency devaluation", "currency depreciation"),
+            entity_id="ades:economics:concept:devaluation",
+            reason="devaluation_seed_needs_official_currency_policy_source_and_context_gate",
+        ),
+        _economics_entity(
+            "Yield curve",
+            aliases=("yield curve", "yield-curve steepening", "yield-curve inversion", "10-year minus 2-year"),
+            entity_id="ades:economics:concept:yield-curve",
+            source_family_id="fred-yield-curve",
+            source_record_id="fred:T10Y2Y",
+            source_record_type="series_metadata",
+            source_field_path="series.T10Y2Y.notes",
+            source_span="FRED T10Y2Y is calculated as the spread between 10-Year and 2-Year Treasury Constant Maturity rates.",
+            source_term="yield curve spread",
+            source_definition="Treasury yield curve, inversion, and steepening terminology.",
+            indicator_code="T10Y2Y",
+            dataset_id="FRED",
+            market="sovereign_rates",
+        ),
+        _economics_entity(
+            "Bond auction",
+            aliases=("bond auction", "government bond auction", "treasury auction", "Treasury auction"),
+            entity_id="ades:economics:concept:bond-auction",
+            source_family_id="treasurydirect-auctions",
+            source_record_id="treasurydirect:announcements-data-results",
+            source_record_type="government_data_page",
+            source_field_path="auctions.announcements_data_results",
+            source_span="Treasury sells bills, notes, bonds, FRNs, and TIPS at regularly scheduled auctions.",
+            source_term="Treasury auction",
+            source_definition="Government bond and Treasury marketable-security auction terminology.",
+            release_id="treasury-auctions",
+            market="sovereign_rates",
+        ),
+        _economics_entity(
+            "Sovereign debt",
+            aliases=("sovereign debt", "public debt", "government debt", "national debt", "federal debt"),
+            entity_id="ades:economics:concept:sovereign-debt",
+            source_family_id="treasury-fiscaldata",
+            source_record_id="treasury:fiscaldata:national-public-debt",
+            source_record_type="government_dataset",
+            source_field_path="datasets.debt_to_the_penny.public_debt",
+            source_span="Treasury Fiscal Data uses national debt, federal debt, and public debt terminology.",
+            source_term="public debt",
+            source_definition="Sovereign, public, government, national, and federal debt terminology.",
+            dataset_id="TREASURY-DEBT-TO-THE-PENNY",
+            release_id="debt-to-the-penny",
+            market="fiscal_policy",
+        ),
+        _economics_entity(
+            "Tax policy",
+            aliases=("tax policy", "tax hike", "tax cut", "tax reform"),
+            entity_id="ades:economics:concept:tax-policy",
+            source_family_id="imf-bop-fiscal-glossary",
+            source_record_id="imf:fiscal-adjustment:revenue-tax-policy",
+            source_record_type="official_explainer",
+            source_field_path="fiscal_adjustment.revenue_measures",
+            source_span="IMF fiscal-adjustment materials discuss revenue, deficits, and fiscal measures.",
+            source_term="tax policy",
+            source_definition="Tax policy, tax reform, tax hike, and tax cut terminology.",
+            jurisdiction="multi_jurisdiction",
+            country_or_area=None,
+            market="fiscal_policy",
+        ),
+        _economics_entity(
+            "Subsidies",
+            aliases=("subsidies", "subsidy", "government subsidies", "countervailing measures"),
+            entity_id="ades:economics:concept:subsidies",
+            source_family_id="wto-tariff-trade-glossary",
+            source_record_id="wto:scm-agreement:subsidies-countervailing-measures",
+            source_record_type="official_agreement",
+            source_field_path="scm_agreement.subsidies_countervailing_measures",
+            source_span="WTO SCM materials cover subsidies and countervailing measures.",
+            source_term="subsidies",
+            source_definition="Subsidy and countervailing-measure terminology for trade and fiscal support routing.",
+            jurisdiction="multi_jurisdiction",
+            country_or_area=None,
+            market="trade_policy",
+        ),
+        _economics_shadow_entity(
+            "Austerity",
+            aliases=("spending cuts", "fiscal austerity"),
+            entity_id="ades:economics:concept:austerity",
+            reason="austerity_seed_is_rhetorical_without_official_fiscal_consolidation_split",
+        ),
+        _economics_entity(
+            "Fiscal stimulus",
+            aliases=("fiscal stimulus", "stimulus package", "government stimulus"),
+            entity_id="ades:economics:concept:fiscal-stimulus",
+            source_family_id="imf-bop-fiscal-glossary",
+            source_record_id="imf:fiscal-adjustment:aggregate-demand-cycle",
+            source_record_type="official_explainer",
+            source_field_path="fiscal_adjustment.aggregate_demand",
+            source_span="IMF fiscal policy materials discuss smoothing aggregate demand over the cycle.",
+            source_term="fiscal stimulus",
+            source_definition="Fiscal stimulus, stimulus-package, and government-demand-support terminology.",
+            jurisdiction="multi_jurisdiction",
+            country_or_area=None,
+            market="fiscal_policy",
+        ),
+        _economics_entity(
+            "Money supply",
+            aliases=("money supply", "money stock", "M2 money supply", "monetary aggregates"),
+            entity_id="ades:economics:concept:money-supply",
+            source_family_id="federal-reserve-policy-statistics",
+            source_record_id="fed:h6:money-stock-measures",
+            source_record_type="statistical_release",
+            source_field_path="h6.money_stock_measures",
+            source_span="Federal Reserve H.6 provides measures of monetary aggregates M1 and M2.",
+            source_term="money stock measures",
+            source_definition="Money supply, money stock, monetary aggregate, and M2 terminology.",
+            blocked_aliases=("liquidity growth",),
+            indicator_code="M2",
+            dataset_id="FED-H6",
+            release_id="money-stock-measures",
+            release_calendar_url="https://www.federalreserve.gov/releases/h6/",
+            market="monetary_policy",
+            quality_reasons=("liquidity_growth_alias_blocked_as_metaphorical",),
+        ),
+        _economics_entity(
+            "Reserve requirement",
+            aliases=("reserve requirement", "reserve requirements", "reserve ratio", "required reserves"),
+            entity_id="ades:economics:concept:reserve-requirement",
+            source_family_id="federal-reserve-policy-statistics",
+            source_record_id="fed:monetary-policy:reserve-requirements",
+            source_record_type="official_policy_page",
+            source_field_path="reserve_requirements.regulation_d",
+            source_span="Federal Reserve reserve requirements are based on Regulation D reserve ratios.",
+            source_term="reserve requirements",
+            source_definition="Reserve requirement, required reserve, and reserve-ratio terminology.",
+            indicator_code="REG-D",
+            dataset_id="FED-RESERVE-REQUIREMENTS",
+            market="monetary_policy",
+        ),
     ),
     "politics-vector-en": (
-        _entity("politics_concept", "Cabinet reshuffle", aliases=("ministerial reshuffle", "cabinet change"), entity_id="ades:politics:concept:cabinet-reshuffle"),
-        _entity("politics_concept", "Coalition government", aliases=("coalition talks", "coalition agreement"), entity_id="ades:politics:concept:coalition-government"),
-        _entity("politics_concept", "Parliamentary vote", aliases=("confidence vote", "no-confidence vote", "legislative vote"), entity_id="ades:politics:concept:parliamentary-vote"),
-        _entity("politics_concept", "Government shutdown", aliases=("shutdown deadline", "funding standoff"), entity_id="ades:politics:concept:government-shutdown"),
-        _entity("politics_concept", "State of emergency", aliases=("emergency decree", "martial law"), entity_id="ades:politics:concept:state-of-emergency"),
-        _entity("politics_concept", "Diplomatic relations", aliases=("diplomatic dispute", "ambassador recall"), entity_id="ades:politics:concept:diplomatic-relations"),
-        _entity("politics_concept", "Defense spending", aliases=("military spending", "defense budget"), entity_id="ades:politics:concept:defense-spending"),
-        _entity("politics_concept", "Trade negotiations", aliases=("trade talks", "trade deal talks"), entity_id="ades:politics:concept:trade-negotiations"),
-        _entity("politics_concept", "Border closure", aliases=("border restrictions", "border shutdown"), entity_id="ades:politics:concept:border-closure"),
-        _entity("politics_concept", "Maritime security", aliases=("shipping security", "naval patrols"), entity_id="ades:politics:concept:maritime-security"),
-        _entity("politics_concept", "Peace talks", aliases=("peace negotiations", "peace process"), entity_id="ades:politics:concept:peace-talks"),
-        _entity("politics_concept", "Referendum", aliases=("popular vote", "constitutional referendum"), entity_id="ades:politics:concept:referendum"),
-        _entity("politics_concept", "Energy policy", aliases=("energy regulation", "gas policy", "oil policy"), entity_id="ades:politics:concept:energy-policy"),
-        _entity("politics_concept", "Mining policy", aliases=("mining regulation", "mineral policy"), entity_id="ades:politics:concept:mining-policy"),
-        _entity("politics_concept", "Resource nationalism", aliases=("nationalization threat", "resource tax"), entity_id="ades:politics:concept:resource-nationalism"),
+        _politics_entity(
+            "Cabinet reshuffle",
+            aliases=("ministerial appointments", "cabinet appointments", "cabinet change"),
+            entity_id="ades:politics:concept:cabinet-reshuffle",
+            source_family_id="govuk-ministerial-appointments",
+            source_record_id="govuk:ministers:ministerial-appointments",
+            source_record_type="government_minister_directory",
+            source_field_path="ministers.appointments",
+            source_span="GOV.UK minister pages list Cabinet ministers and ministerial appointments.",
+            source_term="ministerial appointments",
+            source_definition="Official ministerial appointment and cabinet-change terminology.",
+            jurisdiction="UK",
+            country_or_area="UK",
+            issuing_authority="GOV.UK",
+            office_id="govuk-ministers",
+            blocked_aliases=("cabinet", "administration"),
+            context_requirements=("official_ministerial_appointment_context",),
+            quality_reasons=("generic_cabinet_and_administration_aliases_blocked",),
+        ),
+        _politics_entity(
+            "Coalition government",
+            aliases=("coalition agreement", "coalition government", "confidence and supply"),
+            entity_id="ades:politics:concept:coalition-government",
+            source_family_id="uk-parliament-confidence",
+            source_record_id="uk-parliament:hung-parliament:coalition-confidence-supply",
+            source_record_type="parliament_explainer",
+            source_field_path="hung_parliament.coalition_confidence_supply",
+            source_span="UK Parliament explains that a government majority can include support from other political parties even if there is no formal coalition arrangement.",
+            source_term="coalition arrangement",
+            source_definition="Official parliament terminology for coalition government and confidence-and-supply arrangements.",
+            jurisdiction="UK",
+            country_or_area="UK",
+            issuing_authority="UK Parliament",
+            blocked_aliases=("coalition talks",),
+            context_requirements=("government_formation_or_parliament_context",),
+            quality_reasons=("coalition_talks_alias_blocked_until_official_context",),
+        ),
+        _politics_entity(
+            "Parliamentary vote",
+            aliases=("confidence vote", "no-confidence vote", "legislative vote"),
+            entity_id="ades:politics:concept:parliamentary-vote",
+            source_family_id="uk-parliament-confidence",
+            source_record_id="uk-parliament:motion-of-no-confidence",
+            source_record_type="parliament_glossary_entry",
+            source_field_path="glossary.motion_of_no_confidence",
+            source_span="A motion of no confidence is moved in the House of Commons to express lack of confidence in the government or a minister.",
+            source_term="motion of no confidence",
+            source_definition="Official parliament confidence, no-confidence, and legislative vote terminology.",
+            jurisdiction="UK",
+            country_or_area="UK",
+            issuing_authority="UK Parliament",
+            context_requirements=("parliament_or_legislature_context",),
+        ),
+        _politics_entity(
+            "Government shutdown",
+            aliases=("government shutdown", "shutdown furlough", "lapse in appropriations"),
+            entity_id="ades:politics:concept:government-shutdown",
+            source_family_id="opm-shutdown-furlough",
+            source_record_id="opm:shutdown-furlough:lapse-in-appropriations",
+            source_record_type="government_guidance",
+            source_field_path="shutdown_furlough.lapse_in_appropriations",
+            source_span="OPM states that a shutdown furlough occurs when there is a lapse in appropriations.",
+            source_term="shutdown furlough",
+            source_definition="Official lapse-of-appropriations and government-shutdown terminology.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="U.S. Office of Personnel Management",
+            legal_basis="Antideficiency Act",
+            blocked_aliases=("shutdown deadline", "funding standoff"),
+            context_requirements=("public_budget_or_appropriations_context",),
+            quality_reasons=("funding_standoff_and_shutdown_deadline_aliases_blocked_as_noisy",),
+        ),
+        _politics_entity(
+            "State of emergency",
+            aliases=("state of emergency", "emergency declaration", "emergency decree"),
+            entity_id="ades:politics:concept:state-of-emergency",
+            source_family_id="fema-disaster-declarations",
+            source_record_id="fema:emergency-declaration",
+            source_record_type="government_emergency_declaration",
+            source_field_path="declarations.emergency_declaration",
+            source_span="FEMA explains that the President can declare an emergency when federal assistance is needed.",
+            source_term="emergency declaration",
+            source_definition="Official emergency declaration and state-of-emergency terminology.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="Federal Emergency Management Agency",
+            policy_instrument="emergency_declaration",
+            blocked_aliases=("martial law",),
+            context_requirements=("official_emergency_or_legal_declaration_context",),
+            quality_reasons=("martial_law_excluded_pending_specific_legal_source",),
+        ),
+        _politics_entity(
+            "Diplomatic relations",
+            aliases=("diplomatic relations", "ambassador recall", "recall for consultations"),
+            entity_id="ades:politics:concept:diplomatic-relations",
+            source_family_id="state-department-diplomatic-history",
+            source_record_id="state-history:belarus:ambassador-recall",
+            source_record_type="government_diplomatic_history",
+            source_field_path="countries.belarus.ambassador_recall",
+            source_span="The State Department Office of the Historian notes ambassador recall and diplomatic relations events in country histories.",
+            source_term="diplomatic relations",
+            source_definition="Official diplomatic-relations and ambassador-recall terminology.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="U.S. Department of State Office of the Historian",
+            blocked_aliases=("diplomatic dispute",),
+            context_requirements=("foreign_ministry_or_official_diplomatic_context",),
+            quality_reasons=("diplomatic_dispute_alias_blocked_as_generic",),
+        ),
+        _politics_entity(
+            "Defense spending",
+            aliases=("defense spending", "defence spending", "military spending", "defense budget"),
+            entity_id="ades:politics:concept:defense-spending",
+            source_family_id="nato-defense-expenditure",
+            source_record_id="nato:defence-expenditure:data-tables",
+            source_record_type="intergovernmental_statistics_page",
+            source_field_path="defence_expenditure.tables",
+            source_span="NATO defence expenditure tables cover total defence expenditures, GDP share, categories, and personnel data.",
+            source_term="defence expenditures",
+            source_definition="NATO defense/defence expenditure, military spending, and defense budget terminology.",
+            issuing_authority="NATO",
+            sector="defense",
+            context_requirements=("government_or_alliance_defense_budget_context",),
+        ),
+        _politics_entity(
+            "Trade negotiations",
+            aliases=("trade negotiations", "trade talks", "trade deal talks", "trade agreement negotiations"),
+            entity_id="ades:politics:concept:trade-negotiations",
+            source_family_id="ustr-trade-agreements",
+            source_record_id="ustr:trade-agreements:negotiations",
+            source_record_type="government_trade_policy_page",
+            source_field_path="trade_agreements.negotiations",
+            source_span="USTR pages cover trade agreements, reciprocal trade agreements, and trade agreement negotiations.",
+            source_term="trade agreement negotiations",
+            source_definition="Official trade negotiation and trade-agreement-talks terminology.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="Office of the U.S. Trade Representative",
+            policy_instrument="trade_agreement_negotiation",
+            context_requirements=("government_or_ustr_trade_context",),
+        ),
+        _politics_entity(
+            "Border closure",
+            aliases=("border restrictions", "temporary border closure", "port of entry closure"),
+            entity_id="ades:politics:concept:border-closure",
+            source_family_id="cbp-border-restrictions",
+            source_record_id="cbp:monticello-port-temporary-closure",
+            source_record_type="government_border_notice",
+            source_field_path="local_media_release.temporary_port_closure",
+            source_span="CBP announced a temporary port-of-entry closure with continued border restrictions on non-essential travel.",
+            source_term="temporary closure",
+            source_definition="Official border restriction and temporary port-of-entry closure terminology.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="U.S. Customs and Border Protection",
+            policy_instrument="border_restriction",
+            blocked_aliases=("border shutdown",),
+            context_requirements=("border_agency_or_travel_restriction_context",),
+            quality_reasons=("border_shutdown_alias_blocked_as_noisy",),
+        ),
+        _politics_entity(
+            "Maritime security",
+            aliases=("maritime security", "ship security", "port security", "ISPS Code"),
+            entity_id="ades:politics:concept:maritime-security",
+            source_family_id="imo-maritime-security",
+            source_record_id="imo:isps-code:maritime-security",
+            source_record_type="intergovernmental_security_code",
+            source_field_path="solas_xi_2_isps_code.maritime_security",
+            source_span="The IMO ISPS Code establishes a mandatory maritime and port security regime.",
+            source_term="maritime security",
+            source_definition="Official maritime, ship, port security, and ISPS Code terminology.",
+            issuing_authority="International Maritime Organization",
+            sector="maritime",
+            blocked_aliases=("shipping security", "naval patrols"),
+            context_requirements=("maritime_port_or_international_shipping_context",),
+            quality_reasons=("shipping_security_and_naval_patrols_blocked_until_specific_context",),
+        ),
+        _politics_entity(
+            "Peace talks",
+            aliases=("peace talks", "peace negotiations", "peace process"),
+            entity_id="ades:politics:concept:peace-talks",
+            source_family_id="un-peacemaker-agreements",
+            source_record_id="un-peacemaker:peace-agreements-database",
+            source_record_type="intergovernmental_peace_agreements_database",
+            source_field_path="peace_agreements.database",
+            source_span="UN Peacemaker provides a peace agreements database and language-of-peace tool.",
+            source_term="peace agreements",
+            source_definition="UN peace-talks, peace-negotiation, and peace-process terminology.",
+            issuing_authority="United Nations",
+            agreement_id="un-peacemaker-peace-agreements",
+            context_requirements=("conflict_or_official_mediation_context",),
+        ),
+        _politics_entity(
+            "Referendum",
+            aliases=("referendum", "popular vote", "constitutional referendum", "referendum participant"),
+            entity_id="ades:politics:concept:referendum",
+            source_family_id="uk-electoral-commission-registers",
+            source_record_id="electoral-commission:referendum-role-registers",
+            source_record_type="election_regulator_guidance",
+            source_field_path="referendums.role_and_registers",
+            source_span="The Electoral Commission explains that it works on referendums after Parliament passes referendum legislation and maintains referendum participant records.",
+            source_term="referendum",
+            source_definition="Official referendum, popular vote, and referendum participant terminology.",
+            jurisdiction="UK",
+            country_or_area="UK",
+            issuing_authority="UK Electoral Commission",
+            election_id="uk-referendum-registers",
+            context_requirements=("official_election_or_referendum_context",),
+        ),
+        _politics_entity(
+            "Energy policy",
+            aliases=("energy policy", "energy regulation", "government energy policy", "oil policy", "gas policy"),
+            entity_id="ades:politics:concept:energy-policy",
+            source_family_id="iea-energy-policies",
+            source_record_id="iea:policies-measures-database",
+            source_record_type="intergovernmental_policy_database",
+            source_field_path="policies.measures_database",
+            source_span="IEA Policies and Measures Database provides information on government policies and measures across energy sectors.",
+            source_term="energy policies",
+            source_definition="Government energy policy, energy regulation, oil policy, and gas policy terminology.",
+            issuing_authority="International Energy Agency",
+            policy_instrument="energy_policy",
+            sector="energy",
+            context_requirements=("government_or_regulator_energy_policy_context",),
+        ),
+        _politics_entity(
+            "Mining policy",
+            aliases=("mining policy", "mining regulation", "mineral policy", "critical minerals policy"),
+            entity_id="ades:politics:concept:mining-policy",
+            source_family_id="usgs-mineral-commodity-summaries",
+            source_record_id="usgs:mcs:government-programs-minerals",
+            source_record_type="government_publication",
+            source_field_path="mineral_commodity_summaries.government_programs",
+            source_span="USGS Mineral Commodity Summaries are annual government publications covering minerals, government programs, tariffs, and statistics.",
+            source_term="mineral commodity summaries",
+            source_definition="Government mining, mineral policy, and critical-minerals policy terminology.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="U.S. Geological Survey",
+            policy_instrument="mineral_policy",
+            sector="mining",
+            commodity_or_sector="minerals",
+            context_requirements=("government_or_geological_survey_minerals_context",),
+        ),
+        _politics_shadow_entity(
+            "Resource nationalism",
+            aliases=("nationalization threat", "resource tax"),
+            entity_id="ades:politics:concept:resource-nationalism",
+            reason="resource_nationalism_seed_is_analytical_rhetoric_without_official_nationalization_or_resource_tax_source",
+        ),
     ),
 }
 
 
-BDYA_DOMAIN_PACK_RULE_EXTENSIONS: dict[str, tuple[dict[str, str], ...]] = {
+BDYA_DOMAIN_PACK_RULE_EXTENSIONS: dict[str, tuple[dict[str, object], ...]] = {
     "business-vector-en": (
-        _rule("ipo_listing_phrase", "business_concept", r"\b(?:IPO|initial public offering|stock-market debut|share listing)\b"),
-        _rule("rating_action_phrase", "business_concept", r"\b(?:rating downgrade|rating upgrade|credit outlook|credit rating)\b"),
-        _rule("capacity_supply_phrase", "business_concept", r"\b(?:capacity expansion|factory shutdown|production halt|material shortage|component shortage)\b"),
+        _business_rule(
+            "product_recall_phrase",
+            r"\b(?:product recall|safety recall|FDA recall|vehicle recall)\b",
+            source_family_id="us-product-recall-regulators",
+            source_record_id="us-recall-regulators:public-recall-pages",
+            source_record_type="regulator_recall_index",
+            source_field_path="recalls.topic_pages",
+            source_span="Public recall pages for CPSC consumer products, FDA regulated products, and NHTSA vehicle/equipment recalls.",
+            source_term="recall",
+            source_definition="Source-backed product recall phrase rule with generic recall excluded.",
+            quality_reasons=("generic_recall_phrase_excluded",),
+        ),
+        _business_rule(
+            "ipo_listing_phrase",
+            r"\b(?:initial public offering|stock-market debut|share listing)\b",
+            source_family_id="investor-gov-ipo",
+            source_record_id="investor-glossary:initial-public-offering-ipo",
+            source_record_type="investor_glossary_entry",
+            source_field_path="glossary.initial_public_offering",
+            source_span="An initial public offering, or IPO, generally refers to when a company first sells its shares to the public.",
+            source_term="initial public offering",
+            source_definition="Source-backed IPO/listing phrase rule with standalone IPO excluded.",
+            quality_reasons=("standalone_ipo_shortform_excluded",),
+        ),
+        _business_rule(
+            "rating_action_phrase",
+            r"\b(?:rating downgrade|rating upgrade|credit outlook|credit rating action)\b",
+            source_family_id="sec-nrsro-rating-history",
+            source_record_id="sec:nrsro-rating-history:rating-action",
+            source_record_type="publication_guide_field",
+            source_field_path="rating_history.rating_action",
+            source_span="NRSRO rating history files include ratings, upgrades, downgrades, withdrawals, and other rating actions.",
+            source_term="rating action",
+            source_definition="Source-backed credit rating action phrase rule.",
+        ),
+        _business_rule(
+            "workforce_shutdown_phrase",
+            r"\b(?:mass layoff|job cuts|workforce reduction|plant closing|plant shutdown|factory closure)\b",
+            source_family_id="dol-warn",
+            source_record_id="dol:warn:plant-closings-and-mass-layoffs",
+            source_record_type="government_topic",
+            source_field_path="warn.plant_closings_and_mass_layoffs",
+            source_span="WARN protects workers, families, and communities by requiring advance notice of plant closings and mass layoffs.",
+            source_term="plant closings and mass layoffs",
+            source_definition="Source-backed layoff and plant/factory shutdown phrase rule.",
+        ),
+        _business_rule(
+            "cybersecurity_incident_phrase",
+            r"\b(?:material cybersecurity incident|cybersecurity incident|data breach|ransomware attack)\b",
+            source_family_id="sec-form-8k",
+            source_record_id="form-8-k:item-1.05",
+            source_record_type="form_item",
+            source_field_path="items[1.05].caption",
+            source_span="Item 1.05 Material Cybersecurity Incidents",
+            source_term="material cybersecurity incident",
+            source_definition="Source-backed cybersecurity incident phrase rule.",
+        ),
+        _business_rule(
+            "shareholder_distribution_phrase",
+            r"\b(?:share repurchase|stock buyback|repurchase program|dividend declaration|special dividend|dividend increase|dividend cut)\b",
+            source_family_id="sec-share-repurchase",
+            source_record_id="sec:share-repurchase-disclosure",
+            source_record_type="sec_guidance",
+            source_field_path="issuer_repurchase_disclosure",
+            source_span="Issuer share repurchase disclosure requirements for companies conducting buybacks.",
+            source_term="share repurchase",
+            source_definition="Source-backed shareholder return phrase rule covering buybacks and sourced dividend aliases.",
+        ),
     ),
     "economics-vector-en": (
-        _rule("inflation_activity_phrase", "economics_concept", r"\b(?:core CPI|core inflation|retail sales|consumer confidence|consumer sentiment)\b"),
-        _rule("external_balance_phrase", "economics_concept", r"\b(?:current-account|current account|currency intervention|FX intervention|devaluation)\b"),
-        _rule("sovereign_rates_phrase", "economics_concept", r"\b(?:bond auction|yield curve|sovereign debt|treasury auction|reserve requirement)\b"),
+        _economics_rule(
+            "inflation_activity_phrase",
+            r"\b(?:core CPI|core inflation|core PCE|PCE excluding food and energy|retail sales|monthly retail trade)\b",
+            source_family_id="bea-national-accounts-glossary",
+            source_record_id="bea:pce-price-index-and-census-retail-indicators",
+            source_record_type="official_data_page",
+            source_field_path="pce_price_index.core_and_retail_activity_terms",
+            source_span="BEA PCE price-index pages define core PCE; Census economic indicators include retail trade.",
+            source_term="core inflation and retail sales",
+            source_definition="Source-backed core inflation and retail-activity phrase rule excluding consumer confidence.",
+            indicator_code="CORE-PCE,MRTS",
+            dataset_id="BEA-PCE,CENSUS-RETAIL",
+            quality_reasons=("consumer_confidence_and_sentiment_excluded_pending_license",),
+        ),
+        _economics_rule(
+            "currency_intervention_phrase",
+            r"\b(?:currency intervention|FX intervention|foreign exchange intervention)\b",
+            source_family_id="imf-bop-fiscal-glossary",
+            source_record_id="imf:foreign-exchange-intervention:policy-explainer",
+            source_record_type="official_research_page",
+            source_field_path="foreign_exchange_intervention.policy_terms",
+            source_span="IMF materials discuss intervention in the foreign exchange market by policymakers.",
+            source_term="foreign exchange intervention",
+            source_definition="Source-backed official currency and foreign-exchange intervention phrase rule excluding devaluation.",
+            jurisdiction="multi_jurisdiction",
+            market="external_balance",
+            quality_reasons=("devaluation_excluded_pending_context_gate",),
+        ),
+        _economics_rule(
+            "fiscal_policy_phrase",
+            r"\b(?:fiscal policy|fiscal consolidation|fiscal tightening|fiscal stimulus|budget deficit|tax reform|tax hike|tax cut)\b",
+            source_family_id="imf-bop-fiscal-glossary",
+            source_record_id="imf:fiscal-adjustment:fiscal-policy-terms",
+            source_record_type="official_explainer",
+            source_field_path="fiscal_adjustment.policy_terms",
+            source_span="IMF fiscal-adjustment materials discuss fiscal contraction, deficits, revenue, and aggregate demand.",
+            source_term="fiscal policy",
+            source_definition="Source-backed fiscal policy, tax, deficit, and stimulus phrase rule excluding austerity rhetoric.",
+            jurisdiction="multi_jurisdiction",
+            market="fiscal_policy",
+            quality_reasons=("austerity_and_spending_cuts_excluded_pending_source_split",),
+        ),
+        _economics_rule(
+            "subsidy_trade_phrase",
+            r"\b(?:subsidy|subsidies|government subsidies|countervailing measures)\b",
+            source_family_id="wto-tariff-trade-glossary",
+            source_record_id="wto:scm-agreement:subsidies-countervailing-measures",
+            source_record_type="official_agreement",
+            source_field_path="scm_agreement.subsidies_countervailing_measures",
+            source_span="WTO SCM materials cover subsidies and countervailing measures.",
+            source_term="subsidies",
+            source_definition="Source-backed subsidy and countervailing-measure phrase rule.",
+            jurisdiction="multi_jurisdiction",
+            market="trade_policy",
+        ),
     ),
     "politics-vector-en": (
-        _rule("government_stability_phrase", "politics_concept", r"\b(?:cabinet reshuffle|coalition talks|confidence vote|government shutdown|state of emergency)\b"),
-        _rule("trade_diplomacy_phrase", "politics_concept", r"\b(?:trade negotiations?|diplomatic dispute|border closure|referendum)\b"),
-        _rule("resource_policy_phrase", "politics_concept", r"\b(?:energy policy|gas policy|oil policy|mining policy|resource nationalism|nationali[sz]ation)\b"),
+        _politics_rule(
+            "government_stability_phrase",
+            r"\b(?:coalition agreement|coalition government|confidence and supply|confidence vote|no-confidence vote)\b",
+            source_family_id="uk-parliament-confidence",
+            source_record_id="uk-parliament:confidence-government-stability-rule",
+            source_record_type="parliament_explainer",
+            source_field_path="confidence_supply.no_confidence",
+            source_span="UK Parliament explains confidence and supply, coalition arrangements, and motions of no confidence.",
+            source_term="confidence and supply",
+            source_definition="Source-backed government stability phrase rule excluding generic coalition talks.",
+            jurisdiction="UK",
+            country_or_area="UK",
+            issuing_authority="UK Parliament",
+            quality_reasons=("coalition_talks_excluded_pending_official_context",),
+        ),
+        _politics_rule(
+            "government_shutdown_phrase",
+            r"\b(?:government shutdown|shutdown furlough|lapse in appropriations)\b",
+            source_family_id="opm-shutdown-furlough",
+            source_record_id="opm:shutdown-furlough:rule",
+            source_record_type="government_guidance",
+            source_field_path="shutdown_furlough.lapse_in_appropriations",
+            source_span="OPM states that a shutdown furlough occurs when there is a lapse in appropriations.",
+            source_term="shutdown furlough",
+            source_definition="Source-backed government shutdown phrase rule excluding generic funding-standoff language.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="U.S. Office of Personnel Management",
+            legal_basis="Antideficiency Act",
+        ),
+        _politics_rule(
+            "emergency_declaration_phrase",
+            r"\b(?:state of emergency|emergency declaration|emergency decree)\b",
+            source_family_id="fema-disaster-declarations",
+            source_record_id="fema:emergency-declaration:rule",
+            source_record_type="government_emergency_declaration",
+            source_field_path="declarations.emergency_declaration",
+            source_span="FEMA explains that the President can declare an emergency when federal assistance is needed.",
+            source_term="emergency declaration",
+            source_definition="Source-backed emergency declaration phrase rule excluding martial law.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="Federal Emergency Management Agency",
+            policy_instrument="emergency_declaration",
+            quality_reasons=("martial_law_excluded_pending_specific_legal_source",),
+        ),
+        _politics_rule(
+            "trade_diplomacy_phrase",
+            r"\b(?:trade negotiations?|trade talks|trade deal talks|trade agreement negotiations?)\b",
+            source_family_id="ustr-trade-agreements",
+            source_record_id="ustr:trade-negotiations:rule",
+            source_record_type="government_trade_policy_page",
+            source_field_path="trade_agreements.negotiations",
+            source_span="USTR pages cover trade agreements, reciprocal trade agreements, and trade agreement negotiations.",
+            source_term="trade agreement negotiations",
+            source_definition="Source-backed trade diplomacy phrase rule excluding generic business negotiations.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="Office of the U.S. Trade Representative",
+            policy_instrument="trade_agreement_negotiation",
+        ),
+        _politics_rule(
+            "diplomatic_action_phrase",
+            r"\b(?:diplomatic relations|ambassador recall|recall for consultations)\b",
+            source_family_id="state-department-diplomatic-history",
+            source_record_id="state-history:diplomatic-relations:rule",
+            source_record_type="government_diplomatic_history",
+            source_field_path="diplomatic_history.relations_and_ambassador_recall",
+            source_span="The State Department Office of the Historian records diplomatic relations and ambassador recall events.",
+            source_term="diplomatic relations",
+            source_definition="Source-backed diplomatic action phrase rule excluding generic diplomatic dispute.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="U.S. Department of State Office of the Historian",
+            quality_reasons=("diplomatic_dispute_excluded_as_generic",),
+        ),
+        _politics_rule(
+            "border_restriction_phrase",
+            r"\b(?:border restrictions?|temporary border closure|port of entry closure)\b",
+            source_family_id="cbp-border-restrictions",
+            source_record_id="cbp:border-restrictions:rule",
+            source_record_type="government_border_notice",
+            source_field_path="local_media_release.border_restrictions_temporary_closure",
+            source_span="CBP announced a temporary port-of-entry closure with continued border restrictions on non-essential travel.",
+            source_term="border restrictions",
+            source_definition="Source-backed border restriction phrase rule excluding generic border shutdown.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="U.S. Customs and Border Protection",
+            policy_instrument="border_restriction",
+        ),
+        _politics_rule(
+            "referendum_phrase",
+            r"\b(?:referendum|constitutional referendum|referendum participant)\b",
+            source_family_id="uk-electoral-commission-registers",
+            source_record_id="electoral-commission:referendum:rule",
+            source_record_type="election_regulator_guidance",
+            source_field_path="referendums.role_and_registers",
+            source_span="The Electoral Commission explains its referendum role and maintains referendum participant records.",
+            source_term="referendum",
+            source_definition="Source-backed referendum phrase rule excluding generic survey/poll language.",
+            jurisdiction="UK",
+            country_or_area="UK",
+            issuing_authority="UK Electoral Commission",
+            election_id="uk-referendum-registers",
+        ),
+        _politics_rule(
+            "resource_policy_phrase",
+            r"\b(?:energy policy|energy regulation|government energy policy|gas policy|oil policy)\b",
+            source_family_id="iea-energy-policies",
+            source_record_id="iea:energy-policies:rule",
+            source_record_type="intergovernmental_policy_database",
+            source_field_path="policies.measures_database",
+            source_span="IEA Policies and Measures Database provides information on government policies and measures across energy sectors.",
+            source_term="energy policies",
+            source_definition="Source-backed energy policy phrase rule excluding resource nationalism rhetoric.",
+            issuing_authority="International Energy Agency",
+            policy_instrument="energy_policy",
+            sector="energy",
+            quality_reasons=("resource_nationalism_and_nationalization_terms_excluded_pending_official_source",),
+        ),
+        _politics_rule(
+            "mining_policy_phrase",
+            r"\b(?:mining policy|mining regulation|mineral policy|critical minerals policy)\b",
+            source_family_id="usgs-mineral-commodity-summaries",
+            source_record_id="usgs:mcs:mining-policy:rule",
+            source_record_type="government_publication",
+            source_field_path="mineral_commodity_summaries.government_programs",
+            source_span="USGS Mineral Commodity Summaries are annual government publications covering minerals, government programs, tariffs, and statistics.",
+            source_term="mineral commodity summaries",
+            source_definition="Source-backed mining and mineral policy phrase rule.",
+            jurisdiction="US",
+            country_or_area="US",
+            issuing_authority="U.S. Geological Survey",
+            policy_instrument="mineral_policy",
+            sector="mining",
+            commodity_or_sector="minerals",
+        ),
     ),
 }
 
@@ -1765,12 +4772,31 @@ def _build_domain_source_bundle(
     _write_jsonl(entities_path, list(spec.entities))
     _write_jsonl(rules_path, list(spec.rules))
 
-    source_entry = build_bundle_source_entry(
-        name=f"curated-{spec.domain}-bdya-phase6",
-        snapshot_path=source_path,
-        record_count=len(spec.entities),
-        adapter="curated_bdya_domain_entities",
-    )
+    if spec.pack_id == "business-vector-en":
+        sources = _build_business_source_entries(spec=spec, source_dir=source_dir)
+        if not sources:
+            raise ValueError("business-vector-en requires source-family evidence entries.")
+        tags = [spec.domain, "bdya", "phase6", "source-backed", "english"]
+    elif spec.pack_id == "economics-vector-en":
+        sources = _build_economics_source_entries(spec=spec, source_dir=source_dir)
+        if not sources:
+            raise ValueError("economics-vector-en requires source-family evidence entries.")
+        tags = [spec.domain, "bdya", "phase6", "source-backed", "english"]
+    elif spec.pack_id == "politics-vector-en":
+        sources = _build_politics_source_entries(spec=spec, source_dir=source_dir)
+        if not sources:
+            raise ValueError("politics-vector-en requires source-family evidence entries.")
+        tags = [spec.domain, "bdya", "phase6", "source-backed", "english"]
+    else:
+        sources = [
+            build_bundle_source_entry(
+                name=f"curated-{spec.domain}-bdya-phase6",
+                snapshot_path=source_path,
+                record_count=len(spec.entities),
+                adapter="curated_bdya_domain_entities",
+            )
+        ]
+        tags = [spec.domain, "bdya", "phase6", "curated", "english"]
     bundle_manifest_path.write_text(
         json.dumps(
             {
@@ -1781,7 +4807,7 @@ def _build_domain_source_bundle(
                 "domain": spec.domain,
                 "tier": "domain",
                 "description": spec.description,
-                "tags": [spec.domain, "bdya", "phase6", "curated", "english"],
+                "tags": tags,
                 "dependencies": [],
                 "entities_path": "normalized/entities.jsonl",
                 "rules_path": "normalized/rules.jsonl",
@@ -1789,7 +4815,7 @@ def _build_domain_source_bundle(
                 "label_mappings": {},
                 "stoplisted_aliases": ["N/A"],
                 "allowed_ambiguous_aliases": [],
-                "sources": [source_entry],
+                "sources": sources,
             },
             indent=2,
             sort_keys=True,
@@ -1803,7 +4829,7 @@ def _build_domain_source_bundle(
         version=version,
         entities_path="normalized/entities.jsonl",
         rules_path="normalized/rules.jsonl",
-        sources=[source_entry],
+        sources=sources,
     )
     return DomainSourceBundleResult(
         pack_id=spec.pack_id,

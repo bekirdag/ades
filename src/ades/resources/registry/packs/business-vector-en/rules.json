@@ -1,0 +1,58 @@
+{
+  "patterns": [
+    {
+      "name": "acquisition_disposition_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:merger|acquisition|takeover|disposition of assets|asset sale)\\b",
+      "label": "business_concept"
+    },
+    {
+      "name": "bankruptcy_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:bankruptcy|receivership|insolvency|chapter 11)\\b",
+      "label": "business_concept"
+    },
+    {
+      "name": "cybersecurity_incident_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:material cybersecurity incident|cybersecurity incident|data breach|ransomware attack)\\b",
+      "label": "business_concept"
+    },
+    {
+      "name": "earnings_guidance_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:guidance|profit outlook|earnings outlook)\\b.{0,80}\\b(?:cut|raise|raised|lowered|miss|beat|warning)\\b",
+      "label": "business_concept"
+    },
+    {
+      "name": "ipo_listing_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:initial public offering|stock-market debut|share listing)\\b",
+      "label": "business_concept"
+    },
+    {
+      "name": "product_recall_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:product recall|safety recall|FDA recall|vehicle recall)\\b",
+      "label": "business_concept"
+    },
+    {
+      "name": "rating_action_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:rating downgrade|rating upgrade|credit outlook|credit rating action)\\b",
+      "label": "business_concept"
+    },
+    {
+      "name": "shareholder_distribution_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:share repurchase|stock buyback|repurchase program|dividend declaration|special dividend|dividend increase|dividend cut)\\b",
+      "label": "business_concept"
+    },
+    {
+      "name": "workforce_shutdown_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:mass layoff|job cuts|workforce reduction|plant closing|plant shutdown|factory closure)\\b",
+      "label": "business_concept"
+    }
+  ]
+}

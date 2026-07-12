@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T13:49:14.751228Z",
+  "bundle_dir": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/business-vector-en-bundle",
+  "bundle_manifest_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/business-vector-en-bundle/bundle.json",
+  "include_build_only": false,
+  "input_entity_count": 27,
+  "input_rule_count": 9,
+  "included_entity_count": 19,
+  "included_rule_count": 9,
+  "dropped_record_count": 8,
+  "dropped_alias_count": 0,
+  "ambiguous_alias_count": 0,
+  "analysis_backend": "sqlite",
+  "analysis_db_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/business-vector-en/analysis.sqlite",
+  "alias_analysis_report_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/business-vector-en/alias-analysis.json",
+  "candidate_alias_count": 91,
+  "retained_alias_count": 82,
+  "collision_blocked_alias_count": 0,
+  "retained_alias_audit_scanned_alias_count": 0,
+  "retained_alias_audit_removed_alias_count": 0,
+  "retained_alias_audit_chunk_size": 0,
+  "retained_alias_audit_reason_counts": {},
+  "retained_alias_audit_mode": "heuristic",
+  "retained_alias_audit_reviewer_name": null,
+  "retained_alias_audit_review_cache_path": null,
+  "retained_alias_audit_invoked_review_count": 0,
+  "retained_alias_audit_cached_review_count": 0,
+  "retained_alias_exclusion_removed_alias_count": 0,
+  "retained_alias_exclusion_source_path": null,
+  "exact_common_english_alias_removed_alias_count": 0,
+  "exact_common_english_alias_source_path": null,
+  "exact_identifier_alias_count": 0,
+  "natural_language_alias_count": 91,
+  "blocked_reason_counts": {},
+  "retained_label_counts": {
+    "business_concept": 82
+  },
+  "label_count": 1,
+  "alias_count": 82,
+  "rule_count": 9,
+  "matcher": {
+    "algorithm": "token_trie_v1",
+    "normalization": "normalize_lookup_text:v1",
+    "artifact_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/business-vector-en/matcher/token-trie.bin",
+    "entries_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/registry-release/combined/candidates/business-vector-en/matcher/entries.bin",
+    "entry_count": 78,
+    "state_count": 136,
+    "max_alias_length": 31,
+    "artifact_sha256": "82d8d56802b77f705d528b191ef85ac229364ab2fccddad53b637b5a66373e4d",
+    "entries_sha256": "c8e50d2b5f2afd45b3449d4a1f34911055c1d76ce167ff7e3a37f6be1806c358"
+  },
+  "source_count": 14,
+  "source_license_classes": {
+    "ship-now": 14
+  },
+  "publishable_source_count": 14,
+  "restricted_source_count": 0,
+  "publishable_sources_only": true,
+  "entity_label_distribution": {
+    "business_concept": 19
+  },
+  "label_distribution": {
+    "business_concept": 91
+  }
+}

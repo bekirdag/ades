@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "pack_id": "politics-vector-en",
+  "version": "0.2.0",
+  "language": "en",
+  "domain": "politics",
+  "tier": "domain",
+  "tags": [
+    "politics",
+    "bdya",
+    "phase6",
+    "source-backed",
+    "english"
+  ],
+  "dependencies": [],
+  "artifacts": [
+    {
+      "name": "pack",
+      "url": "../../artifacts/politics-vector-en-0.2.0.tar.zst",
+      "sha256": "8ac8ac02e148ccf1acf4011a7246b4e5000094e9c99401c2466df91b0e1d7026",
+      "size_bytes": 9391
+    }
+  ],
+  "models": [],
+  "rules": [
+    "rules.json"
+  ],
+  "labels": [
+    "labels.json"
+  ],
+  "min_ades_version": "0.1.0",
+  "matcher": {
+    "schema_version": 1,
+    "algorithm": "token_trie_v1",
+    "normalization": "normalize_lookup_text:v1",
+    "artifact_path": "matcher/token-trie.bin",
+    "entries_path": "matcher/entries.bin",
+    "entry_count": 100,
+    "state_count": 179,
+    "max_alias_length": 28,
+    "artifact_sha256": "16a41ce608f59286916da116a3e18b0ba6a0f9366d14c0d10e28055dd4444848",
+    "entries_sha256": "47e1005a10afa5cf86c8453425d2a39228b2fa08486931da388b7066cbe52c6c"
+  },
+  "description": "Source-backed BDYA politics concept/entity pack for policy, sanctions, and geopolitical news routing."
+}

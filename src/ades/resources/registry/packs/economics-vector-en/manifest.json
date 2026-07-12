@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "pack_id": "economics-vector-en",
+  "version": "0.2.0",
+  "language": "en",
+  "domain": "economics",
+  "tier": "domain",
+  "tags": [
+    "economics",
+    "bdya",
+    "phase6",
+    "source-backed",
+    "english"
+  ],
+  "dependencies": [],
+  "artifacts": [
+    {
+      "name": "pack",
+      "url": "../../artifacts/economics-vector-en-0.2.0.tar.zst",
+      "sha256": "58cccc298f0a400fe02e05cbb1544d0a5db416bd0c0ac5765a5c92c35d64ea92",
+      "size_bytes": 8276
+    }
+  ],
+  "models": [],
+  "rules": [
+    "rules.json"
+  ],
+  "labels": [
+    "labels.json"
+  ],
+  "min_ades_version": "0.1.0",
+  "matcher": {
+    "schema_version": 1,
+    "algorithm": "token_trie_v1",
+    "normalization": "normalize_lookup_text:v1",
+    "artifact_path": "matcher/token-trie.bin",
+    "entries_path": "matcher/entries.bin",
+    "entry_count": 91,
+    "state_count": 163,
+    "max_alias_length": 29,
+    "artifact_sha256": "7082c504360f0384e0515e937a151555ecfb319b7f1e9b57c320f385fbdb582b",
+    "entries_sha256": "c1d09381146bd2ad22e0cc42d5b217f8f296d0b889e6f02a5e298b2fb03ef59e"
+  },
+  "description": "Source-backed BDYA economics concept pack for macro and policy news routing."
+}

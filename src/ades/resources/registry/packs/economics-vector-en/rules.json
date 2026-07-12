@@ -1,0 +1,82 @@
+{
+  "patterns": [
+    {
+      "name": "central_bank_policy_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:central bank|monetary authority|Federal Reserve|FOMC)\\b.{0,100}\\b(?:rate|inflation|tighten|ease|federal funds|stable prices)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "currency_intervention_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:currency intervention|FX intervention|foreign exchange intervention)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "external_balance_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:trade balance|trade deficit|trade surplus|current-account|current account|imports|exports)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "fiscal_policy_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:fiscal policy|fiscal consolidation|fiscal tightening|fiscal stimulus|budget deficit|tax reform|tax hike|tax cut)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "inflation_activity_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:core CPI|core inflation|core PCE|PCE excluding food and energy|retail sales|monthly retail trade)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "money_reserves_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:money supply|money stock|M2 money supply|M2|reserve requirement|reserve requirements|required reserves|reserve ratio)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "national_accounts_growth_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:GDP|gross domestic product|real GDP|PCE price index|core PCE)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "price_labor_indicator_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:CPI|PPI|payrolls?|unemployment rate|average hourly earnings|wage growth)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "sovereign_debt_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:sovereign debt|public debt|government debt|national debt|federal debt)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "subsidy_trade_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:subsidy|subsidies|government subsidies|countervailing measures)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "tariff_trade_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:tariff|tariffs|customs duties|import duties|trade restrictions?)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "treasury_auction_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:bond auction|treasury auction|Treasury auction|government bond auction)\\b",
+      "label": "economics_concept"
+    },
+    {
+      "name": "yield_curve_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:yield curve|yield-curve inversion|yield-curve steepening|10-year minus 2-year)\\b",
+      "label": "economics_concept"
+    }
+  ]
+}

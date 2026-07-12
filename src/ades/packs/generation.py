@@ -10,6 +10,7 @@ import re
 import shutil
 from typing import Any
 
+from ..impact.source_catalog import PROMOTION_ELIGIBLE_SOURCE_TIERS
 from ..runtime_matcher import build_matcher_artifact_from_aliases_json
 from ..text_processing import canonicalize_text, normalize_lookup_text
 from .alias_analysis import (
@@ -150,6 +151,8 @@ class SourceSnapshot:
     retrieved_at: str | None = None
     record_count: int | None = None
     notes: str | None = None
+    source_tier: str | None = None
+    source_url: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SourceSnapshot":
@@ -185,6 +188,16 @@ class SourceSnapshot:
             retrieved_at=str(data["retrieved_at"]) if data.get("retrieved_at") is not None else None,
             record_count=int(record_count) if record_count is not None else None,
             notes=str(data["notes"]) if data.get("notes") is not None else None,
+            source_tier=(
+                str(data["source_tier"]).strip()
+                if data.get("source_tier") is not None
+                else None
+            ),
+            source_url=(
+                str(data["source_url"]).strip()
+                if data.get("source_url") is not None
+                else None
+            ),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -203,6 +216,10 @@ class SourceSnapshot:
             payload["record_count"] = self.record_count
         if self.notes is not None:
             payload["notes"] = self.notes
+        if self.source_tier is not None:
+            payload["source_tier"] = self.source_tier
+        if self.source_url is not None:
+            payload["source_url"] = self.source_url
         return payload
 
 
@@ -1441,6 +1458,13 @@ def summarize_source_governance(
     for source in sorted(sources, key=lambda item: _stable_sort_key(item.name)):
         license_class = source.license_class or "blocked-pending-license-review"
         license_class_counts[license_class] = license_class_counts.get(license_class, 0) + 1
+        source_tier = source.source_tier
+        if source_tier is not None and source_tier not in PROMOTION_ELIGIBLE_SOURCE_TIERS:
+            restricted_source_count += 1
+            warnings.append(
+                f"Source '{source.name}' uses source_tier '{source_tier}' and blocks registry publication."
+            )
+            continue
         if license_class == "ship-now":
             publishable_source_count += 1
             continue

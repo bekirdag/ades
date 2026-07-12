@@ -742,7 +742,28 @@ def _query_vector_results_by_seed(
                 resolved_results: list[QdrantNearestPoint] | None = None
                 merged_results: list[QdrantNearestPoint] = []
                 alias_resolved = False
-                for collection_alias in collection_aliases:
+                seed_collection_aliases = [
+                    collection_alias
+                    for collection_alias in collection_aliases
+                    if seed_entity_id
+                    in eligible_seed_ids_by_alias.get(collection_alias, set())
+                ]
+                shared_fallback_aliases = [
+                    collection_alias
+                    for collection_alias in seed_collection_aliases
+                    if (
+                        allow_shared_fallback
+                        and shared_alias
+                        and collection_alias == shared_alias
+                        and len(seed_collection_aliases) > 1
+                    )
+                ]
+                primary_collection_aliases = [
+                    collection_alias
+                    for collection_alias in seed_collection_aliases
+                    if collection_alias not in shared_fallback_aliases
+                ]
+                for collection_alias in primary_collection_aliases:
                     if seed_entity_id not in eligible_seed_ids_by_alias.get(
                         collection_alias, set()
                     ):
@@ -762,12 +783,23 @@ def _query_vector_results_by_seed(
                     resolved_results = alias_results
                     if alias_results:
                         merged_results.extend(alias_results)
-                    if (
-                        not allow_shared_fallback
-                        and collection_alias == shared_alias
-                        and alias_results
-                    ):
-                        break
+                if not merged_results:
+                    for collection_alias in shared_fallback_aliases:
+                        try:
+                            alias_results = client.query_similar_by_id(
+                                collection_alias,
+                                point_id=seed_entity_id,
+                                limit=query_limit,
+                                filter_payload=filter_payload,
+                            )
+                        except QdrantVectorSearchError as exc:
+                            if exc.status_code == 404:
+                                continue
+                            raise
+                        alias_resolved = True
+                        resolved_results = alias_results
+                        if alias_results:
+                            merged_results.extend(alias_results)
                 if alias_resolved:
                     if merged_results:
                         results_by_seed[seed_entity_id] = _merge_nearest_point_results(
@@ -788,11 +820,28 @@ def _query_vector_results_by_seed(
                     )
                 if fallback_vector is not None:
                     fallback_results: list[QdrantNearestPoint] | None = None
-                    for collection_alias in collection_aliases:
-                        if seed_entity_id not in eligible_seed_ids_by_alias.get(
-                            collection_alias, set()
-                        ):
-                            continue
+                    seed_collection_aliases = [
+                        collection_alias
+                        for collection_alias in collection_aliases
+                        if seed_entity_id
+                        in eligible_seed_ids_by_alias.get(collection_alias, set())
+                    ]
+                    shared_fallback_aliases = [
+                        collection_alias
+                        for collection_alias in seed_collection_aliases
+                        if (
+                            allow_shared_fallback
+                            and shared_alias
+                            and collection_alias == shared_alias
+                            and len(seed_collection_aliases) > 1
+                        )
+                    ]
+                    primary_collection_aliases = [
+                        collection_alias
+                        for collection_alias in seed_collection_aliases
+                        if collection_alias not in shared_fallback_aliases
+                    ]
+                    for collection_alias in primary_collection_aliases:
                         try:
                             alias_results = client.query_similar_by_vector(
                                 collection_alias,
@@ -809,6 +858,24 @@ def _query_vector_results_by_seed(
                             fallback_results = alias_results
                         if alias_results:
                             merged_results.extend(alias_results)
+                    if not merged_results:
+                        for collection_alias in shared_fallback_aliases:
+                            try:
+                                alias_results = client.query_similar_by_vector(
+                                    collection_alias,
+                                    vector=fallback_vector,
+                                    limit=query_limit,
+                                    filter_payload=filter_payload,
+                                )
+                            except QdrantVectorSearchError as fallback_exc:
+                                if fallback_exc.status_code == 404:
+                                    continue
+                                warnings.append(f"vector_search_failed:{fallback_exc}")
+                                return {}, warnings
+                            if fallback_results is None:
+                                fallback_results = alias_results
+                            if alias_results:
+                                merged_results.extend(alias_results)
                     if fallback_results is not None:
                         if merged_results:
                             results_by_seed[seed_entity_id] = _merge_nearest_point_results(

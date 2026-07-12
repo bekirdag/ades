@@ -1,0 +1,76 @@
+{
+  "patterns": [
+    {
+      "name": "border_restriction_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:border restrictions?|temporary border closure|port of entry closure)\\b",
+      "label": "politics_concept"
+    },
+    {
+      "name": "diplomatic_action_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:diplomatic relations|ambassador recall|recall for consultations)\\b",
+      "label": "politics_concept"
+    },
+    {
+      "name": "emergency_declaration_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:state of emergency|emergency declaration|emergency decree)\\b",
+      "label": "politics_concept"
+    },
+    {
+      "name": "export_control_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:export control|export controls|export ban|technology restrictions?|Entity List|end-user restrictions?)\\b",
+      "label": "politics_concept"
+    },
+    {
+      "name": "geopolitical_risk_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:ceasefire agreement|cease-fire|truce agreement|peace process|security alliance|defen[cs]e pact)\\b",
+      "label": "politics_concept"
+    },
+    {
+      "name": "government_shutdown_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:government shutdown|shutdown furlough|lapse in appropriations)\\b",
+      "label": "politics_concept"
+    },
+    {
+      "name": "government_stability_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:coalition agreement|coalition government|confidence and supply|confidence vote|no-confidence vote)\\b",
+      "label": "politics_concept"
+    },
+    {
+      "name": "mining_policy_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:mining policy|mining regulation|mineral policy|critical minerals policy)\\b",
+      "label": "politics_concept"
+    },
+    {
+      "name": "referendum_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:referendum|constitutional referendum|referendum participant)\\b",
+      "label": "politics_concept"
+    },
+    {
+      "name": "resource_policy_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:energy policy|energy regulation|government energy policy|gas policy|oil policy)\\b",
+      "label": "politics_concept"
+    },
+    {
+      "name": "sanctions_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:sanctions|sanctions list|OFAC sanctions|UN sanctions|asset freeze|travel ban)\\b",
+      "label": "politics_concept"
+    },
+    {
+      "name": "trade_diplomacy_phrase",
+      "kind": "regex",
+      "pattern": "\\b(?:trade negotiations?|trade talks|trade deal talks|trade agreement negotiations?)\\b",
+      "label": "politics_concept"
+    }
+  ]
+}

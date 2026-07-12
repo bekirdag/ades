@@ -8,6 +8,14 @@ from pathlib import Path
 import shutil
 
 from ..artifact_release import append_release_gate_warnings, run_release_gate_commands
+from .business_quality import (
+    DEFAULT_BUSINESS_MAX_AMBIGUOUS_ALIASES,
+    validate_business_pack_quality,
+)
+from .economics_quality import (
+    DEFAULT_ECONOMICS_MAX_AMBIGUOUS_ALIASES,
+    validate_economics_pack_quality,
+)
 from .finance_quality import (
     DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES,
     DEFAULT_FINANCE_MAX_DROPPED_ALIAS_RATIO,
@@ -22,6 +30,10 @@ from .generation import SourceBundleManifest
 from .medical_quality import (
     DEFAULT_MEDICAL_MAX_AMBIGUOUS_ALIASES,
     validate_medical_pack_quality,
+)
+from .politics_quality import (
+    DEFAULT_POLITICS_MAX_AMBIGUOUS_ALIASES,
+    validate_politics_pack_quality,
 )
 from .publish import RegistryBuildResult, build_static_registry
 from .quality_common import PackQualityResult
@@ -320,6 +332,33 @@ def _validate_quality_for_pack(
             max_ambiguous_aliases=resolved_max_ambiguous_aliases,
             max_dropped_alias_ratio=resolved_max_dropped_alias_ratio,
         )
+    if manifest.pack_id == "business-vector-en":
+        return validate_business_pack_quality(
+            str(bundle_dir),
+            output_dir=str(output_dir),
+            min_expected_recall=min_expected_recall,
+            max_unexpected_hits=max_unexpected_hits,
+            max_ambiguous_aliases=resolved_max_ambiguous_aliases,
+            max_dropped_alias_ratio=resolved_max_dropped_alias_ratio,
+        )
+    if manifest.pack_id == "economics-vector-en":
+        return validate_economics_pack_quality(
+            str(bundle_dir),
+            output_dir=str(output_dir),
+            min_expected_recall=min_expected_recall,
+            max_unexpected_hits=max_unexpected_hits,
+            max_ambiguous_aliases=resolved_max_ambiguous_aliases,
+            max_dropped_alias_ratio=resolved_max_dropped_alias_ratio,
+        )
+    if manifest.pack_id == "politics-vector-en":
+        return validate_politics_pack_quality(
+            str(bundle_dir),
+            output_dir=str(output_dir),
+            min_expected_recall=min_expected_recall,
+            max_unexpected_hits=max_unexpected_hits,
+            max_ambiguous_aliases=resolved_max_ambiguous_aliases,
+            max_dropped_alias_ratio=resolved_max_dropped_alias_ratio,
+        )
     raise ValueError(
         f"No generated-pack quality profile is registered for pack: {manifest.pack_id}"
     )
@@ -363,6 +402,12 @@ def _resolve_max_ambiguous_aliases(
         return DEFAULT_FINANCE_MAX_AMBIGUOUS_ALIASES
     if pack_id == "medical-en":
         return DEFAULT_MEDICAL_MAX_AMBIGUOUS_ALIASES
+    if pack_id == "business-vector-en":
+        return DEFAULT_BUSINESS_MAX_AMBIGUOUS_ALIASES
+    if pack_id == "economics-vector-en":
+        return DEFAULT_ECONOMICS_MAX_AMBIGUOUS_ALIASES
+    if pack_id == "politics-vector-en":
+        return DEFAULT_POLITICS_MAX_AMBIGUOUS_ALIASES
     return DEFAULT_GENERAL_MAX_AMBIGUOUS_ALIASES
 
 

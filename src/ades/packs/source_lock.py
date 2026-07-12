@@ -20,6 +20,8 @@ def build_bundle_source_entry(
     license_name: str = "operator-supplied",
     adapter_version: str = "1",
     version: str | None = None,
+    source_tier: str | None = None,
+    source_url: str | None = None,
     extra_notes: str | None = None,
 ) -> dict[str, Any]:
     """Build one normalized bundle source entry with stable adapter metadata."""
@@ -39,6 +41,10 @@ def build_bundle_source_entry(
     }
     if version is not None:
         payload["version"] = version
+    if source_tier is not None:
+        payload["source_tier"] = source_tier
+    if source_url is not None:
+        payload["source_url"] = source_url
     return payload
 
 
@@ -97,6 +103,10 @@ def _build_lock_source_entry(source: dict[str, Any]) -> dict[str, Any]:
     }
     if source.get("version") is not None:
         payload["version"] = str(source["version"])
+    if source.get("source_tier") is not None:
+        payload["source_tier"] = str(source["source_tier"])
+    if source.get("source_url") is not None:
+        payload["source_url"] = str(source["source_url"])
     return {key: value for key, value in payload.items() if value is not None}
 
 

@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "pack_id": "economics-vector-en",
+  "version": "0.2.0",
+  "bundle_manifest_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/bundle.json",
+  "entities_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/normalized/entities.jsonl",
+  "rules_path": "/mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/normalized/rules.jsonl",
+  "sources": [
+    {
+      "name": "bea-national-accounts-glossary",
+      "snapshot_uri": "file:///mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/source/source_families/bea-national-accounts-glossary.json",
+      "version": "bea-glossary-and-pce-price-index-pages",
+      "license_class": "ship-now",
+      "license": "public-domain-us-government",
+      "retrieved_at": "2026-07-12T13:49:13.935120Z",
+      "record_count": 4,
+      "notes": "adapter=bdya_economics_source_family_evidence;adapter_version=1;source_family_id=bea-national-accounts-glossary",
+      "source_tier": "government",
+      "source_url": "https://www.bea.gov/help/glossary"
+    },
+    {
+      "name": "bls-price-labor-glossaries",
+      "snapshot_uri": "file:///mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/source/source_families/bls-price-labor-glossaries.json",
+      "version": "bls-glossary-cpi-ppi-ces-cps-pages",
+      "license_class": "ship-now",
+      "license": "public-domain-us-government",
+      "retrieved_at": "2026-07-12T13:49:13.935120Z",
+      "record_count": 4,
+      "notes": "adapter=bdya_economics_source_family_evidence;adapter_version=1;source_family_id=bls-price-labor-glossaries",
+      "source_tier": "government",
+      "source_url": "https://www.bls.gov/bls/glossary.htm"
+    },
+    {
+      "name": "census-economic-indicators",
+      "snapshot_uri": "file:///mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/source/source_families/census-economic-indicators.json",
+      "version": "census-economic-indicators-pages",
+      "license_class": "ship-now",
+      "license": "public-domain-us-government",
+      "retrieved_at": "2026-07-12T13:49:13.935120Z",
+      "record_count": 3,
+      "notes": "adapter=bdya_economics_source_family_evidence;adapter_version=1;source_family_id=census-economic-indicators",
+      "source_tier": "government",
+      "source_url": "https://www.census.gov/economic-indicators/"
+    },
+    {
+      "name": "federal-reserve-policy-statistics",
+      "snapshot_uri": "file:///mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/source/source_families/federal-reserve-policy-statistics.json",
+      "version": "federal-reserve-policy-g17-h6-reserve-requirements",
+      "license_class": "ship-now",
+      "license": "public-federal-reserve-website",
+      "retrieved_at": "2026-07-12T13:49:13.936121Z",
+      "record_count": 6,
+      "notes": "adapter=bdya_economics_source_family_evidence;adapter_version=1;source_family_id=federal-reserve-policy-statistics",
+      "source_tier": "official",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy.htm"
+    },
+    {
+      "name": "fred-yield-curve",
+      "snapshot_uri": "file:///mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/source/source_families/fred-yield-curve.json",
+      "version": "fred-treasury-constant-maturity-spread-series",
+      "license_class": "ship-now",
+      "license": "public-federal-reserve-bank-data",
+      "retrieved_at": "2026-07-12T13:49:13.936121Z",
+      "record_count": 2,
+      "notes": "adapter=bdya_economics_source_family_evidence;adapter_version=1;source_family_id=fred-yield-curve",
+      "source_tier": "official",
+      "source_url": "https://fred.stlouisfed.org/series/T10Y2Y"
+    },
+    {
+      "name": "imf-bop-fiscal-glossary",
+      "snapshot_uri": "file:///mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/source/source_families/imf-bop-fiscal-glossary.json",
+      "version": "imf-glossary-current-account-fiscal-adjustment-pages",
+      "license_class": "ship-now",
+      "license": "public-international-organization-website",
+      "retrieved_at": "2026-07-12T13:49:13.936121Z",
+      "record_count": 9,
+      "notes": "adapter=bdya_economics_source_family_evidence;adapter_version=1;source_family_id=imf-bop-fiscal-glossary",
+      "source_tier": "official",
+      "source_url": "https://www.imf.org/en/about/glossary"
+    },
+    {
+      "name": "treasury-fiscaldata",
+      "snapshot_uri": "file:///mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/source/source_families/treasury-fiscaldata.json",
+      "version": "fiscaldata-debt-to-the-penny-and-national-debt-pages",
+      "license_class": "ship-now",
+      "license": "public-domain-us-government",
+      "retrieved_at": "2026-07-12T13:49:13.937120Z",
+      "record_count": 2,
+      "notes": "adapter=bdya_economics_source_family_evidence;adapter_version=1;source_family_id=treasury-fiscaldata",
+      "source_tier": "government",
+      "source_url": "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/"
+    },
+    {
+      "name": "treasurydirect-auctions",
+      "snapshot_uri": "file:///mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/source/source_families/treasurydirect-auctions.json",
+      "version": "treasurydirect-auction-pages",
+      "license_class": "ship-now",
+      "license": "public-domain-us-government",
+      "retrieved_at": "2026-07-12T13:49:13.937120Z",
+      "record_count": 2,
+      "notes": "adapter=bdya_economics_source_family_evidence;adapter_version=1;source_family_id=treasurydirect-auctions",
+      "source_tier": "government",
+      "source_url": "https://www.treasurydirect.gov/auctions/announcements-data-results/"
+    },
+    {
+      "name": "wto-tariff-trade-glossary",
+      "snapshot_uri": "file:///mnt/githubActions/ades_big_data/experimental_pack_prod_readiness/2026-07-12/promotion/regenerated-bundles/economics-vector-en-bundle/source/source_families/wto-tariff-trade-glossary.json",
+      "version": "wto-tariff-glossary-and-scm-agreement",
+      "license_class": "ship-now",
+      "license": "public-international-organization-website",
+      "retrieved_at": "2026-07-12T13:49:13.937120Z",
+      "record_count": 4,
+      "notes": "adapter=bdya_economics_source_family_evidence;adapter_version=1;source_family_id=wto-tariff-trade-glossary",
+      "source_tier": "official",
+      "source_url": "https://www.wto.org/english/tratop_e/tariffs_e/tariffs_e.htm"
+    }
+  ],
+  "source_license_classes": {
+    "ship-now": 9
+  },
+  "publishable_source_count": 9,
+  "restricted_source_count": 0,
+  "publishable_sources_only": true
+}

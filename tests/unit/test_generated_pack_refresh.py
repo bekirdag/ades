@@ -2,10 +2,12 @@ import json
 from pathlib import Path
 import sys
 
+from ades.packs.bdya_phase6 import build_bdya_domain_source_bundles
 from ades.packs.finance_bundle import build_finance_source_bundle
 from ades.packs.general_bundle import build_general_source_bundle
 from ades.packs.medical_bundle import build_medical_source_bundle
 from ades.packs.refresh import (
+    _resolve_max_ambiguous_aliases,
     _resolve_max_dropped_alias_ratio,
     refresh_generated_pack_registry,
 )
@@ -19,6 +21,93 @@ def test_resolve_max_dropped_alias_ratio_uses_pack_family_defaults() -> None:
     assert _resolve_max_dropped_alias_ratio("finance-en", max_dropped_alias_ratio=None) == 0.5
     assert _resolve_max_dropped_alias_ratio("finance-us-en", max_dropped_alias_ratio=None) == 0.6
     assert _resolve_max_dropped_alias_ratio("finance-us-en", max_dropped_alias_ratio=0.4) == 0.4
+
+
+def test_resolve_max_ambiguous_aliases_uses_vector_family_defaults() -> None:
+    assert _resolve_max_ambiguous_aliases(
+        "business-vector-en", max_ambiguous_aliases=None
+    ) == 0
+    assert _resolve_max_ambiguous_aliases(
+        "economics-vector-en", max_ambiguous_aliases=None
+    ) == 0
+    assert _resolve_max_ambiguous_aliases(
+        "politics-vector-en", max_ambiguous_aliases=None
+    ) == 0
+    assert _resolve_max_ambiguous_aliases(
+        "politics-vector-en", max_ambiguous_aliases=2
+    ) == 2
+
+
+def test_refresh_generated_pack_registry_supports_business_vector_profile(
+    tmp_path: Path,
+) -> None:
+    bundles = build_bdya_domain_source_bundles(output_dir=tmp_path / "bdya-bundles")
+    business_bundle = next(
+        bundle for bundle in bundles if bundle.pack_id == "business-vector-en"
+    )
+
+    response = refresh_generated_pack_registry(
+        [business_bundle.bundle_dir],
+        output_dir=tmp_path / "refresh-output",
+    )
+
+    assert response.passed is True
+    assert response.pack_count == 1
+    assert response.registry_materialized is False
+    assert response.packs[0].pack_id == "business-vector-en"
+    assert response.packs[0].quality.fixture_profile == "benchmark"
+    assert response.packs[0].quality.passed is True
+    assert response.packs[0].report.publishable_sources_only is True
+    assert response.packs[0].report.source_count > 1
+    assert "registry_build_skipped:candidate_only" in response.warnings
+
+
+def test_refresh_generated_pack_registry_supports_economics_vector_profile(
+    tmp_path: Path,
+) -> None:
+    bundles = build_bdya_domain_source_bundles(output_dir=tmp_path / "bdya-bundles")
+    economics_bundle = next(
+        bundle for bundle in bundles if bundle.pack_id == "economics-vector-en"
+    )
+
+    response = refresh_generated_pack_registry(
+        [economics_bundle.bundle_dir],
+        output_dir=tmp_path / "refresh-output",
+    )
+
+    assert response.passed is True
+    assert response.pack_count == 1
+    assert response.registry_materialized is False
+    assert response.packs[0].pack_id == "economics-vector-en"
+    assert response.packs[0].quality.fixture_profile == "benchmark"
+    assert response.packs[0].quality.passed is True
+    assert response.packs[0].report.publishable_sources_only is True
+    assert response.packs[0].report.source_count == 9
+    assert "registry_build_skipped:candidate_only" in response.warnings
+
+
+def test_refresh_generated_pack_registry_supports_politics_vector_profile(
+    tmp_path: Path,
+) -> None:
+    bundles = build_bdya_domain_source_bundles(output_dir=tmp_path / "bdya-bundles")
+    politics_bundle = next(
+        bundle for bundle in bundles if bundle.pack_id == "politics-vector-en"
+    )
+
+    response = refresh_generated_pack_registry(
+        [politics_bundle.bundle_dir],
+        output_dir=tmp_path / "refresh-output",
+    )
+
+    assert response.passed is True
+    assert response.pack_count == 1
+    assert response.registry_materialized is False
+    assert response.packs[0].pack_id == "politics-vector-en"
+    assert response.packs[0].quality.fixture_profile == "benchmark"
+    assert response.packs[0].quality.passed is True
+    assert response.packs[0].report.publishable_sources_only is True
+    assert response.packs[0].report.source_count == 20
+    assert "registry_build_skipped:candidate_only" in response.warnings
 
 
 def test_refresh_generated_pack_registry_builds_multi_pack_candidates_by_default(

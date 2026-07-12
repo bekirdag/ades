@@ -192,8 +192,8 @@ PATH_FAMILY_SMOKE_CASES = (
     ),
     NewsAnalyzePathFamilySmokeCase(
         family="macro",
-        article="The central bank cut interest rates as FX volatility increased.",
-        surface="central bank",
+        article="The Federal Reserve cut interest rates and said more easing could follow.",
+        surface="Federal Reserve",
         source_label="central_bank",
         source_ref="wikidata:Q53536",
         source_type="central_bank",

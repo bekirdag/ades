@@ -19,7 +19,14 @@ def test_storage_layout_uses_expected_folders(tmp_path) -> None:
 
 def test_bundled_registry_lists_expected_packs() -> None:
     index = load_registry_index()
-    assert sorted(index.packs) == ["finance-en", "general-en", "medical-en"]
+    assert sorted(index.packs) == [
+        "business-vector-en",
+        "economics-vector-en",
+        "finance-en",
+        "general-en",
+        "medical-en",
+        "politics-vector-en",
+    ]
 
 
 def test_pack_installer_installs_dependencies(tmp_path) -> None:
