@@ -136,6 +136,8 @@ printf '%s\n' \
   /home/deploy/www/repo.adestool.com/public \
   /home/deploy/.local/share/ades-artifacts/repo/current \
   /home/deploy/.local/share/ades-artifacts/repo/public \
+  /mnt/ades/storage \
+  /mnt/ades/storage/registry \
   /mnt/ades/repo/public \
   >> "$roots_file"
 
