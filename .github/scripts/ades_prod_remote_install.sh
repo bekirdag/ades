@@ -517,9 +517,57 @@ fi
 if [ "$switch_repo_current" -eq 1 ]; then
   ln -sfn "$release_root" /mnt/ades/repo/current
 fi
+/mnt/ades/app/shared/.venv/bin/python - <<'PY'
+from ades.config import get_settings
+from ades.packs.registry import PackRegistry
+
+expected_versions = {
+    "business-vector-en": "0.2.0",
+    "economics-vector-en": "0.2.0",
+    "politics-vector-en": "0.2.1",
+}
+
+settings = get_settings()
+registry = PackRegistry(
+    settings.storage_root,
+    runtime_target=settings.runtime_target,
+    metadata_backend=settings.metadata_backend,
+    database_url=settings.database_url,
+)
+for pack_id, expected_version in expected_versions.items():
+    manifest_path = settings.storage_root / "packs" / pack_id / "manifest.json"
+    if not manifest_path.is_file():
+        raise SystemExit(f"missing promoted pack manifest after deploy: {manifest_path}")
+    if not registry.sync_pack_from_disk(pack_id, active=True):
+        raise SystemExit(f"failed to sync promoted pack metadata: {pack_id}")
+    refreshed = registry.get_pack(pack_id, active_only=False)
+    if refreshed is None or refreshed.version != expected_version:
+        raise SystemExit(
+            "promoted pack metadata mismatch after sync: "
+            f"{pack_id} expected={expected_version!r} got={getattr(refreshed, 'version', None)!r}"
+        )
+    print(f"Synced promoted pack metadata: {pack_id} {expected_version}")
+PY
 XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user daemon-reload
 XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user restart ades.service
 timeout 90s bash -c 'until curl --connect-timeout 5 --max-time 10 -fsS http://127.0.0.1:8734/healthz >/dev/null; do sleep 2; done'
+python3 - <<'PY'
+import json
+import urllib.request
+
+expected_versions = {
+    "business-vector-en": "0.2.0",
+    "economics-vector-en": "0.2.0",
+    "politics-vector-en": "0.2.1",
+}
+with urllib.request.urlopen("http://127.0.0.1:8734/v0/packs/available", timeout=15) as response:
+    packs = json.load(response)
+pack_by_id = {pack.get("pack_id"): pack for pack in packs}
+for pack_id, expected_version in expected_versions.items():
+    pack = pack_by_id.get(pack_id) or {}
+    if pack.get("version") != expected_version or pack.get("tier") != "domain":
+        raise SystemExit(f"local service did not promote {pack_id}: {pack}")
+PY
 python3 - "$impact_current_root/market_graph_store.sqlite" <<'PY'
 import json
 import sys

@@ -84,10 +84,37 @@ for match in re.finditer(r"\bserver\s*\{", text):
     block = text[start:end]
     if not re.search(r"\bserver_name\s+[^;]*\brepo\.adestool\.com\b", block):
         continue
-    for root in re.findall(r"(?m)^\s*root\s+([^;]+);", block):
-        root = root.strip().strip('"').strip("'")
-        if root and "$" not in root:
-            print(root)
+    for directive in ("root", "alias"):
+        for root in re.findall(rf"(?m)^\s*{directive}\s+([^;]+);", block):
+            root = root.strip().strip('"').strip("'")
+            if root and "$" not in root:
+                print(root)
+PY
+}
+
+verify_public_registry_url() {
+  python3 - <<'PY'
+import json
+import time
+import urllib.request
+
+expected_versions = {
+    "business-vector-en": "0.2.0",
+    "economics-vector-en": "0.2.0",
+    "politics-vector-en": "0.2.1",
+}
+url = f"https://repo.adestool.com/index.json?sync_verify={int(time.time())}"
+request = urllib.request.Request(url, headers={"user-agent": "ades-public-registry-sync/1.0"})
+with urllib.request.urlopen(request, timeout=30) as response:
+    index = json.load(response)
+packs = index.get("packs") or {}
+for pack_id, expected_version in expected_versions.items():
+    entry = packs.get(pack_id) or {}
+    if entry.get("version") != expected_version or entry.get("tier") != "domain":
+        raise SystemExit(
+            f"public registry URL did not promote {pack_id}: "
+            f"expected={expected_version!r} entry={entry!r}"
+        )
 PY
 }
 
@@ -97,9 +124,18 @@ fi
 detect_nginx_roots >> "$roots_file"
 printf '%s\n' \
   /var/www/repo.adestool.com \
+  /var/www/html/repo.adestool.com \
+  /var/www/html \
   /var/www/adestool-repo \
   /srv/repo.adestool.com \
   /srv/adestool-repo \
+  /usr/share/nginx/html \
+  /home/deploy/repo.adestool.com \
+  /home/deploy/repo.adestool.com/public \
+  /home/deploy/www/repo.adestool.com \
+  /home/deploy/www/repo.adestool.com/public \
+  /home/deploy/.local/share/ades-artifacts/repo/current \
+  /home/deploy/.local/share/ades-artifacts/repo/public \
   /mnt/ades/repo/public \
   >> "$roots_file"
 
@@ -172,5 +208,6 @@ if [ "$synced" -ne 1 ]; then
   echo "No writable public registry root was found for repo.adestool.com." >&2
   exit 1
 fi
+verify_public_registry_url
 
 echo "Public registry static root sync completed."
