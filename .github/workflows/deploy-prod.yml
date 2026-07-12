@@ -426,7 +426,7 @@ jobs:
           if not politics_response.get("related_entities"):
               raise SystemExit(f"politics vector smoke returned no related entities: {politics_response}")
           politics_qids = {
-              str(((entity.get("link") or {}).get("entity_id") or ""))
+              str(((entity.get("link") or {}).get("entity_id") or "")).removeprefix("wikidata:")
               for entity in politics_response.get("entities") or []
           }
           required_politics_qids = {"Q7184", "Q1065", "Q789915", "Q455289"}
