@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import time
 from typing import Literal
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Query
 
@@ -413,7 +414,26 @@ _HIDDEN_PASSIVE_ARTIFACT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.IGNORECASE,
         ),
     ),
+    (
+        "html_entity",
+        re.compile(r"&(?:#[0-9]+|#x[0-9a-f]+|[a-z][a-z0-9]+);", re.IGNORECASE),
+    ),
     ("html_fragment", re.compile(r"<[^>]+>")),
+    (
+        "temporal_phrase",
+        re.compile(
+            r"^(?:in|on|by|during|since|through|until|from|as\s+of|before|after)\s+"
+            r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+            r"jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|"
+            r"dec(?:ember)?|q[1-4]|h[12]|today|tomorrow|yesterday|monday|tuesday|"
+            r"wednesday|thursday|friday|saturday|sunday|20\d{2})\b(?:[\s,.-]*\d{1,4})?$",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "time_window",
+        re.compile(r"^(?:short|medium|long|near)\s+term$", re.IGNORECASE),
+    ),
 )
 _PASSIVE_ARTIFACT_LABELS = {
     "basis_point",
@@ -460,6 +480,7 @@ _PASSIVE_GENERIC_FINANCE_ALIAS_TERMS = {
     "bank",
     "banks",
     "business",
+    "block",
     "company",
     "corp",
     "corporation",
@@ -482,6 +503,7 @@ _PASSIVE_GENERIC_FINANCE_ALIAS_TERMS = {
     "ltd",
     "market",
     "markets",
+    "personal",
     "plc",
     "sector",
     "services",
@@ -503,6 +525,16 @@ _CORPORATE_SUFFIX_TERMS = {
     "nv",
     "plc",
     "sa",
+}
+_ORGANIZATION_CANONICAL_TERMS = {
+    *_CORPORATE_SUFFIX_TERMS,
+    "bank",
+    "enterprise",
+    "enterprises",
+    "group",
+    "holding",
+    "holdings",
+    "insurance",
 }
 _SPORTS_ENTITY_PATTERN = re.compile(
     r"\b(?:baseball|basketball|football|hockey|soccer|"
@@ -586,6 +618,21 @@ _CRYPTO_TOPIC_PATTERN = re.compile(
     r"\b(?:bitcoin|btc|ether|ethereum|crypto(?:currency|currencies)?|digital\s+assets?)\b",
     re.IGNORECASE,
 )
+_FOREX_TOPIC_PATTERN = re.compile(
+    r"\b(?:forex|fx|foreign\s+exchange|currency|currencies|exchange\s+rate|"
+    r"peso|rupee|lira|rupiah|real|yen|yuan|euro|sterling|pound)\b",
+    re.IGNORECASE,
+)
+_LABOR_TOPIC_PATTERN = re.compile(
+    r"\b(?:labor|labour|union|strike|strikes|walkout|work\s+stoppage|"
+    r"collective\s+bargaining|wage\s+talks?)\b",
+    re.IGNORECASE,
+)
+_ELECTORAL_TOPIC_PATTERN = re.compile(
+    r"\b(?:election|electoral|campaign|candidate|ballot|voters?|polling|"
+    r"political\s+party|campaign\s+funding|fundraising|super\s+pac|donors?)\b",
+    re.IGNORECASE,
+)
 _LEGAL_TOPIC_PATTERN = re.compile(
     r"\b(?:court|lawsuit|legal|penalt(?:y|ies)|fine|fined|settlement|regulator|regulatory|enforcement|probe)\b",
     re.IGNORECASE,
@@ -627,6 +674,39 @@ _SEMICONDUCTOR_NEGATIVE_WARNING_PATTERN = re.compile(
     r"|\b(?:warn|warns|warned|warning|downgrade|downgrades|downgraded|cut|cuts|cutting|lower|lowers|lowered|weak|weaker|negative)\b.{0,140}\b(?:semiconductor|semiconductors|chipmaker|chipmakers|chips?|morgan\s+stanley)\b",
     re.IGNORECASE | re.DOTALL,
 )
+_HIGH_IMPACT_GEOPOLITICAL_SIGNAL_TYPES = {"sanctions", "war_escalation"}
+_HIGH_IMPACT_GEOPOLITICAL_CLAIM_PATTERN = re.compile(
+    r"\b(?:blockade|invasion|military\s+strike|missile|ceasefire|war|"
+    r"armed\s+conflict|supreme\s+leader|martial\s+law|border\s+clash)\b",
+    re.IGNORECASE,
+)
+_HIGH_TRUST_SOURCE_HOST_SUFFIXES = {
+    "apnews.com",
+    "bbc.com",
+    "bloomberg.com",
+    "cnbc.com",
+    "cnn.com",
+    "ft.com",
+    "marketwatch.com",
+    "reuters.com",
+    "wsj.com",
+}
+_HIGH_TRUST_SOURCE_NAME_PATTERN = re.compile(
+    r"\b(?:associated\s+press|ap\s+news|bbc|bloomberg|cnbc|cnn|"
+    r"financial\s+times|marketwatch|reuters|wall\s+street\s+journal)\b",
+    re.IGNORECASE,
+)
+_UNSUPPORTED_TICKER_PLACEHOLDER_KEYS = {
+    "abc",
+    "example",
+    "placeholder",
+    "sample",
+    "symbol",
+    "tbd",
+    "test",
+    "ticker",
+    "xyz",
+}
 
 
 @dataclass(frozen=True)
@@ -2194,6 +2274,13 @@ def _filter_unanchored_impact_candidates(
 def _non_asset_terminal_candidate_reason(candidate: ImpactCandidate) -> str | None:
     if not _is_direct_terminal_ref(candidate.entity_ref):
         return None
+    ref_key = candidate.entity_ref.casefold()
+    is_ticker_ref = "-ticker:" in ref_key or ":ticker:" in ref_key
+    has_source_backed_evidence = bool(candidate.source_entity_refs) or any(
+        path.edges for path in candidate.relationship_paths
+    )
+    if is_ticker_ref and not has_source_backed_evidence:
+        return "unsupported_terminal_candidate"
     terms = _dedupe_string_values(
         [candidate.name, *_direct_terminal_identity_terms(candidate.entity_ref)]
     )
@@ -2201,6 +2288,8 @@ def _non_asset_terminal_candidate_reason(candidate: ImpactCandidate) -> str | No
         key = re.sub(r"[^a-z0-9]+", "", term.casefold())
         if key in _NON_ASSET_TERMINAL_IDENTIFIER_KEYS:
             return "non_asset_terminal_identifier"
+        if is_ticker_ref and key in _UNSUPPORTED_TICKER_PLACEHOLDER_KEYS:
+            return "placeholder_ticker_identifier"
     return None
 
 
@@ -2580,6 +2669,50 @@ def _story_quality_warnings(raw_text: str, analysis_text: str) -> list[str]:
     return warnings
 
 
+def _source_host(request: NewsAnalyzeRequest) -> str:
+    if request.source is None or not request.source.url:
+        return ""
+    parsed = urlparse(request.source.url)
+    host = parsed.hostname or ""
+    if not host and "://" not in request.source.url:
+        host = urlparse(f"https://{request.source.url}").hostname or ""
+    return host.removeprefix("www.").casefold()
+
+
+def _source_is_high_trust_for_geopolitical_claims(request: NewsAnalyzeRequest) -> bool:
+    publisher = request.source.publisher if request.source else None
+    if publisher and _HIGH_TRUST_SOURCE_NAME_PATTERN.search(publisher):
+        return True
+    host = _source_host(request)
+    return bool(
+        host
+        and any(
+            host == trusted_host or host.endswith(f".{trusted_host}")
+            for trusted_host in _HIGH_TRUST_SOURCE_HOST_SUFFIXES
+        )
+    )
+
+
+def _source_credibility_warnings(
+    *,
+    request: NewsAnalyzeRequest,
+    event_signals: list[object],
+    text: str,
+) -> list[str]:
+    signal_types = {
+        str(getattr(signal, "event_type", "")).strip().casefold()
+        for signal in event_signals
+        if str(getattr(signal, "event_type", "")).strip()
+    }
+    high_impact_claim = bool(
+        signal_types & _HIGH_IMPACT_GEOPOLITICAL_SIGNAL_TYPES
+        or _HIGH_IMPACT_GEOPOLITICAL_CLAIM_PATTERN.search(text)
+    )
+    if not high_impact_claim or _source_is_high_trust_for_geopolitical_claims(request):
+        return []
+    return ["ADES_NEWS_ANALYZE_SOURCE_REVIEW:HIGH_IMPACT_GEOPOLITICAL_UNVERIFIED"]
+
+
 def _request_domain_terms(request: NewsAnalyzeRequest) -> list[str]:
     terms: list[str] = []
     for value in (request.domain_hint,):
@@ -2925,6 +3058,8 @@ def _contextual_entity_artifact_reasons(
         if entity.provenance and entity.provenance.source_domain
         else ""
     )
+    surface_tokens = re.findall(r"[A-Za-z0-9]+", surface.casefold())
+    canonical_tokens = re.findall(r"[A-Za-z0-9]+", canonical_name.casefold())
 
     if (
         normalized_surface
@@ -2948,6 +3083,16 @@ def _contextual_entity_artifact_reasons(
         text or ""
     ):
         reasons.append("sports_entity_context_mismatch")
+
+    if (
+        label in {"person", "people"}
+        and len(surface_tokens) == 1
+        and len(canonical_tokens) > 1
+        and surface_tokens[0] in canonical_tokens
+        and not any(token in _ORGANIZATION_CANONICAL_TERMS for token in canonical_tokens)
+        and not canonical_anchored
+    ):
+        reasons.append("partial_person_name")
 
     if (
         label in {"organization", "company", "issuer", "government"}
@@ -3545,12 +3690,22 @@ def _build_topic_scope(
         route_text
     ):
         primary_override = "Regulatory & Legal"
+    elif (
+        "currency_market_move" in signal_types
+        or "fx_intervention" in signal_types
+        or _FOREX_TOPIC_PATTERN.search(route_text)
+    ):
+        primary_override = "Trading & Markets"
+    elif _ELECTORAL_TOPIC_PATTERN.search(route_text):
+        primary_override = "Political & Policy"
     elif signal_types & {"acquisition", "merger", "divestiture", "equity_listing"} or _MA_TOPIC_PATTERN.search(
         route_text
     ):
         primary_override = "Trading & Markets"
     elif "crypto_market_move" in signal_types or _CRYPTO_TOPIC_PATTERN.search(route_text):
         primary_override = "Trading & Markets"
+    elif "strike_labor_disruption" in signal_types or _LABOR_TOPIC_PATTERN.search(route_text):
+        primary_override = "Economic & Macro"
     elif _TECH_TOPIC_PATTERN.search(route_text) and any(
         "commodit" in label.casefold() for label in labels
     ):
@@ -4784,6 +4939,13 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         analysis_text = _clean_news_analysis_text(raw_analysis_text)
         warnings.extend(_story_quality_warnings(raw_analysis_text, analysis_text))
         event_signals = extract_news_event_signals(analysis_text)
+        warnings.extend(
+            _source_credibility_warnings(
+                request=request,
+                event_signals=event_signals,
+                text=analysis_text,
+            )
+        )
         non_market_reasons = _non_market_news_rejection_reasons(
             request=request,
             text=analysis_text,
@@ -5122,6 +5284,11 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             quality_flags.append("NO_TERMINAL_IMPACT_CANDIDATES")
         if unresolved_entities:
             quality_flags.append("UNRESOLVED_MARKET_RELATIONSHIPS_PRESENT")
+        if any(
+            warning.startswith("ADES_NEWS_ANALYZE_SOURCE_REVIEW:")
+            for warning in warnings
+        ):
+            quality_flags.append("GEOPOLITICAL_SOURCE_REVIEW_REQUIRED")
 
         deduped_warnings = _dedupe_string_values(warnings)[:32]
         no_terminal_reasons = _build_no_terminal_reasons(

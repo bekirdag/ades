@@ -5744,6 +5744,21 @@ def test_news_analyze_story_quality_routes_topics_and_strips_internal_metadata(
             "Trading & Markets",
         ),
         (
+            "The Philippine peso weakened in forex trading as importers bought dollars.",
+            "Commodities, Energy & Agriculture",
+            "Trading & Markets",
+        ),
+        (
+            "Dockworkers union leaders extended labor talks after a port wage dispute.",
+            "Political & Policy",
+            "Economic & Macro",
+        ),
+        (
+            "A presidential candidate's election bid drew new campaign funding.",
+            "Trading & Markets",
+            "Political & Policy",
+        ),
+        (
             "Sky made a takeover offer for ITV shares.",
             "Regional & International",
             "Trading & Markets",
@@ -6119,6 +6134,145 @@ def test_news_analyze_normalizes_country_alias_passives_and_hides_date_artifacts
     artifact = passive_by_ref["ades:artifact:anno-domini"]
     assert artifact["display_eligible"] is False
     assert "date_era_artifact" in artifact["quality_reasons"]
+
+
+def test_news_analyze_hides_html_temporal_partial_and_generic_finance_passives(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "passive-weekly-quality-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+    story_text = (
+        "In June, Lindsey said personal income measures would affect bank lending."
+    )
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="In June",
+                    label="organization",
+                    start=text.index("In June"),
+                    end=text.index("In June") + len("In June"),
+                    confidence=0.86,
+                    relevance=0.65,
+                    link=EntityLink(
+                        entity_id="ades:artifact:in-june",
+                        canonical_text="In June",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="general",
+                    ),
+                ),
+                EntityMatch(
+                    text="NBC&#39;s &quot;Meet",
+                    label="organization",
+                    start=0,
+                    end=len("NBC&#39;s &quot;Meet"),
+                    confidence=0.84,
+                    relevance=0.6,
+                    link=EntityLink(
+                        entity_id="ades:artifact:html-source-fragment",
+                        canonical_text="NBC&#39;s &quot;Meet",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="general",
+                    ),
+                ),
+                EntityMatch(
+                    text="Lindsey",
+                    label="person",
+                    start=text.index("Lindsey"),
+                    end=text.index("Lindsey") + len("Lindsey"),
+                    confidence=0.9,
+                    relevance=0.74,
+                    link=EntityLink(
+                        entity_id="wikidata:Q22212",
+                        canonical_text="Lindsey Graham",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="general",
+                    ),
+                ),
+                EntityMatch(
+                    text="personal",
+                    label="organization",
+                    start=text.index("personal"),
+                    end=text.index("personal") + len("personal"),
+                    confidence=0.88,
+                    relevance=0.72,
+                    link=EntityLink(
+                        entity_id="finance-ca-issuer:personal-group",
+                        canonical_text="The Personal Group Insurance Company",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="finance",
+                    ),
+                ),
+            ],
+            topics=[TopicMatch(label="Economic & Macro", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": story_text,
+            "options": {"include_relationship_paths": False},
+        },
+    )
+
+    assert response.status_code == 200
+    passive_by_ref = {
+        entity["entity_ref"]: entity for entity in response.json()["passive_entities"]
+    }
+    assert passive_by_ref["ades:artifact:in-june"]["display_eligible"] is False
+    assert "temporal_phrase" in passive_by_ref["ades:artifact:in-june"]["quality_reasons"]
+    assert passive_by_ref["ades:artifact:html-source-fragment"]["display_eligible"] is False
+    assert "html_entity" in passive_by_ref["ades:artifact:html-source-fragment"][
+        "quality_reasons"
+    ]
+    assert passive_by_ref["wikidata:Q22212"]["display_eligible"] is False
+    assert "partial_person_name" in passive_by_ref["wikidata:Q22212"]["quality_reasons"]
+    assert passive_by_ref["finance-ca-issuer:personal-group"]["display_eligible"] is False
+    assert "unanchored_finance_alias" in passive_by_ref[
+        "finance-ca-issuer:personal-group"
+    ]["quality_reasons"]
 
 
 def test_news_analyze_hides_context_mismatched_passive_entities(
@@ -6586,6 +6740,152 @@ def test_news_analyze_drops_non_asset_terminal_identifier_candidates(
         warning.startswith("ADES_NEWS_ANALYZE_DROPPED_INVALID_TERMINAL")
         for warning in payload["warnings"]
     )
+
+
+def test_news_analyze_drops_unsupported_placeholder_ticker_candidates(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "unsupported-terminal-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="United States",
+                    label="country",
+                    start=text.index("United States"),
+                    end=text.index("United States") + len("United States"),
+                    confidence=0.94,
+                    relevance=0.92,
+                    link=EntityLink(
+                        entity_id="country:us",
+                        canonical_text="United States",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="general",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="Trading & Markets", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs: list[str], **_: object) -> ImpactExpansionResult:
+        assert "country:us" in entity_refs
+        return ImpactExpansionResult(
+            graph_version="fixture",
+            artifact_version="fixture",
+            artifact_hash="sha256:fixture",
+            source_entities=[],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref="finance-us-ticker:XYZ",
+                    name="XYZ",
+                    entity_type="ticker",
+                    evidence_level="shallow",
+                    confidence=0.71,
+                    source_entity_refs=[],
+                    relationship_paths=[],
+                )
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": "United States markets moved after a broad policy update.",
+            "options": {
+                "include_relationship_paths": True,
+                "include_impact_paths": True,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["terminal_impact_candidates"] == []
+    assert any(
+        "unsupported_terminal_candidate" in warning
+        for warning in payload["warnings"]
+        if warning.startswith("ADES_NEWS_ANALYZE_DROPPED_INVALID_TERMINAL")
+    )
+
+
+def test_news_analyze_flags_unverified_high_impact_geopolitical_claims(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "source-review-en", domain="politics")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[],
+            topics=[TopicMatch(label="Political & Policy", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "source": {
+                "publisher": "Local Industry Blog",
+                "url": "https://local-industry.example/story",
+            },
+            "text": (
+                "A blockade and military strike report raised war concerns in a "
+                "major shipping corridor."
+            ),
+            "options": {"include_relationship_paths": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert (
+        "ADES_NEWS_ANALYZE_SOURCE_REVIEW:HIGH_IMPACT_GEOPOLITICAL_UNVERIFIED"
+        in payload["warnings"]
+    )
+    assert "GEOPOLITICAL_SOURCE_REVIEW_REQUIRED" in payload["quality_flags"]
 
 
 def test_news_analyze_overrides_negative_cost_and_warning_directions(
