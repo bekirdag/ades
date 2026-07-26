@@ -121,6 +121,9 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
             _rx(
                 r"\b(?:stimulus|spending\s+package|fiscal\s+support|budget\s+expansion|tax\s+cut|public\s+spending)\b"
             ),
+            _rx(
+                r"\b(?:unfunded\s+(?:spending|tax\s+cuts?|budget)|borrowing[-\s]+funded\s+(?:spending|tax\s+cuts?)|deficit[-\s]+funded\s+(?:spending|tax\s+cuts?))\b"
+            ),
         ),
         compatible_asset_families=("rates", "currency", "bonds", "equity_index", "country_risk"),
         confidence=0.78,

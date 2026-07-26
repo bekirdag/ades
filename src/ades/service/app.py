@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 import hashlib
+from html import unescape
 import os
 from pathlib import Path
 import re
@@ -511,6 +512,50 @@ _PASSIVE_GENERIC_FINANCE_ALIAS_TERMS = {
     "stocks",
     "the",
 }
+_PASSIVE_COMMON_NOUN_ARTIFACT_TERMS = {
+    "agency",
+    "analyst",
+    "analysts",
+    "article",
+    "author",
+    "company",
+    "country",
+    "economy",
+    "firm",
+    "government",
+    "investor",
+    "investors",
+    "lawmakers",
+    "market",
+    "markets",
+    "ministry",
+    "official",
+    "officials",
+    "policy",
+    "report",
+    "sources",
+    "stock",
+    "stocks",
+    "the agency",
+    "the company",
+    "the country",
+    "the firm",
+    "the government",
+    "the market",
+    "the ministry",
+    "trader",
+    "traders",
+}
+_PASSIVE_UI_ARTIFACT_PATTERN = re.compile(
+    r"^(?:read\s+more|continue\s+reading|more\s+from|click\s+here|"
+    r"sign\s+in|log\s+in|subscribe|advertisement|sponsored|share|"
+    r"print|email|comments?|all\s+rights\s+reserved|newsletter)$",
+    re.IGNORECASE,
+)
+_PASSIVE_NUMERIC_ID_PATTERN = re.compile(
+    r"^(?:(?:article|story|post|node|item|content|id)\s*)?#?\s*\d{4,}$",
+    re.IGNORECASE,
+)
 _CORPORATE_SUFFIX_TERMS = {
     "ag",
     "co",
@@ -673,6 +718,24 @@ _SEMICONDUCTOR_NEGATIVE_WARNING_PATTERN = re.compile(
     r"\b(?:semiconductor|semiconductors|chipmaker|chipmakers|chips?|morgan\s+stanley)\b.{0,140}\b(?:warn|warns|warned|warning|downgrade|downgrades|downgraded|cut|cuts|cutting|lower|lowers|lowered|weak|weaker|negative)\b"
     r"|\b(?:warn|warns|warned|warning|downgrade|downgrades|downgraded|cut|cuts|cutting|lower|lowers|lowered|weak|weaker|negative)\b.{0,140}\b(?:semiconductor|semiconductors|chipmaker|chipmakers|chips?|morgan\s+stanley)\b",
     re.IGNORECASE | re.DOTALL,
+)
+_FISCAL_STRESS_NEGATIVE_PATTERN = re.compile(
+    r"\b(?:unfunded\s+(?:spending|tax\s+cuts?|budget)|"
+    r"borrowing[-\s]+funded\s+(?:spending|tax\s+cuts?)|"
+    r"deficit[-\s]+funded\s+(?:spending|tax\s+cuts?)|"
+    r"fiscal\s+(?:stress|crisis|credibility|risk|concerns?|hole|slippage)|"
+    r"budget\s+(?:hole|crisis|deficit|shortfall)|"
+    r"debt\s+(?:sustainability|concerns?|fears?)|"
+    r"gilt\s+(?:selloff|sell-off|turmoil)|"
+    r"bond\s+(?:market\s+)?(?:vigilantes|selloff|sell-off|turmoil)|"
+    r"borrowing\s+costs?\s+(?:jump|rise|rose|surge|climb|spike))\b",
+    re.IGNORECASE,
+)
+_FISCAL_STRESS_TARGET_PATTERN = re.compile(
+    r"\b(?:currency|gbp|sterling|pound|fx|gilt|bond|bonds|rates?|"
+    r"sovereign|debt|country[_\s-]?risk|index|equity[_\s-]?index|"
+    r"uk\s+market|ftse|country_macro_policy|currency_proxy|risk_proxy)\b",
+    re.IGNORECASE,
 )
 _HIGH_IMPACT_GEOPOLITICAL_SIGNAL_TYPES = {"sanctions", "war_escalation"}
 _HIGH_IMPACT_GEOPOLITICAL_CLAIM_PATTERN = re.compile(
@@ -2561,12 +2624,15 @@ def _country_alias_pattern(alias: str) -> re.Pattern[str]:
 
 
 def _country_codes_from_text(text: str) -> list[str]:
-    codes: list[str] = []
+    matches: list[tuple[int, int, str]] = []
     for alias, code in sorted(_COUNTRY_ALIAS_TO_CODE.items(), key=lambda item: -len(item[0])):
         if len(alias) < 2:
             continue
-        if _country_alias_pattern(alias).search(text):
-            codes.append(code)
+        match = _country_alias_pattern(alias).search(text)
+        if match:
+            matches.append((match.start(), -len(alias), code))
+    matches.sort()
+    codes = [code for _start, _alias_length, code in matches]
     return _dedupe_string_values(codes)
 
 
@@ -2900,15 +2966,15 @@ def _build_country_scope(
             hinted_code,
             hint_source if hint_source == "country_hint" else "country_hint",
         )
+    if text:
+        text_country_codes = _country_codes_from_text(text)
+        if text_country_codes:
+            return _scope_for_code(text_country_codes[0], "text_country_mention")
     for entity in entities:
         code = _entity_ref_country_code(entity.link.entity_id if entity.link else None)
         code = code or _country_code_from_text(_entity_name(entity))
         if code:
             return _scope_for_code(code, "entity_match", preferred_name=_entity_name(entity))
-    if text:
-        text_country_codes = _country_codes_from_text(text)
-        if text_country_codes:
-            return _scope_for_code(text_country_codes[0], "text_country_mention")
     if hinted_code:
         return _scope_for_code(
             hinted_code,
@@ -2947,6 +3013,45 @@ def _additional_country_scopes_from_text(
         if pattern.search(text):
             _append(code, "entity_match")
     return scopes
+
+
+def _decode_entity_display_text(value: str | None) -> str:
+    if not value:
+        return ""
+    decoded = unescape(value)
+    decoded = (
+        decoded.replace("\u2018", "'")
+        .replace("\u2019", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\xa0", " ")
+    )
+    return re.sub(r"\s+", " ", decoded).strip()
+
+
+def _normalize_entity_display_name(value: str, *, label: str | None = None) -> str:
+    normalized = _decode_entity_display_text(value)
+    entity_type = (label or "").strip().casefold()
+    if (
+        entity_type in {"organization", "company", "issuer", "government"}
+        and normalized
+        and normalized == normalized.upper()
+        and len(normalized) > 8
+        and re.search(r"[A-Z]{3,}", normalized)
+    ):
+        keep_upper = {"AG", "AS", "GMBH", "LLC", "LP", "NV", "PLC", "SA", "SE", "SNC"}
+        title_suffix = {"CO": "Co", "CORP": "Corp", "INC": "Inc", "LTD": "Ltd"}
+        words = []
+        for token in normalized.split():
+            stripped = re.sub(r"[^A-Z0-9]", "", token)
+            if stripped in title_suffix:
+                words.append(title_suffix[stripped])
+            elif stripped in keep_upper or (len(stripped) <= 3 and stripped.isalpha()):
+                words.append(token)
+            else:
+                words.append(token[:1] + token[1:].lower())
+        normalized = " ".join(words)
+    return normalized
 
 
 def _text_contains_entity_phrase(text: str | None, name: str) -> bool:
@@ -3050,9 +3155,12 @@ def _contextual_entity_artifact_reasons(
         return []
 
     reasons: list[str] = []
-    surface = entity.text.strip()
+    surface = _decode_entity_display_text(entity.text)
     normalized_surface = re.sub(r"[^A-Za-z0-9]+", "", surface)
-    canonical_anchored = _entity_name_occurs_in_story_context(text, canonical_name)
+    analysis_text = _decode_entity_display_text(text)
+    canonical_anchored = _entity_name_occurs_in_story_context(analysis_text, canonical_name)
+    surface_anchored = _entity_phrase_occurs_in_story_context(analysis_text, surface)
+    surface_present = _text_contains_entity_phrase(analysis_text, surface)
     source_domain = (
         entity.provenance.source_domain.strip().casefold()
         if entity.provenance and entity.provenance.source_domain
@@ -3080,9 +3188,18 @@ def _contextual_entity_artifact_reasons(
 
     sports_text = " ".join([canonical_name, entity_ref])
     if _SPORTS_ENTITY_PATTERN.search(sports_text) and not _SPORTS_CONTEXT_PATTERN.search(
-        text or ""
+        analysis_text
     ):
         reasons.append("sports_entity_context_mismatch")
+
+    if (
+        label in {"organization", "company", "issuer", "government", "person", "people"}
+        and surface
+        and not surface_present
+        and not surface_anchored
+        and not canonical_anchored
+    ):
+        reasons.append("unanchored_surface")
 
     if (
         label in {"person", "people"}
@@ -3120,14 +3237,24 @@ def _hidden_artifact_reasons(
     entity: EntityMatch | None = None,
     source_outlet_artifact: bool = False,
 ) -> list[str]:
-    normalized = value.strip()
+    raw_normalized = value.strip()
+    normalized = _decode_entity_display_text(value)
     if not normalized:
         return ["empty_text"]
     reasons: list[str] = []
     label = entity.label.strip().casefold() if entity else ""
+    normalized_key = normalized.casefold()
+    if re.search(r"&(?:quot|lt|gt|amp|#34|#60|#62|#38);", raw_normalized, re.IGNORECASE):
+        reasons.append("html_entity")
+    if normalized_key in _PASSIVE_COMMON_NOUN_ARTIFACT_TERMS:
+        reasons.append("common_noun")
+    if _PASSIVE_UI_ARTIFACT_PATTERN.fullmatch(normalized):
+        reasons.append("boilerplate")
+    if _PASSIVE_NUMERIC_ID_PATTERN.fullmatch(normalized):
+        reasons.append("numeric_id")
     if normalized.casefold() in {"ad", "a.d.", "anno domini"}:
         reasons.append("date_era_artifact")
-    if normalized.casefold() in {
+    if normalized_key in {
         "none",
         "null",
         "nil",
@@ -3162,7 +3289,7 @@ def _hidden_artifact_reasons(
         flags=re.IGNORECASE,
     ):
         reasons.append("photo_credit")
-    if normalized.casefold() in {"read more", "click here", "subscribe", "advertisement"}:
+    if normalized_key in {"read more", "click here", "subscribe", "advertisement"}:
         reasons.append("boilerplate")
     if source_outlet_artifact:
         reasons.append("source_outlet_artifact")
@@ -3238,7 +3365,7 @@ def _passive_contextual_alias_reasons(
     request: NewsAnalyzeRequest,
     canonical_name: str,
 ) -> list[str]:
-    surface = entity.text.strip()
+    surface = _decode_entity_display_text(entity.text)
     normalized_surface = re.sub(r"[^A-Za-z0-9]+", "", surface).casefold()
     reasons = _PASSIVE_COLLISION_SURFACE_REASONS.get(normalized_surface)
     if not reasons:
@@ -3257,7 +3384,7 @@ def _passive_finance_alias_reasons(
     entity_ref = _entity_ref(entity).casefold()
     if not entity_ref.startswith("finance-") or _is_direct_terminal_ref(entity_ref):
         return []
-    surface = entity.text.strip()
+    surface = _decode_entity_display_text(entity.text)
     if not surface or not canonical_name or surface.casefold() == canonical_name.casefold():
         return []
     if _text_contains_entity_phrase(_news_analysis_text(request), canonical_name):
@@ -3318,15 +3445,26 @@ def _build_passive_entities(
             continue
         entity_ref = _entity_ref(entity)
         raw_name = _entity_name(entity)
-        name = _canonical_country_name_for_ref(entity_ref, raw_name) or raw_name
+        normalized_name = _normalize_entity_display_name(raw_name, label=entity.label)
+        name = _canonical_country_name_for_ref(entity_ref, normalized_name) or normalized_name
         role = _passive_role(entity, name)
-        hidden_reasons = _hidden_artifact_reasons(
-            name,
-            entity=entity,
-            source_outlet_artifact=(
-                role == "source_outlet"
-                and not _source_outlet_is_story_subject(request=request, name=name)
-            ),
+        source_outlet_artifact = (
+            role == "source_outlet"
+            and not _source_outlet_is_story_subject(request=request, name=name)
+        )
+        hidden_reasons = _dedupe_string_values(
+            [
+                *_hidden_artifact_reasons(
+                    name,
+                    entity=entity,
+                    source_outlet_artifact=source_outlet_artifact,
+                ),
+                *_hidden_artifact_reasons(
+                    entity.text,
+                    entity=entity,
+                    source_outlet_artifact=source_outlet_artifact,
+                ),
+            ]
         )
         contextual_reasons = _contextual_entity_artifact_reasons(
             entity,
@@ -3378,7 +3516,7 @@ def _build_passive_entities(
                 mention_count=entity.mention_count,
                 confidence=entity.confidence,
                 relevance=entity.relevance,
-                evidence_text=entity.text,
+                evidence_text=_decode_entity_display_text(entity.text),
                 link=entity.link,
                 provenance=entity.provenance,
                 quality_reasons=reasons,
@@ -3810,6 +3948,10 @@ def _negative_direction_hint_for_candidate(
         or "chip" in candidate_context
     ) and _SEMICONDUCTOR_NEGATIVE_WARNING_PATTERN.search(text):
         return "negative_analyst_warning"
+    if _FISCAL_STRESS_NEGATIVE_PATTERN.search(text) and _FISCAL_STRESS_TARGET_PATTERN.search(
+        candidate_context
+    ):
+        return "negative_fiscal_stress"
     return None
 
 

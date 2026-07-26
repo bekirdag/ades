@@ -4033,6 +4033,19 @@ def test_news_analyze_passive_classifier_hides_artifacts_and_forces_text_country
                 _entity("None", "organization"),
                 _entity("24 Hours", "organization"),
                 _entity("AP Photo/Terry Chea", "person"),
+                _entity("Read More", "organization"),
+                _entity("Story 12345", "organization"),
+                _entity("The market", "organization"),
+                _entity(
+                    "Germany&rsquo;s Federal Employment Agency",
+                    "organization",
+                    entity_id="entity_germany_employment_agency",
+                ),
+                _entity(
+                    "RESERVE PETROLEUM CO",
+                    "organization",
+                    entity_id="entity_reserve_petroleum",
+                ),
                 _entity(
                     "Federal Reserve",
                     "organization",
@@ -4053,7 +4066,10 @@ def test_news_analyze_passive_classifier_hides_artifacts_and_forces_text_country
             "text": (
                 "Canada inflation rose 10% after Reuters cited "
                 "https://example.com and <a>link</a>. None and 24 Hours appeared "
-                "near AP Photo/Terry Chea while the Federal Reserve responded."
+                "near AP Photo/Terry Chea. Read More and Story 12345 appeared "
+                "beside The market boilerplate. Germany&rsquo;s Federal Employment "
+                "Agency and RESERVE PETROLEUM CO were named while the Federal "
+                "Reserve responded."
             ),
             "packs": [pack_id],
             "options": {
@@ -4074,6 +4090,9 @@ def test_news_analyze_passive_classifier_hides_artifacts_and_forces_text_country
     assert passive_by_ref["country:ca"]["display_eligible"] is True
     assert passive_by_name["Federal Reserve"]["role"] == "policy_body"
     assert passive_by_name["Federal Reserve"]["display_eligible"] is True
+    assert passive_by_name["Germany's Federal Employment Agency"]["display_eligible"] is True
+    assert passive_by_name["Reserve Petroleum Co"]["display_eligible"] is True
+    assert all("&" not in entity["name"] for entity in payload["passive_entities"])
 
     assert passive_by_name["Reuters"]["role"] == "source_outlet"
     assert passive_by_name["Reuters"]["quality"] == "hidden_artifact"
@@ -4091,6 +4110,101 @@ def test_news_analyze_passive_classifier_hides_artifacts_and_forces_text_country
     assert "none_placeholder" in hidden_reasons_by_name["None"]
     assert "duration_or_time_window" in hidden_reasons_by_name["24 Hours"]
     assert "photo_credit" in hidden_reasons_by_name["AP Photo/Terry Chea"]
+    assert "boilerplate" in hidden_reasons_by_name["Read More"]
+    assert "numeric_id" in hidden_reasons_by_name["Story 12345"]
+    assert "common_noun" in hidden_reasons_by_name["The market"]
+
+
+def test_news_analyze_marks_unanchored_passive_orgs_display_ineligible(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_news_pack(tmp_path)
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or pack_id,
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="EUA",
+                    label="organization",
+                    start=0,
+                    end=3,
+                    confidence=0.88,
+                    relevance=0.84,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="politics",
+                    ),
+                    link=EntityLink(
+                        entity_id="wikidata:Q178331",
+                        canonical_text="European University Association",
+                        provider="wikidata",
+                    ),
+                ),
+                EntityMatch(
+                    text="Iran",
+                    label="country",
+                    start=text.index("Iran"),
+                    end=text.index("Iran") + len("Iran"),
+                    confidence=0.92,
+                    relevance=0.9,
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="aliases.json",
+                        match_source="pack",
+                        source_pack=pack or pack_id,
+                        source_domain="politics",
+                    ),
+                    link=EntityLink(
+                        entity_id="country:ir",
+                        canonical_text="Iran",
+                        provider="ades",
+                    ),
+                ),
+            ],
+            topics=[TopicMatch(label="politics", score=0.88, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "title": "Iran shipping talks affect Gulf routes",
+            "text": "Iran said shipping talks continued after regional security warnings.",
+            "packs": [pack_id],
+            "options": {
+                "include_passive_entities": True,
+                "include_relationship_paths": False,
+                "max_passive_entities": 32,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    passive_by_name = {entity["name"]: entity for entity in response.json()["passive_entities"]}
+    unrelated = passive_by_name["European University Association"]
+    assert unrelated["quality"] == "hidden_artifact"
+    assert unrelated["display_eligible"] is False
+    assert "unanchored_surface" in unrelated["quality_reasons"]
 
 
 def test_news_analyze_marks_generic_finance_alias_passive_ineligible(
@@ -4166,7 +4280,7 @@ def test_news_analyze_marks_generic_finance_alias_passive_ineligible(
     payload = response.json()
     passive_by_ref = {entity["entity_ref"]: entity for entity in payload["passive_entities"]}
     issuer = passive_by_ref["finance-us-issuer:FISI"]
-    assert issuer["name"] == "FINANCIAL INSTITUTIONS INC"
+    assert issuer["name"] == "Financial Institutions Inc"
     assert issuer["evidence_text"] == "The financial"
     assert issuer["quality"] == "weak"
     assert issuer["display_eligible"] is False
@@ -6950,11 +7064,17 @@ def test_news_analyze_overrides_negative_cost_and_warning_directions(
             compatible_event_types=[event_type],
         )
 
-    def _candidate(entity_ref: str, name: str, edge: ImpactPathEdge) -> ImpactCandidate:
+    def _candidate(
+        entity_ref: str,
+        name: str,
+        edge: ImpactPathEdge,
+        *,
+        entity_type: str = "sector",
+    ) -> ImpactCandidate:
         return ImpactCandidate(
             entity_ref=entity_ref,
             name=name,
-            entity_type="sector",
+            entity_type=entity_type,
             evidence_level="shallow",
             confidence=0.86,
             source_entity_refs=["country:us"],
@@ -6991,6 +7111,26 @@ def test_news_analyze_overrides_negative_cost_and_warning_directions(
                         "guidance_cut",
                     ),
                 ),
+                _candidate(
+                    "ades:index:uk-market",
+                    "UK Market Index",
+                    _edge(
+                        "ades:index:uk-market",
+                        "country_affects_index_proxy",
+                        "fiscal_expansion",
+                    ),
+                    entity_type="index",
+                ),
+                _candidate(
+                    "ades:currency:gbp",
+                    "GBP",
+                    _edge(
+                        "ades:currency:gbp",
+                        "country_affects_currency_proxy",
+                        "fiscal_expansion",
+                    ),
+                    entity_type="currency",
+                ),
             ],
         )
 
@@ -7004,7 +7144,9 @@ def test_news_analyze_overrides_negative_cost_and_warning_directions(
             "text": (
                 "United States oil prices rose after a supply disruption, lifting "
                 "fuel costs for airlines. Morgan Stanley cut its semiconductor "
-                "outlook and warned chipmakers face weaker demand."
+                "outlook and warned chipmakers face weaker demand. UK markets "
+                "sold off after investors warned unfunded spending would raise "
+                "borrowing costs."
             ),
             "options": {
                 "include_relationship_paths": True,
@@ -7030,4 +7172,16 @@ def test_news_analyze_overrides_negative_cost_and_warning_directions(
             "direction_hint"
         ]
         == "negative_analyst_warning"
+    )
+    assert (
+        candidates["ades:index:uk-market"]["relationship_paths"][0]["edges"][0][
+            "direction_hint"
+        ]
+        == "negative_fiscal_stress"
+    )
+    assert (
+        candidates["ades:currency:gbp"]["relationship_paths"][0]["edges"][0][
+            "direction_hint"
+        ]
+        == "negative_fiscal_stress"
     )
