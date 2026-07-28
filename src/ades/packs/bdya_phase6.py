@@ -2863,7 +2863,16 @@ BDYA_FINANCE_MARKET_ONTOLOGY_ENTITIES: tuple[dict[str, object], ...] = (
     _entity(
         "commodity",
         "WTI crude",
-        aliases=("WTI oil", "West Texas Intermediate", "WTI crude futures"),
+        aliases=(
+            "WTI oil",
+            "West Texas Intermediate",
+            "WTI crude futures",
+            "crude oil",
+            "oil futures",
+            "OVX",
+            "crude oil volatility index",
+            "CBOE Crude Oil ETF Volatility Index",
+        ),
         entity_id="ades:impact:commodity:wti-crude",
         metadata={"category": "energy_benchmark"},
     ),

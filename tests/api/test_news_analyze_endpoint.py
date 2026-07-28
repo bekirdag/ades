@@ -5877,6 +5877,16 @@ def test_news_analyze_story_quality_routes_topics_and_strips_internal_metadata(
             "Regional & International",
             "Trading & Markets",
         ),
+        (
+            "Varun Beverages reported earnings that beat estimates and improved guidance.",
+            "Trading & Markets",
+            "Economic & Macro",
+        ),
+        (
+            "LookFantastic promoted a beauty box discount voucher for shoppers.",
+            "Trading & Markets",
+            "General / Mixed",
+        ),
     ]
 
     for story_text, topic_label, expected_primary in cases:
@@ -5910,6 +5920,7 @@ def test_news_analyze_story_quality_routes_topics_and_strips_internal_metadata(
                 "text": (
                     "Primary signal: Seven & i Holdings internal routing note.\n"
                     "Market exposure is concentrated around stale terminal refs.\n"
+                    "Country scope: US\n"
                     f"{story_text}"
                 ),
                 "options": {"include_relationship_paths": False},
@@ -5978,6 +5989,95 @@ def test_news_analyze_strips_placeholder_titles_and_additional_metadata_labels(
     assert response.status_code == 200
     payload = response.json()
     assert "ADES_NEWS_ANALYZE_STRIPPED_INTERNAL_METADATA" in payload["warnings"]
+
+
+def test_news_analyze_strips_language_artifacts_and_hides_noisy_passives(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "language-hygiene-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _entity(text: str, entity_id: str) -> EntityMatch:
+        return EntityMatch(
+            text=text,
+            label="organization",
+            start=0,
+            end=len(text),
+            confidence=0.91,
+            relevance=0.8,
+            link=EntityLink(
+                entity_id=entity_id,
+                canonical_text=text,
+                provider="test",
+            ),
+            provenance=EntityProvenance(
+                match_kind="alias",
+                match_path="test",
+                match_source="fixture",
+                source_pack=pack_id,
+                source_domain="finance",
+            ),
+        )
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        assert "Primary signal:" not in text
+        assert "Country scope:" not in text
+        assert "Nachdem US" not in text
+        assert "\u4e2d\u56fd" not in text
+        assert "\u00e6\u00b0" not in text
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                _entity("Nachdem US", "ades:artifact:nachdem-us"),
+                _entity("tariffs", "ades:artifact:tariffs"),
+            ],
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "title": "\u4e2d\u56fd\u5e02\u573a Meta update",
+            "description": "\u00e6\u00b0\u00aa\u00e6\u02dc\u0178 raw source title",
+            "text": (
+                "Body: 'Primary signal: raw source header'\n"
+                "Country scope: DE\n"
+                "Nachdem US officials said raw German-source text leaked.\n"
+                "English market text said oil futures rose after supply disruption."
+            ),
+            "options": {
+                "include_relationship_paths": False,
+                "max_passive_entities": 16,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "ADES_NEWS_ANALYZE_STRIPPED_INTERNAL_METADATA" in payload["warnings"]
+    assert "ADES_NEWS_ANALYZE_STRIPPED_LANGUAGE_ARTIFACT" in payload["warnings"]
+
+    passive_by_name = {entity["name"]: entity for entity in payload["passive_entities"]}
+    assert passive_by_name["Nachdem US"]["display_eligible"] is False
+    assert "source_language_fragment" in passive_by_name["Nachdem US"]["quality_reasons"]
+    assert passive_by_name["tariffs"]["display_eligible"] is False
+    assert "common_noun" in passive_by_name["tariffs"]["quality_reasons"]
 
 
 def test_news_analyze_filters_matched_signal_sports_from_market_impacts(
@@ -7184,4 +7284,116 @@ def test_news_analyze_overrides_negative_cost_and_warning_directions(
             "direction_hint"
         ]
         == "negative_fiscal_stress"
+    )
+
+
+def test_news_analyze_promotes_ovx_oil_volatility_and_positive_supply_direction(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "ovx-oil-volatility-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[],
+            topics=[TopicMatch(label="Trading & Markets", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs: list[str], **_: object) -> ImpactExpansionResult:
+        assert "ades:impact:commodity:wti-crude" in set(entity_refs)
+        edge = ImpactPathEdge(
+            source_ref="ades:impact:commodity:wti-crude",
+            target_ref="ades:impact:commodity:wti-crude",
+            relation="commodity_volatility_points_to_price_risk",
+            evidence_level="direct",
+            confidence=0.9,
+            direction_hint="negative",
+            source_name="Fixture",
+            source_url="https://example.test/source",
+            source_snapshot="2026-07-28",
+            compatible_event_types=["commodity_price_move"],
+        )
+        return ImpactExpansionResult(
+            graph_version="fixture",
+            artifact_version="fixture",
+            artifact_hash="sha256:fixture",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="ades:impact:commodity:wti-crude",
+                    name="WTI crude",
+                    entity_type="commodity",
+                    is_graph_seed=True,
+                    is_tradable=True,
+                )
+            ],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref="ades:impact:commodity:wti-crude",
+                    name="WTI crude",
+                    entity_type="commodity",
+                    evidence_level="direct",
+                    confidence=0.91,
+                    source_entity_refs=["ades:impact:commodity:wti-crude"],
+                    relationship_paths=[
+                        ImpactRelationshipPath(path_depth=1, edges=[edge]),
+                    ],
+                    compatible_event_types=["commodity_price_move"],
+                )
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": (
+                "OVX surged after a crude oil supply disruption threatened WTI oil futures."
+            ),
+            "options": {
+                "include_relationship_paths": True,
+                "include_impact_paths": True,
+                "include_terminal_candidates": True,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "commodity_price_move" in {
+        signal["event_type"] for signal in payload["event_signals"]
+    }
+    candidate = {
+        candidate["entity_ref"]: candidate
+        for candidate in payload["terminal_impact_candidates"]
+    }["ades:impact:commodity:wti-crude"]
+    assert (
+        candidate["relationship_paths"][0]["edges"][0]["direction_hint"]
+        == "positive_supply_shock"
+    )
+    assert (
+        "story_positive_signal"
+        in candidate["relationship_paths"][0]["edges"][0]["direction_preconditions"]
+    )
+    assert (
+        "ADES_NEWS_ANALYZE_DIRECTION_OVERRIDE:"
+        "ades:impact:commodity:wti-crude:positive_supply_shock"
+        in payload["warnings"]
     )

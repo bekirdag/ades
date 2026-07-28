@@ -523,12 +523,14 @@ _PASSIVE_COMMON_NOUN_ARTIFACT_TERMS = {
     "economy",
     "firm",
     "government",
+    "headline",
     "investor",
     "investors",
     "lawmakers",
     "market",
     "markets",
     "ministry",
+    "news",
     "official",
     "officials",
     "policy",
@@ -536,6 +538,8 @@ _PASSIVE_COMMON_NOUN_ARTIFACT_TERMS = {
     "sources",
     "stock",
     "stocks",
+    "tariff",
+    "tariffs",
     "the agency",
     "the company",
     "the country",
@@ -609,7 +613,13 @@ _DIRECT_MARKET_TERMINAL_SIGNAL_FAMILIES = {
 _INTERNAL_NEWS_METADATA_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
         r"^\s*(?:primary\s+(?:signal|action)|market\s+exposure|impact\s+paths?|"
-        r"passive\s+entities|affected\s+dimensions|source\s+groups?|category)\s*:.*$",
+        r"passive\s+entities|affected\s+dimensions|source\s+groups?|"
+        r"country\s+scope|category)\s*:.*$",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(
+        r"^\s*(?:body|summary|story)\s*:\s*['\"]?\s*(?:primary\s+signal|"
+        r"primary\s+action|market\s+exposure|country\s+scope)\s*:.*$",
         re.IGNORECASE | re.MULTILINE,
     ),
     re.compile(
@@ -620,6 +630,17 @@ _INTERNAL_NEWS_METADATA_PATTERNS: tuple[re.Pattern[str], ...] = (
         r"^\s*(?:title\s*:\s*)?unclassified\s+market[-\s]+relevant\s+update\s*$",
         re.IGNORECASE | re.MULTILINE,
     ),
+)
+_MOJIBAKE_FRAGMENT_PATTERN = re.compile(
+    "[\\u00aa\\u00b0\\u00b8\\u00bd\\u00c2\\u00c3\\u00c5\\u00c6"
+    "\\u00e2\\u00e3\\u00e5\\u00e6\\u00ef\\u00f0\\u0160\\u02dc"
+    "\\u2122\\ufffd]"
+)
+_CJK_FRAGMENT_PATTERN = re.compile("[\\u3400-\\u4dbf\\u4e00-\\u9fff\\uf900-\\ufaff]")
+_SOURCE_LANGUAGE_FRAGMENT_PATTERN = re.compile(
+    "^\\s*(?:nachdem|w(?:ae|\u00e4)hrend|laut|weil)\\b|"
+    "\\b(?:mehr\\s+lesen|aktualisiert|aktualisierung)\\b",
+    re.IGNORECASE,
 )
 _NON_ASSET_TERMINAL_IDENTIFIER_KEYS = {"gdp", "grossdomesticproduct", "shortterm"}
 _NON_MARKET_SIGNAL_TERMS = {
@@ -709,6 +730,25 @@ _PHYSICAL_COMMODITY_TOPIC_PATTERN = re.compile(
     r"livestock|metals?|commodity|commodities)\b",
     re.IGNORECASE,
 )
+_EARNINGS_TOPIC_SIGNAL_TYPES = {
+    "earnings_beat",
+    "earnings_miss",
+    "guidance_raise",
+    "guidance_cut",
+}
+_EARNINGS_TOPIC_PATTERN = re.compile(
+    r"\b(?:earnings|profits?|eps|quarterly\s+results?|fiscal\s+quarter|"
+    r"revenue\s+guidance|(?:raised|raises|raising|improved|improves|improving|"
+    r"cut|cuts|cutting|lowered|lowers|lowering)\s+guidance|"
+    r"guidance\s+(?:raise|raises|raised|improve|improves|improved|"
+    r"cut|cuts|lower|lowers|lowered))\b",
+    re.IGNORECASE,
+)
+_RETAIL_PROMOTION_TOPIC_PATTERN = re.compile(
+    r"\b(?:beauty\s+box|promotion|promotional|discount|coupon|voucher|"
+    r"flash\s+sale|shopping\s+event|retail\s+promotion)\b",
+    re.IGNORECASE,
+)
 _AIRLINE_NEGATIVE_COST_PATTERN = re.compile(
     r"\b(?:oil|crude|brent|wti|fuel|jet\s+fuel)\b.{0,120}\b(?:rise|rises|rose|rising|jump|jumps|jumped|surge|surges|surged|hike|hikes|hiked|higher|costlier|spike|spikes|spiked)\b"
     r"|\b(?:rise|rises|rose|rising|jump|jumps|jumped|surge|surges|surged|hike|hikes|hiked|higher|costlier|spike|spikes|spiked)\b.{0,120}\b(?:oil|crude|brent|wti|fuel|jet\s+fuel)\b",
@@ -736,6 +776,17 @@ _FISCAL_STRESS_TARGET_PATTERN = re.compile(
     r"sovereign|debt|country[_\s-]?risk|index|equity[_\s-]?index|"
     r"uk\s+market|ftse|country_macro_policy|currency_proxy|risk_proxy)\b",
     re.IGNORECASE,
+)
+_COMMODITY_SUPPLY_SHOCK_POSITIVE_PATTERN = re.compile(
+    r"\b(?:oil|crude|brent|wti|gas|lng|fuel|energy|commodity|commodities)\b"
+    r".{0,160}\b(?:supply\s+(?:shock|disruption|shortage|risk)|"
+    r"production\s+(?:cut|halt|shutdown|outage)|exports?\s+(?:halt|ban|drop)|"
+    r"blockade|closure|sanctions?|attack|conflict)\b"
+    r"|\b(?:supply\s+(?:shock|disruption|shortage|risk)|"
+    r"production\s+(?:cut|halt|shutdown|outage)|exports?\s+(?:halt|ban|drop)|"
+    r"blockade|closure|sanctions?|attack|conflict)\b.{0,160}"
+    r"\b(?:oil|crude|brent|wti|gas|lng|fuel|energy|commodity|commodities)\b",
+    re.IGNORECASE | re.DOTALL,
 )
 _HIGH_IMPACT_GEOPOLITICAL_SIGNAL_TYPES = {"sanctions", "war_escalation"}
 _HIGH_IMPACT_GEOPOLITICAL_CLAIM_PATTERN = re.compile(
@@ -2721,14 +2772,34 @@ def _clean_news_analysis_text(text: str) -> str:
     cleaned = text
     for pattern in _INTERNAL_NEWS_METADATA_PATTERNS:
         cleaned = pattern.sub("", cleaned)
-    lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+    lines = [
+        line.strip()
+        for line in cleaned.splitlines()
+        if line.strip() and not _language_artifact_reasons(line)
+    ]
     return "\n".join(lines).strip()
+
+
+def _language_artifact_reasons(value: str | None) -> list[str]:
+    normalized = _decode_entity_display_text(value)
+    if not normalized:
+        return []
+    reasons: list[str] = []
+    if _MOJIBAKE_FRAGMENT_PATTERN.search(normalized):
+        reasons.append("mojibake_fragment")
+    if _CJK_FRAGMENT_PATTERN.search(normalized):
+        reasons.append("non_english_script")
+    if _SOURCE_LANGUAGE_FRAGMENT_PATTERN.search(normalized):
+        reasons.append("source_language_fragment")
+    return _dedupe_string_values(reasons)
 
 
 def _story_quality_warnings(raw_text: str, analysis_text: str) -> list[str]:
     warnings: list[str] = []
     if any(pattern.search(raw_text) for pattern in _INTERNAL_NEWS_METADATA_PATTERNS):
         warnings.append("ADES_NEWS_ANALYZE_STRIPPED_INTERNAL_METADATA")
+    if any(_language_artifact_reasons(line) for line in raw_text.splitlines()):
+        warnings.append("ADES_NEWS_ANALYZE_STRIPPED_LANGUAGE_ARTIFACT")
     factual_text = analysis_text.casefold()
     if "cantarell" in factual_text and "petrobras" in factual_text and "pemex" not in factual_text:
         warnings.append("ADES_NEWS_ANALYZE_FACTUAL_CONSISTENCY:CANTARELL_OPERATOR_PEMEX")
@@ -3246,6 +3317,7 @@ def _hidden_artifact_reasons(
     normalized_key = normalized.casefold()
     if re.search(r"&(?:quot|lt|gt|amp|#34|#60|#62|#38);", raw_normalized, re.IGNORECASE):
         reasons.append("html_entity")
+    reasons.extend(_language_artifact_reasons(normalized))
     if normalized_key in _PASSIVE_COMMON_NOUN_ARTIFACT_TERMS:
         reasons.append("common_noun")
     if _PASSIVE_UI_ARTIFACT_PATTERN.fullmatch(normalized):
@@ -3824,7 +3896,11 @@ def _build_topic_scope(
     }
     route_text = "\n".join([text or "", " ".join(labels)]).strip()
     primary_override: str | None = None
-    if signal_types & {"regulatory_enforcement", "sanctions", "export_control"} or _LEGAL_TOPIC_PATTERN.search(
+    if _RETAIL_PROMOTION_TOPIC_PATTERN.search(route_text) and not signal_types:
+        primary_override = "General / Mixed"
+    elif signal_types & _EARNINGS_TOPIC_SIGNAL_TYPES or _EARNINGS_TOPIC_PATTERN.search(route_text):
+        primary_override = "Economic & Macro"
+    elif signal_types & {"regulatory_enforcement", "sanctions", "export_control"} or _LEGAL_TOPIC_PATTERN.search(
         route_text
     ):
         primary_override = "Regulatory & Legal"
@@ -3934,12 +4010,30 @@ def _candidate_direction_context(candidate: ImpactCandidate) -> str:
     return " ".join(part for part in parts if part).casefold()
 
 
-def _negative_direction_hint_for_candidate(
+def _story_direction_hint_for_candidate(
     *,
     candidate: ImpactCandidate,
     text: str,
 ) -> str | None:
     candidate_context = _candidate_direction_context(candidate)
+    if (
+        _COMMODITY_SUPPLY_SHOCK_POSITIVE_PATTERN.search(text)
+        and any(
+            token in candidate_context
+            for token in (
+                "commodity",
+                "crude",
+                "oil",
+                "wti",
+                "brent",
+                "gas",
+                "lng",
+                "energy",
+            )
+        )
+        and "airline" not in candidate_context
+    ):
+        return "positive_supply_shock"
     if "airline" in candidate_context and _AIRLINE_NEGATIVE_COST_PATTERN.search(text):
         return "negative_cost_pressure"
     if (
@@ -3963,7 +4057,7 @@ def _apply_story_direction_overrides(
 ) -> list[ImpactCandidate]:
     updated_candidates: list[ImpactCandidate] = []
     for candidate in candidates:
-        direction_hint = _negative_direction_hint_for_candidate(
+        direction_hint = _story_direction_hint_for_candidate(
             candidate=candidate,
             text=text,
         )
@@ -3979,7 +4073,9 @@ def _apply_story_direction_overrides(
                         "direction_preconditions": _dedupe_string_values(
                             [
                                 *edge.direction_preconditions,
-                                "story_negative_signal",
+                                "story_negative_signal"
+                                if direction_hint.startswith("negative_")
+                                else "story_positive_signal",
                             ]
                         ),
                     }

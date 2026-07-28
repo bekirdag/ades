@@ -462,10 +462,10 @@ _EVENT_RULES: tuple[_EventRule, ...] = (
         event_type="commodity_price_move",
         patterns=(
             _rx(
-                r"\b(?:oil|crude|brent|wti|natural\s+gas|gasoline|diesel|coffee|cocoa|sugar|wheat|corn|soybeans?|copper|iron\s+ore|coal|uranium)\b.{0,120}\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|climb(?:s|ed|ing)?|trade(?:s|d|ing)?|edge(?:s|d|ing)?)\b"
+                r"\b(?:oil|crude|brent|wti|ovx|crude\s+oil\s+volatility(?:\s+index)?|natural\s+gas|gasoline|diesel|coffee|cocoa|sugar|wheat|corn|soybeans?|copper|iron\s+ore|coal|uranium)\b.{0,120}\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|climb(?:s|ed|ing)?|trade(?:s|d|ing)?|edge(?:s|d|ing)?)\b"
             ),
             _rx(
-                r"\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|climb(?:s|ed|ing)?|trade(?:s|d|ing)?|edge(?:s|d|ing)?)\b.{0,120}\b(?:oil|crude|brent|wti|natural\s+gas|gasoline|diesel|coffee|cocoa|sugar|wheat|corn|soybeans?|copper|iron\s+ore|coal|uranium)\b"
+                r"\b(?:slip(?:s|ped|ping)?|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|declin(?:e|ed|es|ing)|rise|rises|rose|rally|rallies|rallied|gain(?:s|ed|ing)?|jump(?:s|ed|ing)?|surg(?:e|ed|es|ing)|climb(?:s|ed|ing)?|trade(?:s|d|ing)?|edge(?:s|d|ing)?)\b.{0,120}\b(?:oil|crude|brent|wti|ovx|crude\s+oil\s+volatility(?:\s+index)?|natural\s+gas|gasoline|diesel|coffee|cocoa|sugar|wheat|corn|soybeans?|copper|iron\s+ore|coal|uranium)\b"
             ),
         ),
         compatible_asset_families=("commodity", "energy", "agriculture", "safe_haven"),
