@@ -6080,6 +6080,263 @@ def test_news_analyze_strips_language_artifacts_and_hides_noisy_passives(
     assert "common_noun" in passive_by_name["tariffs"]["quality_reasons"]
 
 
+def test_news_analyze_ignores_unanchored_geopolitical_country_entities(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "country-noise-en", domain="politics")
+    for country_pack in ("finance-us-en", "finance-kr-en", "finance-ru-en"):
+        _install_named_pack(tmp_path, country_pack, domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _entity(text: str, label: str, entity_id: str) -> EntityMatch:
+        return EntityMatch(
+            text=text,
+            label=label,
+            start=0,
+            end=len(text),
+            confidence=0.92,
+            relevance=0.9,
+            link=EntityLink(
+                entity_id=entity_id,
+                canonical_text=text,
+                provider="test",
+            ),
+            provenance=EntityProvenance(
+                match_kind="alias",
+                match_path="test",
+                match_source="fixture",
+                source_pack=pack_id,
+                source_domain="politics",
+            ),
+        )
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                _entity(
+                    "European Commission",
+                    "organization",
+                    "ades:org:eu:european-commission",
+                ),
+                _entity("South Korea", "country", "country:kr"),
+                _entity("United States", "country", "country:us"),
+                _entity("Russia", "country", "country:ru"),
+            ],
+            topics=[TopicMatch(label="Political & Policy", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": (
+                "The European Commission approved EU carbon-border legislation "
+                "while Koch Industries agreed to sell a unit."
+            ),
+            "options": {
+                "include_relationship_paths": False,
+                "max_passive_entities": 16,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    passive_refs = {entity["entity_ref"] for entity in payload["passive_entities"]}
+    assert "ades:org:eu:european-commission" in passive_refs
+    assert {"country:kr", "country:us", "country:ru"}.isdisjoint(passive_refs)
+    planned_country_packs = {
+        decision["pack_id"]
+        for decision in payload["pack_decisions"]
+        if decision.get("country_code") and decision["selected"] is True
+    }
+    assert {"finance-kr-en", "finance-us-en", "finance-ru-en"}.isdisjoint(
+        planned_country_packs
+    )
+
+
+def test_news_analyze_promotes_anchored_regions_to_country_scope(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "region-country-en", domain="politics")
+    _install_named_pack(tmp_path, "finance-ca-en", domain="finance")
+    _install_named_pack(tmp_path, "finance-us-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="New Brunswick",
+                    label="region",
+                    start=text.index("New Brunswick"),
+                    end=text.index("New Brunswick") + len("New Brunswick"),
+                    confidence=0.94,
+                    relevance=0.92,
+                    link=EntityLink(
+                        entity_id="country:ca",
+                        canonical_text="Canada",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="politics",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="Economic & Macro", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "source": {"source_country": "US"},
+            "text": (
+                "New Brunswick exporters warned that tariffs would disrupt "
+                "regional manufacturers and cross-border shipments."
+            ),
+            "options": {
+                "include_relationship_paths": False,
+                "max_country_finance_packs": 4,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["country_scope"]["entity_ref"] == "country:ca"
+    assert payload["country_scope"]["name"] == "Canada"
+    passive_refs = {entity["entity_ref"] for entity in payload["passive_entities"]}
+    assert "country:ca" in passive_refs
+    assert any(
+        decision["pack_id"] == "finance-ca-en" and decision["selected"] is True
+        for decision in payload["pack_decisions"]
+    )
+
+
+def test_news_analyze_hides_source_metadata_and_common_noun_passives(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "source-metadata-passive-en", domain="general")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _entity(text: str) -> EntityMatch:
+        return EntityMatch(
+            text=text,
+            label="organization",
+            start=0,
+            end=len(text),
+            confidence=0.88,
+            relevance=0.74,
+            link=EntityLink(
+                entity_id=f"ades:artifact:{text.casefold().replace(' ', '-')}",
+                canonical_text=text,
+                provider="test",
+            ),
+            provenance=EntityProvenance(
+                match_kind="alias",
+                match_path="test",
+                match_source="fixture",
+                source_pack=pack_id,
+                source_domain="general",
+            ),
+        )
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                _entity("NEXT Newsmaker"),
+                _entity("PACKED CENTRAL BANK"),
+                _entity("exports"),
+                _entity("tariffs"),
+            ],
+            topics=[],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": (
+                "NEXT Newsmaker and PACKED CENTRAL BANK appeared in a raw source "
+                "sidebar. The story body discussed exports and tariffs as concepts."
+            ),
+            "options": {
+                "include_relationship_paths": False,
+                "max_passive_entities": 16,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    passive_by_name = {
+        entity["name"]: entity for entity in response.json()["passive_entities"]
+    }
+    assert passive_by_name["NEXT Newsmaker"]["display_eligible"] is False
+    assert "source_metadata_artifact" in passive_by_name["NEXT Newsmaker"]["quality_reasons"]
+    assert passive_by_name["Packed Central Bank"]["display_eligible"] is False
+    assert (
+        "source_metadata_artifact"
+        in passive_by_name["Packed Central Bank"]["quality_reasons"]
+    )
+    assert passive_by_name["exports"]["display_eligible"] is False
+    assert "common_noun" in passive_by_name["exports"]["quality_reasons"]
+    assert passive_by_name["tariffs"]["display_eligible"] is False
+    assert "common_noun" in passive_by_name["tariffs"]["quality_reasons"]
+
+
 def test_news_analyze_filters_matched_signal_sports_from_market_impacts(
     tmp_path: Path,
     monkeypatch,
@@ -7100,6 +7357,188 @@ def test_news_analyze_flags_unverified_high_impact_geopolitical_claims(
         in payload["warnings"]
     )
     assert "GEOPOLITICAL_SOURCE_REVIEW_REQUIRED" in payload["quality_flags"]
+
+
+def test_news_analyze_prefers_broad_macro_index_and_rejects_private_ticker(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(tmp_path, "macro-private-terminal-en", domain="finance")
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Federal Reserve",
+                    label="organization",
+                    start=text.index("Federal Reserve"),
+                    end=text.index("Federal Reserve") + len("Federal Reserve"),
+                    confidence=0.94,
+                    relevance=0.92,
+                    link=EntityLink(
+                        entity_id="ades:policy-body:us:federal-reserve",
+                        canonical_text="Federal Reserve",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="finance",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="Trading & Markets", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _edge(source_ref: str, target_ref: str, event_type: str) -> ImpactPathEdge:
+        return ImpactPathEdge(
+            source_ref=source_ref,
+            target_ref=target_ref,
+            relation="macro_policy_affects_terminal",
+            evidence_level="direct",
+            confidence=0.9,
+            direction_hint="macro_sensitive",
+            source_name="Fixture",
+            source_url="https://example.test/source",
+            source_snapshot="2026-07-29",
+            compatible_event_types=[event_type],
+        )
+
+    def _candidate(
+        entity_ref: str,
+        name: str,
+        entity_type: str,
+        source_ref: str,
+        event_type: str,
+    ) -> ImpactCandidate:
+        return ImpactCandidate(
+            entity_ref=entity_ref,
+            name=name,
+            entity_type=entity_type,
+            evidence_level="shallow",
+            confidence=0.88,
+            source_entity_refs=[source_ref],
+            relationship_paths=[
+                ImpactRelationshipPath(
+                    path_depth=1,
+                    edges=[_edge(source_ref, entity_ref, event_type)],
+                )
+            ],
+            compatible_event_types=[event_type],
+        )
+
+    def _fake_expand(entity_refs: list[str], **_: object) -> ImpactExpansionResult:
+        assert "ades:policy-body:us:federal-reserve" in entity_refs
+        return ImpactExpansionResult(
+            graph_version="fixture",
+            artifact_version="fixture",
+            artifact_hash="sha256:fixture",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="ades:policy-body:us:federal-reserve",
+                    name="Federal Reserve",
+                    entity_type="government_body",
+                    is_graph_seed=True,
+                ),
+                ImpactSourceEntity(
+                    entity_ref="finance-us-issuer:jpmorgan-chase",
+                    name="JPMorgan Chase",
+                    entity_type="organization",
+                    same_as_refs=["finance-us-ticker:JPM"],
+                    is_graph_seed=True,
+                ),
+                ImpactSourceEntity(
+                    entity_ref="finance-us-issuer:private-brands",
+                    name="Private Brands",
+                    entity_type="organization",
+                    same_as_refs=["finance-us-ticker:PRBRY"],
+                    is_graph_seed=True,
+                ),
+            ],
+            candidates=[
+                _candidate(
+                    "ades:index:sp-500",
+                    "S&P 500",
+                    "index",
+                    "ades:policy-body:us:federal-reserve",
+                    "policy_rate_hold",
+                ),
+                _candidate(
+                    "finance-us-ticker:JPM",
+                    "JPM",
+                    "ticker",
+                    "finance-us-issuer:jpmorgan-chase",
+                    "policy_rate_hold",
+                ),
+                _candidate(
+                    "finance-us-ticker:PRBRY",
+                    "PRBRY",
+                    "ticker",
+                    "finance-us-issuer:private-brands",
+                    "default",
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": (
+                "Federal Reserve officials held rates steady as S&P 500 futures "
+                "moved on broad macro risk. Private Brands, a private company, "
+                "reported a management change with no public ticker."
+            ),
+            "options": {
+                "include_relationship_paths": True,
+                "include_impact_paths": True,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    candidate_refs = {
+        candidate["entity_ref"] for candidate in payload["terminal_impact_candidates"]
+    }
+    assert "ades:index:sp-500" in candidate_refs
+    assert "finance-us-ticker:JPM" not in candidate_refs
+    assert "finance-us-ticker:PRBRY" not in candidate_refs
+    assert any(
+        warning.startswith(
+            (
+                "ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_DIRECT_TERMINAL",
+                "ADES_NEWS_ANALYZE_DROPPED_UNANCHORED_IMPACT_CANDIDATE",
+            )
+        )
+        and "finance-us-ticker:JPM" in warning
+        for warning in payload["warnings"]
+    )
+    assert any(
+        "private_company_terminal_candidate" in warning
+        and "finance-us-ticker:PRBRY" in warning
+        for warning in payload["warnings"]
+    )
 
 
 def test_news_analyze_overrides_negative_cost_and_warning_directions(

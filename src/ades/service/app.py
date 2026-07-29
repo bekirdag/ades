@@ -521,6 +521,8 @@ _PASSIVE_COMMON_NOUN_ARTIFACT_TERMS = {
     "company",
     "country",
     "economy",
+    "export",
+    "exports",
     "firm",
     "government",
     "headline",
@@ -558,6 +560,10 @@ _PASSIVE_UI_ARTIFACT_PATTERN = re.compile(
 )
 _PASSIVE_NUMERIC_ID_PATTERN = re.compile(
     r"^(?:(?:article|story|post|node|item|content|id)\s*)?#?\s*\d{4,}$",
+    re.IGNORECASE,
+)
+_PASSIVE_SOURCE_METADATA_PATTERN = re.compile(
+    r"^(?:next\s+newsmaker|packed\s+[a-z0-9][a-z0-9\s&/-]{2,})$",
     re.IGNORECASE,
 )
 _CORPORATE_SUFFIX_TERMS = {
@@ -821,6 +827,11 @@ _UNSUPPORTED_TICKER_PLACEHOLDER_KEYS = {
     "ticker",
     "xyz",
 }
+_PRIVATE_COMPANY_TERMINAL_CONTEXT_PATTERN = re.compile(
+    r"\b(?:private(?:ly)?[-\s]+held|private\s+company|unlisted|"
+    r"not\s+publicly\s+traded|no\s+public\s+(?:ticker|listing))\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -2385,7 +2396,49 @@ def _filter_unanchored_impact_candidates(
     return filtered
 
 
-def _non_asset_terminal_candidate_reason(candidate: ImpactCandidate) -> str | None:
+def _source_entity_has_private_company_context(
+    source_entity: ImpactSourceEntity,
+    *,
+    text: str,
+) -> bool:
+    analysis_text = _decode_entity_display_text(text)
+    if not _PRIVATE_COMPANY_TERMINAL_CONTEXT_PATTERN.search(analysis_text):
+        return False
+    terms = [source_entity.name]
+    if ":" in source_entity.entity_ref:
+        terms.append(source_entity.entity_ref.rsplit(":", 1)[1])
+    for term in _dedupe_string_values(terms):
+        if not term or not _entity_phrase_occurs_in_story_context(analysis_text, term):
+            continue
+        for match in re.finditer(re.escape(term), analysis_text, re.IGNORECASE):
+            window = analysis_text[max(0, match.start() - 180) : match.end() + 180]
+            if _PRIVATE_COMPANY_TERMINAL_CONTEXT_PATTERN.search(window):
+                return True
+    return False
+
+
+def _private_company_context_applies_to_candidate(
+    candidate: ImpactCandidate,
+    *,
+    source_entities_by_ref: dict[str, ImpactSourceEntity],
+    text: str,
+) -> bool:
+    for ref in _candidate_source_entity_refs(candidate):
+        source_entity = source_entities_by_ref.get(ref.casefold())
+        if source_entity and _source_entity_has_private_company_context(
+            source_entity,
+            text=text,
+        ):
+            return True
+    return False
+
+
+def _non_asset_terminal_candidate_reason(
+    candidate: ImpactCandidate,
+    *,
+    source_entities_by_ref: dict[str, ImpactSourceEntity] | None = None,
+    text: str | None = None,
+) -> str | None:
     if not _is_direct_terminal_ref(candidate.entity_ref):
         return None
     ref_key = candidate.entity_ref.casefold()
@@ -2395,6 +2448,21 @@ def _non_asset_terminal_candidate_reason(candidate: ImpactCandidate) -> str | No
     )
     if is_ticker_ref and not has_source_backed_evidence:
         return "unsupported_terminal_candidate"
+    if (
+        is_ticker_ref
+        and text
+        and source_entities_by_ref
+        and _private_company_context_applies_to_candidate(
+            candidate,
+            source_entities_by_ref=source_entities_by_ref,
+            text=text,
+        )
+    ):
+        terms = _dedupe_string_values(
+            [candidate.name, *_direct_terminal_identity_terms(candidate.entity_ref)]
+        )
+        if not any(_entity_phrase_occurs_in_story_context(text, term) for term in terms):
+            return "private_company_terminal_candidate"
     terms = _dedupe_string_values(
         [candidate.name, *_direct_terminal_identity_terms(candidate.entity_ref)]
     )
@@ -2410,11 +2478,18 @@ def _non_asset_terminal_candidate_reason(candidate: ImpactCandidate) -> str | No
 def _filter_invalid_terminal_candidates(
     candidates: list[ImpactCandidate],
     *,
+    source_entities: list[ImpactSourceEntity] | None = None,
+    text: str | None = None,
     warnings: list[str],
 ) -> list[ImpactCandidate]:
+    source_entities_by_ref = _source_entity_ref_index(source_entities or [])
     filtered: list[ImpactCandidate] = []
     for candidate in candidates:
-        reason = _non_asset_terminal_candidate_reason(candidate)
+        reason = _non_asset_terminal_candidate_reason(
+            candidate,
+            source_entities_by_ref=source_entities_by_ref,
+            text=text,
+        )
         if reason is None:
             filtered.append(candidate)
             continue
@@ -2687,12 +2762,65 @@ def _country_codes_from_text(text: str) -> list[str]:
     return _dedupe_string_values(codes)
 
 
-def _country_codes_from_entities(entities: list[EntityMatch]) -> list[str]:
+def _country_code_for_entity(entity: EntityMatch) -> str | None:
+    code = _entity_ref_country_code(entity.link.entity_id if entity.link else None)
+    return code or _country_code_from_text(_entity_name(entity))
+
+
+def _country_entity_is_story_anchored(
+    entity: EntityMatch,
+    *,
+    text: str | None,
+) -> bool:
+    code = _country_code_for_entity(entity)
+    if not code:
+        return False
+    analysis_text = _decode_entity_display_text(text)
+    if not analysis_text:
+        return True
+    if code in _country_codes_from_text(analysis_text):
+        return True
+
+    surface = _decode_entity_display_text(entity.text)
+    label = entity.label.strip().casefold()
+    if (
+        label in {"location", "place", "city", "region"}
+        and surface
+        and _entity_phrase_occurs_in_story_context(analysis_text, surface)
+    ):
+        return True
+    if (
+        surface
+        and _country_code_from_text(surface) == code
+        and _entity_phrase_occurs_in_story_context(analysis_text, surface)
+    ):
+        return True
+
+    canonical_name = _canonical_country_name_for_ref(
+        entity.link.entity_id if entity.link else None,
+        _entity_name(entity),
+    )
+    return bool(
+        canonical_name
+        and _country_code_from_text(canonical_name) == code
+        and _entity_name_occurs_in_story_context(analysis_text, canonical_name)
+    )
+
+
+def _country_codes_from_entities(
+    entities: list[EntityMatch],
+    *,
+    text: str | None = None,
+) -> list[str]:
     codes: list[str] = []
     for entity in entities:
-        code = _entity_ref_country_code(entity.link.entity_id if entity.link else None)
-        code = code or _country_code_from_text(_entity_name(entity))
+        code = _country_code_for_entity(entity)
         if code:
+            if text is not None and not _country_entity_is_story_anchored(
+                entity,
+                text=text,
+            ):
+                continue
             codes.append(code)
     return _dedupe_string_values(codes)
 
@@ -2715,7 +2843,7 @@ def _country_code_candidates_for_pack_plan(
     for code in _country_codes_from_text(text):
         if not any(existing == code for existing, _ in candidates):
             candidates.append((code, "text_country_mention"))
-    for code in _country_codes_from_entities(entities):
+    for code in _country_codes_from_entities(entities, text=text):
         if not any(existing == code for existing, _ in candidates):
             candidates.append((code, "entity_country_match"))
     _append(request.source.source_country if request.source else None, "source_country")
@@ -3042,8 +3170,12 @@ def _build_country_scope(
         if text_country_codes:
             return _scope_for_code(text_country_codes[0], "text_country_mention")
     for entity in entities:
-        code = _entity_ref_country_code(entity.link.entity_id if entity.link else None)
-        code = code or _country_code_from_text(_entity_name(entity))
+        code = _country_code_for_entity(entity)
+        if code and text is not None and not _country_entity_is_story_anchored(
+            entity,
+            text=text,
+        ):
+            continue
         if code:
             return _scope_for_code(code, "entity_match", preferred_name=_entity_name(entity))
     if hinted_code:
@@ -3324,6 +3456,8 @@ def _hidden_artifact_reasons(
         reasons.append("boilerplate")
     if _PASSIVE_NUMERIC_ID_PATTERN.fullmatch(normalized):
         reasons.append("numeric_id")
+    if _PASSIVE_SOURCE_METADATA_PATTERN.fullmatch(normalized):
+        reasons.append("source_metadata_artifact")
     if normalized.casefold() in {"ad", "a.d.", "anno domini"}:
         reasons.append("date_era_artifact")
     if normalized_key in {
@@ -3517,6 +3651,11 @@ def _build_passive_entities(
             continue
         entity_ref = _entity_ref(entity)
         raw_name = _entity_name(entity)
+        if (
+            _country_code_for_entity(entity)
+            and not _country_entity_is_story_anchored(entity, text=analysis_text)
+        ):
+            continue
         normalized_name = _normalize_entity_display_name(raw_name, label=entity.label)
         name = _canonical_country_name_for_ref(entity_ref, normalized_name) or normalized_name
         role = _passive_role(entity, name)
@@ -5380,6 +5519,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 )
             expanded_terminal_candidates = _filter_invalid_terminal_candidates(
                 expanded_terminal_candidates,
+                source_entities=impact_paths.source_entities,
+                text=analysis_text,
                 warnings=warnings,
             )
             expanded_terminal_candidates = _filter_unanchored_impact_candidates(
