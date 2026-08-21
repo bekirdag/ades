@@ -526,6 +526,7 @@ _PASSIVE_COMMON_NOUN_ARTIFACT_TERMS = {
     "firm",
     "government",
     "headline",
+    "in june",
     "investor",
     "investors",
     "lawmakers",
@@ -536,7 +537,10 @@ _PASSIVE_COMMON_NOUN_ARTIFACT_TERMS = {
     "official",
     "officials",
     "policy",
+    "retail sales",
     "report",
+    "sanction",
+    "sanctions",
     "sources",
     "stock",
     "stocks",
@@ -551,6 +555,12 @@ _PASSIVE_COMMON_NOUN_ARTIFACT_TERMS = {
     "the ministry",
     "trader",
     "traders",
+    "union",
+}
+_PASSIVE_INTERNAL_CODE_ARTIFACT_TERMS = {
+    "comsyn",
+    "nzk",
+    "southwest",
 }
 _PASSIVE_UI_ARTIFACT_PATTERN = re.compile(
     r"^(?:read\s+more|continue\s+reading|more\s+from|click\s+here|"
@@ -563,7 +573,9 @@ _PASSIVE_NUMERIC_ID_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _PASSIVE_SOURCE_METADATA_PATTERN = re.compile(
-    r"^(?:next\s+newsmaker|packed\s+[a-z0-9][a-z0-9\s&/-]{2,})$",
+    r"^(?:next\s+newsmaker|packed\s+[a-z0-9][a-z0-9\s&/-]{2,}|"
+    r"essential\s+business\s+intelligence|the\s+central|the\s+new\s+group|"
+    r"grand\s+view)$",
     re.IGNORECASE,
 )
 _CORPORATE_SUFFIX_TERMS = {
@@ -719,6 +731,12 @@ _TECH_TOPIC_PATTERN = re.compile(
     r"space|satellite|rocket|launch|nasa|spacex)\b",
     re.IGNORECASE,
 )
+_BIOTECH_TOPIC_PATTERN = re.compile(
+    r"\b(?:biotech(?:nology)?|biopharma|pharmaceuticals?|pharma|"
+    r"drug(?:maker|makers|s)?|medicines?|clinical\s+trials?|"
+    r"cancer\s+(?:patients?|treatments?)|oncology|moderna|vaccines?)\b",
+    re.IGNORECASE,
+)
 _NON_PHYSICAL_ASSET_PATTERN = re.compile(
     r"\b(?:bitcoin|crypto(?:currency|currencies)?|digital\s+assets?|software|"
     r"ai|artificial\s+intelligence|cloud|quantum(?:\s+computing)?|space|satellite)\b",
@@ -830,6 +848,16 @@ _UNSUPPORTED_TICKER_PLACEHOLDER_KEYS = {
 _PRIVATE_COMPANY_TERMINAL_CONTEXT_PATTERN = re.compile(
     r"\b(?:private(?:ly)?[-\s]+held|private\s+company|unlisted|"
     r"not\s+publicly\s+traded|no\s+public\s+(?:ticker|listing))\b",
+    re.IGNORECASE,
+)
+_LOCAL_REAL_ESTATE_ASSET_CONTEXT_PATTERN = re.compile(
+    r"\b(?:real\s+estate|property|properties|land|estate|island|building|"
+    r"office|warehouse|retail\s+park|development|listing)\b",
+    re.IGNORECASE,
+)
+_LOCAL_REAL_ESTATE_AGENT_CONTEXT_PATTERN = re.compile(
+    r"\b(?:estate\s+agent|property\s+agent|property\s+consultancy|agent|"
+    r"broker|brokerage|marketed|advertised|listed|for\s+sale)\b",
     re.IGNORECASE,
 )
 
@@ -2433,6 +2461,47 @@ def _private_company_context_applies_to_candidate(
     return False
 
 
+def _source_entity_has_local_real_estate_agent_context(
+    source_entity: ImpactSourceEntity,
+    *,
+    text: str,
+) -> bool:
+    analysis_text = _decode_entity_display_text(text)
+    if not _LOCAL_REAL_ESTATE_ASSET_CONTEXT_PATTERN.search(
+        analysis_text
+    ) or not _LOCAL_REAL_ESTATE_AGENT_CONTEXT_PATTERN.search(analysis_text):
+        return False
+    terms = [source_entity.name]
+    if ":" in source_entity.entity_ref:
+        terms.append(source_entity.entity_ref.rsplit(":", 1)[1])
+    for term in _dedupe_string_values(terms):
+        if not term or not _entity_phrase_occurs_in_story_context(analysis_text, term):
+            continue
+        for match in re.finditer(re.escape(term), analysis_text, re.IGNORECASE):
+            window = analysis_text[max(0, match.start() - 180) : match.end() + 180]
+            if _LOCAL_REAL_ESTATE_ASSET_CONTEXT_PATTERN.search(
+                window
+            ) and _LOCAL_REAL_ESTATE_AGENT_CONTEXT_PATTERN.search(window):
+                return True
+    return False
+
+
+def _local_real_estate_context_applies_to_candidate(
+    candidate: ImpactCandidate,
+    *,
+    source_entities_by_ref: dict[str, ImpactSourceEntity],
+    text: str,
+) -> bool:
+    for ref in _candidate_source_entity_refs(candidate):
+        source_entity = source_entities_by_ref.get(ref.casefold())
+        if source_entity and _source_entity_has_local_real_estate_agent_context(
+            source_entity,
+            text=text,
+        ):
+            return True
+    return False
+
+
 def _non_asset_terminal_candidate_reason(
     candidate: ImpactCandidate,
     *,
@@ -2463,6 +2532,21 @@ def _non_asset_terminal_candidate_reason(
         )
         if not any(_entity_phrase_occurs_in_story_context(text, term) for term in terms):
             return "private_company_terminal_candidate"
+    if (
+        is_ticker_ref
+        and text
+        and source_entities_by_ref
+        and _local_real_estate_context_applies_to_candidate(
+            candidate,
+            source_entities_by_ref=source_entities_by_ref,
+            text=text,
+        )
+    ):
+        terms = _dedupe_string_values(
+            [candidate.name, *_direct_terminal_identity_terms(candidate.entity_ref)]
+        )
+        if not any(_entity_phrase_occurs_in_story_context(text, term) for term in terms):
+            return "local_real_estate_agent_terminal_candidate"
     terms = _dedupe_string_values(
         [candidate.name, *_direct_terminal_identity_terms(candidate.entity_ref)]
     )
@@ -3452,6 +3536,8 @@ def _hidden_artifact_reasons(
     reasons.extend(_language_artifact_reasons(normalized))
     if normalized_key in _PASSIVE_COMMON_NOUN_ARTIFACT_TERMS:
         reasons.append("common_noun")
+    if normalized_key in _PASSIVE_INTERNAL_CODE_ARTIFACT_TERMS:
+        reasons.append("internal_code")
     if _PASSIVE_UI_ARTIFACT_PATTERN.fullmatch(normalized):
         reasons.append("boilerplate")
     if _PASSIVE_NUMERIC_ID_PATTERN.fullmatch(normalized):
@@ -4059,6 +4145,10 @@ def _build_topic_scope(
         primary_override = "Trading & Markets"
     elif "strike_labor_disruption" in signal_types or _LABOR_TOPIC_PATTERN.search(route_text):
         primary_override = "Economic & Macro"
+    elif _BIOTECH_TOPIC_PATTERN.search(route_text) and any(
+        "commodit" in label.casefold() for label in labels
+    ):
+        primary_override = "General / Mixed"
     elif _TECH_TOPIC_PATTERN.search(route_text) and any(
         "commodit" in label.casefold() for label in labels
     ):

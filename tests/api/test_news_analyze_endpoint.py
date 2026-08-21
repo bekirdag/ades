@@ -5858,6 +5858,16 @@ def test_news_analyze_story_quality_routes_topics_and_strips_internal_metadata(
             "Trading & Markets",
         ),
         (
+            "Reserve Bank of India minutes drove bond yields higher as investors repriced rates.",
+            "Commodities, Energy & Agriculture",
+            "Trading & Markets",
+        ),
+        (
+            "Cancer patients and doctors questioned excessive drug treatments in a biotech trial.",
+            "Commodities, Energy & Agriculture",
+            "General / Mixed",
+        ),
+        (
             "The Philippine peso weakened in forex trading as importers bought dollars.",
             "Commodities, Energy & Agriculture",
             "Trading & Markets",
@@ -6296,6 +6306,18 @@ def test_news_analyze_hides_source_metadata_and_common_noun_passives(
             entities=[
                 _entity("NEXT Newsmaker"),
                 _entity("PACKED CENTRAL BANK"),
+                _entity("Essential Business Intelligence"),
+                _entity("The Central"),
+                _entity("The New Group"),
+                _entity("Grand View"),
+                _entity("300226"),
+                _entity("SOUTHWEST"),
+                _entity("COMSYN"),
+                _entity("NZK"),
+                _entity("In June"),
+                _entity("retail sales"),
+                _entity("sanctions"),
+                _entity("Union"),
                 _entity("exports"),
                 _entity("tariffs"),
             ],
@@ -6324,6 +6346,9 @@ def test_news_analyze_hides_source_metadata_and_common_noun_passives(
     passive_by_name = {
         entity["name"]: entity for entity in response.json()["passive_entities"]
     }
+    passive_by_ref = {
+        entity["entity_ref"]: entity for entity in response.json()["passive_entities"]
+    }
     assert passive_by_name["NEXT Newsmaker"]["display_eligible"] is False
     assert "source_metadata_artifact" in passive_by_name["NEXT Newsmaker"]["quality_reasons"]
     assert passive_by_name["Packed Central Bank"]["display_eligible"] is False
@@ -6331,6 +6356,30 @@ def test_news_analyze_hides_source_metadata_and_common_noun_passives(
         "source_metadata_artifact"
         in passive_by_name["Packed Central Bank"]["quality_reasons"]
     )
+    for name in (
+        "Essential Business Intelligence",
+        "The Central",
+        "The New Group",
+        "Grand View",
+    ):
+        assert passive_by_name[name]["display_eligible"] is False
+        assert (
+            "source_metadata_artifact" in passive_by_name[name]["quality_reasons"]
+        )
+    assert passive_by_name["300226"]["display_eligible"] is False
+    assert "numeric_id" in passive_by_name["300226"]["quality_reasons"]
+    for ref in (
+        "ades:artifact:southwest",
+        "ades:artifact:comsyn",
+        "ades:artifact:nzk",
+    ):
+        assert passive_by_ref[ref]["display_eligible"] is False
+        assert "internal_code" in passive_by_ref[ref]["quality_reasons"]
+    assert passive_by_name["In June"]["display_eligible"] is False
+    assert "temporal_phrase" in passive_by_name["In June"]["quality_reasons"]
+    for name in ("retail sales", "sanctions", "Union"):
+        assert passive_by_name[name]["display_eligible"] is False
+        assert "common_noun" in passive_by_name[name]["quality_reasons"]
     assert passive_by_name["exports"]["display_eligible"] is False
     assert "common_noun" in passive_by_name["exports"]["quality_reasons"]
     assert passive_by_name["tariffs"]["display_eligible"] is False
@@ -7301,6 +7350,129 @@ def test_news_analyze_drops_unsupported_placeholder_ticker_candidates(
     assert payload["terminal_impact_candidates"] == []
     assert any(
         "unsupported_terminal_candidate" in warning
+        for warning in payload["warnings"]
+        if warning.startswith("ADES_NEWS_ANALYZE_DROPPED_INVALID_TERMINAL")
+    )
+
+
+def test_news_analyze_drops_local_real_estate_agent_peer_ticker_candidate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pack_id = _install_named_pack(
+        tmp_path, "local-real-estate-terminal-en", domain="finance"
+    )
+    monkeypatch.setenv("ADES_NEWS_ANALYZE_ENABLED", "1")
+    client = TestClient(create_app(storage_root=tmp_path))
+
+    def _fake_tag(
+        text: str,
+        *,
+        pack: str | None = None,
+        content_type: str = "text/plain",
+        **_: object,
+    ) -> TagResponse:
+        return TagResponse(
+            version="0.1.0",
+            pack=pack or "unknown",
+            pack_version="0.1.0",
+            language="en",
+            content_type=content_type,
+            entities=[
+                EntityMatch(
+                    text="Carter Jonas",
+                    label="organization",
+                    start=text.index("Carter Jonas"),
+                    end=text.index("Carter Jonas") + len("Carter Jonas"),
+                    confidence=0.94,
+                    relevance=0.91,
+                    link=EntityLink(
+                        entity_id="ades:org:uk:carter-jonas",
+                        canonical_text="Carter Jonas",
+                        provider="test",
+                    ),
+                    provenance=EntityProvenance(
+                        match_kind="alias",
+                        match_path="test",
+                        match_source="fixture",
+                        source_pack=pack or "unknown",
+                        source_domain="finance",
+                    ),
+                )
+            ],
+            topics=[TopicMatch(label="General / Mixed", score=0.9, evidence_count=1)],
+            warnings=[],
+            timing_ms=1,
+        )
+
+    def _fake_expand(entity_refs: list[str], **_: object) -> ImpactExpansionResult:
+        assert "ades:org:uk:carter-jonas" in entity_refs
+        edge = ImpactPathEdge(
+            source_ref="ades:org:uk:carter-jonas",
+            target_ref="finance-us-ticker:JLL",
+            relation="real_estate_peer_exposure",
+            evidence_level="shallow",
+            confidence=0.78,
+            direction_hint="proxy",
+            source_name="Fixture",
+            source_url="https://example.test/source",
+            source_snapshot="2026-08-21",
+        )
+        return ImpactExpansionResult(
+            graph_version="fixture",
+            artifact_version="fixture",
+            artifact_hash="sha256:fixture",
+            source_entities=[
+                ImpactSourceEntity(
+                    entity_ref="ades:org:uk:carter-jonas",
+                    name="Carter Jonas",
+                    entity_type="organization",
+                    is_graph_seed=True,
+                )
+            ],
+            candidates=[
+                ImpactCandidate(
+                    entity_ref="finance-us-ticker:JLL",
+                    name="JLL",
+                    entity_type="ticker",
+                    evidence_level="shallow",
+                    confidence=0.78,
+                    source_entity_refs=["ades:org:uk:carter-jonas"],
+                    relationship_paths=[
+                        ImpactRelationshipPath(path_depth=1, edges=[edge])
+                    ],
+                )
+            ],
+        )
+
+    monkeypatch.setattr("ades.service.app.tag", _fake_tag)
+    monkeypatch.setattr("ades.service.app.expand_impact_paths", _fake_expand)
+    response = client.post(
+        "/v0/news/analyze",
+        json={
+            "packs": [pack_id],
+            "text": (
+                "Carter Jonas advertised Drake's Island in Plymouth Sound for sale. "
+                "The property listing described the UK island as a local real estate "
+                "transaction."
+            ),
+            "options": {
+                "include_relationship_paths": True,
+                "include_impact_paths": True,
+                "max_terminal_candidates": 8,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    candidate_refs = {
+        candidate["entity_ref"] for candidate in payload["terminal_impact_candidates"]
+    }
+    assert "finance-us-ticker:JLL" not in candidate_refs
+    assert any(
+        "local_real_estate_agent_terminal_candidate" in warning
+        and "finance-us-ticker:JLL" in warning
         for warning in payload["warnings"]
         if warning.startswith("ADES_NEWS_ANALYZE_DROPPED_INVALID_TERMINAL")
     )
