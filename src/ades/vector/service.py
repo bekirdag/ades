@@ -111,7 +111,7 @@ def _linked_seed_entity_set(response: TagResponse) -> set[str]:
 
 
 def _seed_entity_label(entity) -> str:
-    return str(entity.label or "").strip().casefold()
+    return "" if entity is None else str(entity.label or "").strip().casefold()
 
 
 def _is_recent_news_generic_org_seed(entity) -> bool:

@@ -5877,3 +5877,16 @@ def test_enrich_tag_response_with_related_entities_uses_recent_news_direct_suppo
 
     assert [item.entity_id for item in enriched.related_entities] == ["wikidata:Q12"]
     assert enriched.related_entities[0].provider == "recent_news.support"
+
+
+def test_recent_news_fallback_tolerates_seed_missing_from_extracted_entities() -> None:
+    response = _response_with_linked_entities()
+    response.graph_support = GraphSupport(
+        coherence_score=0.0,
+        seed_entity_ids=["wikidata:Qmissing"],
+    )
+    assert vector_service._recent_news_direct_fallback_seed_entity_ids(
+        response,
+        strong_seed_entity_ids=["wikidata:Qmissing"],
+        domain_hint="business",
+    ) == ["wikidata:Qmissing"]

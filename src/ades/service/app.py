@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 import hashlib
@@ -4393,6 +4396,8 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
     """Create a FastAPI application bound to a storage root."""
 
     runtime_state = _ServiceRuntimeState(storage_root)
+    # Keep readiness checks independent of long-running extraction worker slots.
+    status_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ades-status")
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -4403,7 +4408,10 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
             except (FileNotFoundError, UnsupportedRuntimeConfigurationError, ValueError):
                 # Preserve request-time config errors on the public endpoints.
                 pass
-        yield
+        try:
+            yield
+        finally:
+            status_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(title="ades", version=__version__, lifespan=lifespan)
 
@@ -4414,11 +4422,13 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
         return {"status": "ok", "version": __version__}
 
     @app.get("/v0/status", response_model=StatusResponse)
-    def runtime_status() -> StatusResponse:
+    async def runtime_status() -> StatusResponse:
         """Report local runtime status."""
 
         try:
-            response = status(storage_root=storage_root)
+            response = await asyncio.get_running_loop().run_in_executor(
+                status_executor, partial(status, storage_root=storage_root)
+            )
             return response.model_copy(
                 update={"prewarmed_packs": sorted(runtime_state.prewarmed_packs)}
             )
