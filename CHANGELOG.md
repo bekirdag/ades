@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/bekirdag/ades/compare/ades-tool-v0.4.1...ades-tool-v0.4.2) (2026-10-14)
+
+
+### Documentation
+
+* record completed corpus audit and published-text correction verification ([9365b9f](https://github.com/bekirdag/ades/commit/9365b9fed483400f14227586ae796c9f0401d491))
+
 ## 0.4.1 (2026-10-14)
 
 * Reject geographic, institutional and date strings misclassified as finance people.
