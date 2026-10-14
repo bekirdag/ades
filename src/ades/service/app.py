@@ -2245,6 +2245,7 @@ def _direct_terminal_source_entity_is_story_anchored(
         return False
     terms: list[str] = [*_direct_terminal_identity_terms(terminal_ref)]
     terms.extend(_direct_terminal_anchor_name_variants(source_entity.name))
+    terms.extend(source_entity.mention_texts)
     entity_ref = source_entity.entity_ref.strip()
     if ":" in entity_ref:
         terms.append(entity_ref.rsplit(":", 1)[1])
@@ -2259,6 +2260,29 @@ def _direct_terminal_source_entity_is_story_anchored(
         if _entity_phrase_occurs_in_story_context(text, term):
             return True
     return False
+
+
+def _source_entities_with_mention_texts(
+    source_entities: list[ImpactSourceEntity],
+    entities: list[EntityMatch],
+    *,
+    text: str,
+) -> list[ImpactSourceEntity]:
+    """Preserve validated extraction surfaces across refs-only graph expansion."""
+    by_ref: dict[str, list[str]] = {}
+    for entity in entities:
+        if entity.link is None or not entity.text.strip():
+            continue
+        if not _entity_phrase_occurs_in_story_context(text, entity.text):
+            continue
+        by_ref.setdefault(entity.link.entity_id.casefold(), []).append(entity.text)
+    result: list[ImpactSourceEntity] = []
+    for source in source_entities:
+        mentions = list(source.mention_texts)
+        for ref in [source.entity_ref, *source.same_as_refs]:
+            mentions.extend(by_ref.get(ref.casefold(), []))
+        result.append(source.model_copy(update={"mention_texts": _dedupe_string_values(mentions)}))
+    return result
 
 
 def _source_entity_ref_index(
@@ -2354,7 +2378,7 @@ def _impact_source_entity_is_story_anchored(
     if normalized_ref.startswith("country:"):
         code = normalized_ref.split(":", 1)[1]
         return code in _country_codes_from_text(text)
-    terms = [source_entity.name]
+    terms = [source_entity.name, *source_entity.mention_texts]
     if ":" in entity_ref:
         terms.append(entity_ref.rsplit(":", 1)[1])
     for same_as_ref in source_entity.same_as_refs:
@@ -5597,6 +5621,11 @@ def create_app(*, storage_root: str | Path | None = None) -> FastAPI:
                 warnings.append(f"ADES_NEWS_ANALYZE_IMPACT_EXPAND_FAILED:{str(exc)[:180]}")
 
         if impact_paths is not None:
+            impact_paths = impact_paths.model_copy(update={
+                "source_entities": _source_entities_with_mention_texts(
+                    impact_paths.source_entities, production_entities, text=analysis_text,
+                ),
+            })
             warnings.extend(impact_paths.warnings)
 
         expanded_terminal_candidates = impact_paths.candidates if impact_paths else []

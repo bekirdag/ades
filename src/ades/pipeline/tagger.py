@@ -18,6 +18,7 @@ try:
 except ImportError:  # pragma: no cover - packaging/tests install wordfreq
     _wordfreq_zipf_frequency = None
 
+from ..packs.entity_taxonomy import is_invalid_finance_person_name, is_geographic_person_name
 from ..packs.registry import PackRegistry
 from ..packs.g20_country_aliases import DEFAULT_CURATED_G20_COUNTRY_ENTITIES
 from ..packs.runtime import PackRuntime, RuleDefinition, load_pack_runtime
@@ -2175,6 +2176,13 @@ def _load_runtime_finance_country_short_aliases(
 
 
 def _runtime_finance_country_short_alias_surface_allowed(surface: str) -> bool:
+    if is_geographic_person_name(surface):
+        return False
+    # Legal-name truncation must not turn ordinary article vocabulary into issuers.
+    if normalize_lookup_text(surface) in {
+        "business", "embassy", "electricity", "foreign", "reserve", "union", "west",
+    }:
+        return False
     tokens = [token for token in TOKEN_RE.findall(surface) if any(ch.isalpha() for ch in token)]
     normalized_tokens = [
         _normalize_finance_country_alias_token(token)
@@ -3427,6 +3435,17 @@ def _build_exact_contextual_acronym_lookup_entities(
     return extracted
 
 
+def _has_company_financial_reporting_context(text: str, *, start: int, end: int) -> bool:
+    """Require a local corporate reporting phrase for ambiguous issuer aliases."""
+    return re.match(
+        r"\s+(?:reported|reports|reporting|announced|announces|posted|posts)\s+"
+        r"(?:(?:its|quarterly|annual|record|first-quarter|second-quarter|third-quarter|fourth-quarter)\s+){0,3}"
+        r"(?:earnings|revenue|results|profits?|dividends?)\b",
+        text[end:end + 100],
+        re.IGNORECASE,
+    ) is not None
+
+
 def _should_skip_single_token_lookup_candidate(
     *,
     matched_text: str,
@@ -3449,6 +3468,17 @@ def _should_skip_single_token_lookup_candidate(
             and normalized_matched_text in _RUNTIME_G20_COUNTRY_ALIAS_TEXTS
         ):
             return True
+        if (
+            label_key == "organization"
+            and _is_single_token_alpha(matched_text)
+            and normalized_candidate_value != normalized_canonical_text
+            and _wordfreq_zipf_en(normalized_matched_text) >= 4.7
+        ):
+            return not (
+                not matched_text.islower()
+                and segment_text is not None and start is not None and end is not None
+                and _has_company_financial_reporting_context(segment_text, start=start, end=end)
+            )
         if not _is_single_token_alpha(matched_text):
             return False
         if label_key == "person":
@@ -3482,6 +3512,11 @@ def _should_skip_single_token_lookup_candidate(
                 end=end,
             ):
                 return True
+            if (
+                normalized_candidate_value != normalized_canonical_text
+                and _has_company_financial_reporting_context(segment_text, start=start, end=end)
+            ):
+                return False
             if _single_token_occurrence_count(segment_text, matched_text) < 2:
                 return True
             return _wordfreq_zipf_en(normalized_matched_text) >= 4.95
@@ -3636,6 +3671,8 @@ def _should_skip_multi_token_lookup_candidate(
     candidate_generated: bool = False,
 ) -> bool:
     label_key = candidate_label.casefold()
+    if label_key == "person" and is_invalid_finance_person_name(matched_text):
+        return True
     if candidate_domain == "finance":
         canonical_text = canonical_text or candidate_value
         if (

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .entity_taxonomy import is_invalid_finance_person_name
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
@@ -1557,6 +1559,8 @@ def _normalize_person_display_name(value: str) -> str:
 
 def _looks_like_finance_person_name(value: str, *, raw_value: str | None = None) -> bool:
     normalized = _clean_text(value)
+    if is_invalid_finance_person_name(normalized):
+        return False
     if not normalized:
         return False
     normalized = re.sub(r"\s*\(\d+\)\s*$", "", normalized)

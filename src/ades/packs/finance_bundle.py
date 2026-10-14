@@ -449,6 +449,10 @@ def _build_sec_company_issuers(
             [
                 alias
                 for alias in [
+                    re.sub(
+                        r"(?:,?\s+)(?:incorporated|inc\.?|corp\.?|corporation|ltd\.?|limited)\s*$",
+                        "", canonical_text, flags=re.IGNORECASE,
+                    ).strip(),
                     *submission_profile.get("former_names", []),
                     _clean_text(companyfacts_profile.get("entity_name")),
                 ]

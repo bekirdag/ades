@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ades-tool"
-version = "0.4.0"
+version = "0.4.1"
 description = "Local-first semantic enrichment service and Python library."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,9 +43,11 @@ server = [
 ades = "ades.cli:main"
 
 [tool.hatch.build.targets.wheel]
+core-metadata-version = "2.3"
 packages = ["src/ades"]
 
 [tool.hatch.build.targets.sdist]
+core-metadata-version = "2.3"
 include = [
   "/npm/ades",
   "/src/ades",

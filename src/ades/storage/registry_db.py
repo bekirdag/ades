@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 from dataclasses import replace
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -994,17 +996,22 @@ class PackMetadataStore:
             for row in rows
         ]
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(
             self.layout.registry_db,
             timeout=SQLITE_CONNECT_TIMEOUT_SECONDS,
         )
-        connection.row_factory = sqlite3.Row
-        connection.execute(f"PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}")
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA journal_mode = WAL")
-        connection.execute("PRAGMA synchronous = NORMAL")
-        return connection
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute(f"PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}")
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA journal_mode = WAL")
+            connection.execute("PRAGMA synchronous = NORMAL")
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     @staticmethod
     def _alias_score(

@@ -5,6 +5,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing ades-tool-vX.Y.Z tag to validate and publish"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -15,13 +21,29 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      sha: ${{ steps.release.outputs.sha }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      version: ${{ steps.release.outputs.version }}
+      release_created: ${{ steps.manual.outputs.release_created || steps.release.outputs.release_created }}
+      sha: ${{ steps.manual.outputs.sha || steps.release.outputs.sha }}
+      tag_name: ${{ steps.manual.outputs.tag_name || steps.release.outputs.tag_name }}
+      version: ${{ steps.manual.outputs.version || steps.release.outputs.version }}
     steps:
+      - name: Select explicit audited release
+        id: manual
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        env:
+          AUDITED_RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ ! "$AUDITED_RELEASE_TAG" =~ ^ades-tool-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected an ades-tool-vX.Y.Z tag" >&2
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$AUDITED_RELEASE_TAG" >/dev/null
+          echo "release_created=true" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$AUDITED_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${AUDITED_RELEASE_TAG#ades-tool-v}" >> "$GITHUB_OUTPUT"
       - name: Run Release Please
         id: release
+        if: github.event_name != 'workflow_dispatch' || inputs.release_tag == ''
         uses: googleapis/release-please-action@v4
         with:
           config-file: .release-please-config.json

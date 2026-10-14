@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 import sqlite3
 from typing import Iterable
@@ -47,6 +47,7 @@ _EVENT_GATED_PROXY_RELATIONS = {
 class _MentionMetadata:
     entity_ref: str
     name: str
+    mention_texts: tuple[str, ...] = ()
     entity_type: str | None = None
     library_id: str | None = None
     confidence: float = 1.0
@@ -161,9 +162,12 @@ def _mentions_from_entities(entities: Iterable[EntityMatch]) -> dict[str, _Menti
             entity_type=entity.label,
             library_id=entity.provenance.source_pack if entity.provenance is not None else None,
             confidence=_clamp_confidence(confidence),
+            mention_texts=tuple(dict.fromkeys([*(current.mention_texts if current else ()), entity.text])),
         )
         if current is None or metadata.confidence > current.confidence:
             mentions[entity_ref] = metadata
+        elif current is not None:
+            mentions[entity_ref] = replace(current, mention_texts=metadata.mention_texts)
     return mentions
 
 
@@ -509,6 +513,7 @@ def _expand_with_store(
             ImpactSourceEntity(
                 entity_ref=entity_ref,
                 name=direct_terminal_name,
+                mention_texts=list(metadata_for_ref.mention_texts),
                 entity_type=metadata_for_ref.entity_type
                 or (node.entity_type if node else direct_terminal_type),
                 library_id=metadata_for_ref.library_id or (node.library_id if node else None),

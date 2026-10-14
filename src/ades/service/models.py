@@ -1711,6 +1711,7 @@ class ImpactSourceEntity(BaseModel):
 
     entity_ref: str
     name: str
+    mention_texts: list[str] = Field(default_factory=list)
     same_as_refs: list[str] = Field(default_factory=list)
     entity_type: str | None = None
     library_id: str | None = None

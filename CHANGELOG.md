@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1 (2026-10-14)
+
+* Reject geographic, institutional and date strings misclassified as finance people.
+* Recognize verified issuer aliases in corporate reporting context.
+* Preserve extracted mention surfaces when anchoring news impact candidates.
+* Close registry SQLite connections explicitly to prevent file descriptor exhaustion.
+* Isolate status checks from news worker saturation and tolerate missing vector seed labels.
+* Add developer documentation and reproducible full-corpus TNL audit tooling.
+
 ## [0.4.0](https://github.com/bekirdag/ades/compare/ades-tool-v0.3.1...ades-tool-v0.4.0) (2026-07-11)
 
 
