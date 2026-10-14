@@ -21,12 +21,14 @@
 . .venv/bin/activate
 python -m pip install ades-tool
 ades --version
+export ADES_REGISTRY_URL=https://repo.adestool.com/index.json
 ades pull finance-us-en
 ades tag "NVIDIA reported quarterly earnings." --pack finance-us-en
 ades serve</code></pre><div class="code-head">Alternative: npm wrapper <button data-copy>Copy</button></div><pre><code>npm install -g @bekirdag/ades
 ades --version
+export ADES_REGISTRY_URL=https://repo.adestool.com/index.json
 ades pull finance-us-en
-ades tag "NVIDIA reported quarterly earnings." --pack finance-us-en</code></pre><p>Local results depend on the installed package and library versions. Pull the libraries you need; dependencies are pulled automatically. Check <code>ades serve --help</code> for binding options before exposing a local service.</p><h3>Call the hosted API from Python</h3><p>No ADES package is needed for an HTTP client. This example uses Python's standard library.</p><div class="code-head">Python <button data-copy>Copy</button></div><pre><code>import json
+ades tag "NVIDIA reported quarterly earnings." --pack finance-us-en</code></pre><p>The registry setting selects the published production libraries; the bundled development registry is not the production pack catalogue. Local results depend on the installed package and library versions. Pull the libraries you need; dependencies are pulled automatically. Check <code>ades serve --help</code> for binding options before exposing a local service.</p><h3>Call the hosted API from Python</h3><p>No ADES package is needed for an HTTP client. This example uses Python's standard library.</p><div class="code-head">Python <button data-copy>Copy</button></div><pre><code>import json
 from urllib.request import Request, urlopen
 
 request = Request(

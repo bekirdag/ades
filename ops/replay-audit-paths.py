@@ -31,7 +31,7 @@ def trace(d):
 
 def main():
     start=time.monotonic();errors=0;total=0;findings=0
-    with (ROOT/'replay-all-final.jsonl').open() as f, (ROOT/'replay-all-final-paths.jsonl').open('w') as out,ProcessPoolExecutor(max_workers=8) as ex:
+    with (ROOT/'replay-release-final.jsonl').open() as f, (ROOT/'replay-release-final-paths.jsonl').open('w') as out,ProcessPoolExecutor(max_workers=8) as ex:
         for i,d in enumerate(ex.map(trace,(json.loads(l) for l in f),chunksize=10),1):
             total=i;errors+=bool(d.get('error'));findings+=bool(d.get('findings'));out.write(json.dumps(d,ensure_ascii=False)+'\n')
             if i%500==0:out.flush();print(json.dumps({'traced':i,'errors':errors,'flagged':findings,'seconds':time.monotonic()-start}),flush=True)

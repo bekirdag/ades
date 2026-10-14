@@ -16,6 +16,6 @@ env['ADES_STORAGE_ROOT']='/home/wodo/adestool-audits/2026-10-14/runtime-candidat
 env['ADES_SERVICE_PREWARM_ENABLED']='false'
 env['ADES_IMPACT_EXPANSION_ARTIFACT_PATH']='/home/deploy/.local/share/ades-artifacts/market-graph/audit-20261014-v041/market_graph_store.sqlite'
 log=Path('/home/wodo/adestool-audits/2026-10-14/candidate-api.log').open('w')
-p=subprocess.Popen(['/mnt/ades/app/shared/.venv/bin/python','-m','uvicorn','ades.api:create_service_app','--factory','--host','127.0.0.1','--port','8744'],env=env,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+p=subprocess.Popen(['/mnt/ades/app/shared/.venv/bin/python','-m','uvicorn','ades.api:create_service_app','--factory','--host','127.0.0.1','--port','8744','--workers','8'],env=env,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
 Path('/home/wodo/adestool-audits/2026-10-14/candidate-api.pid').write_text(str(p.pid))
 print(json.dumps({'candidate_pid':p.pid,'port':8744}),flush=True)
