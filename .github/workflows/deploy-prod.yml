@@ -17,7 +17,7 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, wodo-ci]
     concurrency:
       group: ades-prod
       cancel-in-progress: true
