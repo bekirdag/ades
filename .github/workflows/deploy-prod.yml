@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  ADES_DEPLOY_HOST: ${{ secrets.ADES_DEPLOY_HOST || '95.70.192.142' }}
+  ADES_DEPLOY_HOST: ${{ secrets.ADES_DEPLOY_HOST || '192.168.12.165' }}
   ADES_DEPLOY_PORT: ${{ secrets.ADES_DEPLOY_PORT || '22' }}
   ADES_DEPLOY_USER: ${{ secrets.ADES_DEPLOY_USER || 'deploy' }}
   ADES_PACK_OBJECT_STORAGE_BUCKET: ${{ secrets.ADES_PACK_OBJECT_STORAGE_BUCKET }}
@@ -73,8 +73,8 @@ jobs:
 
       - name: Configure SSH
         env:
-          ADES_PROD_SSH_KEY: ${{ secrets.ADES_PROD_SSH_KEY }}
-          ADES_PROD_KNOWN_HOSTS: ${{ secrets.ADES_PROD_KNOWN_HOSTS }}
+          ADES_PROD_SSH_KEY: ${{ secrets.RAIJIN_CI_SSH_KEY || secrets.ADES_PROD_SSH_KEY }}
+          ADES_PROD_KNOWN_HOSTS: ${{ secrets.RAIJIN_CI_KNOWN_HOSTS || secrets.ADES_PROD_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           install -d -m 700 ~/.ssh
@@ -92,10 +92,12 @@ jobs:
             shift
             local try=1
             while true; do
+              local exit_code=0
               if "$@"; then
                 return 0
+              else
+                exit_code=$?
               fi
-              local exit_code=$?
               if [ "$try" -ge "$attempts" ]; then
                 return "$exit_code"
               fi
@@ -164,10 +166,12 @@ jobs:
             shift
             local try=1
             while true; do
+              local exit_code=0
               if "$@"; then
                 return 0
+              else
+                exit_code=$?
               fi
-              local exit_code=$?
               if [ "$try" -ge "$attempts" ]; then
                 return "$exit_code"
               fi
@@ -206,10 +210,12 @@ jobs:
             shift
             local try=1
             while true; do
+              local exit_code=0
               if "$@"; then
                 return 0
+              else
+                exit_code=$?
               fi
-              local exit_code=$?
               if [ "$try" -ge "$attempts" ]; then
                 return "$exit_code"
               fi
